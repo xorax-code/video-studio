@@ -2066,36 +2066,24 @@
 
   // --- Build Nano Banana prompt for the START frame of a segment ---
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
-    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
-    const seg = segments[i];
-    const action = seg && seg.action ? seg.action : '';
     const obj = {
-      reference_photos: 'Photo 1 = START FRAME from video (scene/background/pose reference). Photo 2 = AVATAR photo (face/clothing reference). Swap avatar face and body into the scene from Photo 1.',
-      scene: setting || 'Match the background, lighting, and environment exactly from reference photo 1 (the start frame). Preserve every detail of the scene — walls, objects, surfaces, props, lighting.',
-      character: avatarNotes
-        ? avatarNotes + (action ? '. ' + action : '')
-        : 'Person from avatar photo (reference photo 2). Use exact face, skin tone, hair, and clothing from the avatar photo. Place them in the pose and position shown in the start frame.' + (action ? ' ' + action : ''),
-      camera: 'Match the exact framing, shot distance, and angle from reference photo 1. Vertical 9:16. Static shot. No camera movement.',
+      reference_photo_1: 'AVATAR — the person in this photo replaces the person in reference photo 2',
+      reference_photo_2: 'START FRAME — the scene, pose, position, background, props, and lighting to match exactly',
+      instruction: 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.',
       no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed clothing, changed props'
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing'
     };
     return JSON.stringify(obj, null, 2);
   }
 
   // --- Build Nano Banana prompt for the END frame of a segment ---
   function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
-    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
-    const seg = segments[i];
-    const action = seg && seg.action ? seg.action : '';
     const obj = {
-      reference_photos: 'Photo 1 = END FRAME from video (scene/background/pose reference). Photo 2 = AVATAR photo (face/clothing reference). Swap avatar face and body into the scene from Photo 1.',
-      scene: setting || 'Match the background, lighting, and environment exactly from reference photo 1 (the end frame). Preserve every detail of the scene — walls, objects, surfaces, props, lighting.',
-      character: avatarNotes
-        ? avatarNotes + (action ? '. Final pose: ' + action : '')
-        : 'Person from avatar photo (reference photo 2). Use exact face, skin tone, hair, and clothing from the avatar photo. Place them in the pose and position shown in the end frame.' + (action ? ' Final pose: ' + action : ''),
-      camera: 'Match the exact framing, shot distance, and angle from reference photo 1 (the end frame). Vertical 9:16. Static shot. No camera movement.',
+      reference_photo_1: 'AVATAR — the person in this photo replaces the person in reference photo 2',
+      reference_photo_2: 'END FRAME — the scene, pose, position, background, props, and lighting to match exactly',
+      instruction: 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.',
       no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed clothing, changed props'
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing'
     };
     return JSON.stringify(obj, null, 2);
   }
