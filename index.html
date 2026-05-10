@@ -471,32 +471,6 @@
           </div>
         </div>
 
-        <!-- Rewritten Script -->
-        <div class="vs-panel" style="flex-shrink:0;">
-          <div class="vs-panel-header" style="padding:5px 10px;">
-            <span>Rewritten for Product</span>
-            <div style="display:flex;gap:4px;align-items:center;">
-              <span id="rewriteStatus" style="font-size:10px;color:#5a8a5a;display:none;"></span>
-              <button class="btn" onclick="copyRewritePrompt()" id="rewriteBtn" style="padding:1px 8px;font-size:10px;border-color:#3a4a6a;color:#7a9acc;" title="Copy a prompt to paste into the Claude chat for rewriting">📋 Copy prompt</button>
-              <button class="btn" onclick="pasteRewrite()" style="padding:1px 8px;font-size:10px;border-color:#2a3a5a;color:#6a8acc;" title="Paste Claude's rewrite from clipboard into this box">📥 Paste</button>
-            </div>
-          </div>
-          <div style="padding:6px 10px;">
-            <div id="rewriteHint" style="font-size:9px;color:#4a5a7a;margin-bottom:4px;line-height:1.4;display:none;">
-              ① Click <strong style="color:#7a9acc;">📋 Copy prompt</strong> → paste in the Claude chat → copy the reply → click <strong style="color:#6a8acc;">📥 Paste</strong>
-            </div>
-            <textarea id="rewrittenScript" rows="3" placeholder="Click 📋 Copy prompt → paste in Claude chat → copy reply → click 📥 Paste." style="width:100%;font-size:10px;padding:5px 7px;background:#0d0d0d;border:1px solid #222;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
-            <div style="display:flex;gap:8px;margin-top:5px;align-items:center;">
-              <span style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Use for segments:</span>
-              <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#aaa;cursor:pointer;">
-                <input type="radio" name="scriptSource" value="rewritten" id="useRewritten" checked style="accent-color:#7a9acc;"> Rewritten
-              </label>
-              <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#aaa;cursor:pointer;">
-                <input type="radio" name="scriptSource" value="original" id="useOriginal" style="accent-color:#7acc7a;"> Original
-              </label>
-            </div>
-          </div>
-        </div>
 
         <!-- Product + Setting -->
         <div class="vs-panel" style="flex-shrink:0;">
@@ -1812,53 +1786,6 @@
     }
   }
 
-  // --- Copy rewrite prompt for Claude Cowork chat ---
-  function copyRewritePrompt() {
-    const original = document.getElementById('originalScript').value.trim();
-    if (!original) { alert('Transcribe or paste a script first.'); return; }
-    const productSel = document.getElementById('studioProduct');
-    const productName = productSel.options[productSel.selectedIndex].text || '';
-    const productDetails = productSel.value || '';
-    if (!productDetails) { alert('Select a product first.'); return; }
-
-    const prompt = `Rewrite this video script to promote my product. Keep the exact same hook style, energy, pacing, and length. Sound like a real person genuinely recommending it — not a salesperson. End with a soft CTA asking viewers to comment a keyword to get the link. Return only the rewritten script, no commentary.
-
-PRODUCT: ${productName}
-PRODUCT DETAILS: ${productDetails}
-
-ORIGINAL SCRIPT:
-${original}`;
-
-    navigator.clipboard.writeText(prompt).then(() => {
-      const status = document.getElementById('rewriteStatus');
-      const hint = document.getElementById('rewriteHint');
-      status.textContent = '✓ Prompt copied — paste in Claude chat';
-      status.style.display = 'inline';
-      hint.style.display = 'block';
-      setTimeout(() => { status.style.display = 'none'; }, 5000);
-    }).catch(() => {
-      // Fallback: show in a textarea the user can copy manually
-      document.getElementById('rewrittenScript').value = prompt;
-      alert('Could not auto-copy. The prompt has been placed in the text box — select all and copy it manually, then paste in the Claude chat.');
-    });
-  }
-
-  // --- Paste Claude's rewrite from clipboard ---
-  async function pasteRewrite() {
-    try {
-      const text = await navigator.clipboard.readText();
-      if (!text.trim()) { alert('Nothing on clipboard yet — copy Claude\'s reply first.'); return; }
-      document.getElementById('rewrittenScript').value = text.trim();
-      document.getElementById('useRewritten').checked = true;
-      const status = document.getElementById('rewriteStatus');
-      status.textContent = '✓ Pasted';
-      status.style.display = 'inline';
-      setTimeout(() => status.style.display = 'none', 2500);
-    } catch (err) {
-      alert('Clipboard access denied. Paste manually into the box below.');
-      document.getElementById('rewrittenScript').focus();
-    }
-  }
 
   // --- Timestamp display ---
   function updateTimestamp() {
@@ -2012,13 +1939,8 @@ ${original}`;
   }
 
   function distributeScript() {
-    const useRewritten = document.getElementById('useRewritten') && document.getElementById('useRewritten').checked;
-    const rewrittenEl = document.getElementById('rewrittenScript');
     const originalEl = document.getElementById('originalScript');
-    const rewrittenText = rewrittenEl ? rewrittenEl.value.trim() : '';
-    const originalText = originalEl ? originalEl.value.trim() : '';
-    // Use rewritten if selected and non-empty, otherwise fall back to original
-    const script = (useRewritten && rewrittenText) ? rewrittenText : originalText;
+    const script = originalEl ? originalEl.value.trim() : '';
     const slices = splitScriptIntoSegments(script, segments);
     segments.forEach((seg, i) => { seg.script = slices[i] || ''; });
   }
@@ -2050,9 +1972,12 @@ ${original}`;
           <div style="display:flex;gap:4px;align-items:flex-start;">
             <div style="flex:1;">
               <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#555;margin-bottom:3px;">Script slice</div>
-              <textarea onchange="segments[${i}].script=this.value" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
+              <textarea oninput="segments[${i}].script=this.value" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
             </div>
-            <button onclick="removeSegment(${i})" style="background:#1a1212;border:1px solid #2a1e1e;border-radius:2px;color:#7a4040;font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;margin-top:14px;">✕</button>
+            <div style="display:flex;flex-direction:column;gap:4px;margin-top:14px;">
+              <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 prompt from current script" style="background:#0a1a2a;border:1px solid #1a3a5a;border-radius:2px;color:#4a8acc;font-size:10px;padding:3px 6px;cursor:pointer;white-space:nowrap;">↻ Veo 3</button>
+              <button onclick="removeSegment(${i})" style="background:#1a1212;border:1px solid #2a1e1e;border-radius:2px;color:#7a4040;font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;">✕</button>
+            </div>
           </div>
           ${seg.nbPrompt ? `
           <div style="margin-top:6px;">
@@ -2132,6 +2057,24 @@ ${original}`;
     renderSegments();
     const saveAllBtn = document.getElementById('saveAllBtn');
     if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
+  }
+
+  // --- Refresh Veo 3 prompt for a single segment after script edit ---
+  function refreshSegmentVeo3(i) {
+    const seg = segments[i];
+    if (!seg) return;
+    const productSel = document.getElementById('studioProduct');
+    const productName = productSel ? (productSel.options[productSel.selectedIndex].text || 'the product') : 'the product';
+    const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
+    seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
+    // Update just the veo block in the DOM without full re-render
+    const veoEl = document.getElementById('veo-seg-' + i);
+    if (veoEl) {
+      veoEl.textContent = seg.veoPrompt;
+    } else {
+      // Veo block doesn't exist yet (prompts never generated) — do a full render
+      renderSegments();
+    }
   }
 
   function saveAvatarProfile() {
@@ -2254,7 +2197,7 @@ ${original}`;
       ? `AVATAR REFERENCE IMAGE: ✅ Uploaded — use the person in the attached photo as the avatar. Match their exact appearance: face, skin tone, hair, and features precisely.\n${avatar ? `ADDITIONAL NOTES: ${avatar}` : ''}`
       : `AVATAR DESCRIPTION: ${avatar || '[No avatar photo uploaded — add one in the Avatar section for best results]'}`;
 
-    const rewrittenScript = script || `[Watch the reference video above, type the script, and it will appear here]`;
+    const scriptText = script || `[Watch the reference video above, type the script, and it will appear here]`;
 
     const formatNote = format.includes('Greenscreen')
       ? 'Greenscreen setup. Avatar stands in front of a digital background — use a natural outdoor or kitchen environment behind them.'
@@ -2278,7 +2221,7 @@ ${productDetails ? `PRODUCT DETAILS: ${productDetails}` : ''}
 
 SCRIPT TO DELIVER:
 ---
-${rewrittenScript}
+${scriptText}
 ---
 
 TECHNICAL SPECS:
