@@ -2108,7 +2108,7 @@
         const content = [
           {
             type: 'text',
-            text: `These frames are sampled evenly from an 8-second video clip. Describe in one short general sentence what the person is doing, using the pronoun "${pronoun}". Focus only on physical actions and movement — not appearance. Keep it simple and general. Examples: "${pronoun} holds up a bottle toward the camera and nods", "${pronoun} gestures with both hands while looking directly at the camera", "${pronoun} leans forward and points at the viewer". Return only the sentence, nothing else.`
+            text: `These frames are sampled evenly from an 8-second video clip. Write a detailed scene description using the pronoun "${pronoun}". Include ALL of the following you can observe: what ${pronoun} is doing and how ${pronoun} is moving, hand gestures and body language, facial expression and eye contact, what ${pronoun} is holding or interacting with, what is on the table or surface in front of ${pronoun}, objects and props visible in the scene, the background environment and setting, lighting and atmosphere, anything else visible in the frame. Be as detailed and specific as possible — this will be used to recreate the scene in a video generator. Return only the description, no intro or commentary.`
           },
           ...frames.map(f => ({
             type: 'image_url',
@@ -2119,7 +2119,7 @@
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'gpt-4o', max_tokens: 80, messages: [{ role: 'user', content }] })
+          body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
         const data = await res.json();
         const description = data.choices?.[0]?.message?.content?.trim() || '';
