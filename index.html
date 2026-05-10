@@ -1992,14 +1992,25 @@
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     container.innerHTML = segments.map((seg, i) => `
-      <div style="display:grid;grid-template-columns:86px 1fr;gap:10px;border-bottom:1px solid #161616;padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
+      <div style="display:grid;grid-template-columns:182px 1fr;gap:10px;border-bottom:1px solid #161616;padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
         <div>
-          ${seg.frameDataUrl
-            ? `<img src="${seg.frameDataUrl}" style="width:86px;height:48px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
-            : `<div style="width:86px;height:48px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+          <div style="display:flex;gap:4px;">
+            <div style="flex:1;">
+              <div style="font-size:8px;color:#444;text-align:center;margin-bottom:2px;">Start</div>
+              ${seg.frameDataUrl
+                ? `<img src="${seg.frameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
+                : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+            </div>
+            <div style="flex:1;">
+              <div style="font-size:8px;color:#444;text-align:center;margin-bottom:2px;">End</div>
+              ${seg.endFrameDataUrl
+                ? `<img src="${seg.endFrameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
+                : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+            </div>
+          </div>
           <div style="font-size:9px;color:#555;margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
           <div style="font-size:9px;color:#444;text-align:center;">Seg ${i+1}</div>
-          ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:4px;width:86px;font-size:9px;padding:3px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Download</button>` : ''}
+          ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:4px;width:100%;font-size:9px;padding:3px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Download</button>` : ''}
         </div>
         <div>
           <div style="display:flex;gap:4px;align-items:flex-start;">
