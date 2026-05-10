@@ -2048,8 +2048,18 @@
     const productSel = document.getElementById('studioProduct');
     const productName = productSel.options[productSel.selectedIndex].text || 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
-    // Re-distribute script in case user updated it
-    distributeScript();
+
+    // Sync any live textarea edits into the segments array
+    segments.forEach((seg, i) => {
+      const ta = document.querySelector('#seg-card-' + i + ' textarea');
+      if (ta) seg.script = ta.value;
+    });
+
+    // If all segments are still empty, try distributing from the original script box
+    if (segments.every(s => !s.script.trim())) {
+      distributeScript();
+    }
+
     segments.forEach((seg, i) => {
       seg.nbPrompt = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
       seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
