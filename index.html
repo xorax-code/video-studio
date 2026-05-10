@@ -1910,7 +1910,17 @@
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+'m'+(s<10?'0':'')+s+'s'; };
     const a = document.createElement('a');
     a.href = seg.frameDataUrl;
-    a.download = 'frame_seg' + (i+1) + '_' + fmt(seg.startTime) + '.jpg';
+    a.download = 'frame_seg' + (i+1) + '_start_' + fmt(seg.startTime) + '.jpg';
+    a.click();
+  }
+
+  function downloadEndFrame(i) {
+    const seg = segments[i];
+    if (!seg || !seg.endFrameDataUrl) return;
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+'m'+(s<10?'0':'')+s+'s'; };
+    const a = document.createElement('a');
+    a.href = seg.endFrameDataUrl;
+    a.download = 'frame_seg' + (i+1) + '_end_' + fmt(seg.endTime) + '.jpg';
     a.click();
   }
 
@@ -2001,17 +2011,18 @@
               ${seg.frameDataUrl
                 ? `<img src="${seg.frameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+              ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Start</button>` : ''}
             </div>
             <div style="flex:1;">
               <div style="font-size:8px;color:#444;text-align:center;margin-bottom:2px;">End</div>
               ${seg.endFrameDataUrl
                 ? `<img src="${seg.endFrameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+              ${seg.endFrameDataUrl ? `<button onclick="downloadEndFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ End</button>` : ''}
             </div>
           </div>
           <div style="font-size:9px;color:#555;margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
           <div style="font-size:9px;color:#444;text-align:center;">Seg ${i+1}</div>
-          ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:4px;width:100%;font-size:9px;padding:3px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Download</button>` : ''}
         </div>
         <div>
           <div style="display:flex;gap:4px;align-items:flex-start;">
