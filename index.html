@@ -1,0 +1,2381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Social Media Account Organizer</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0d0d0d; color: #f0f0f0; min-height: 100vh; font-size: 13px; line-height: 1.4; }
+
+  /* Header */
+  .header { background: #111; padding: 9px 20px; border-bottom: 1px solid #222; display: flex; align-items: center; justify-content: space-between; }
+  .header h1 { font-size: 13px; font-weight: 600; color: #f0f0f0; letter-spacing: 0.2px; }
+  .header-count { font-size: 11px; color: #777; }
+
+  /* Tabs */
+  .tabs { display: flex; background: #111; border-bottom: 1px solid #222; padding: 0 20px; }
+  .tab { padding: 7px 14px; font-size: 12px; font-weight: 500; cursor: pointer; border: none; background: transparent; color: #888; transition: color 0.15s; border-bottom: 1px solid transparent; margin-bottom: -1px; letter-spacing: 0.2px; }
+  .tab:hover { color: #d0d0d0; }
+  .tab.active { color: #f5f5f5; border-bottom: 1px solid #888; }
+
+  /* Layout */
+  .container { max-width: 1400px; margin: 0 auto; padding: 14px 20px; }
+  .tab-content { display: none; }
+  #tab-video-studio { display: none !important; }
+  #tab-video-studio.active { display: flex !important; }
+  .tab-content.active { display: block; }
+
+  /* Toolbar */
+  .toolbar { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .search-box { flex: 1; min-width: 180px; position: relative; }
+  .search-box input { width: 100%; padding: 5px 10px 5px 28px; background: #161616; border: 1px solid #252525; border-radius: 3px; color: #f0f0f0; font-size: 12px; outline: none; }
+  .search-box input:focus { border-color: #777; }
+  .search-box .icon { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); color: #777; font-size: 11px; }
+  .filter-select { padding: 5px 9px; background: #161616; border: 1px solid #252525; border-radius: 3px; color: #f0f0f0; font-size: 12px; outline: none; cursor: pointer; }
+  .filter-select:focus { border-color: #777; }
+  .btn { padding: 5px 12px; border-radius: 3px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid #303030; background: #1a1a1a; color: #e0e0e0; transition: all 0.12s; white-space: nowrap; }
+  .btn:hover { background: #222; border-color: #777; color: #f5f5f5; }
+  .btn-primary { background: #1a1a1a; color: #e0e0e0; border-color: #303030; }
+  .btn-primary:hover { background: #222; border-color: #888; color: #f5f5f5; }
+  .btn-green { background: #1a1a1a; color: #e0e0e0; border-color: #303030; }
+  .btn-green:hover { background: #222; border-color: #888; color: #f5f5f5; }
+  .btn-secondary { background: #161616; color: #aaaaaa; border-color: #282828; }
+  .btn-secondary:hover { background: #1e1e1e; color: #f0f0f0; border-color: #777; }
+
+  /* Stats bar */
+  .stats { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .stat-card { flex: 1; min-width: 64px; background: #111; border: 1px solid #1e1e1e; border-radius: 3px; padding: 7px 10px; }
+  .stat-card .stat-num { font-size: 16px; font-weight: 700; color: #f0f0f0; }
+  .stat-card .stat-label { font-size: 9px; color: #777; margin-top: 1px; text-transform: uppercase; letter-spacing: 0.6px; }
+  .stat-tiktok .stat-num, .stat-instagram .stat-num, .stat-facebook .stat-num,
+  .stat-youtube .stat-num, .stat-total .stat-num, .stat-comp .stat-num,
+  .stat-script .stat-num, .stat-try .stat-num, .stat-used-s .stat-num { color: #f0f0f0; }
+
+  /* Table */
+  .table-wrap { background: #111; border: 1px solid #1e1e1e; border-radius: 3px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #141414; }
+  th { padding: 6px 12px; text-align: left; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.7px; color: #777; border-bottom: 1px solid #1e1e1e; }
+  td { padding: 7px 12px; font-size: 12px; border-bottom: 1px solid #161616; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #151515; }
+
+  /* Platform badge */
+  .platform-badge { display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 2px; font-size: 11px; font-weight: 500; background: #181818; color: #aaaaaa; border: 1px solid #252525; }
+  .platform-tiktok, .platform-instagram, .platform-facebook, .platform-youtube, .platform-other { background: #181818; color: #aaaaaa; border-color: #252525; }
+
+  /* Status badge */
+  .status-badge { display: inline-block; padding: 1px 7px; border-radius: 2px; font-size: 10px; font-weight: 600; letter-spacing: 0.3px; }
+  .status-active { background: #161e16; color: #7ab87a; border: 1px solid #1e2a1e; }
+  .status-inactive { background: #181818; color: #888; border: 1px solid #252525; }
+  .status-banned { background: #1e1414; color: #cc7070; border: 1px solid #2a1e1e; }
+
+  /* Tags */
+  .tags { display: flex; gap: 3px; flex-wrap: wrap; }
+  .tag { padding: 1px 5px; background: #161616; color: #999; border-radius: 2px; font-size: 10px; border: 1px solid #222; }
+  .tag-green, .tag-fire { background: #161616; color: #999; border-color: #222; }
+
+  /* Viral Scripts */
+  .scripts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+  .script-card { background: #111; border: 1px solid #1e1e1e; border-radius: 3px; padding: 13px; display: flex; flex-direction: column; gap: 9px; transition: border-color 0.12s; }
+  .script-card:hover { border-color: #383838; }
+  .script-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
+  .script-title { font-size: 12px; font-weight: 600; color: #f0f0f0; flex: 1; padding-right: 8px; line-height: 1.4; }
+  .script-hook { background: #141414; border-left: 2px solid #484848; border-radius: 2px; padding: 7px 9px; font-size: 11px; color: #d8d8d8; font-style: italic; line-height: 1.5; }
+  .script-hook-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #888; margin-bottom: 3px; }
+  .script-body { font-size: 11px; color: #999; line-height: 1.6; background: #0a0a0a; border: 1px solid #1a1a1a; border-radius: 2px; padding: 7px 9px; max-height: 95px; overflow-y: auto; white-space: pre-wrap; font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; }
+  .script-body::-webkit-scrollbar { width: 3px; }
+  .script-body::-webkit-scrollbar-track { background: transparent; }
+  .script-body::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 2px; }
+  .script-meta { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+  .script-format { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; background: #181818; color: #999; border: 1px solid #252525; }
+  .script-source { font-size: 11px; color: #777; }
+  .script-source span { color: #aaaaaa; }
+  .script-why { font-size: 11px; color: #777; line-height: 1.5; }
+  .script-why strong { color: #999; }
+  .script-card-footer { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; margin-top: auto; padding-top: 7px; border-top: 1px solid #161616; }
+  .script-status { display: inline-block; padding: 1px 6px; border-radius: 2px; font-size: 10px; font-weight: 600; }
+  .script-status-try { background: #1a1810; color: #c8a84a; border: 1px solid #252010; }
+  .script-status-used { background: #121a12; color: #6aaa6a; border: 1px solid #1a2a1a; }
+  .script-status-archived { background: #161616; color: #484848; border: 1px solid #222; }
+  .btn-copy { padding: 2px 7px; border-radius: 2px; font-size: 11px; cursor: pointer; border: 1px solid #252525; font-weight: 500; background: #161616; color: #999; transition: all 0.12s; }
+  .btn-copy:hover { background: #1e1e1e; color: #d8d8d8; border-color: #666; }
+  .btn-copy.copied { background: #121a12; color: #6aaa6a; border-color: #1a2a1a; }
+
+  /* Notes */
+  .note-text { color: #888; font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Action buttons */
+  .actions { display: flex; gap: 3px; }
+  .action-btn { padding: 3px 7px; border-radius: 2px; font-size: 11px; cursor: pointer; border: 1px solid #252525; font-weight: 500; transition: all 0.12s; background: #161616; color: #aaaaaa; }
+  .action-edit:hover { background: #1e1e1e; color: #f0f0f0; border-color: #666; }
+  .action-delete { color: #aa6666; border-color: #251e1e; background: #141212; }
+  .action-delete:hover { background: #1e1616; color: #cc8888; border-color: #362828; }
+  .action-link { background: #141414; color: #999; text-decoration: none; display: inline-block; border: 1px solid #252525; }
+  .action-link:hover { background: #1e1e1e; color: #d8d8d8; border-color: #666; }
+
+  /* Empty state */
+  .empty-state { text-align: center; padding: 40px 20px; }
+  .empty-state .empty-icon { font-size: 28px; margin-bottom: 10px; opacity: 0.25; }
+  .empty-state h3 { font-size: 13px; color: #666; margin-bottom: 4px; font-weight: 500; }
+  .empty-state p { font-size: 11px; color: #666; }
+
+  /* Competitor cards */
+  .comp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 8px; }
+  .comp-card { background: #111; border: 1px solid #1e1e1e; border-radius: 3px; padding: 12px; transition: border-color 0.12s; }
+  .comp-card:hover { border-color: #383838; }
+  .comp-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 8px; }
+  .comp-card-title { display: flex; align-items: center; gap: 8px; }
+  .comp-avatar { width: 28px; height: 28px; border-radius: 50%; background: #1e1e1e; border: 1px solid #2a2a2a; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+  .comp-name { font-size: 12px; font-weight: 600; color: #f0f0f0; }
+  .comp-handle { font-size: 10px; color: #777; margin-top: 1px; }
+  .comp-card-actions { display: flex; gap: 3px; flex-shrink: 0; }
+  .comp-section { margin-bottom: 6px; }
+  .comp-section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #666; margin-bottom: 2px; }
+  .comp-section-value { font-size: 11px; color: #999; line-height: 1.4; }
+  .comp-niche { display: inline-block; padding: 1px 6px; background: #161616; color: #888; border-radius: 2px; font-size: 10px; font-weight: 600; border: 1px solid #222; margin-bottom: 6px; }
+  .comp-followers { font-size: 12px; color: #d0d0d0; font-weight: 600; }
+  .comp-inspiration { background: #0d0d0d; border-radius: 2px; padding: 7px 9px; font-size: 11px; color: #888; line-height: 1.5; border-left: 2px solid #2a2a2a; margin-top: 7px; }
+
+  /* Modal */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.88); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; overflow-y: auto; }
+  .modal { background: #131313; border: 1px solid #252525; border-radius: 3px; width: 100%; max-width: 460px; padding: 18px; margin: auto; }
+  .modal h2 { font-size: 13px; font-weight: 600; margin-bottom: 16px; color: #f0f0f0; }
+  .form-group { margin-bottom: 10px; }
+  .form-group label { display: block; font-size: 10px; font-weight: 600; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 6px 9px; background: #0d0d0d; border: 1px solid #252525; border-radius: 2px; color: #f0f0f0; font-size: 12px; outline: none; transition: border-color 0.12s; font-family: inherit; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #777; }
+  .form-group textarea { resize: vertical; min-height: 65px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .modal-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 14px; }
+
+  /* Password toggle */
+  .pass-wrap { position: relative; }
+  .pass-wrap input { padding-right: 34px; }
+  .pass-toggle { position: absolute; right: 9px; top: 50%; transform: translateY(-50%); background: none; border: none; color: #777; cursor: pointer; font-size: 13px; }
+
+  /* Section heading */
+  .section-heading { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+  .section-heading h2 { font-size: 12px; font-weight: 600; color: #f0f0f0; }
+  .section-heading p { font-size: 11px; color: #777; }
+
+  /* Scrollbar global */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: #0d0d0d; }
+  ::-webkit-scrollbar-thumb { background: #252525; border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #333; }
+
+  /* Video Studio */
+  .vs-panel { background: #111; border: 1px solid #1e1e1e; border-radius: 3px; display: flex; flex-direction: column; }
+  .vs-panel-header { padding: 8px 12px; border-bottom: 1px solid #1e1e1e; font-size: 11px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.6px; display: flex; align-items: center; justify-content: space-between; background: #141414; }
+  .vs-panel-body { padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .vs-scene-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
+  .vs-scene-num { background: #1a1a1a; border: 1px solid #252525; border-radius: 2px; padding: 4px 7px; font-size: 10px; font-weight: 700; color: #666; white-space: nowrap; margin-top: 1px; }
+  .vs-scene-row textarea { flex: 1; padding: 5px 8px; background: #0d0d0d; border: 1px solid #222; border-radius: 2px; color: #c8c8c8; font-size: 11px; font-family: inherit; outline: none; resize: vertical; min-height: 48px; }
+  .vs-scene-row textarea:focus { border-color: #444; }
+  .vs-scene-row button { background: #161212; border: 1px solid #251e1e; border-radius: 2px; color: #6a4040; font-size: 11px; padding: 4px 7px; cursor: pointer; white-space: nowrap; }
+  .vs-scene-row button:hover { color: #cc8888; background: #1e1616; }
+  .prompt-block { background: #0a0a0a; border: 1px solid #1e1e1e; border-radius: 2px; padding: 10px 12px; margin-bottom: 8px; }
+  .prompt-block-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #555; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+  .prompt-block-text { font-size: 11px; color: #c8c8c8; line-height: 1.7; white-space: pre-wrap; font-family: 'SF Mono', 'Consolas', 'Menlo', monospace; max-height: 160px; overflow-y: auto; }
+  .prompt-block-text::-webkit-scrollbar { width: 3px; }
+  .prompt-block-text::-webkit-scrollbar-thumb { background: #2a2a2a; }
+  .lib-item { border-bottom: 1px solid #161616; padding: 8px 0; }
+  .lib-item:last-child { border-bottom: none; }
+  .lib-item-title { font-size: 11px; font-weight: 600; color: #c8c8c8; margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
+  .lib-item-meta { font-size: 10px; color: #555; }
+
+  @media (max-width: 900px) {
+    #tab-video-studio > div { grid-template-columns: 1fr !important; }
+  }
+  @media (max-width: 768px) {
+    .header { padding: 8px 14px; }
+    .tabs { padding: 0 14px; }
+    .container { padding: 10px 14px; }
+    .form-row { grid-template-columns: 1fr; }
+    .comp-grid { grid-template-columns: 1fr; }
+    th:nth-child(5), td:nth-child(5),
+    th:nth-child(4), td:nth-child(4) { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>Account Organizer</h1>
+  <span class="header-count" id="headerCount">0 accounts</span>
+</div>
+
+<!-- Tabs -->
+<div class="tabs">
+  <button class="tab active" onclick="switchTab('my-accounts')">My Accounts</button>
+  <button class="tab" onclick="switchTab('competitors')">Competitors</button>
+  <button class="tab" onclick="switchTab('viral-scripts')">Viral Scripts</button>
+  <button class="tab" onclick="switchTab('video-studio')">Video Studio</button>
+</div>
+
+<div class="container">
+
+  <!-- ===== MY ACCOUNTS TAB ===== -->
+  <div id="tab-my-accounts" class="tab-content active">
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-card stat-total">
+        <div class="stat-num" id="statTotal">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card stat-tiktok">
+        <div class="stat-num" id="statTikTok">0</div>
+        <div class="stat-label">TikTok</div>
+      </div>
+      <div class="stat-card stat-instagram">
+        <div class="stat-num" id="statInstagram">0</div>
+        <div class="stat-label">Instagram</div>
+      </div>
+      <div class="stat-card stat-facebook">
+        <div class="stat-num" id="statFacebook">0</div>
+        <div class="stat-label">Facebook</div>
+      </div>
+      <div class="stat-card stat-youtube">
+        <div class="stat-num" id="statYouTube">0</div>
+        <div class="stat-label">YouTube</div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="icon">🔍</span>
+        <input type="text" id="searchInput" placeholder="Search by username, email, tags..." oninput="renderTable()">
+      </div>
+      <select class="filter-select" id="filterPlatform" onchange="renderTable()">
+        <option value="">All Platforms</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Instagram">Instagram</option>
+        <option value="Facebook">Facebook</option>
+        <option value="YouTube">YouTube</option>
+        <option value="Other">Other</option>
+      </select>
+      <select class="filter-select" id="filterStatus" onchange="renderTable()">
+        <option value="">All Status</option>
+        <option value="Active">Active</option>
+        <option value="Inactive">Inactive</option>
+        <option value="Banned">Banned</option>
+      </select>
+      <button class="btn btn-primary" onclick="openModal()">+ Add Account</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Platform</th>
+            <th>Account / Product</th>
+            <th>Email</th>
+            <th>Tags</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+      <div id="emptyState" class="empty-state" style="display:none;">
+        <div class="empty-icon">📭</div>
+        <h3>No accounts found</h3>
+        <p>Add your first account or adjust your filters.</p>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ===== COMPETITORS TAB ===== -->
+  <div id="tab-competitors" class="tab-content">
+
+    <div class="stats" style="margin-bottom:24px;">
+      <div class="stat-card stat-comp">
+        <div class="stat-num" id="statCompTotal">0</div>
+        <div class="stat-label">Total</div>
+      </div>
+      <div class="stat-card stat-tiktok">
+        <div class="stat-num" id="statCompTikTok">0</div>
+        <div class="stat-label">TikTok</div>
+      </div>
+      <div class="stat-card stat-instagram">
+        <div class="stat-num" id="statCompInstagram">0</div>
+        <div class="stat-label">Instagram</div>
+      </div>
+      <div class="stat-card stat-facebook">
+        <div class="stat-num" id="statCompFacebook">0</div>
+        <div class="stat-label">Facebook</div>
+      </div>
+      <div class="stat-card stat-youtube">
+        <div class="stat-num" id="statCompYouTube">0</div>
+        <div class="stat-label">YouTube</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="icon">🔍</span>
+        <input type="text" id="compSearchInput" placeholder="Search competitors, niche, inspiration..." oninput="renderCompetitors()">
+      </div>
+      <select class="filter-select" id="compFilterPlatform" onchange="renderCompetitors()">
+        <option value="">All Platforms</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Instagram">Instagram</option>
+        <option value="Facebook">Facebook</option>
+        <option value="YouTube">YouTube</option>
+        <option value="Other">Other</option>
+      </select>
+      <button class="btn btn-green" onclick="openCompModal()">+ Add Competitor</button>
+    </div>
+
+    <div class="comp-grid" id="compGrid"></div>
+    <div id="compEmptyState" class="empty-state" style="display:none;">
+      <div class="empty-icon">🔍</div>
+      <h3>No competitors added yet</h3>
+      <p>Add competitor accounts to track for inspiration and ideas.</p>
+    </div>
+
+  </div>
+
+  <!-- ===== VIRAL SCRIPTS TAB ===== -->
+  <div id="tab-viral-scripts" class="tab-content">
+
+    <div class="stats" style="margin-bottom:24px;">
+      <div class="stat-card stat-script">
+        <div class="stat-num" id="statScriptTotal">0</div>
+        <div class="stat-label">Total Scripts</div>
+      </div>
+      <div class="stat-card stat-try">
+        <div class="stat-num" id="statScriptTry">0</div>
+        <div class="stat-label">To Try</div>
+      </div>
+      <div class="stat-card stat-used-s">
+        <div class="stat-num" id="statScriptUsed">0</div>
+        <div class="stat-label">Used</div>
+      </div>
+      <div class="stat-card stat-tiktok">
+        <div class="stat-num" id="statScriptTikTok">0</div>
+        <div class="stat-label">TikTok</div>
+      </div>
+      <div class="stat-card stat-instagram">
+        <div class="stat-num" id="statScriptInsta">0</div>
+        <div class="stat-label">Instagram</div>
+      </div>
+      <div class="stat-card stat-facebook">
+        <div class="stat-num" id="statScriptFB">0</div>
+        <div class="stat-label">Facebook</div>
+      </div>
+    </div>
+
+    <div class="toolbar">
+      <div class="search-box">
+        <span class="icon">🔍</span>
+        <input type="text" id="scriptSearchInput" placeholder="Search scripts, hooks, niches..." oninput="renderScripts()">
+      </div>
+      <select class="filter-select" id="scriptFilterPlatform" onchange="renderScripts()">
+        <option value="">All Platforms</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Instagram">Instagram</option>
+        <option value="Facebook">Facebook</option>
+        <option value="YouTube">YouTube</option>
+        <option value="Other">Other</option>
+      </select>
+      <select class="filter-select" id="scriptFilterStatus" onchange="renderScripts()">
+        <option value="">All Status</option>
+        <option value="To Try">To Try</option>
+        <option value="Used">Used</option>
+        <option value="Archived">Archived</option>
+      </select>
+      <select class="filter-select" id="scriptFilterFormat" onchange="renderScripts()">
+        <option value="">All Formats</option>
+        <option value="Talking Head">Talking Head</option>
+        <option value="Greenscreen">Greenscreen</option>
+        <option value="Voiceover + B-roll">Voiceover + B-roll</option>
+        <option value="Text on Screen">Text on Screen</option>
+        <option value="Other">Other</option>
+      </select>
+      <button class="btn" onclick="openScriptModal()">+ Add Script</button>
+    </div>
+
+    <div class="scripts-grid" id="scriptsGrid"></div>
+    <div id="scriptsEmptyState" class="empty-state" style="display:none;">
+      <div class="empty-icon">🔥</div>
+      <h3>No viral scripts saved yet</h3>
+      <p>Find a viral video from a competitor and save the script here to replicate later.</p>
+    </div>
+
+  </div>
+
+
+</div><!-- end .container -->
+
+<!-- ===== VIDEO STUDIO — outside .container for fixed-height full-bleed layout ===== -->
+<div id="tab-video-studio" class="tab-content" style="height:calc(100vh - 70px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
+
+    <!-- 2-COLUMN BODY -->
+    <div style="display:grid;grid-template-columns:300px 1fr;gap:10px;flex:1;overflow:hidden;min-height:0;">
+
+      <!-- ===== LEFT COLUMN ===== -->
+      <div style="display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0;">
+
+        <!-- Avatar -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-header">
+            <span>Avatar</span>
+            <button class="btn" onclick="saveAvatarProfile()" style="padding:2px 7px;font-size:10px;">Save</button>
+          </div>
+          <div class="vs-panel-body" style="padding:8px;gap:6px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <div style="flex-shrink:0;">
+                <div id="avatarImgPreview" onclick="document.getElementById('avatarImgInput').click()" style="width:60px;height:60px;border:1px dashed #333;border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#0d0d0d;">
+                  <span id="avatarImgPlaceholder" style="font-size:18px;opacity:0.3;">👤</span>
+                  <img id="avatarImgEl" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:3px;">
+                </div>
+                <input type="file" id="avatarImgInput" accept="image/*" style="display:none;" onchange="onAvatarImageChange(event)">
+                <button class="btn" id="clearAvatarImgBtn" onclick="clearAvatarImage()" style="width:100%;margin-top:2px;font-size:9px;padding:1px 0;display:none;">Clear</button>
+              </div>
+              <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #252525;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
+            </div>
+            <div id="avatarSavedNote" style="display:none;font-size:10px;color:#5a8a5a;">✓ Saved</div>
+          </div>
+        </div>
+
+        <!-- Original Transcript -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-header" style="padding:5px 10px;">
+            <span>Original Transcript</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <span id="transcribeStatus" style="font-size:10px;color:#666;display:none;"></span>
+              <button class="btn" onclick="transcribeVideo()" id="transcribeBtn" style="padding:1px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">🎙 Transcribe</button>
+              <button class="btn" onclick="showApiKeyInput()" style="padding:1px 6px;font-size:10px;color:#888;">⚙</button>
+            </div>
+          </div>
+          <div style="padding:6px 10px;">
+            <div id="apiKeyRow" style="display:none;margin-bottom:5px;">
+              <div style="display:flex;gap:4px;">
+                <input type="password" id="openaiKeyInput" placeholder="sk-… OpenAI key (for Transcribe)" style="flex:1;font-size:10px;padding:3px 6px;background:#0d0d0d;border:1px solid #2a3a2a;border-radius:2px;color:#c8c8c8;outline:none;" />
+                <button class="btn" onclick="saveApiKey()" style="padding:2px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">Save</button>
+                <button class="btn" onclick="hideApiKeyInput()" style="padding:2px 6px;font-size:10px;color:#888;">✕</button>
+              </div>
+            </div>
+            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." style="width:100%;font-size:10px;padding:5px 7px;background:#0d0d0d;border:1px solid #222;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
+          </div>
+        </div>
+
+        <!-- Rewritten Script -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-header" style="padding:5px 10px;">
+            <span>Rewritten for Product</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <span id="rewriteStatus" style="font-size:10px;color:#5a8a5a;display:none;"></span>
+              <button class="btn" onclick="copyRewritePrompt()" id="rewriteBtn" style="padding:1px 8px;font-size:10px;border-color:#3a4a6a;color:#7a9acc;" title="Copy a prompt to paste into the Claude chat for rewriting">📋 Copy prompt</button>
+              <button class="btn" onclick="pasteRewrite()" style="padding:1px 8px;font-size:10px;border-color:#2a3a5a;color:#6a8acc;" title="Paste Claude's rewrite from clipboard into this box">📥 Paste</button>
+            </div>
+          </div>
+          <div style="padding:6px 10px;">
+            <div id="rewriteHint" style="font-size:9px;color:#4a5a7a;margin-bottom:4px;line-height:1.4;display:none;">
+              ① Click <strong style="color:#7a9acc;">📋 Copy prompt</strong> → paste in the Claude chat → copy the reply → click <strong style="color:#6a8acc;">📥 Paste</strong>
+            </div>
+            <textarea id="rewrittenScript" rows="3" placeholder="Click 📋 Copy prompt → paste in Claude chat → copy reply → click 📥 Paste." style="width:100%;font-size:10px;padding:5px 7px;background:#0d0d0d;border:1px solid #222;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
+            <div style="display:flex;gap:8px;margin-top:5px;align-items:center;">
+              <span style="font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.5px;">Use for segments:</span>
+              <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#aaa;cursor:pointer;">
+                <input type="radio" name="scriptSource" value="rewritten" id="useRewritten" checked style="accent-color:#7a9acc;"> Rewritten
+              </label>
+              <label style="display:flex;align-items:center;gap:3px;font-size:10px;color:#aaa;cursor:pointer;">
+                <input type="radio" name="scriptSource" value="original" id="useOriginal" style="accent-color:#7acc7a;"> Original
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Product + Setting -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-body" style="padding:8px;gap:5px;">
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:9px;">Product</label>
+              <select id="studioProduct" style="font-size:10px;padding:3px 6px;">
+                <option value="">— select —</option>
+                <option value="Rosabella Electrolyte Drink Powder (Watermelon) — Sugar-free, sodium, potassium, magnesium, calcium, Vitamin C &amp; B12. ASIN B0FJMXG83P.">Rosabella Electrolyte</option>
+                <option value="Serene Herbs Soursop Bitters Liquid — #1 Detox, soursop leaf, black seed, moringa, Irish moss, ashwagandha, turmeric, ginger. ASIN B0CYV4FCJS.">Soursop Bitters</option>
+                <option value="QUIA AHA/BHA Toner Pads — Korean skincare, 70 pads, 3X gentler exfoliation, reduces blackheads. ASIN B0G4JQ5M69.">QUIA Toner Pads</option>
+                <option value="JiYu Toning Polish Pads — Dark spots, snail mucin, niacinamide, peptides, centella, alpha-arbutin. 100 pads. ASIN B0DC156Y5X.">JiYu Toner Pads</option>
+                <option value="Pura Vida Moringa Capsules — #1 Moringa, organic, 120ct 500mg, energy + metabolism + immune. ASIN B00Y2MAE9O.">Pura Vida Moringa</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label style="font-size:9px;">Setting</label>
+              <input type="text" id="studioSetting" placeholder="kitchen, outdoors…" style="font-size:10px;padding:3px 6px;">
+            </div>
+          </div>
+        </div>
+
+        <!-- Saved Library -->
+        <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
+          <div class="vs-panel-header" style="padding:5px 10px;">
+            <span>Saved</span>
+            <span id="libCount" style="font-size:10px;color:#555;"></span>
+          </div>
+          <div id="studioLibrary" style="flex:1;overflow-y:auto;padding:6px 10px;">
+            <div style="font-size:11px;color:#444;text-align:center;padding:10px 0;">No saved recreations yet</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ===== RIGHT COLUMN ===== -->
+      <div style="display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0;">
+
+        <!-- Video player -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-header">
+            <span>Reference Video</span>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span id="apiKeyStatus" style="font-size:10px;font-family:monospace;padding:1px 7px;border-radius:2px;display:none;"></span>
+              <span id="videoTimestamp" style="font-size:10px;color:#666;font-family:monospace;">0:00 / 0:00</span>
+              <button class="btn" id="clearVideoBtn" onclick="clearVideo()" style="padding:2px 8px;font-size:10px;display:none;">Clear</button>
+            </div>
+          </div>
+          <div style="padding:6px 10px 8px;">
+            <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;">
+              <div>
+                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed #333;border-radius:3px;padding:12px;text-align:center;cursor:pointer;background:#0d0d0d;">
+                  <div id="videoUploadPlaceholder">
+                    <div style="font-size:20px;opacity:0.25;margin-bottom:4px;">🎬</div>
+                    <div style="font-size:11px;color:#555;">Click to upload MP4</div>
+                  </div>
+                  <video id="refVideoEl" controls style="display:none;width:100%;max-height:180px;border-radius:2px;" ontimeupdate="updateTimestamp()"></video>
+                </div>
+                <input type="file" id="refVideoInput" accept="video/mp4,video/*" style="display:none;" onchange="onVideoFileChange(event)">
+              </div>
+              <!-- Scene buttons -->
+              <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
+                <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">✂ Mark Scene</button>
+                <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">⚡ Auto 8s</button>
+                <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:#9a6060;border-color:#251e1e;">🗑 Clear</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Segments panel — fills remaining height -->
+        <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
+          <div class="vs-panel-header">
+            <span>Segments <span id="segmentCount" style="font-size:10px;color:#555;font-weight:400;"></span></span>
+            <div style="display:flex;gap:6px;">
+              <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:#555;color:#f0f0f0;">⚡ Generate All Prompts</button>
+              <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
+            </div>
+          </div>
+          <div id="segmentsContainer" style="flex:1;overflow-y:auto;padding:10px;">
+            <div style="text-align:center;padding:24px;font-size:11px;color:#3a3a3a;">
+              Upload a video then click <strong style="color:#666;">Auto 8s</strong> to split into segments, or <strong style="color:#666;">✂ Mark Scene</strong> while watching.
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- Hidden canvas for frame capture -->
+    <canvas id="frameCanvas" style="display:none;"></canvas>
+
+</div><!-- end #tab-video-studio -->
+
+<!-- ===== MY ACCOUNTS MODAL ===== -->
+<div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModalOnBg(event)">
+  <div class="modal">
+    <h2 id="modalTitle">Add Account</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Platform</label>
+        <select id="fPlatform">
+          <option>TikTok</option><option>Instagram</option><option>Facebook</option><option>YouTube</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="fStatus">
+          <option>Active</option><option>Inactive</option><option>Banned</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Username / Handle</label>
+      <input type="text" id="fUsername" placeholder="@username">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="fEmail" placeholder="email@example.com">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="pass-wrap">
+          <input type="password" id="fPassword" placeholder="••••••••">
+          <button class="pass-toggle" onclick="togglePass()" type="button" id="passToggleBtn">👁</button>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Tags (comma separated)</label>
+      <input type="text" id="fTags" placeholder="e.g. main, client, niche1">
+    </div>
+    <div class="form-group">
+      <label>Profile URL</label>
+      <input type="url" id="fUrl" placeholder="https://www.facebook.com/profile.php?id=...">
+    </div>
+    <div class="form-group">
+      <label>Notes</label>
+      <textarea id="fNotes" placeholder="Add any notes about this account..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAccount()">Save Account</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== COMPETITORS MODAL ===== -->
+<div class="modal-overlay" id="compModalOverlay" style="display:none;" onclick="closeCompModalOnBg(event)">
+  <div class="modal">
+    <h2 id="compModalTitle">Add Competitor</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Platform</label>
+        <select id="cPlatform">
+          <option>TikTok</option><option>Instagram</option><option>Facebook</option><option>YouTube</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Niche / Category</label>
+        <input type="text" id="cNiche" placeholder="e.g. Health, Beauty">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Account Name</label>
+      <input type="text" id="cName" placeholder="Display name">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Username / Handle</label>
+        <input type="text" id="cHandle" placeholder="@handle">
+      </div>
+      <div class="form-group">
+        <label>Followers (approx.)</label>
+        <input type="text" id="cFollowers" placeholder="e.g. 500K">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Profile URL</label>
+      <input type="url" id="cUrl" placeholder="https://tiktok.com/@username">
+    </div>
+    <div class="form-group">
+      <label>What I Like / Inspiration Notes</label>
+      <textarea id="cInspiration" placeholder="e.g. Great hooks, posting style, video length, content ideas I want to try..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Tags (comma separated)</label>
+      <input type="text" id="cTags" placeholder="e.g. hook style, trending, health niche">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeCompModal()">Cancel</button>
+      <button class="btn btn-green" onclick="saveCompetitor()">Save Competitor</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VIRAL SCRIPTS MODAL ===== -->
+<div class="modal-overlay" id="scriptModalOverlay" style="display:none;" onclick="closeScriptModalOnBg(event)">
+  <div class="modal" style="max-width:580px;">
+    <h2 id="scriptModalTitle">Add Viral Script</h2>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Platform</label>
+        <select id="sPlatform">
+          <option>TikTok</option><option>Instagram</option><option>Facebook</option><option>YouTube</option><option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Status</label>
+        <select id="sStatus">
+          <option>To Try</option><option>Used</option><option>Archived</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Script Title / Topic</label>
+      <input type="text" id="sTitle" placeholder="e.g. Ozempic fat dissolving hook — soursop bitters">
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Competitor / Source Account</label>
+        <input type="text" id="sSource" placeholder="@handle or account name">
+      </div>
+      <div class="form-group">
+        <label>Niche / Category</label>
+        <input type="text" id="sNiche" placeholder="e.g. Health, Beauty, Fitness">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Video Format</label>
+      <select id="sFormat">
+        <option>Talking Head</option><option>Greenscreen</option><option>Voiceover + B-roll</option><option>Text on Screen</option><option>Other</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Hook (Opening Line — first 1-3 seconds)</label>
+      <input type="text" id="sHook" placeholder="e.g. Women shouldn't drink this too often...">
+    </div>
+    <div class="form-group">
+      <label>Full Script</label>
+      <textarea id="sScript" style="min-height:130px;" placeholder="Paste or type the full word-for-word script here..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Why It Works (psychological trigger / format notes)</label>
+      <textarea id="sWhy" placeholder="e.g. Fear + curiosity hook, Ozempic social proof, fat-dissolving visual grabs attention..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Tags (comma separated)</label>
+      <input type="text" id="sTags" placeholder="e.g. health, soursop, fat dissolve, hook">
+    </div>
+    <div class="form-group">
+      <label>Original Video URL (optional)</label>
+      <input type="url" id="sUrl" placeholder="https://tiktok.com/...">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeScriptModal()">Cancel</button>
+      <button class="btn" style="background:linear-gradient(135deg,#ea580c,#dc2626);color:white;" onclick="saveScript()">Save Script</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ===== SHARED =====
+  const platformEmojis = { TikTok: '🎵', Instagram: '📸', Facebook: '👤', YouTube: '▶️', Other: '🌐' };
+
+  function escHtml(str) {
+    if (!str) return '';
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.getElementById('tab-' + tab).classList.add('active');
+    event.target.classList.add('active');
+    // Lock body scroll only for Video Studio (fixed-height layout); restore for all other tabs
+    if (tab === 'video-studio') {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+      initVideoStudio();
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+      if (tab === 'competitors') renderCompetitors();
+      if (tab === 'viral-scripts') renderScripts();
+    }
+  }
+
+  // ===== MY ACCOUNTS =====
+  let accounts = JSON.parse(localStorage.getItem('sm_accounts') || '[]');
+  let editingId = null;
+
+  function saveAccounts() { localStorage.setItem('sm_accounts', JSON.stringify(accounts)); }
+
+  function renderTable() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const platform = document.getElementById('filterPlatform').value;
+    const status = document.getElementById('filterStatus').value;
+
+    let filtered = accounts.filter(a => {
+      const matchSearch = !search ||
+        a.username.toLowerCase().includes(search) ||
+        (a.email||'').toLowerCase().includes(search) ||
+        (a.tags||'').toLowerCase().includes(search) ||
+        (a.notes||'').toLowerCase().includes(search);
+      const matchPlatform = !platform || a.platform === platform;
+      const matchStatus = !status || a.status === status;
+      return matchSearch && matchPlatform && matchStatus;
+    });
+
+    const tbody = document.getElementById('tableBody');
+    const empty = document.getElementById('emptyState');
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      tbody.innerHTML = filtered.map(a => {
+        const pClass = 'platform-' + a.platform.toLowerCase();
+        const emoji = platformEmojis[a.platform] || '🌐';
+        const sClass = 'status-' + a.status.toLowerCase();
+        const tags = a.tags ? a.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag">${escHtml(t)}</span>`).join('') : '';
+        const linkBtn = a.url ? `<a href="${escHtml(a.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-left:7px;padding:2px 7px;border-radius:2px;background:#1a1a1a;color:#aaa;font-size:10px;font-weight:500;text-decoration:none;border:1px solid #333;white-space:nowrap;" title="${escHtml(a.url)}">↗ Open</a>` : '';
+        const productLine = a.notes ? `<div style="font-size:10px;color:#888;margin-top:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(a.notes)}">${escHtml(a.notes)}</div>` : '';
+        return `<tr>
+          <td><span class="platform-badge ${pClass}">${emoji} ${a.platform}</span></td>
+          <td><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;"><strong style="font-size:12px;">${escHtml(a.username)}</strong>${linkBtn}</div>${productLine}</td>
+          <td style="color:#d8d8d8">${escHtml(a.email)}</td>
+          <td><div class="tags">${tags || '<span style="color:#777">—</span>'}</div></td>
+          <td><span class="status-badge ${sClass}">${a.status}</span></td>
+          <td><div class="actions">
+            <button class="action-btn action-edit" onclick="editAccount('${a.id}')">Edit</button>
+            <button class="action-btn action-delete" onclick="deleteAccount('${a.id}')">Delete</button>
+          </div></td>
+        </tr>`;
+      }).join('');
+    }
+
+    updateStats();
+  }
+
+  function updateStats() {
+    document.getElementById('statTotal').textContent = accounts.length;
+    document.getElementById('statTikTok').textContent = accounts.filter(a => a.platform === 'TikTok').length;
+    document.getElementById('statInstagram').textContent = accounts.filter(a => a.platform === 'Instagram').length;
+    document.getElementById('statFacebook').textContent = accounts.filter(a => a.platform === 'Facebook').length;
+    document.getElementById('statYouTube').textContent = accounts.filter(a => a.platform === 'YouTube').length;
+    document.getElementById('headerCount').textContent = accounts.length + ' account' + (accounts.length !== 1 ? 's' : '');
+  }
+
+  function openModal(id = null) {
+    editingId = id;
+    document.getElementById('modalTitle').textContent = id ? 'Edit Account' : 'Add Account';
+    if (id) {
+      const a = accounts.find(x => x.id === id);
+      document.getElementById('fPlatform').value = a.platform;
+      document.getElementById('fStatus').value = a.status;
+      document.getElementById('fUsername').value = a.username;
+      document.getElementById('fEmail').value = a.email || '';
+      document.getElementById('fPassword').value = a.password || '';
+      document.getElementById('fUrl').value = a.url || '';
+      document.getElementById('fTags').value = a.tags || '';
+      document.getElementById('fNotes').value = a.notes || '';
+    } else {
+      ['fPlatform','fStatus','fUsername','fEmail','fPassword','fUrl','fTags','fNotes'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el.tagName === 'SELECT') el.selectedIndex = 0;
+        else el.value = '';
+      });
+    }
+    document.getElementById('modalOverlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('fUsername').focus(), 100);
+  }
+
+  function closeModal() { document.getElementById('modalOverlay').style.display = 'none'; editingId = null; }
+  function closeModalOnBg(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
+
+  function saveAccount() {
+    const username = document.getElementById('fUsername').value.trim();
+    if (!username) { alert('Username is required.'); return; }
+    const data = {
+      platform: document.getElementById('fPlatform').value,
+      status: document.getElementById('fStatus').value,
+      username,
+      email: document.getElementById('fEmail').value.trim(),
+      password: document.getElementById('fPassword').value,
+      url: document.getElementById('fUrl').value.trim(),
+      tags: document.getElementById('fTags').value.trim(),
+      notes: document.getElementById('fNotes').value.trim(),
+    };
+    if (editingId) {
+      const idx = accounts.findIndex(a => a.id === editingId);
+      accounts[idx] = { ...accounts[idx], ...data };
+    } else {
+      accounts.push({ id: Date.now().toString(), ...data });
+    }
+    saveAccounts(); closeModal(); renderTable();
+  }
+
+  function editAccount(id) { openModal(id); }
+  function deleteAccount(id) {
+    if (!confirm('Delete this account?')) return;
+    accounts = accounts.filter(a => a.id !== id);
+    saveAccounts(); renderTable();
+  }
+
+  function togglePass() {
+    const inp = document.getElementById('fPassword');
+    const btn = document.getElementById('passToggleBtn');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    btn.textContent = inp.type === 'password' ? '👁' : '🙈';
+  }
+
+  // ===== COMPETITORS =====
+  let competitors = JSON.parse(localStorage.getItem('sm_competitors') || '[]');
+  let editingCompId = null;
+
+  function saveCompetitors() { localStorage.setItem('sm_competitors', JSON.stringify(competitors)); }
+
+  function renderCompetitors() {
+    const search = document.getElementById('compSearchInput').value.toLowerCase();
+    const platform = document.getElementById('compFilterPlatform').value;
+
+    let filtered = competitors.filter(c => {
+      const matchSearch = !search ||
+        (c.name||'').toLowerCase().includes(search) ||
+        (c.handle||'').toLowerCase().includes(search) ||
+        (c.niche||'').toLowerCase().includes(search) ||
+        (c.inspiration||'').toLowerCase().includes(search) ||
+        (c.tags||'').toLowerCase().includes(search);
+      const matchPlatform = !platform || c.platform === platform;
+      return matchSearch && matchPlatform;
+    });
+
+    const grid = document.getElementById('compGrid');
+    const empty = document.getElementById('compEmptyState');
+
+    document.getElementById('statCompTotal').textContent = competitors.length;
+    document.getElementById('statCompTikTok').textContent = competitors.filter(c => c.platform === 'TikTok').length;
+    document.getElementById('statCompInstagram').textContent = competitors.filter(c => c.platform === 'Instagram').length;
+    document.getElementById('statCompFacebook').textContent = competitors.filter(c => c.platform === 'Facebook').length;
+    document.getElementById('statCompYouTube').textContent = competitors.filter(c => c.platform === 'YouTube').length;
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      const pClass = p => 'platform-' + (p||'other').toLowerCase();
+      grid.innerHTML = filtered.map(c => {
+        const emoji = platformEmojis[c.platform] || '🌐';
+        const tags = c.tags ? c.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag tag-green">${escHtml(t)}</span>`).join('') : '';
+        const urlBtn = c.url ? `<a class="action-btn action-link" href="${escHtml(c.url)}" target="_blank">🔗 Visit</a>` : '';
+        return `<div class="comp-card">
+          <div class="comp-card-header">
+            <div class="comp-card-title">
+              <div class="comp-avatar">${emoji}</div>
+              <div>
+                <div class="comp-name">${escHtml(c.name || c.handle)}</div>
+                <div class="comp-handle">${escHtml(c.handle)}</div>
+              </div>
+            </div>
+            <div class="comp-card-actions">
+              ${urlBtn}
+              <button class="action-btn action-edit" onclick="editCompetitor('${c.id}')">✏️</button>
+              <button class="action-btn action-delete" onclick="deleteCompetitor('${c.id}')">🗑</button>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;">
+            <span class="platform-badge ${pClass(c.platform)}">${emoji} ${c.platform}</span>
+            ${c.niche ? `<span class="comp-niche">${escHtml(c.niche)}</span>` : ''}
+            ${c.followers ? `<span class="comp-followers">👥 ${escHtml(c.followers)}</span>` : ''}
+          </div>
+          ${c.inspiration ? `<div class="comp-inspiration">💡 ${escHtml(c.inspiration)}</div>` : ''}
+          ${tags ? `<div class="tags" style="margin-top:10px;">${tags}</div>` : ''}
+        </div>`;
+      }).join('');
+    }
+  }
+
+  function openCompModal(id = null) {
+    editingCompId = id;
+    document.getElementById('compModalTitle').textContent = id ? 'Edit Competitor' : 'Add Competitor';
+    if (id) {
+      const c = competitors.find(x => x.id === id);
+      document.getElementById('cPlatform').value = c.platform;
+      document.getElementById('cNiche').value = c.niche || '';
+      document.getElementById('cName').value = c.name || '';
+      document.getElementById('cHandle').value = c.handle || '';
+      document.getElementById('cFollowers').value = c.followers || '';
+      document.getElementById('cUrl').value = c.url || '';
+      document.getElementById('cInspiration').value = c.inspiration || '';
+      document.getElementById('cTags').value = c.tags || '';
+    } else {
+      ['cNiche','cName','cHandle','cFollowers','cUrl','cInspiration','cTags'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cPlatform').selectedIndex = 0;
+    }
+    document.getElementById('compModalOverlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('cName').focus(), 100);
+  }
+
+  function closeCompModal() { document.getElementById('compModalOverlay').style.display = 'none'; editingCompId = null; }
+  function closeCompModalOnBg(e) { if (e.target === document.getElementById('compModalOverlay')) closeCompModal(); }
+
+  function saveCompetitor() {
+    const name = document.getElementById('cName').value.trim();
+    const handle = document.getElementById('cHandle').value.trim();
+    if (!name && !handle) { alert('Name or handle is required.'); return; }
+    const data = {
+      platform: document.getElementById('cPlatform').value,
+      niche: document.getElementById('cNiche').value.trim(),
+      name, handle,
+      followers: document.getElementById('cFollowers').value.trim(),
+      url: document.getElementById('cUrl').value.trim(),
+      inspiration: document.getElementById('cInspiration').value.trim(),
+      tags: document.getElementById('cTags').value.trim(),
+    };
+    if (editingCompId) {
+      const idx = competitors.findIndex(c => c.id === editingCompId);
+      competitors[idx] = { ...competitors[idx], ...data };
+    } else {
+      competitors.push({ id: Date.now().toString(), ...data });
+    }
+    saveCompetitors(); closeCompModal(); renderCompetitors();
+  }
+
+  function editCompetitor(id) { openCompModal(id); }
+  function deleteCompetitor(id) {
+    if (!confirm('Remove this competitor?')) return;
+    competitors = competitors.filter(c => c.id !== id);
+    saveCompetitors(); renderCompetitors();
+  }
+
+  // ===== SEED VIRAL SCRIPTS (merges by ID) =====
+  function seedViralScripts() {
+    const existingIds = new Set(viralScripts.map(s => s.id));
+    const seedScripts = [
+      {
+        id: 'vs_1',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '"Comment Your Age" USA Geo-Hook — Soursop Bitters',
+        source: 'Mother Satori (@MotherSatori) — 5M followers',
+        niche: 'Herbal Remedies / Soursop',
+        format: 'Talking Head',
+        hook: 'If you\'re from the USA 🇺🇸 — comment your age right now.',
+        script: 'If you\'re from the USA 🇺🇸 — comment your age right now.\n\n[beat]\n\nBecause I need to tell you something your doctor never will.\n\n[beat]\n\nYour belly is not fat. It is inflammation — sitting deep in your gut, in your liver, in your lymph nodes. Blocking everything.\n\nAnd it has been there for years.\n\nWhen your liver is clogged with toxins, it cannot break down fat. It cannot flush waste. It just holds onto it.\n\nThat is why no diet, no exercise is working.\n\nIn the Caribbean, we have been cleaning the liver with one thing for over 400 years.\n\nSoursop bitters. The leaf. The root. The bark.\n\nBitter herbs trigger your liver to produce bile again. Bile breaks the toxins loose. And your body finally releases what it has been holding onto.\n\nIn seven days — the bloating drops. The puffiness leaves.\n\nComment BITTERS and I will send you exactly where I get mine.',
+        why: 'USA geo-hook forces comments instantly — age is personal, everyone answers it. Algorithm sees comment spike and pushes to millions. Hidden internal enemy (liver toxins) = curiosity + fear. ManyChat auto-replies with product link = passive income machine.',
+        tags: 'soursop,liver,USA hook,comment your age,bitters,ManyChat,3.4M views,PROVEN',
+        url: 'https://www.facebook.com/watch/?v=25736998135937411',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_2',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '"Doctor Explains the Truth About Breakfast" — Fasting Hook',
+        source: 'Kim\'s Remedy (@kimsremedy68) — 67K followers',
+        niche: 'Health / Fasting / Weight Loss',
+        format: 'Talking Head',
+        hook: 'Doctor explains the truth about breakfast — and why eating 3 times a day is keeping your body sick.',
+        script: 'Doctor explains the truth about breakfast.\n\n[beat]\n\nIf we eat 3 times a day, our body works around the clock to digest food and dispose of waste.\n\nIt does not have time to heal itself.\n\n[beat]\n\nWhen you give your body a break — two meals instead of three — something remarkable happens.\n\nYour body switches from digestion mode into healing mode.\n\nInflammation drops. Fat cells start releasing stored toxins. Your gut finally gets a chance to repair itself.\n\n[beat]\n\nThis is why fasting works better than any diet. Not because of calories — because of timing.\n\n2 meals is better than 3. Fasting is better than we think.\n\n[beat]\n\nIf your body feels sluggish, bloated, heavy — this is why.\n\nComment HEAL and I will send you the morning routine I personally follow every day.',
+        why: 'Authority hook (doctor) makes viewers stop scrolling. Challenges a daily behavior everyone does (eating breakfast). Educational save-bait format gets shared. Fasting angle resonates with 35-55 women already curious about intermittent fasting.',
+        tags: 'fasting,breakfast,doctor,authority hook,weight loss,healing,1M views,PROVEN',
+        url: 'https://www.facebook.com/watch/?v=987852250594549',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_3',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '"Comment SKIN" — Korean Natural Beauty Recipe Hook',
+        source: 'Imani Kim Beauty (@imani.kim.beauty) — 71yr Black/Korean, 14K followers',
+        niche: 'Korean Skincare / Brightening / Anti-Aging',
+        format: 'Talking Head',
+        hook: 'Comment SKIN and follow — and I\'ll send you more natural beauty recipes from Korea that women over 50 swear by.',
+        script: 'Comment SKIN and follow — and I\'ll send you more natural beauty recipes from Korea that women over 50 swear by.\n\n[beat]\n\nI am 71 years old. And I have never bought a single skin lightening cream.\n\n[beat]\n\nMy Korean grandmother gave me three things when I was a girl. And I have used them every single week since.\n\n[visual cue: hold up each ingredient]\n\nRice water. Fermented. Applied like a toner every morning.\n\nSnail mucin. One drop. On every dark spot.\n\nNiacinamide. Mixed into my moisturizer every night.\n\n[beat]\n\nThirty days. That is all it takes.\n\nDark spots fade. Skin tightens. Tone evens out.\n\n[smile to camera]\n\nHere is the toner I use personally after every single remedy.\n\nComment SKIN and I will send you the full routine — including what I put on my inner thighs and neck.',
+        why: 'Comment keyword CTA drives algorithm engagement. "71 years old and look like this" is instant proof. Cultural authority (Black/Korean = two beauty traditions in one). #over40 #over50 audience is the most engaged skincare demographic on Facebook.',
+        tags: 'korean skincare,brightening,comment skin,over50,over40,dark spots,recipe,kbeauty,2.1K views',
+        url: 'https://www.facebook.com/watch/?v=1671765690808196',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_4',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: 'Caribbean Holistic Healer — Beetroot/Ancient Remedy Hook',
+        source: 'Iyah Rootman (ID: 61588469780414) — 1M followers, St. Vincent 🇻🇨',
+        niche: 'Caribbean Herbal Remedies / Holistic Health',
+        format: 'Talking Head',
+        hook: 'This root has been growing in the Caribbean for centuries. And your doctor has never once mentioned it to you.',
+        script: 'This root has been growing in the Caribbean for centuries.\n\nAnd your doctor has never once mentioned it to you.\n\n[beat]\n\nI am a root healer from St. Vincent. My grandmother\'s grandmother used this plant. And now science is finally catching up.\n\n[beat]\n\nBeetroot.\n\nNot the kind in your grocery store salad — the concentrated root, the way we extract it.\n\nBeetroot floods your blood with nitrates. Your blood vessels relax. Circulation opens up.\n\nAnd when circulation opens up — fat that has been stuck to your organs starts moving.\n\nInflammation that has sat in your joints for years starts leaving.\n\nYour energy comes back. Your skin clears. Your belly flattens.\n\n[beat]\n\nNot because you dieted. Because your blood is finally moving the way God designed it to.\n\nComment ROOT and I will send you exactly what I use and where to get it.',
+        why: 'Vincentian cultural authority = extremely rare and trustworthy angle. "Your doctor never mentioned it" = suppressed knowledge hook (one of the highest converting health hooks). 1.7M view reel proves this format is working at massive scale on this exact account.',
+        tags: 'caribbean,beetroot,holistic,root healer,blood circulation,ancient remedy,1.7M views,PROVEN',
+        url: 'https://www.facebook.com/reel/3896104254027592',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_5',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '"Watch Me" Transformation Hook — Wedding Makeup',
+        source: 'Hwang Makeup (ID: 61576513903123) — 28K followers',
+        niche: 'Beauty / Korean Makeup / Transformation',
+        format: 'POV / B-roll',
+        hook: 'Watch me do her wedding makeup… 😳‼️',
+        script: '[No dialogue needed — pure visual hook]\n\nOPENING FRAME: Show subject before — no makeup, natural look.\n\n[TRANSFORMATION SEQUENCE]\nApply base product step by step. Close-up on skin texture changing.\nShow contouring. Highlight. Lip color.\n\nFINAL REVEAL: Subject fully made up — dramatic before/after cut.\n\n[Text overlay]: "Comment GLOW and I\'ll send you every product used"\n\nCAPTION: "Watch me do her [event] transformation 😳‼️ Comment GLOW for the full product list #over40 #kbeauty #skincare #usa"',
+        why: '"Watch me" is one of the highest CTR hooks on Facebook Reels — it promises entertainment. Shocked emoji + double exclamation creates FOMO. Wedding/event context is emotionally loaded. 75K views with only 28K followers = massive over-performance ratio. Pure visual — no talking head needed.',
+        tags: 'watch me,transformation,before after,makeup,no script,visual hook,75K views,PROVEN',
+        url: 'https://www.facebook.com/watch/?v=818460924218705',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_6',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: 'Mother Satori — Liver/Bile Soursop Science Script (Full Research Version)',
+        source: 'Mother Satori (@MotherSatori) — 5M followers',
+        niche: 'Herbal Remedies / Liver Health',
+        format: 'Talking Head',
+        hook: 'The problem is hidden inside. It is your liver.',
+        script: 'The problem is hidden inside.\n\nIt is your liver.\n\n[beat]\n\nYour neck is where collagen breaks down first — because the skin there is thinnest. But the real cause is not age.\n\nIt is a clogged liver.\n\nWhen your liver fills with toxins, it creates inflammation. That inflammation travels through your body and destroys collagen — in your neck, your thighs, your belly.\n\n[beat]\n\nFor generations, my family has cleaned the liver with herbs that have been passed down for centuries.\n\nSoursop. Black seed. Lemon root. Hibiscus.\n\nThese are bitter herbs. And bitter compounds trigger your liver to produce bile.\n\nBile breaks down the toxins. Pushes them out of the body.\n\nAnd when the toxins leave — the inflammation drops. The skin tightens. The belly flattens.\n\n[beat]\n\nComment the letter T — and I will send you the exact recipe I mix my bitters with every single morning.',
+        why: 'Liver as the hidden root cause is the #1 performing health hook across all avatar pages. Connects skin problems (collagen) to internal organ = more credibility than just "drink this." Bitter herbs + bile science sounds credible even to skeptics. "Comment T" is the shortest possible comment CTA — lowest friction = highest response rate.',
+        tags: 'liver,bile,collagen,soursop,black seed,comment T,science hook,low friction CTA,PROVEN',
+        url: 'https://www.facebook.com/MotherSatori/',
+        dateAdded: 'Scanned May 2026'
+      },
+      {
+        id: 'vs_7',
+        platform: 'Instagram',
+        status: 'To Try',
+        title: 'Melanskia — "Industrial Waste in Your Liver" Amish Wisdom Script',
+        source: 'Melanskia (@melanskia) — 373K followers',
+        niche: 'Natural Supplements / Liver Cleanse',
+        format: 'Talking Head',
+        hook: 'What\'s sitting in your gut right now is not fat. It\'s industrial waste your liver was never designed to process.',
+        script: 'What\'s sitting in your gut right now is not fat.\n\nIt is industrial waste. Chemicals, preservatives, synthetic dyes — things your liver was never designed to process.\n\n[beat]\n\nOn our farm, we do not eat from packages. We eat from the ground.\n\nAnd in the Amish community, we have known for generations what happens when you put man-made chemicals into a body built for real food.\n\nYour liver gets overwhelmed. It stores what it cannot process as fat. Right around your organs. Right around your belly.\n\n[beat]\n\nThe way to clear it is not a diet. It is not exercise.\n\nIt is giving your liver the compounds it needs to actually flush.\n\n[hold up product]\n\nThis is what I take every morning before anything else.\n\nOne teaspoon. Warm water. Empty stomach.\n\nBy day five your bloating drops. By day ten your energy comes back. By day fourteen your clothes fit differently.\n\nComment CLEAN and I will send you the link.',
+        why: 'Amish cultural authority = purity and simplicity = highest trust in natural remedy content. "Industrial waste" framing redefines the problem from personal failure (I ate too much) to systemic one (the food system poisoned me) = emotional relief + anger = sharing. 373K followers built on this exact formula.',
+        tags: 'amish,liver,industrial waste,gut,cleanse,supplement,comment clean,cultural authority,373K followers',
+        url: 'https://www.instagram.com/melanskia/',
+        dateAdded: 'Scanned May 2026'
+      },
+      // ===== PRODUCT-SPECIFIC REWRITES (vs_8 – vs_14) =====
+      {
+        id: 'vs_8',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 USA Age Hook — Serene Herbs Soursop Bitters Liquid',
+        source: 'Inspired by Mother Satori 3.4M-view formula',
+        niche: 'Herbal Remedies / Gut Cleanse / Detox',
+        format: 'Talking Head',
+        hook: 'If you\'re from the USA 🇺🇸 — comment your age right now.',
+        script: 'If you\'re from the USA 🇺🇸 — comment your age right now.\n\n[beat]\n\nBecause I need to show you what people in the Caribbean have known for over 400 years.\n\nYour gut is not just "unhealthy." It is clogged with inflammation — sitting in your liver, your intestines, your lymph nodes. Blocking everything.\n\nEvery day you eat processed food, drink tap water, breathe polluted air — it gets worse.\n\nYour liver becomes overwhelmed. It can\'t flush waste. So it stores it — as fat, as bloat, as that puffy feeling you wake up with every morning.\n\n[beat]\n\nIn the Caribbean, we fix this with one liquid. It starts with soursop — the graviola leaf. Mixed with black seed, moringa, Irish moss, turmeric, and ginger.\n\nWe have been using this combination since our grandmothers\' grandmothers.\n\nAnd now it\'s the number-one best-selling detox supplement in America. Sixty thousand people bought it just last month.\n\n[beat]\n\nSeven days. That\'s all it takes for the bloating to drop.\n\nComment CLEANSE and I\'ll send you exactly where to get it.\n\n[ManyChat keyword: CLEANSE → send Amazon link for Serene Herbs Soursop Bitters B0CYV4FCJS]',
+        why: 'Same proven geo-hook formula as Mother Satori\'s 3.4M view video. Soursop Bitters is the EXACT product — "60K bought last month" is real Amazon data. Specific ingredients (soursop, black seed, moringa, Irish moss) match bottle label for authenticity.',
+        tags: 'soursop,liver,USA hook,comment your age,bitters,ManyChat,product-specific,serene herbs,REWRITE',
+        url: 'https://www.amazon.com/dp/B0CYV4FCJS',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_9',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 Doctor Explains Why You\'re Always Tired — Pura Vida Moringa',
+        source: 'Inspired by Kim\'s Remedy 1M-view authority hook formula',
+        niche: 'Energy / Metabolism / Immune Support',
+        format: 'Talking Head',
+        hook: 'A doctor finally explained why I was exhausted at 2 PM every single day — even when I slept 8 hours.',
+        script: 'A doctor finally explained why I was exhausted at 2 PM every single day — even when I slept 8 hours.\n\n[beat]\n\nIt is not age. It is not stress.\n\nIt is your mitochondria — the tiny batteries inside every single cell in your body.\n\nWhen your mitochondria are damaged by processed food, chemicals, and chronic inflammation — your cells literally cannot produce energy.\n\nThat afternoon crash? That brain fog? Those are not feelings. That is cellular breakdown.\n\n[beat]\n\nFor 5,000 years, Ayurvedic medicine has had one answer. Moringa oleifera. The miracle tree.\n\nIt contains over 90 nutrients. More iron than spinach. More vitamin C than oranges. More calcium than milk.\n\nBut the secret compound — isothiocyanates — these directly protect your mitochondria. They rebuild the energy your cells have been starved of.\n\n[beat]\n\nI have been taking two capsules every morning for 60 days.\n\nNo more 2 PM crash. No more reaching for coffee. My metabolism is running the way it ran at 30.\n\nComment ENERGY and I will send you the exact brand I use — it is single-origin organic and the number one moringa supplement in America.\n\n[ManyChat keyword: ENERGY → send Amazon link for Pura Vida Moringa B00Y2MAE9O]',
+        why: 'Doctor + cellular science makes it credible. "2 PM crash" is universal — everyone relates. 5,000 years of Ayurveda + modern isothiocyanate science = ancient/modern hybrid hook. Pura Vida is literally #1 in Moringa category on Amazon.',
+        tags: 'moringa,energy,doctor hook,mitochondria,metabolism,2pm crash,ayurveda,pura vida,REWRITE',
+        url: 'https://www.amazon.com/dp/B00Y2MAE9O',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_10',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 Comment GLOW — JiYu Korean Dark Spot Toning Pads',
+        source: 'Inspired by Imani Kim Beauty Korean recipe formula',
+        niche: 'Korean Skincare / Dark Spots / Anti-Aging',
+        format: 'Talking Head',
+        hook: 'Comment GLOW and I\'ll send you the Korean secret to erasing dark spots without a single cream.',
+        script: 'Comment GLOW and I\'ll send you the Korean secret to erasing dark spots without a single cream.\n\n[beat]\n\nI am 58 years old. Korean-American. And I have never had a single laser treatment.\n\n[beat]\n\nMy mother had dark spots. My grandmother had dark spots. Every woman in my family did.\n\nUntil my halmoni — my grandmother — showed me what Korean women have been using for 300 years.\n\nSnail mucin. Niacinamide. Centella asiatica.\n\nThese three ingredients work at the cellular level. They interrupt melanin production before it reaches the surface. They rebuild the collagen layer beneath the skin.\n\nDark spots don\'t get covered up. They get erased.\n\n[beat]\n\nI used to spend three hundred dollars a month on brightening creams. Then I found these pads.\n\nKorean formula. One hundred pads in one pack. Snail mucin, niacinamide, peptides, centella asiatica, AND alpha-arbutin — everything my halmoni\'s recipe had, in one single swipe.\n\nOne pad every night. Within two weeks — the spots started fading. Within thirty days — my skin tone evened out completely.\n\n[hold up JiYu pads to camera]\n\nComment GLOW and I will send you the link.\n\n[ManyChat keyword: GLOW → send Amazon link for JiYu Toning Polish Pads B0DC156Y5X]',
+        why: 'Korean halmoni cultural authority = highest trust in skincare content. Specific ingredients on the JiYu label (snail mucin, niacinamide, centella, alpha-arbutin) are name-dropped for authenticity. "Erase" not "cover" — active transformation language. Over-50 demographic is most engaged skincare viewer on Facebook.',
+        tags: 'korean skincare,dark spots,glow,comment glow,halmoni,snail mucin,niacinamide,jiyu,REWRITE',
+        url: 'https://www.amazon.com/dp/B0DC156Y5X',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_11',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 Caribbean Island Hydration Secret — Rosabella Electrolyte',
+        source: 'Inspired by Iyah Rootman 1.7M-view Caribbean healer formula',
+        niche: 'Hydration / Electrolytes / Natural Wellness',
+        format: 'Talking Head',
+        hook: 'This combination of minerals has been used in the islands since before your grandparents were born. And your sports drink has zero of them.',
+        script: 'This combination of minerals has been used in the islands since before your grandparents were born.\n\nAnd your sports drink has zero of them.\n\n[beat]\n\nI am a root healer from the islands. Where I come from, we do not reach for sugar-filled sports drinks or energy drinks full of artificial colors.\n\nWe drink what the earth gives us.\n\n[beat]\n\nYour body needs five things to stay hydrated at the cellular level. Not just water.\n\nSodium. Potassium. Magnesium. Calcium. And Vitamin C from real plants.\n\nWhen these are out of balance — you feel it.\n\nMuscle cramps. Brain fog. Fatigue that sleep does not fix. Heart racing when you stand up too fast.\n\nThat is not weakness. That is cellular dehydration.\n\n[beat]\n\nIn the islands, we get these from hibiscus, sea moss, coconut water, and Himalayan sea salt.\n\nBut now there is a formula that gives your body all five — with no sugar, no chemicals, no artificial anything.\n\nJust clean electrolytes: sodium, potassium, magnesium, calcium, Vitamin C and B12. Watermelon flavor from real plant minerals.\n\n[hold up Rosabella packet]\n\nRosabella. The island answer, finally in a modern form.\n\nFive thousand people are buying this every month.\n\nComment HYDRATE and I will send you the link.\n\n[ManyChat keyword: HYDRATE → send Amazon link for Rosabella Electrolyte B0FJMXG83P]',
+        why: 'Caribbean authority + cellular hydration science. "Not just water" reframes hydration — educates and elevates. Naming the 5 electrolytes matches Rosabella\'s actual label. Sugar-free is a critical differentiator for health-conscious audience. 5K/month Amazon sales = real social proof.',
+        tags: 'electrolytes,hydration,caribbean,rosabella,sugar free,watermelon,comment hydrate,island remedy,REWRITE',
+        url: 'https://www.amazon.com/dp/B0FJMXG83P',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_12',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 "Watch Me Clear My Skin" — QUIA AHA/BHA Toner Pads',
+        source: 'Inspired by Hwang Makeup 75K-view "Watch Me" transformation formula',
+        niche: 'Korean Skincare / Acne / Pores / Exfoliation',
+        format: 'POV / B-roll / 30-Day Challenge',
+        hook: 'Watch me clear my skin in 30 days using one Korean pad 😳‼️',
+        script: '[OPENING FRAME: Bare skin close-up — visible blackheads, dull texture, uneven tone]\n[Text overlay: "Day 1 — no filter, no makeup"]\n\nWatch me.\n\n[DAYS 1-7 MONTAGE: Quick clips applying QUIA pad each morning. Hold pad to camera. Swipe across cheek.]\n[Text overlay: "One pad. Every morning. No prescription needed."]\n\n[DAYS 8-14: Close-up on skin — pores visibly tightening]\n[Text overlay: "Day 14 — I can feel the texture changing"]\n\n[DAYS 15-30: Clean, glowing skin reveal — slow zoom]\n[Text overlay: "Day 30. Same face. Zero filter."]\n\n[FINAL FRAME: Hold QUIA toner pads to camera with smile]\n[Text overlay: "Comment CLEAR and I\'ll send you these 🇰🇷"]\n\nCAPTION: "Watch me clear my skin in 30 days using one Korean pad 😳‼️ AHA + BHA dual formula, 70 pads per pack, clinically proven 3X gentler than regular exfoliants. No purging. No irritation. Just results. Comment CLEAR for the link #skincare #kbeauty #acne #toner #blackheads #30daychallenge"\n\n[ManyChat keyword: CLEAR → send Amazon link for QUIA Toner Pads B0G4JQ5M69]',
+        why: '"Watch me" is the #1 performing visual hook on Facebook Reels. 30-day challenge format = saves, shares, and follow-up comments. "No prescription" = resonates with people frustrated by expensive dermatology. QUIA\'s "3X gentler" clinical claim is a real differentiator to display on screen.',
+        tags: 'watch me,transformation,before after,30 days,toner pads,AHA BHA,blackheads,QUIA,kbeauty,REWRITE',
+        url: 'https://www.amazon.com/dp/B0G4JQ5M69',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_13',
+        platform: 'Facebook',
+        status: 'To Try',
+        title: '🛒 Liver/Bile Science Hook — Serene Herbs Soursop Bitters',
+        source: 'Inspired by Mother Satori Liver/Bile Science formula',
+        niche: 'Herbal Remedies / Liver Health / Detox',
+        format: 'Talking Head',
+        hook: 'The problem is hiding inside you right now. And it has nothing to do with what you ate.',
+        script: 'The problem is hiding inside you right now.\n\nAnd it has nothing to do with what you ate.\n\n[beat]\n\nYour neck is sagging. Your belly will not go down no matter what you try. You wake up tired every morning.\n\nThat is not aging. That is your liver.\n\n[beat]\n\nWhen your liver is clogged — and everyone who eats processed food has some level of liver congestion — it stops producing bile.\n\nBile is what breaks down fat. Bile is what carries toxins out of your body.\n\nWithout bile, toxins recirculate. They destroy collagen. They create inflammation. They get stored around your organs.\n\nThat is what you are seeing in the mirror.\n\n[beat]\n\nIn the Caribbean, in West Africa, in ancient India — they all knew one truth.\n\nBitter herbs force the liver to produce bile again.\n\nSoursop leaf. Black seed. Moringa. Ashwagandha. Irish sea moss. Turmeric. Ginger.\n\nNot one. All of them together. Concentrated. In liquid form.\n\nYour body absorbs liquid in seven minutes. Capsules take hours.\n\n[hold up Serene Herbs bottle]\n\nThis is Serene Herbs. Number one best-selling detox supplement in America. Eight thousand verified five-star reviews. Sixty thousand people bought it last month.\n\nComment BITTER and I will send you the link.\n\n[ManyChat keyword: BITTER → send Amazon link for Serene Herbs Soursop Bitters B0CYV4FCJS]',
+        why: 'Liver as hidden root cause is the #1 performing health hook. "Liquid absorbs in 7 minutes" = unique product angle vs. capsules. 8K reviews + 60K bought/month is real Amazon data — say it confidently. "Comment BITTER" = lowest-friction CTA.',
+        tags: 'liver,bile,collagen,soursop,black seed,moringa,comment bitter,science hook,serene herbs,REWRITE',
+        url: 'https://www.amazon.com/dp/B0CYV4FCJS',
+        dateAdded: 'May 2026 — Product Rewrite'
+      },
+      {
+        id: 'vs_14',
+        platform: 'Instagram',
+        status: 'To Try',
+        title: '🛒 "Industrial Waste in Your Body" — Pura Vida Moringa Capsules',
+        source: 'Inspired by Melanskia 373K "Industrial Waste" Amish formula',
+        niche: 'Natural Supplements / Detox / Energy',
+        format: 'Talking Head',
+        hook: 'What\'s sitting in your body right now is not fat. It\'s toxins your liver was never built to process.',
+        script: 'What\'s sitting in your body right now is not fat.\n\nIt\'s toxins. Pesticides, preservatives, synthetic chemicals — things your liver was never designed to handle.\n\n[beat]\n\nI grew up on a small farm. We grew our own food. We did not eat from packages.\n\nAnd I watched what happened to people in my community who switched to processed food.\n\nTheir energy disappeared. Their belly grew. Their joints ached. Their mood crashed.\n\nThat is not aging. That is a toxic overload.\n\n[beat]\n\nThe most powerful natural detoxifier on this earth does not come from a lab.\n\nIt comes from the moringa tree. Called the "miracle tree" in 80 countries. Used by healers for over 5,000 years.\n\nOver 90 vitamins and minerals in one leaf. The compounds in moringa — called isothiocyanates — activate your liver\'s natural detox pathways. Give your cells the fuel they\'ve been starved of.\n\n[beat]\n\nWithin 14 days, your energy comes back. Your digestion normalizes. The inflammation in your joints starts dropping.\n\n[hold up Pura Vida bottle]\n\nPura Vida Moringa. Single-origin organic. 120 capsules. Number one moringa supplement in America. Ten thousand people bought this last month.\n\nComment TREE and I will send you the link.\n\n[ManyChat keyword: TREE → send Amazon link for Pura Vida Moringa B00Y2MAE9O]',
+        why: '"Industrial waste" framing = emotional relief (not my fault, the food system did this). Farm cultural authority = purity and trust. Moringa\'s 5,000-year history + isothiocyanate science = ancient/modern hybrid. "90+ vitamins" is a real, verifiable claim. Pura Vida is genuinely #1 in Moringa on Amazon.',
+        tags: 'moringa,industrial waste,detox,energy,farm authority,5000 years,pura vida,comment tree,REWRITE',
+        url: 'https://www.amazon.com/dp/B00Y2MAE9O',
+        dateAdded: 'May 2026 — Product Rewrite'
+      }
+    ];
+    const newSeeds = seedScripts.filter(s => !existingIds.has(s.id));
+    if (newSeeds.length === 0) return;
+    viralScripts = [...viralScripts, ...newSeeds];
+    saveScriptsStore();
+  }
+
+  // ===== VIRAL SCRIPTS =====
+  let viralScripts = JSON.parse(localStorage.getItem('sm_viral_scripts') || '[]');
+  let editingScriptId = null;
+
+  function saveScriptsStore() { localStorage.setItem('sm_viral_scripts', JSON.stringify(viralScripts)); }
+
+  function renderScripts() {
+    const search = (document.getElementById('scriptSearchInput').value || '').toLowerCase();
+    const platform = document.getElementById('scriptFilterPlatform').value;
+    const status = document.getElementById('scriptFilterStatus').value;
+    const format = document.getElementById('scriptFilterFormat').value;
+
+    let filtered = viralScripts.filter(s => {
+      const matchSearch = !search ||
+        (s.title||'').toLowerCase().includes(search) ||
+        (s.hook||'').toLowerCase().includes(search) ||
+        (s.script||'').toLowerCase().includes(search) ||
+        (s.niche||'').toLowerCase().includes(search) ||
+        (s.source||'').toLowerCase().includes(search) ||
+        (s.tags||'').toLowerCase().includes(search) ||
+        (s.why||'').toLowerCase().includes(search);
+      const matchPlat = !platform || s.platform === platform;
+      const matchSt = !status || s.status === status;
+      const matchFmt = !format || s.format === format;
+      return matchSearch && matchPlat && matchSt && matchFmt;
+    });
+
+    // Stats
+    document.getElementById('statScriptTotal').textContent = viralScripts.length;
+    document.getElementById('statScriptTry').textContent = viralScripts.filter(s => s.status === 'To Try').length;
+    document.getElementById('statScriptUsed').textContent = viralScripts.filter(s => s.status === 'Used').length;
+    document.getElementById('statScriptTikTok').textContent = viralScripts.filter(s => s.platform === 'TikTok').length;
+    document.getElementById('statScriptInsta').textContent = viralScripts.filter(s => s.platform === 'Instagram').length;
+    document.getElementById('statScriptFB').textContent = viralScripts.filter(s => s.platform === 'Facebook').length;
+
+    const grid = document.getElementById('scriptsGrid');
+    const empty = document.getElementById('scriptsEmptyState');
+
+    if (filtered.length === 0) {
+      grid.innerHTML = '';
+      empty.style.display = 'block';
+    } else {
+      empty.style.display = 'none';
+      grid.innerHTML = filtered.map(s => {
+        const emoji = platformEmojis[s.platform] || '🌐';
+        const pClass = 'platform-' + (s.platform||'other').toLowerCase();
+        const stClass = s.status === 'To Try' ? 'script-status-try' : s.status === 'Used' ? 'script-status-used' : 'script-status-archived';
+        const tags = s.tags ? s.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag tag-fire">${escHtml(t)}</span>`).join('') : '';
+        const urlBtn = s.url ? `<a class="action-btn action-link" href="${escHtml(s.url)}" target="_blank" style="font-size:11px;">▶ Original</a>` : '';
+        const scriptPreview = escHtml(s.script || '').replace(/\n/g, '<br>');
+        return `<div class="script-card">
+          <div class="script-card-header">
+            <div class="script-title">${escHtml(s.title || 'Untitled Script')}</div>
+            <div style="display:flex;gap:5px;flex-shrink:0;">
+              <button class="action-btn action-edit" onclick="editScript('${s.id}')">✏️</button>
+              <button class="action-btn action-delete" onclick="deleteScript('${s.id}')">🗑</button>
+            </div>
+          </div>
+          <div class="script-meta">
+            <span class="platform-badge ${pClass}">${emoji} ${escHtml(s.platform)}</span>
+            ${s.niche ? `<span class="comp-niche" style="margin-bottom:0;">${escHtml(s.niche)}</span>` : ''}
+            ${s.format ? `<span class="script-format">${escHtml(s.format)}</span>` : ''}
+            <span class="script-status ${stClass}">${escHtml(s.status)}</span>
+          </div>
+          ${s.hook ? `<div>
+            <div class="script-hook-label">🎣 Hook</div>
+            <div class="script-hook">"${escHtml(s.hook)}"</div>
+          </div>` : ''}
+          ${s.script ? `<div class="script-body">${scriptPreview}</div>` : ''}
+          ${s.why ? `<div class="script-why"><strong>💡 Why it works:</strong> ${escHtml(s.why)}</div>` : ''}
+          ${s.source ? `<div class="script-source">📌 From: <span>${escHtml(s.source)}</span></div>` : ''}
+          <div class="script-card-footer">
+            ${tags}
+            <button class="btn-copy" onclick="copyScript('${s.id}', this)" title="Copy script to clipboard">📋 Copy</button>
+            ${urlBtn}
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  function copyScript(id, btn) {
+    const s = viralScripts.find(x => x.id === id);
+    if (!s) return;
+    const text = [s.title, s.hook ? 'HOOK: ' + s.hook : '', s.script].filter(Boolean).join('\n\n');
+    navigator.clipboard.writeText(text).then(() => {
+      btn.textContent = '✅ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  function openScriptModal(id = null) {
+    editingScriptId = id;
+    document.getElementById('scriptModalTitle').textContent = id ? 'Edit Viral Script' : 'Add Viral Script';
+    if (id) {
+      const s = viralScripts.find(x => x.id === id);
+      document.getElementById('sPlatform').value = s.platform || 'TikTok';
+      document.getElementById('sStatus').value = s.status || 'To Try';
+      document.getElementById('sTitle').value = s.title || '';
+      document.getElementById('sSource').value = s.source || '';
+      document.getElementById('sNiche').value = s.niche || '';
+      document.getElementById('sFormat').value = s.format || 'Talking Head';
+      document.getElementById('sHook').value = s.hook || '';
+      document.getElementById('sScript').value = s.script || '';
+      document.getElementById('sWhy').value = s.why || '';
+      document.getElementById('sTags').value = s.tags || '';
+      document.getElementById('sUrl').value = s.url || '';
+    } else {
+      ['sTitle','sSource','sNiche','sHook','sScript','sWhy','sTags','sUrl'].forEach(i => document.getElementById(i).value = '');
+      document.getElementById('sPlatform').selectedIndex = 0;
+      document.getElementById('sStatus').selectedIndex = 0;
+      document.getElementById('sFormat').selectedIndex = 0;
+    }
+    document.getElementById('scriptModalOverlay').style.display = 'flex';
+    setTimeout(() => document.getElementById('sTitle').focus(), 100);
+  }
+
+  function closeScriptModal() { document.getElementById('scriptModalOverlay').style.display = 'none'; editingScriptId = null; }
+  function closeScriptModalOnBg(e) { if (e.target === document.getElementById('scriptModalOverlay')) closeScriptModal(); }
+
+  function saveScript() {
+    const title = document.getElementById('sTitle').value.trim();
+    const hook = document.getElementById('sHook').value.trim();
+    if (!title && !hook) { alert('Title or Hook is required.'); return; }
+    const data = {
+      platform: document.getElementById('sPlatform').value,
+      status: document.getElementById('sStatus').value,
+      title,
+      source: document.getElementById('sSource').value.trim(),
+      niche: document.getElementById('sNiche').value.trim(),
+      format: document.getElementById('sFormat').value,
+      hook,
+      script: document.getElementById('sScript').value.trim(),
+      why: document.getElementById('sWhy').value.trim(),
+      tags: document.getElementById('sTags').value.trim(),
+      url: document.getElementById('sUrl').value.trim(),
+    };
+    if (editingScriptId) {
+      const idx = viralScripts.findIndex(s => s.id === editingScriptId);
+      viralScripts[idx] = { ...viralScripts[idx], ...data };
+    } else {
+      viralScripts.push({ id: Date.now().toString(), dateAdded: new Date().toLocaleDateString(), ...data });
+    }
+    saveScriptsStore(); closeScriptModal(); renderScripts();
+  }
+
+  function editScript(id) { openScriptModal(id); }
+  function deleteScript(id) {
+    if (!confirm('Remove this viral script?')) return;
+    viralScripts = viralScripts.filter(s => s.id !== id);
+    saveScriptsStore(); renderScripts();
+  }
+
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') { closeModal(); closeCompModal(); closeScriptModal(); }
+  });
+
+  // ===== SEED BEST COMPETITORS (merges by ID — safe to run anytime) =====
+  function seedCompetitors() {
+    const seeds = [
+      {
+        id: 'seed_1',
+        platform: 'Facebook',
+        niche: 'Herbal Remedies / Soursop',
+        name: 'Mother Satori',
+        handle: '@MotherSatori',
+        followers: '4M+',
+        url: 'https://www.facebook.com/MotherSatori',
+        inspiration: 'Top performer in soursop bitters niche. Uses "Comment your age if you\'re from USA 🇺🇸" as engagement hook — drives massive comment volume for algorithm. Script formula: hidden internal enemy (liver toxins) → ancient Caribbean herb solution → Comment keyword CTA. Product link always in first comment via ManyChat.',
+        tags: 'soursop,bitters,liver,comment hook,USA geo-hook,ManyChat,holistic healer'
+      },
+      {
+        id: 'seed_2',
+        platform: 'Instagram',
+        niche: 'Natural Supplements / Liver Cleanse',
+        name: 'Melanskia',
+        handle: '@melanskia',
+        followers: '300K+',
+        url: 'https://www.instagram.com/melanskia/',
+        inspiration: 'Amish avatar AI character promoting Modern Antidote liver supplement ($50/jar). Cultural authority angle — "Amish wisdom" = trust. Hook: "Your belly isn\'t fat, it\'s industrial waste in your liver." Everyday lifestyle scenes (baking, farming) make product feel natural. Highest engagement in organic lifestyle niche.',
+        tags: 'amish,liver cleanse,cultural authority,avatar,supplement,organic,lifestyle'
+      },
+      {
+        id: 'seed_3',
+        platform: 'Instagram',
+        niche: 'Natural Health / Amish Wisdom',
+        name: 'Nina Yoder',
+        handle: '@nina_yoder_33',
+        followers: '100K+',
+        url: 'https://www.instagram.com/nina_yoder_33/reels/',
+        inspiration: 'Amish wisdom angle for herbal remedies. Highly shareable "ancient secret" framing. Targets 35-55 women who distrust mainstream medicine. Save-bait recipe content works well — viewers save for later, which signals algorithm.',
+        tags: 'amish,herbal,natural remedy,save bait,recipe,women 35-55'
+      },
+      {
+        id: 'seed_4',
+        platform: 'Instagram',
+        niche: 'Health & Wellness / Holistic',
+        name: 'Maelin Health',
+        handle: '@maelin.health',
+        followers: 'Growing',
+        url: 'https://www.instagram.com/maelin.health/reels/',
+        inspiration: 'Health & wellness reels format. Study their reel structure and posting frequency. Good reference for clean talking-head health content format on Instagram.',
+        tags: 'health,wellness,reels,holistic,instagram'
+      },
+      {
+        id: 'seed_5',
+        platform: 'Instagram',
+        niche: 'Chinese Medicine / TCM',
+        name: 'Chen Chinese Med',
+        handle: '@chen.chinesemed',
+        followers: 'Growing',
+        url: 'https://www.instagram.com/chen.chinesemed/',
+        inspiration: 'TCM (Traditional Chinese Medicine) authority angle. Cultural expertise = instant credibility. Study how they frame ancient remedies for modern problems. Similar to Halmoni character — cultural knowledge as the trust mechanism.',
+        tags: 'TCM,chinese medicine,cultural authority,ancient remedy,herbal'
+      },
+      {
+        id: 'seed_6',
+        platform: 'Instagram',
+        niche: 'Chinese Medicine / Acupuncture',
+        name: 'ChenTao Med',
+        handle: '@chentaomed',
+        followers: 'Growing',
+        url: 'https://www.instagram.com/chentaomed/reels/',
+        inspiration: 'Another strong TCM content creator. Watch their reels for format ideas — how they explain body systems (liver, kidney, gut) in simple visual ways. Their "ancient cure for modern problem" framing is directly replicable for soursop/bitters content.',
+        tags: 'TCM,acupuncture,liver,gut,body systems,ancient cure'
+      },
+      {
+        id: 'seed_7',
+        platform: 'Instagram',
+        niche: 'Beauty / Skincare',
+        name: 'Camille Rochester',
+        handle: '@camillerochester',
+        followers: 'Growing',
+        url: 'https://www.instagram.com/camillerochester/',
+        inspiration: 'Skincare and beauty content creator. Good reference for brightening content format, recipe reveals, and "before/after" style hooks. Study her audience engagement tactics and caption style for the brightening recipe niche.',
+        tags: 'skincare,brightening,beauty,before after,recipe reveal'
+      },
+      {
+        id: 'seed_8',
+        platform: 'Instagram',
+        niche: 'Health / Educational',
+        name: 'Sawyer Educational',
+        handle: '@sawyer.educational',
+        followers: 'Growing',
+        url: 'https://www.instagram.com/sawyer.educational/',
+        inspiration: 'Educational health content format. Study how they make complex health info simple and shareable. "Did you know?" hook style. Strong save-bait content — educational content gets saved more than entertainment.',
+        tags: 'educational,health,did you know,save bait,science hook'
+      },
+      {
+        id: 'seed_9',
+        platform: 'Facebook',
+        niche: 'Herbal Remedies / Health',
+        name: 'FB Avatar Health Page 1',
+        handle: 'ID: 61588469780414',
+        followers: 'Growing',
+        url: 'https://www.facebook.com/profile.php?id=61588469780414',
+        inspiration: 'Part of a cluster of Facebook AI-avatar health pages in the same niche. Monitor for posting frequency, what hooks they test, and which videos get the most shares. These pages often A/B test hooks rapidly — what gets shares reveals what resonates.',
+        tags: 'facebook,avatar,health,herbal,A/B test'
+      },
+      {
+        id: 'seed_10', platform: 'Facebook', niche: 'Holistic Health / Herbal',
+        name: 'FB Avatar Health Page 2', handle: 'ID: 61578514026499', followers: 'Growing',
+        url: 'https://www.facebook.com/profile.php?id=61578514026499',
+        inspiration: 'Second Facebook avatar health page from competitor cluster. Compare posting strategy with other pages in cluster to spot their winning content patterns.',
+        tags: 'facebook,avatar,holistic,herbal,cluster'
+      },
+      { id:'seed_11', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar C', handle:'ID: 61582083664733', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61582083664733&sk=reels_tab', inspiration:'Monitor reel frequency and hook styles being tested. Track which videos get the most shares to spot winning content this week.', tags:'facebook,avatar,health,herbal,reels,cluster' },
+      { id:'seed_12', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar D', handle:'ID: 61576513903123', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61576513903123&sk=reels_tab', inspiration:'Compare hook styles across this cluster — liver, gut, inflammation, skin — to identify which angle is getting traction right now.', tags:'facebook,avatar,health,herbal,hook testing' },
+      { id:'seed_13', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar E', handle:'ID: 61581571332748', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61581571332748&sk=reels_tab', inspiration:'Watch for new product angles or character styles being tested. Note which persona is getting the most engagement.', tags:'facebook,avatar,health,persona,character,cluster' },
+      { id:'seed_14', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar F', handle:'ID: 61588168746896', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61588168746896&sk=reels_tab', inspiration:'Track CTA style — comment keyword vs link in bio vs direct product link. Whichever dominates is what the algorithm is rewarding.', tags:'facebook,avatar,health,CTA,comment keyword' },
+      { id:'seed_15', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar G', handle:'ID: 61574374395353', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61574374395353&sk=reels_tab', inspiration:'Monitor script formula variations — especially first 3 seconds. The hook is the most A/B-tested element across these pages.', tags:'facebook,avatar,health,hook,script,3 seconds' },
+      { id:'seed_16', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar H', handle:'ID: 61569217314654', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61569217314654&sk=reels_tab', inspiration:'One of the older pages — check if they have higher follower counts, which signals their content formula has been validated longer.', tags:'facebook,avatar,health,established,follower growth' },
+      { id:'seed_17', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar I', handle:'ID: 61579542250184', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61579542250184&sk=reels_tab', inspiration:'Compare niche focus vs others — targeting women specifically, or broader? Audience targeting affects which hooks they use.', tags:'facebook,avatar,health,women,audience,targeting' },
+      { id:'seed_18', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar J', handle:'ID: 61555941464895', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61555941464895&sk=reels_tab', inspiration:'Earliest created page in cluster (lowest ID). Study their full video library for what worked at the start vs what they post now — shows the evolution of the niche.', tags:'facebook,avatar,health,established,early,evolution' },
+      { id:'seed_19', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar K', handle:'ID: 61585093851657', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61585093851657&sk=reels_tab', inspiration:'Watch video length patterns — 30-second quick hooks or 60-90 second full scripts? Length preference reveals what FB algorithm rewards in this niche.', tags:'facebook,avatar,health,video length,algorithm,format' },
+      { id:'seed_20', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar L', handle:'ID: 100084707749976', followers:'Growing', url:'https://www.facebook.com/profile.php?id=100084707749976&sk=reels_tab', inspiration:'Different-style ID — may be older/differently structured account. Compare content format to newer avatar pages. Could indicate a strategy pivot.', tags:'facebook,health,legacy,format,comparison' },
+      { id:'seed_21', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar M', handle:'ID: 61587814272619', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61587814272619&sk=reels_tab', inspiration:'Monitor caption style — heavy hashtags, keyword-rich captions, or minimal text? Caption strategy on Facebook reels directly affects organic reach.', tags:'facebook,avatar,health,caption,hashtags,reach' },
+      { id:'seed_22', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar N', handle:'ID: 61578823245402', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61578823245402&sk=reels_tab', inspiration:'Study their thumbnail/cover frame — the first frame of a Facebook reel acts as the thumbnail. What they show in frame 1 is deliberate. Copy the thumbnail strategy.', tags:'facebook,avatar,health,thumbnail,first frame,visual hook' },
+      { id:'seed_23', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar O', handle:'ID: 61585581172941', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61585581172941&sk=reels_tab', inspiration:'Note posting schedule — these cluster pages often post 2-3x per day. Volume + consistency is part of the growth model alongside hook quality.', tags:'facebook,avatar,health,posting schedule,frequency,volume' },
+      { id:'seed_24', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar P', handle:'ID: 61579553879577', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61579553879577&sk=reels_tab', inspiration:'Check their comment section — what questions do viewers ask most? Those questions are your next video topics. Comments reveal exact audience language for pain points.', tags:'facebook,avatar,health,comments,audience research,pain points' },
+      { id:'seed_25', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar Q', handle:'ID: 61573479115488', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61573479115488&sk=reels_tab', inspiration:'Look for their pinned video — pinned content is always their top performer or best sales video. Start your research analysis there.', tags:'facebook,avatar,health,pinned,top performer,sales video' },
+      { id:'seed_26', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar R', handle:'ID: 61587268836199', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61587268836199&sk=reels_tab', inspiration:'Monitor which products they pivot to — if they switch from soursop to a new product, it signals the old is saturating and a new one is converting better.', tags:'facebook,avatar,health,product pivot,saturation,conversion' },
+      { id:'seed_27', platform:'Facebook', niche:'Health Avatar / Herbal', name:'FB Health Avatar S', handle:'ID: 61586276835161', followers:'Growing', url:'https://www.facebook.com/profile.php?id=61586276835161&sk=reels_tab', inspiration:'Compare engagement rate (likes+comments÷views) vs others in cluster. High engagement = strong hook + strong script. Low rate = weak hook despite high reach.', tags:'facebook,avatar,health,engagement rate,hook quality,script' },
+      { id:'seed_28', platform:'Facebook', niche:'Beauty / Korean Skincare', name:'Imani Kim Beauty', handle:'@imani.kim.beauty', followers:'Growing', url:'https://www.facebook.com/imani.kim.beauty/reels/', inspiration:'Korean skincare content for Black and multicultural audiences on Facebook. Study how she frames Korean beauty secrets for brightening. Directly relevant to your dark inner thigh and armpit brightening content.', tags:'beauty,korean,skincare,brightening,facebook,multicultural,Black women' },
+      { id:'seed_29', platform:'Facebook', niche:'Health / Medical Authority', name:'Dr. Marlon Campbell', handle:'@Drmarloncampbell', followers:'Growing', url:'https://www.facebook.com/Drmarloncampbell/reels/', inspiration:'Medical doctor using Facebook reels. Study how he uses authority to make health claims feel credible. His 60-second body system explainer format (liver, inflammation, gut) is the benchmark for your Mama Cerasee and Jupi content.', tags:'doctor,medical authority,health,liver,gut,credibility,script structure' },
+      { id:'seed_30', platform:'Facebook', niche:'Herbal Remedies / Natural Health', name:"Kim's Remedy", handle:'@kimsremedy68', followers:'Growing', url:'https://www.facebook.com/kimsremedy68/reels/', inspiration:'Herbal and natural remedy content — almost identical space to your soursop bitters and brightening content. Study their hook style, product presentation, and CTA format closely.', tags:'herbal,remedy,natural,facebook,soursop,bitters,CTA' },
+      { id:'seed_31', platform:'Instagram', niche:"Korean Beauty / Men's Health", name:'Justin Gwang', handle:'@justin.gwang', followers:'Growing', url:'https://www.instagram.com/justin.gwang/reels/', inspiration:'Korean male health and wellness creator. Study how he frames Korean health secrets for men — directly applicable to your Rastafarian man and Jupi hydration content.', tags:'korean,male,health,wellness,reels,authority,mens health' },
+      { id:'seed_32', platform:'Instagram', niche:'Skincare / Beauty', name:'Skincare by Serena', handle:'@skincarebyserena_', followers:'Growing', url:'https://www.instagram.com/skincarebyserena_/reels/', inspiration:'Recipe reveal format, ingredient breakdowns, before/after hooks. Her 60-second ingredient explainer structure is the template for your brightening recipe series.', tags:'skincare,beauty,recipe,ingredients,before after,brightening' },
+      { id:'seed_33', platform:'Instagram', niche:'Korean Health / Grandmother Character', name:'Grandma Jiwon', handle:'@grandma.jiwon', followers:'Growing', url:'https://www.instagram.com/grandma.jiwon/reels/', inspiration:'⭐ HIGH PRIORITY — Korean grandmother character, identical to your Halmoni. Study every reel. How does she frame advice? What body problems does she target? What products does she link? This is your closest reference for Halmoni content.', tags:'korean,grandmother,halmoni,character,health,beauty,HIGH PRIORITY' },
+      { id:'seed_34', platform:'Instagram', niche:'Korean Mom / Beauty Tips', name:'My Korean Mom Tips', handle:'@mykoreanmom.tips', followers:'Growing', url:'https://www.instagram.com/mykoreanmom.tips/reels/', inspiration:'⭐ HIGH PRIORITY — Korean mom character sharing beauty and health tips. Direct reference for Halmoni content. Study hook style, body problems targeted (skin, weight, aging), and how she delivers the cultural authority angle.', tags:'korean,mom,beauty,health,tips,halmoni,cultural,HIGH PRIORITY' },
+      { id:'seed_35', platform:'Instagram', niche:'Holistic Wellness', name:"Katie's Holistic Wellness", handle:'@katiesholisticwellness', followers:'Growing', url:'https://www.instagram.com/katiesholisticwellness/reels/', inspiration:'Warm, educational, non-pushy tone for natural remedies. Her script structure for presenting supplements without feeling salesy is a great tone reference for all your characters.', tags:'holistic,wellness,natural,remedy,educational,warm tone,supplements' },
+      { id:'seed_36', platform:'Instagram', niche:'Korean Mom / Health Beauty', name:'Korean Mom Official', handle:'@korean.mom.official', followers:'Growing', url:'https://www.instagram.com/korean.mom.official/reels/', inspiration:'⭐ HIGH PRIORITY — Compare vs @grandma.jiwon and @mykoreanmom.tips. Which Korean character style gets the best engagement? Use all three to nail your Halmoni character.', tags:'korean,mom,character,health,beauty,comparison,halmoni,HIGH PRIORITY' },
+      { id:'seed_37', platform:'Instagram', niche:'Medical / Holistic MD', name:'Victoria Vane MD', handle:'@victoriavanemd', followers:'Growing', url:'https://www.instagram.com/victoriavanemd/reels/', inspiration:'MD who also endorses natural solutions — the exact credibility balance your Mama Cerasee content needs. Study how she blends medical authority with herbal recommendations to build maximum trust.', tags:'doctor,MD,holistic,medical,credibility,natural,instagram,authority' }
+    ];
+    const existingIds = new Set(competitors.map(c => c.id));
+    const newSeeds = seeds.filter(s => !existingIds.has(s.id));
+    if (newSeeds.length === 0) return;
+    competitors = [...competitors, ...newSeeds];
+    saveCompetitors();
+  }
+
+  function seedMyAccounts() {
+    const seeds = [
+      { id: 'my_1', platform: 'Facebook', status: 'Active', username: 'Rosabella Electrolyte', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61589406122683', tags: 'electrolytes,hydration,watermelon,sugar-free', notes: '🛒 Rosabella Electrolyte Drink Powder (Watermelon) — Sugar-free, Himalayan pink salt, potassium, magnesium, calcium, Vitamin C & B12' },
+      { id: 'my_2', platform: 'Facebook', status: 'Active', username: 'Serene Herbs Soursop', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61588709376350', tags: 'soursop,detox,gut cleanse,liver,bitters', notes: '🛒 Serene Herbs Soursop Bitters Liquid — #1 Best Seller Detox, soursop, black seed, moringa, Irish moss, ashwagandha, turmeric' },
+      { id: 'my_3', platform: 'Facebook', status: 'Active', username: 'Soursop Bitters (Page 2)', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61589390343621', tags: 'soursop,detox,gut cleanse,liver,bitters', notes: '🛒 Serene Herbs Soursop Bitters Liquid — secondary page. Same product as Page 1.' },
+      { id: 'my_4', platform: 'Facebook', status: 'Active', username: 'QUIA Toner Pads', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61589172641448', tags: 'AHA BHA,exfoliation,blackheads,korean skincare,pores', notes: '🛒 QUIA AHA/BHA Toner Pads — Dual-action exfoliation, 70 pads, clinically proven 3X gentler, reduces blackheads' },
+      { id: 'my_5', platform: 'Facebook', status: 'Active', username: 'JiYu Toner Pads', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61589045653924', tags: 'dark spots,snail mucin,niacinamide,korean skincare,brightening', notes: '🛒 JiYu Toning Polish Pads — Dark spots, wrinkles, snail mucin, niacinamide, peptides, centella, alpha-arbutin, 100 pads' },
+      { id: 'my_6', platform: 'Facebook', status: 'Active', username: 'Pura Vida Moringa', email: '', password: '', url: 'https://www.facebook.com/profile.php?id=61589202695239', tags: 'moringa,energy,metabolism,immune,organic,detox', notes: '🛒 Pura Vida Moringa Capsules — #1 Moringa, single-origin organic, 120ct, 500mg, energy + metabolism + immune support' },
+    ];
+    let changed = false;
+    seeds.forEach(seed => {
+      const idx = accounts.findIndex(a => a.id === seed.id);
+      if (idx === -1) {
+        accounts.push(seed);
+        changed = true;
+      } else {
+        // always sync username, url, tags, notes from seed so updates take effect
+        accounts[idx].username = seed.username;
+        accounts[idx].url = seed.url;
+        accounts[idx].tags = seed.tags;
+        accounts[idx].notes = seed.notes;
+        changed = true;
+      }
+    });
+    if (changed) saveAccounts();
+  }
+
+  // ===== VIDEO STUDIO =====
+  const OPENAI_KEY_BAKED = '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';
+  let studioLibrary = JSON.parse(localStorage.getItem('sm_studio_library') || '[]');
+  let avatarImageDataUrl = null;
+  let refVideoObjectUrl = null;
+  let refVideoFile = null; // Raw File object for Whisper transcription
+  let segments = []; // [{startTime, endTime, frameDataUrl, script, nbPrompt, veoPrompt}]
+
+  function saveStudioLibrary() { localStorage.setItem('sm_studio_library', JSON.stringify(studioLibrary)); }
+
+  // --- Avatar image ---
+  function onAvatarImageChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      avatarImageDataUrl = ev.target.result;
+      const img = document.getElementById('avatarImgEl');
+      const placeholder = document.getElementById('avatarImgPlaceholder');
+      img.src = avatarImageDataUrl;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+      document.getElementById('clearAvatarImgBtn').style.display = 'block';
+      // Save to localStorage (base64)
+      try { localStorage.setItem('sm_avatar_img', avatarImageDataUrl); } catch(e) {}
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearAvatarImage() {
+    avatarImageDataUrl = null;
+    document.getElementById('avatarImgEl').src = '';
+    document.getElementById('avatarImgEl').style.display = 'none';
+    document.getElementById('avatarImgPlaceholder').style.display = 'block';
+    document.getElementById('clearAvatarImgBtn').style.display = 'none';
+    document.getElementById('avatarImgInput').value = '';
+    localStorage.removeItem('sm_avatar_img');
+  }
+
+  function loadAvatarImage() {
+    const saved = localStorage.getItem('sm_avatar_img');
+    if (saved) {
+      avatarImageDataUrl = saved;
+      document.getElementById('avatarImgEl').src = saved;
+      document.getElementById('avatarImgEl').style.display = 'block';
+      document.getElementById('avatarImgPlaceholder').style.display = 'none';
+      document.getElementById('clearAvatarImgBtn').style.display = 'block';
+    }
+  }
+
+  // --- Reference video ---
+  function onVideoFileChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    refVideoFile = file; // Store for Whisper transcription
+    if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
+    refVideoObjectUrl = URL.createObjectURL(file);
+    const videoEl = document.getElementById('refVideoEl');
+    const placeholder = document.getElementById('videoUploadPlaceholder');
+    videoEl.src = refVideoObjectUrl;
+    videoEl.style.display = 'block';
+    placeholder.style.display = 'none';
+    document.getElementById('clearVideoBtn').style.display = 'inline-block';
+    document.getElementById('videoFileName').textContent = file.name;
+    document.getElementById('videoUploadZone').onclick = null;
+  }
+
+  function clearVideo() {
+    if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
+    refVideoFile = null;
+    const videoEl = document.getElementById('refVideoEl');
+    videoEl.src = '';
+    videoEl.style.display = 'none';
+    document.getElementById('videoUploadPlaceholder').style.display = 'block';
+    document.getElementById('clearVideoBtn').style.display = 'none';
+    document.getElementById('videoFileName').textContent = '';
+    document.getElementById('refVideoInput').value = '';
+    document.getElementById('videoUploadZone').onclick = function() { document.getElementById('refVideoInput').click(); };
+  }
+
+  // --- OpenAI API key management ---
+  function showApiKeyInput() {
+    const row = document.getElementById('apiKeyRow');
+    row.style.display = 'block';
+    const saved = localStorage.getItem('sm_openai_key');
+    if (saved) document.getElementById('openaiKeyInput').value = saved;
+    document.getElementById('openaiKeyInput').focus();
+  }
+
+  function hideApiKeyInput() {
+    document.getElementById('apiKeyRow').style.display = 'none';
+  }
+
+  function saveApiKey() {
+    const key = document.getElementById('openaiKeyInput').value.trim();
+    if (key) localStorage.setItem('sm_openai_key', key);
+    hideApiKeyInput();
+    const status = document.getElementById('transcribeStatus');
+    status.textContent = '✓ Key saved';
+    status.style.color = '#5a8a5a';
+    status.style.display = 'inline';
+    setTimeout(() => status.style.display = 'none', 2500);
+    renderApiKeyStatus();
+  }
+
+  function getApiKey() {
+    return OPENAI_KEY_BAKED || localStorage.getItem('sm_openai_key') || '';
+  }
+
+  function renderApiKeyStatus() {
+    const badge = document.getElementById('apiKeyStatus');
+    if (!badge) return;
+    const key = getApiKey();
+    if (key) {
+      badge.textContent = '🔑 OpenAI ✓';
+      badge.style.display = 'inline';
+      badge.style.background = '#0d1a0d';
+      badge.style.color = '#5a9a5a';
+      badge.style.border = '1px solid #1a2a1a';
+    } else {
+      badge.textContent = '🔑 No key';
+      badge.style.display = 'inline';
+      badge.style.background = '#1a1a1a';
+      badge.style.color = '#555';
+      badge.style.border = '1px solid #252525';
+    }
+  }
+
+  // --- Whisper transcription ---
+  async function transcribeVideo() {
+    if (!refVideoFile) {
+      alert('Upload a video first, then click Transcribe.');
+      return;
+    }
+    // Check file size (Whisper limit is 25MB)
+    if (refVideoFile.size > 25 * 1024 * 1024) {
+      alert('Video file is larger than 25MB (OpenAI Whisper limit). Try a shorter clip or compress the video first.');
+      return;
+    }
+    let apiKey = getApiKey();
+    if (!apiKey) {
+      showApiKeyInput();
+      alert('Enter your OpenAI API key first (click ⚙), then click Transcribe again.');
+      return;
+    }
+    const btn = document.getElementById('transcribeBtn');
+    const status = document.getElementById('transcribeStatus');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    status.textContent = 'Transcribing…';
+    status.style.color = '#888';
+    status.style.display = 'inline';
+    try {
+      const formData = new FormData();
+      formData.append('file', refVideoFile, refVideoFile.name);
+      formData.append('model', 'whisper-1');
+      formData.append('response_format', 'text');
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey },
+        body: formData
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          status.textContent = '✗ Invalid API key';
+          status.style.color = '#cc6060';
+          showApiKeyInput();
+        } else {
+          status.textContent = '✗ ' + (err.error?.message || 'API error ' + response.status);
+          status.style.color = '#cc6060';
+        }
+        return;
+      }
+      const transcript = await response.text();
+      document.getElementById('originalScript').value = transcript.trim();
+      status.textContent = '✓ Transcribed!';
+      status.style.color = '#5a8a5a';
+      setTimeout(() => status.style.display = 'none', 3000);
+    } catch (err) {
+      console.error('Whisper error:', err);
+      const msg = err.message || err.toString();
+      if (msg.toLowerCase().includes('cors') || msg.toLowerCase().includes('failed to fetch')) {
+        status.textContent = '✗ CORS blocked — see fix below';
+        status.style.color = '#cc6060';
+        alert('Chrome is blocking the request from a local file.\n\nFix: In Chrome, go to:\nchrome://flags/#block-insecure-private-network-requests\nand set it to Disabled, then relaunch Chrome.\n\nOr right-click the HTML file → Open with → choose a browser that allows local file requests.');
+      } else {
+        status.textContent = '✗ ' + msg.substring(0, 60);
+        status.style.color = '#cc6060';
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '🎙 Transcribe';
+    }
+  }
+
+  // --- Copy rewrite prompt for Claude Cowork chat ---
+  function copyRewritePrompt() {
+    const original = document.getElementById('originalScript').value.trim();
+    if (!original) { alert('Transcribe or paste a script first.'); return; }
+    const productSel = document.getElementById('studioProduct');
+    const productName = productSel.options[productSel.selectedIndex].text || '';
+    const productDetails = productSel.value || '';
+    if (!productDetails) { alert('Select a product first.'); return; }
+
+    const prompt = `Rewrite this video script to promote my product. Keep the exact same hook style, energy, pacing, and length. Sound like a real person genuinely recommending it — not a salesperson. End with a soft CTA asking viewers to comment a keyword to get the link. Return only the rewritten script, no commentary.
+
+PRODUCT: ${productName}
+PRODUCT DETAILS: ${productDetails}
+
+ORIGINAL SCRIPT:
+${original}`;
+
+    navigator.clipboard.writeText(prompt).then(() => {
+      const status = document.getElementById('rewriteStatus');
+      const hint = document.getElementById('rewriteHint');
+      status.textContent = '✓ Prompt copied — paste in Claude chat';
+      status.style.display = 'inline';
+      hint.style.display = 'block';
+      setTimeout(() => { status.style.display = 'none'; }, 5000);
+    }).catch(() => {
+      // Fallback: show in a textarea the user can copy manually
+      document.getElementById('rewrittenScript').value = prompt;
+      alert('Could not auto-copy. The prompt has been placed in the text box — select all and copy it manually, then paste in the Claude chat.');
+    });
+  }
+
+  // --- Paste Claude's rewrite from clipboard ---
+  async function pasteRewrite() {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) { alert('Nothing on clipboard yet — copy Claude\'s reply first.'); return; }
+      document.getElementById('rewrittenScript').value = text.trim();
+      document.getElementById('useRewritten').checked = true;
+      const status = document.getElementById('rewriteStatus');
+      status.textContent = '✓ Pasted';
+      status.style.display = 'inline';
+      setTimeout(() => status.style.display = 'none', 2500);
+    } catch (err) {
+      alert('Clipboard access denied. Paste manually into the box below.');
+      document.getElementById('rewrittenScript').focus();
+    }
+  }
+
+  // --- Timestamp display ---
+  function updateTimestamp() {
+    const videoEl = document.getElementById('refVideoEl');
+    if (!videoEl) return;
+    const cur = videoEl.currentTime;
+    const dur = videoEl.duration || 0;
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    document.getElementById('videoTimestamp').textContent = fmt(cur) + ' / ' + fmt(dur);
+  }
+
+  // --- Frame capture (returns Promise<dataUrl>) ---
+  function captureFrame(time) {
+    return new Promise((resolve) => {
+      const videoEl = document.getElementById('refVideoEl');
+      if (!videoEl || !videoEl.src) { resolve(null); return; }
+      const canvas = document.getElementById('frameCanvas');
+      const doCapture = () => {
+        canvas.width = videoEl.videoWidth || 360;
+        canvas.height = videoEl.videoHeight || 640;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      if (Math.abs(videoEl.currentTime - time) < 0.1) {
+        doCapture();
+      } else {
+        videoEl.currentTime = time;
+        videoEl.onseeked = () => { videoEl.onseeked = null; doCapture(); };
+      }
+    });
+  }
+
+  // --- Auto-segment every 8 seconds ---
+  async function autoSegment() {
+    const videoEl = document.getElementById('refVideoEl');
+    if (!videoEl || !videoEl.src || !videoEl.duration) {
+      alert('Please upload a video first and wait for it to load.');
+      return;
+    }
+    const dur = videoEl.duration;
+    const interval = 8;
+    segments = [];
+    const times = [];
+    for (let t = 0; t < dur; t += interval) {
+      times.push({ start: t, end: Math.min(t + interval, dur) });
+    }
+    document.getElementById('segmentsContainer').innerHTML =
+      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
+    for (let i = 0; i < times.length; i++) {
+      const frameDataUrl = await captureFrame(times[i].start);
+      segments.push({ startTime: times[i].start, endTime: times[i].end, frameDataUrl, script: '', nbPrompt: '', veoPrompt: '' });
+      const prog = document.getElementById('captureProgress');
+      if (prog) prog.textContent = (i + 1) + '/' + times.length;
+    }
+    distributeScript();
+    renderSegments();
+  }
+
+  // --- Mark scene change manually at current playback time ---
+  async function markSceneChange() {
+    const videoEl = document.getElementById('refVideoEl');
+    if (!videoEl || !videoEl.src) { alert('Please upload a video first.'); return; }
+    const t = videoEl.currentTime;
+    if (segments.length > 0) {
+      const prev = segments[segments.length - 1];
+      if (t <= prev.startTime + 0.5) {
+        alert('Seek further into the video before marking a new scene.'); return;
+      }
+      prev.endTime = t;
+    }
+    const frameDataUrl = await captureFrame(t);
+    const dur = videoEl.duration || t + 8;
+    segments.push({ startTime: t, endTime: dur, frameDataUrl, script: '', nbPrompt: '', veoPrompt: '' });
+    distributeScript();
+    renderSegments();
+  }
+
+  // --- Clear all segments ---
+  function clearSegments() {
+    segments = [];
+    renderSegments();
+  }
+
+  // --- Download frame as image file ---
+  function downloadFrame(i) {
+    const seg = segments[i];
+    if (!seg || !seg.frameDataUrl) return;
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+'m'+(s<10?'0':'')+s+'s'; };
+    const a = document.createElement('a');
+    a.href = seg.frameDataUrl;
+    a.download = 'frame_seg' + (i+1) + '_' + fmt(seg.startTime) + '.jpg';
+    a.click();
+  }
+
+  // --- Remove a single segment ---
+  function removeSegment(i) {
+    segments.splice(i, 1);
+    renderSegments();
+  }
+
+  // --- Split script at sentence boundaries, proportional to segment durations ---
+  function splitScriptIntoSegments(fullScript, segs) {
+    const n = segs.length;
+    if (!fullScript || n === 0) return Array(n).fill('');
+    if (n === 1) return [fullScript.trim()];
+
+    // Extract sentences (keep punctuation attached)
+    const raw = fullScript.trim();
+    let sentences = raw.match(/[^.!?…]+[.!?…]*["']?\s*/g) || [];
+    sentences = sentences.map(s => s.trim()).filter(Boolean);
+
+    // If no sentences found (no punctuation), fall back to even word split
+    if (sentences.length <= 1) {
+      const words = raw.split(/\s+/);
+      const perSeg = Math.ceil(words.length / n);
+      return Array.from({ length: n }, (_, i) => words.slice(i * perSeg, (i + 1) * perSeg).join(' '));
+    }
+
+    // Total duration and total word count for proportional targeting
+    const totalDur = segs[n - 1].endTime - segs[0].startTime || 1;
+    const totalWords = raw.split(/\s+/).length;
+
+    const result = Array(n).fill('');
+    let sentIdx = 0;
+
+    for (let i = 0; i < n - 1; i++) {
+      const segDur = segs[i].endTime - segs[i].startTime;
+      const targetWords = Math.round((segDur / totalDur) * totalWords);
+      const bucket = [];
+      let wordCount = 0;
+
+      while (sentIdx < sentences.length) {
+        const sw = sentences[sentIdx].split(/\s+/).length;
+        // Always take at least one sentence; keep adding while under target
+        if (bucket.length === 0 || wordCount + sw <= targetWords) {
+          bucket.push(sentences[sentIdx]);
+          wordCount += sw;
+          sentIdx++;
+          if (wordCount >= targetWords) break;
+        } else {
+          break;
+        }
+      }
+      result[i] = bucket.join(' ');
+    }
+
+    // Last segment gets all remaining sentences
+    result[n - 1] = sentences.slice(sentIdx).join(' ');
+    return result;
+  }
+
+  function distributeScript() {
+    const useRewritten = document.getElementById('useRewritten') && document.getElementById('useRewritten').checked;
+    const rewrittenEl = document.getElementById('rewrittenScript');
+    const originalEl = document.getElementById('originalScript');
+    const rewrittenText = rewrittenEl ? rewrittenEl.value.trim() : '';
+    const originalText = originalEl ? originalEl.value.trim() : '';
+    // Use rewritten if selected and non-empty, otherwise fall back to original
+    const script = (useRewritten && rewrittenText) ? rewrittenText : originalText;
+    const slices = splitScriptIntoSegments(script, segments);
+    segments.forEach((seg, i) => { seg.script = slices[i] || ''; });
+  }
+
+  // --- Render segment cards ---
+  function renderSegments() {
+    const container = document.getElementById('segmentsContainer');
+    const countEl = document.getElementById('segmentCount');
+    if (!container) return;
+    if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
+    if (segments.length === 0) {
+      container.innerHTML = '<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:#3a3a3a;">Upload a video then click <strong style="color:#666;">Auto 8s</strong> to split into segments, or <strong style="color:#666;">✂ Mark Scene</strong> while watching to mark changes manually.</div>';
+      const saveAllBtn = document.getElementById('saveAllBtn');
+      if (saveAllBtn) saveAllBtn.style.display = 'none';
+      return;
+    }
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    container.innerHTML = segments.map((seg, i) => `
+      <div style="display:grid;grid-template-columns:86px 1fr;gap:10px;border-bottom:1px solid #161616;padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
+        <div>
+          ${seg.frameDataUrl
+            ? `<img src="${seg.frameDataUrl}" style="width:86px;height:48px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
+            : `<div style="width:86px;height:48px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
+          <div style="font-size:9px;color:#555;margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
+          <div style="font-size:9px;color:#444;text-align:center;">Seg ${i+1}</div>
+          ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:4px;width:86px;font-size:9px;padding:3px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Download</button>` : ''}
+        </div>
+        <div>
+          <div style="display:flex;gap:4px;align-items:flex-start;">
+            <div style="flex:1;">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#555;margin-bottom:3px;">Script slice</div>
+              <textarea onchange="segments[${i}].script=this.value" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
+            </div>
+            <button onclick="removeSegment(${i})" style="background:#1a1212;border:1px solid #2a1e1e;border-radius:2px;color:#7a4040;font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;margin-top:14px;">✕</button>
+          </div>
+          ${seg.nbPrompt ? `
+          <div style="margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana</div>
+              <button class="btn-copy" onclick="copyPromptBlock('nb-seg-${i}')">Copy</button>
+            </div>
+            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-seg-${i}">${escHtml(seg.nbPrompt)}</div>
+          </div>` : ''}
+          ${seg.veoPrompt ? `
+          <div style="margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#2a5a7a;">🎬 Veo 3</div>
+              <button class="btn-copy" onclick="copyPromptBlock('veo-seg-${i}')">Copy</button>
+            </div>
+            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="veo-seg-${i}">${escHtml(seg.veoPrompt)}</div>
+          </div>` : ''}
+        </div>
+      </div>`).join('');
+  }
+
+  // --- Build Nano Banana prompt for one segment ---
+  function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
+    const hasAvatar = !!avatarImageDataUrl;
+    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    const seg = segments[i];
+    const timeRange = seg ? fmt(seg.startTime) + '–' + fmt(seg.endTime) : '';
+    const obj = {
+      subject: avatarNotes || (hasAvatar ? 'person from avatar photo' : 'creator'),
+      face: hasAvatar ? 'exact face, skin tone, and hair from avatar photo — do not alter' : 'creator face',
+      clothing: 'exact clothing worn in avatar photo — preserve every garment, color, and accessory unchanged',
+      body_position: 'identical to the person in the reference frame — same pose, angle, and framing',
+      background: 'identical to reference frame — do not change any element of the scene',
+      lighting: 'identical to reference frame — do not adjust color temperature or brightness',
+      camera_angle: 'identical to reference frame',
+      setting: setting || 'match reference frame',
+      format: 'vertical 9:16, photorealistic, sharp, no text, no overlays, no AI artifacts'
+    };
+    return JSON.stringify(obj, null, 2);
+  }
+
+  // --- Build Veo 3 prompt for one segment ---
+  function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName) {
+    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
+    const baseAvatar = avatarNotes || 'person from Nano Banana output image';
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    const dur = Math.round(endTime - startTime);
+    const obj = {
+      start_frame: 'Nano Banana output image for this segment',
+      subject: baseAvatar,
+      action: 'speaking directly to camera with natural confidence and real eye contact',
+      speech: scriptSlice || '',
+      setting: setting || 'match start frame',
+      duration_seconds: dur,
+      format: 'vertical 9:16, photorealistic, warm natural lighting, handheld documentary feel, no AI artifacts'
+    };
+    return JSON.stringify(obj, null, 2);
+  }
+
+  // --- Generate all segment prompts ---
+  function generateAllSegmentPrompts() {
+    if (segments.length === 0) {
+      alert('No segments yet. Upload a video and click ⚡ Auto 8s or ✂ Mark Scene first.');
+      return;
+    }
+    const product = document.getElementById('studioProduct').value;
+    const productSel = document.getElementById('studioProduct');
+    const productName = productSel.options[productSel.selectedIndex].text || 'the product';
+    const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
+    // Re-distribute script in case user updated it
+    distributeScript();
+    segments.forEach((seg, i) => {
+      seg.nbPrompt = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
+      seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
+    });
+    renderSegments();
+    const saveAllBtn = document.getElementById('saveAllBtn');
+    if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
+  }
+
+  function saveAvatarProfile() {
+    const desc = document.getElementById('avatarDesc').value.trim();
+    localStorage.setItem('sm_avatar_profile', desc);
+    const note = document.getElementById('avatarSavedNote');
+    note.style.display = 'block';
+    setTimeout(() => note.style.display = 'none', 2500);
+  }
+
+  function loadAvatarProfile() {
+    const saved = localStorage.getItem('sm_avatar_profile');
+    if (saved) document.getElementById('avatarDesc').value = saved;
+  }
+
+  function addStudioScene(description) {
+    studioSceneCount++;
+    const n = studioSceneCount;
+    const container = document.getElementById('studioScenes');
+    const row = document.createElement('div');
+    row.className = 'vs-scene-row';
+    row.id = 'scene-row-' + n;
+    row.innerHTML = `<div class="vs-scene-num">Scene ${n}</div>
+      <textarea id="scene-${n}" placeholder="Describe what happens visually in this scene — camera angle, what the person is doing, what's shown on screen, any text overlays...">${description || ''}</textarea>
+      <button onclick="removeStudioScene(${n})">✕</button>`;
+    container.appendChild(row);
+  }
+
+  function removeStudioScene(n) {
+    const row = document.getElementById('scene-row-' + n);
+    if (row) row.remove();
+  }
+
+  function getScenes() {
+    const scenes = [];
+    document.querySelectorAll('#studioScenes .vs-scene-row').forEach((row, i) => {
+      const ta = row.querySelector('textarea');
+      if (ta && ta.value.trim()) scenes.push({ num: i + 1, desc: ta.value.trim() });
+    });
+    return scenes;
+  }
+
+  function generateStudioPrompts() {
+    const avatar = document.getElementById('avatarDesc').value.trim() || '[YOUR AVATAR — add description in Avatar Profile]';
+    const videoUrl = document.getElementById('refVideoUrl').value.trim();
+    const product = document.getElementById('studioProduct').value;
+    const format = document.getElementById('studioFormat').value;
+    const setting = document.getElementById('studioSetting').value.trim() || 'clean neutral background';
+    const script = document.getElementById('originalScript').value.trim();
+    const scenes = getScenes();
+
+    if (!script && scenes.length === 0) {
+      alert('Please add the original script and/or at least one scene description.');
+      return;
+    }
+
+    const productName = document.getElementById('studioProduct').options[document.getElementById('studioProduct').selectedIndex].text || 'the product';
+
+    // Build Nano Banana prompt
+    const nbPrompt = buildNanoBananaPrompt(avatar, script, setting, format, productName, product);
+
+    // Build Veo 3 prompts
+    const veo3Prompts = buildVeo3Prompts(avatar, scenes, script, setting, format, productName, product);
+
+    // Render output
+    const output = document.getElementById('studioOutput');
+    output.innerHTML = '';
+
+    // Avatar + video reference row at top
+    if (avatarImageDataUrl || document.getElementById('refVideoUrl').value) {
+      const refRow = document.createElement('div');
+      refRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:8px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;';
+      refRow.innerHTML = (avatarImageDataUrl ? `<img src="${avatarImageDataUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:2px;border:1px solid #2a2a2a;flex-shrink:0;">` : '') +
+        `<div style="flex:1;"><div style="font-size:10px;color:#888;font-weight:600;">Avatar photo ${avatarImageDataUrl ? '✓ uploaded' : '— not set'}</div>
+        <div style="font-size:10px;color:#555;margin-top:2px;">Product: ${escHtml(productName)}</div></div>`;
+      output.appendChild(refRow);
+    }
+
+    // Nano Banana block
+    const nbBlock = document.createElement('div');
+    nbBlock.className = 'prompt-block';
+    nbBlock.innerHTML = `<div class="prompt-block-label">
+        <span>🍌 Nano Banana — Avatar Video Prompt</span>
+        <button class="btn-copy" onclick="copyPromptBlock('nb-text')">Copy</button>
+      </div>
+      <div class="prompt-block-text" id="nb-text">${escHtml(nbPrompt)}</div>`;
+    output.appendChild(nbBlock);
+
+    // Veo 3 blocks
+    veo3Prompts.forEach((p, i) => {
+      const block = document.createElement('div');
+      block.className = 'prompt-block';
+      block.innerHTML = `<div class="prompt-block-label">
+          <span>🎬 Veo 3 — ${escHtml(p.label)}</span>
+          <button class="btn-copy" onclick="copyPromptBlock('veo-text-${i}')">Copy</button>
+        </div>
+        <div class="prompt-block-text" id="veo-text-${i}">${escHtml(p.prompt)}</div>`;
+      output.appendChild(block);
+    });
+
+    // Show save button
+    document.getElementById('savePromptsBtn').style.display = 'inline-block';
+
+    // Store current generation for saving
+    window._lastGeneration = {
+      id: Date.now().toString(),
+      title: productName + (videoUrl ? ' — ' + videoUrl.substring(0, 40) + '...' : ''),
+      videoUrl,
+      product: productName,
+      nbPrompt,
+      veo3Prompts,
+      date: new Date().toLocaleDateString()
+    };
+  }
+
+  function buildNanoBananaPrompt(avatar, script, setting, format, productName, productDetails) {
+    const hasImage = !!avatarImageDataUrl;
+
+    const avatarSection = hasImage
+      ? `AVATAR REFERENCE IMAGE: ✅ Uploaded — use the person in the attached photo as the avatar. Match their exact appearance: face, skin tone, hair, and features precisely.\n${avatar ? `ADDITIONAL NOTES: ${avatar}` : ''}`
+      : `AVATAR DESCRIPTION: ${avatar || '[No avatar photo uploaded — add one in the Avatar section for best results]'}`;
+
+    const rewrittenScript = script || `[Watch the reference video above, type the script, and it will appear here]`;
+
+    const formatNote = format.includes('Greenscreen')
+      ? 'Greenscreen setup. Avatar stands in front of a digital background — use a natural outdoor or kitchen environment behind them.'
+      : format.includes('B-roll')
+      ? 'Primary talking head shot. Cut to B-roll of the product between speaking segments.'
+      : 'Clean single-shot talking head. Avatar speaks directly and confidently to camera the entire time.';
+
+    return `NANO BANANA — Video Recreation Prompt
+=======================================
+
+${avatarSection}
+
+SETTING: ${setting || 'clean neutral dark background'}. Natural soft lighting — warm and flattering. Realistic depth.
+
+FORMAT: ${formatNote}
+
+DELIVERY STYLE: The avatar speaks directly to camera with genuine confidence and warmth. Natural hand gestures. Authentic energy — not stiff or robotic. Real eye contact. Sounds and feels like a real person making a genuine recommendation.
+
+PRODUCT BEING PROMOTED: ${productName || '[select product]'}
+${productDetails ? `PRODUCT DETAILS: ${productDetails}` : ''}
+
+SCRIPT TO DELIVER:
+---
+${rewrittenScript}
+---
+
+TECHNICAL SPECS:
+- Vertical format 9:16 (portrait / Reels / TikTok)
+- Photorealistic — no AI artifacts, no uncanny valley
+- Natural skin texture, realistic lighting falloff, real background depth
+- Match the energy and pacing of a real health & wellness creator
+- The avatar IS the main speaker for the entire video`;
+  }
+
+  function buildVeo3Prompts(avatar, scenes, script, setting, format, productName, productDetails) {
+    const prompts = [];
+    const baseAvatar = avatar.split(',')[0] || 'person';
+
+    // Hook scene
+    prompts.push({
+      label: 'Scene 1 — Hook (0–3 seconds)',
+      prompt: `Cinematic vertical video (9:16). Opening shot: ${baseAvatar} in ${setting || 'a clean natural environment'}. The person is looking directly into camera with a serious, knowing expression — about to say something important. Natural handheld camera feel. Warm soft lighting. Photorealistic. No text. 3 seconds.`
+    });
+
+    // Custom scenes from user input
+    scenes.forEach(s => {
+      prompts.push({
+        label: `Scene ${s.num + 1} — ${s.desc.substring(0, 40)}...`,
+        prompt: `Cinematic vertical video (9:16). ${baseAvatar}. Setting: ${setting || 'natural environment'}. ${s.desc}. Warm natural lighting. Realistic, documentary-style camera work. Photorealistic quality. Product being promoted: ${productName}.`
+      });
+    });
+
+    // Product reveal scene
+    if (productDetails) {
+      prompts.push({
+        label: 'Product Reveal Scene',
+        prompt: `Cinematic vertical video (9:16). Close-up shot: ${baseAvatar} holds up the product (${productName}) to camera with one hand, smiling slightly. The product label is clearly visible. Setting: ${setting || 'natural environment'}. Warm natural lighting. The person nods as if to say "this is the one." Photorealistic. 3–5 seconds.`
+      });
+    }
+
+    // CTA scene
+    prompts.push({
+      label: 'CTA Scene — Comment Hook Ending',
+      prompt: `Cinematic vertical video (9:16). ${baseAvatar} in ${setting || 'natural environment'}, looking into camera with a warm smile. They point directly at the viewer as if talking to them personally. Natural energy, relaxed and authentic. This is the final 3 seconds of a short-form health & wellness video promoting ${productName}. Warm lighting, photorealistic, vertical format.`
+    });
+
+    return prompts;
+  }
+
+  function copyPromptBlock(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.innerText).then(() => {
+      const btn = el.previousElementSibling.querySelector('.btn-copy');
+      if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); }
+    });
+  }
+
+  function saveGeneratedToLibrary() {
+    if (segments.length === 0) { alert('Generate prompts first.'); return; }
+    const productSel = document.getElementById('studioProduct');
+    const productName = productSel ? productSel.options[productSel.selectedIndex].text : 'Untitled';
+    const item = {
+      id: Date.now().toString(),
+      product: productName,
+      date: new Date().toLocaleDateString(),
+      segmentCount: segments.length,
+      segments: segments.map(s => ({
+        startTime: s.startTime, endTime: s.endTime,
+        script: s.script, nbPrompt: s.nbPrompt, veoPrompt: s.veoPrompt
+      }))
+    };
+    studioLibrary.unshift(item);
+    saveStudioLibrary();
+    renderStudioLibrary();
+    const btn = document.getElementById('saveAllBtn');
+    if (btn) { btn.textContent = 'Saved!'; setTimeout(() => btn.textContent = 'Save to Library', 2000); }
+  }
+
+  function renderStudioLibrary() {
+    const container = document.getElementById('studioLibrary');
+    const count = document.getElementById('libCount');
+    if (!container) return;
+    if (count) count.textContent = studioLibrary.length + ' saved';
+    if (studioLibrary.length === 0) {
+      container.innerHTML = '<div style="font-size:11px;color:#444;text-align:center;padding:16px 0;">No saved recreations yet</div>';
+      return;
+    }
+    container.innerHTML = studioLibrary.map((item, i) => `
+      <div class="lib-item">
+        <div class="lib-item-title">
+          <span>${escHtml(item.product || 'Untitled')}</span>
+          <div style="display:flex;gap:4px;">
+            <button class="btn-copy" onclick="loadLibraryItem(${i})">Load</button>
+            <button class="action-btn action-delete" onclick="deleteLibraryItem(${i})" style="padding:2px 6px;font-size:10px;">✕</button>
+          </div>
+        </div>
+        <div class="lib-item-meta">${escHtml(item.date)} · ${item.segmentCount || 0} segments</div>
+      </div>`).join('');
+  }
+
+  function loadLibraryItem(i) {
+    const item = studioLibrary[i];
+    if (!item) return;
+    if (item.segments && item.segments.length > 0) {
+      // Load into segments array and render
+      segments = item.segments.map(s => ({
+        startTime: s.startTime || 0,
+        endTime: s.endTime || 0,
+        frameDataUrl: s.frameDataUrl || null,
+        script: s.script || '',
+        nbPrompt: s.nbPrompt || '',
+        veoPrompt: s.veoPrompt || ''
+      }));
+      renderSegments();
+    }
+  }
+
+  function deleteLibraryItem(i) {
+    studioLibrary.splice(i, 1);
+    saveStudioLibrary();
+    renderStudioLibrary();
+  }
+
+  function initVideoStudio() {
+    loadAvatarProfile();
+    loadAvatarImage();
+    renderSegments();
+    renderStudioLibrary();
+    renderApiKeyStatus();
+  }
+
+  // Init
+  seedMyAccounts();
+  seedCompetitors();
+  seedViralScripts();
+  renderTable();
+</script>
+</body>
+</html>
