@@ -2064,46 +2064,38 @@
       </div>`).join('');
   }
 
-  // --- Build Nano Banana prompt for one segment ---
+  // --- Build Nano Banana prompt for the START frame of a segment ---
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
-    const hasAvatar = !!avatarImageDataUrl;
     const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
-    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     const seg = segments[i];
-    const timeRange = seg ? fmt(seg.startTime) + '–' + fmt(seg.endTime) : '';
+    const action = seg && seg.action ? seg.action : '';
     const obj = {
-      subject: avatarNotes || (hasAvatar ? 'person from avatar photo' : 'creator'),
-      face: hasAvatar ? 'exact face, skin tone, and hair from avatar photo — do not alter' : 'creator face',
-      clothing: 'exact clothing worn in avatar photo — preserve every garment, color, and accessory unchanged',
-      body_position: 'identical to the person in the reference frame — same pose, angle, and framing',
-      background: 'identical to reference frame — do not change any element of the scene',
-      lighting: 'identical to reference frame — do not adjust color temperature or brightness',
-      camera_angle: 'identical to reference frame',
-      setting: setting || 'match reference frame',
-      format: 'vertical 9:16, photorealistic, sharp, no text, no overlays, no AI artifacts'
+      reference_photos: 'Photo 1 = START FRAME from video (scene/background/pose reference). Photo 2 = AVATAR photo (face/clothing reference). Swap avatar face and body into the scene from Photo 1.',
+      scene: setting || 'Match the background, lighting, and environment exactly from reference photo 1 (the start frame). Preserve every detail of the scene — walls, objects, surfaces, props, lighting.',
+      character: avatarNotes
+        ? avatarNotes + (action ? '. ' + action : '')
+        : 'Person from avatar photo (reference photo 2). Use exact face, skin tone, hair, and clothing from the avatar photo. Place them in the pose and position shown in the start frame.' + (action ? ' ' + action : ''),
+      camera: 'Match the exact framing, shot distance, and angle from reference photo 1. Vertical 9:16. Static shot. No camera movement.',
+      no_text: true,
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed clothing, changed props'
     };
     return JSON.stringify(obj, null, 2);
   }
 
   // --- Build Nano Banana prompt for the END frame of a segment ---
   function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
-    const hasAvatar = !!avatarImageDataUrl;
     const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
-    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     const seg = segments[i];
-    const timeRange = seg ? fmt(seg.startTime) + '–' + fmt(seg.endTime) : '';
+    const action = seg && seg.action ? seg.action : '';
     const obj = {
-      subject: avatarNotes || (hasAvatar ? 'person from avatar photo' : 'creator'),
-      face: hasAvatar ? 'exact face, skin tone, and hair from avatar photo — do not alter' : 'creator face',
-      clothing: 'exact clothing worn in avatar photo — preserve every garment, color, and accessory unchanged',
-      body_position: 'identical to the person in the END frame of this segment — same pose, angle, and framing',
-      background: 'identical to END reference frame — do not change any element of the scene',
-      lighting: 'identical to END reference frame — do not adjust color temperature or brightness',
-      camera_angle: 'identical to END reference frame',
-      setting: setting || 'match end reference frame',
-      frame_note: 'This is the ENDING frame — use the END frame image as the reference, not the start frame',
-      segment_time: timeRange,
-      format: 'vertical 9:16, photorealistic, sharp, no text, no overlays, no AI artifacts'
+      reference_photos: 'Photo 1 = END FRAME from video (scene/background/pose reference). Photo 2 = AVATAR photo (face/clothing reference). Swap avatar face and body into the scene from Photo 1.',
+      scene: setting || 'Match the background, lighting, and environment exactly from reference photo 1 (the end frame). Preserve every detail of the scene — walls, objects, surfaces, props, lighting.',
+      character: avatarNotes
+        ? avatarNotes + (action ? '. Final pose: ' + action : '')
+        : 'Person from avatar photo (reference photo 2). Use exact face, skin tone, hair, and clothing from the avatar photo. Place them in the pose and position shown in the end frame.' + (action ? ' Final pose: ' + action : ''),
+      camera: 'Match the exact framing, shot distance, and angle from reference photo 1 (the end frame). Vertical 9:16. Static shot. No camera movement.',
+      no_text: true,
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed clothing, changed props'
     };
     return JSON.stringify(obj, null, 2);
   }
