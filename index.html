@@ -1577,6 +1577,7 @@
       script: s.script || '',
       action: s.action || '',
       nbPrompt: s.nbPrompt || '',
+      nbEndPrompt: s.nbEndPrompt || '',
       veoPrompt: s.veoPrompt || ''
       // frameDataUrl and endFrameDataUrl omitted — too large for localStorage
     }));
@@ -2027,10 +2028,18 @@
           ${seg.nbPrompt ? `
           <div style="margin-top:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana</div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana — Start Frame</div>
               <button class="btn-copy" onclick="copyPromptBlock('nb-seg-${i}')">Copy</button>
             </div>
             <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-seg-${i}">${escHtml(seg.nbPrompt)}</div>
+          </div>` : ''}
+          ${seg.nbEndPrompt ? `
+          <div style="margin-top:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana — End Frame</div>
+              <button class="btn-copy" onclick="copyPromptBlock('nb-end-seg-${i}')">Copy</button>
+            </div>
+            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-end-seg-${i}">${escHtml(seg.nbEndPrompt)}</div>
           </div>` : ''}
           ${seg.veoPrompt ? `
           <div style="margin-top:6px;">
@@ -2060,6 +2069,29 @@
       lighting: 'identical to reference frame — do not adjust color temperature or brightness',
       camera_angle: 'identical to reference frame',
       setting: setting || 'match reference frame',
+      format: 'vertical 9:16, photorealistic, sharp, no text, no overlays, no AI artifacts'
+    };
+    return JSON.stringify(obj, null, 2);
+  }
+
+  // --- Build Nano Banana prompt for the END frame of a segment ---
+  function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
+    const hasAvatar = !!avatarImageDataUrl;
+    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    const seg = segments[i];
+    const timeRange = seg ? fmt(seg.startTime) + '–' + fmt(seg.endTime) : '';
+    const obj = {
+      subject: avatarNotes || (hasAvatar ? 'person from avatar photo' : 'creator'),
+      face: hasAvatar ? 'exact face, skin tone, and hair from avatar photo — do not alter' : 'creator face',
+      clothing: 'exact clothing worn in avatar photo — preserve every garment, color, and accessory unchanged',
+      body_position: 'identical to the person in the END frame of this segment — same pose, angle, and framing',
+      background: 'identical to END reference frame — do not change any element of the scene',
+      lighting: 'identical to END reference frame — do not adjust color temperature or brightness',
+      camera_angle: 'identical to END reference frame',
+      setting: setting || 'match end reference frame',
+      frame_note: 'This is the ENDING frame — use the END frame image as the reference, not the start frame',
+      segment_time: timeRange,
       format: 'vertical 9:16, photorealistic, sharp, no text, no overlays, no AI artifacts'
     };
     return JSON.stringify(obj, null, 2);
@@ -2191,6 +2223,7 @@
 
     segments.forEach((seg, i) => {
       seg.nbPrompt = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
+      seg.nbEndPrompt = buildSegmentNanoBananaEndPrompt(i, setting, productName, product);
       seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
     });
     saveSegments();
