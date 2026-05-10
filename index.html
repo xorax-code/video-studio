@@ -204,7 +204,11 @@
 
 <div class="header">
   <h1>Account Organizer</h1>
-  <span class="header-count" id="headerCount">0 accounts</span>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <span class="header-count" id="headerCount">0 accounts</span>
+    <button onclick="exportAllData()" style="padding:3px 8px;background:#1a1a1a;border:1px solid #333;color:#aaa;border-radius:3px;font-size:11px;cursor:pointer;" title="Export all data to JSON file">⬇ Export</button>
+    <label style="padding:3px 8px;background:#1a1a1a;border:1px solid #333;color:#aaa;border-radius:3px;font-size:11px;cursor:pointer;" title="Import data from JSON file">⬆ Import<input type="file" accept=".json" onchange="importAllData(event)" style="display:none;"></label>
+  </div>
 </div>
 
 <!-- Tabs -->
@@ -1581,7 +1585,7 @@
   }
 
   // ===== VIDEO STUDIO =====
-  const OPENAI_KEY_BAKED = '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';
+  const OPENAI_KEY_BAKED = ''; // Key removed — use the ⚙ settings field instead
   let studioLibrary = JSON.parse(localStorage.getItem('sm_studio_library') || '[]');
   let avatarImageDataUrl = null;
   let refVideoObjectUrl = null;
@@ -1589,6 +1593,38 @@
   let segments = []; // [{startTime, endTime, frameDataUrl, script, nbPrompt, veoPrompt}]
 
   function saveStudioLibrary() { localStorage.setItem('sm_studio_library', JSON.stringify(studioLibrary)); }
+
+  // --- Export / Import all data ---
+  function exportAllData() {
+    const data = {
+      sm_accounts: localStorage.getItem('sm_accounts'),
+      sm_competitors: localStorage.getItem('sm_competitors'),
+      sm_viral_scripts: localStorage.getItem('sm_viral_scripts'),
+      sm_studio_library: localStorage.getItem('sm_studio_library'),
+      sm_avatar_profile: localStorage.getItem('sm_avatar_profile'),
+      sm_openai_key: localStorage.getItem('sm_openai_key'),
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'account-organizer-backup.json';
+    a.click();
+  }
+
+  function importAllData(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      try {
+        const data = JSON.parse(ev.target.result);
+        Object.entries(data).forEach(([k, v]) => { if (v) localStorage.setItem(k, v); });
+        alert('Data imported! Reloading...');
+        location.reload();
+      } catch(err) { alert('Invalid backup file.'); }
+    };
+    reader.readAsText(file);
+  }
 
   // --- Avatar image ---
   function onAvatarImageChange(e) {
