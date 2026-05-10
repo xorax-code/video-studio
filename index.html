@@ -546,6 +546,7 @@
           <div class="vs-panel-header">
             <span>Segments <span id="segmentCount" style="font-size:10px;color:#555;font-weight:400;"></span></span>
             <div style="display:flex;gap:6px;">
+              <button class="btn" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:#555;color:#f0f0f0;">⚡ Generate All Prompts</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
@@ -1971,6 +1972,7 @@
         <div>
           <div style="display:flex;gap:4px;align-items:flex-start;">
             <div style="flex:1;">
+              ${seg.action ? `<div style="font-size:9px;color:#6a9a4a;margin-bottom:4px;line-height:1.4;background:#0a150a;border:1px solid #1a2a1a;border-radius:2px;padding:3px 6px;" id="action-seg-${i}">🎬 ${escHtml(seg.action)}</div>` : `<div style="font-size:9px;color:#333;margin-bottom:4px;" id="action-seg-${i}"></div>`}
               <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#555;margin-bottom:3px;">Script slice</div>
               <textarea oninput="segments[${i}].script=this.value" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
             </div>
@@ -2022,14 +2024,87 @@
 
   // --- Build Veo 3 prompt for one segment ---
   function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName) {
+    const seg = segments[i];
+    const analyzedAction = seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures';
     const obj = {
-      action: 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures, warm lighting, vertical 9:16, photorealistic',
+      action: analyzedAction,
       speech: scriptSlice || '',
       audio: 'natural ambient sound, clear voice, no background music',
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16'
     };
     return JSON.stringify(obj, null, 2);
+  }
+
+  // --- Capture multiple frames from a segment for video analysis ---
+  async function captureSegmentFrames(seg, count) {
+    const frames = [];
+    const step = (seg.endTime - seg.startTime) / (count + 1);
+    for (let k = 1; k <= count; k++) {
+      const t = seg.startTime + step * k;
+      const dataUrl = await captureFrame(t);
+      if (dataUrl) frames.push(dataUrl);
+    }
+    return frames;
+  }
+
+  // --- Analyze all segment videos with GPT-4o Vision ---
+  async function analyzeAllFrames() {
+    if (segments.length === 0) { alert('No segments yet — run Auto 8s first.'); return; }
+    const apiKey = getApiKey();
+    if (!apiKey) { alert('Add your OpenAI API key in ⚙ Settings first.'); return; }
+
+    const btn = document.getElementById('analyzeFramesBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Analyzing…';
+
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      btn.textContent = `⏳ Seg ${i + 1}/${segments.length}…`;
+      try {
+        // Capture 4 frames evenly spread across the segment
+        const frames = await captureSegmentFrames(seg, 4);
+        if (frames.length === 0) continue;
+
+        // Build the content array: instruction + all frames
+        const content = [
+          {
+            type: 'text',
+            text: 'These frames are sampled evenly across an 8-second video clip. Describe in one concise sentence the person\'s action, movement, gestures, body position, and expression throughout this clip — suitable for a video generation prompt. Be specific and physical (e.g. "person holds up a green drink bottle, gestures toward camera with right hand, leans slightly forward with an enthusiastic expression").'
+          },
+          ...frames.map(f => ({
+            type: 'image_url',
+            image_url: { url: f, detail: 'low' }
+          }))
+        ];
+
+        const res = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: 'gpt-4o', max_tokens: 120, messages: [{ role: 'user', content }] })
+        });
+        const data = await res.json();
+        const description = data.choices?.[0]?.message?.content?.trim() || '';
+        seg.action = description;
+
+        // Update the action display in the card immediately
+        const actionEl = document.getElementById('action-seg-' + i);
+        if (actionEl) {
+          actionEl.style.color = '#6a9a4a';
+          actionEl.style.background = '#0a150a';
+          actionEl.style.border = '1px solid #1a2a1a';
+          actionEl.style.borderRadius = '2px';
+          actionEl.style.padding = '3px 6px';
+          actionEl.textContent = '🎬 ' + description;
+        }
+      } catch (e) {
+        console.error('Segment ' + i + ' analysis failed:', e);
+      }
+    }
+
+    btn.disabled = false;
+    btn.textContent = '✅ Analyzed';
+    setTimeout(() => { btn.textContent = '🔍 Analyze Video'; }, 3000);
   }
 
   // --- Generate all segment prompts ---
