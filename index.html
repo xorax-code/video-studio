@@ -1578,6 +1578,7 @@
       action: s.action || '',
       nbPrompt: s.nbPrompt || '',
       veoPrompt: s.veoPrompt || ''
+      // frameDataUrl and endFrameDataUrl omitted — too large for localStorage
     }));
     try { localStorage.setItem('sm_segments', JSON.stringify(slim)); } catch(e) {}
   }
@@ -1865,7 +1866,8 @@
       '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
     for (let i = 0; i < times.length; i++) {
       const frameDataUrl = await captureFrame(times[i].start);
-      segments.push({ startTime: times[i].start, endTime: times[i].end, frameDataUrl, script: '', nbPrompt: '', veoPrompt: '' });
+      const endFrameDataUrl = await captureFrame(Math.max(times[i].end - 0.1, times[i].start));
+      segments.push({ startTime: times[i].start, endTime: times[i].end, frameDataUrl, endFrameDataUrl, script: '', action: '', nbPrompt: '', veoPrompt: '' });
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = (i + 1) + '/' + times.length;
     }
@@ -1887,7 +1889,8 @@
     }
     const frameDataUrl = await captureFrame(t);
     const dur = videoEl.duration || t + 8;
-    segments.push({ startTime: t, endTime: dur, frameDataUrl, script: '', nbPrompt: '', veoPrompt: '' });
+    const endFrameDataUrl = await captureFrame(Math.max(dur - 0.1, t));
+    segments.push({ startTime: t, endTime: dur, frameDataUrl, endFrameDataUrl, script: '', action: '', nbPrompt: '', veoPrompt: '' });
     distributeScript();
     renderSegments();
   }
@@ -2100,20 +2103,27 @@
       const seg = segments[i];
       btn.textContent = `⏳ Seg ${i + 1}/${segments.length}…`;
       try {
-        // Capture 4 frames evenly spread across the segment
+        // Capture 4 frames evenly spread across the segment + the end frame
         const frames = await captureSegmentFrames(seg, 4);
         if (frames.length === 0) continue;
+        const endFrame = seg.endFrameDataUrl || null;
 
-        // Build the content array: instruction + all frames
+        // Build the content array: instruction + all frames + labeled end frame
+        const imageContent = frames.map((f, idx) => ({
+          type: 'image_url',
+          image_url: { url: f, detail: 'low' }
+        }));
+        if (endFrame) {
+          imageContent.push({ type: 'text', text: 'The following is the FINAL frame — this is where the action ends:' });
+          imageContent.push({ type: 'image_url', image_url: { url: endFrame, detail: 'low' } });
+        }
+
         const content = [
           {
             type: 'text',
-            text: `These frames are sampled evenly from an 8-second video clip. Write a detailed scene description using the pronoun "${pronoun}". Include ALL of the following you can observe: what ${pronoun} is doing and how ${pronoun} is moving, hand gestures and body language, facial expression and eye contact, what ${pronoun} is holding or interacting with, what is on the table or surface in front of ${pronoun}, objects and props visible in the scene, the background environment and setting, lighting and atmosphere, anything else visible in the frame. Be as detailed and specific as possible — this will be used to recreate the scene in a video generator. Return only the description, no intro or commentary.`
+            text: `These frames are sampled evenly from an 8-second video clip, followed by the final frame. Write a detailed scene description using the pronoun "${pronoun}". Include ALL of the following you can observe: what ${pronoun} is doing and how ${pronoun} is moving, hand gestures and body language, facial expression and eye contact, what ${pronoun} is holding or interacting with, what is on the table or surface in front of ${pronoun}, objects and props visible in the scene, the background environment and setting, lighting and atmosphere, and importantly — describe the exact final state the action ends on. Be as detailed and specific as possible — this will be used to recreate the scene in a video generator. Return only the description, no intro or commentary.`
           },
-          ...frames.map(f => ({
-            type: 'image_url',
-            image_url: { url: f, detail: 'low' }
-          }))
+          ...imageContent
         ];
 
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
