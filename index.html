@@ -2022,18 +2022,12 @@
 
   // --- Build Veo 3 prompt for one segment ---
   function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName) {
-    const avatarNotes = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
-    const baseAvatar = avatarNotes || 'person from Nano Banana output image';
-    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
-    const dur = Math.round(endTime - startTime);
     const obj = {
-      start_frame: 'Nano Banana output image for this segment',
-      subject: baseAvatar,
-      action: 'speaking directly to camera with natural confidence and real eye contact',
+      action: 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures, warm lighting, vertical 9:16, photorealistic',
       speech: scriptSlice || '',
-      setting: setting || 'match start frame',
-      duration_seconds: dur,
-      format: 'vertical 9:16, photorealistic, warm natural lighting, handheld documentary feel, no AI artifacts'
+      audio: 'natural ambient sound, clear voice, no background music',
+      negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
+      camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16'
     };
     return JSON.stringify(obj, null, 2);
   }
