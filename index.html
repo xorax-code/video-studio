@@ -1565,9 +1565,35 @@
   let avatarImageDataUrl = null;
   let refVideoObjectUrl = null;
   let refVideoFile = null; // Raw File object for Whisper transcription
-  let segments = []; // [{startTime, endTime, frameDataUrl, script, nbPrompt, veoPrompt}]
+  let segments = []; // [{startTime, endTime, frameDataUrl, script, action, nbPrompt, veoPrompt}]
 
   function saveStudioLibrary() { localStorage.setItem('sm_studio_library', JSON.stringify(studioLibrary)); }
+
+  // --- Save/load segments (frameDataUrl excluded — too large for localStorage) ---
+  function saveSegments() {
+    const slim = segments.map(s => ({
+      startTime: s.startTime,
+      endTime: s.endTime,
+      script: s.script || '',
+      action: s.action || '',
+      nbPrompt: s.nbPrompt || '',
+      veoPrompt: s.veoPrompt || ''
+    }));
+    try { localStorage.setItem('sm_segments', JSON.stringify(slim)); } catch(e) {}
+  }
+
+  function loadSegments() {
+    try {
+      const saved = JSON.parse(localStorage.getItem('sm_segments') || '[]');
+      if (saved.length > 0) {
+        segments = saved.map(s => ({ ...s, frameDataUrl: null }));
+        renderSegments();
+      }
+    } catch(e) {}
+  }
+
+  // Auto-load segments on startup
+  loadSegments();
 
   // --- Export / Import all data ---
   function exportAllData() {
@@ -1578,6 +1604,7 @@
       sm_studio_library: localStorage.getItem('sm_studio_library'),
       sm_avatar_profile: localStorage.getItem('sm_avatar_profile'),
       sm_openai_key: localStorage.getItem('sm_openai_key'),
+      sm_segments: localStorage.getItem('sm_segments'),
     };
     const blob = new Blob([JSON.stringify(data, null, 2)], {type: 'application/json'});
     const a = document.createElement('a');
@@ -1868,6 +1895,7 @@
   // --- Clear all segments ---
   function clearSegments() {
     segments = [];
+    saveSegments();
     renderSegments();
   }
 
@@ -1885,6 +1913,7 @@
   // --- Remove a single segment ---
   function removeSegment(i) {
     segments.splice(i, 1);
+    saveSegments();
     renderSegments();
   }
 
@@ -1974,7 +2003,7 @@
             <div style="flex:1;">
               ${seg.action ? `<div style="font-size:9px;color:#6a9a4a;margin-bottom:4px;line-height:1.4;background:#0a150a;border:1px solid #1a2a1a;border-radius:2px;padding:3px 6px;" id="action-seg-${i}">🎬 ${escHtml(seg.action)}</div>` : `<div style="font-size:9px;color:#333;margin-bottom:4px;" id="action-seg-${i}"></div>`}
               <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#555;margin-bottom:3px;">Script slice</div>
-              <textarea oninput="segments[${i}].script=this.value" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
+              <textarea oninput="segments[${i}].script=this.value;clearTimeout(window._segSaveTimer);window._segSaveTimer=setTimeout(saveSegments,800)" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;margin-top:14px;">
               <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 prompt from current script" style="background:#0a1a2a;border:1px solid #1a3a5a;border-radius:2px;color:#4a8acc;font-size:10px;padding:3px 6px;cursor:pointer;white-space:nowrap;">↻ Veo 3</button>
@@ -2048,12 +2077,21 @@
     return frames;
   }
 
+  // --- Detect pronoun from avatar description ---
+  function getAvatarPronoun() {
+    const desc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value : '').toLowerCase();
+    if (/\b(woman|female|she|her|girl)\b/.test(desc)) return 'she';
+    if (/\b(man|male|he|him|guy|boy)\b/.test(desc)) return 'he';
+    return 'they';
+  }
+
   // --- Analyze all segment videos with GPT-4o Vision ---
   async function analyzeAllFrames() {
     if (segments.length === 0) { alert('No segments yet — run Auto 8s first.'); return; }
     const apiKey = getApiKey();
     if (!apiKey) { alert('Add your OpenAI API key in ⚙ Settings first.'); return; }
 
+    const pronoun = getAvatarPronoun();
     const btn = document.getElementById('analyzeFramesBtn');
     btn.disabled = true;
     btn.textContent = '⏳ Analyzing…';
@@ -2070,7 +2108,7 @@
         const content = [
           {
             type: 'text',
-            text: 'These frames are sampled evenly across an 8-second video clip. Describe in one concise sentence the person\'s action, movement, gestures, body position, and expression throughout this clip — suitable for a video generation prompt. Be specific and physical (e.g. "person holds up a green drink bottle, gestures toward camera with right hand, leans slightly forward with an enthusiastic expression").'
+            text: `These frames are sampled evenly from an 8-second video clip. Describe in one short general sentence what the person is doing, using the pronoun "${pronoun}". Focus only on physical actions and movement — not appearance. Keep it simple and general. Examples: "${pronoun} holds up a bottle toward the camera and nods", "${pronoun} gestures with both hands while looking directly at the camera", "${pronoun} leans forward and points at the viewer". Return only the sentence, nothing else.`
           },
           ...frames.map(f => ({
             type: 'image_url',
@@ -2081,7 +2119,7 @@
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model: 'gpt-4o', max_tokens: 120, messages: [{ role: 'user', content }] })
+          body: JSON.stringify({ model: 'gpt-4o', max_tokens: 80, messages: [{ role: 'user', content }] })
         });
         const data = await res.json();
         const description = data.choices?.[0]?.message?.content?.trim() || '';
@@ -2102,6 +2140,7 @@
       }
     }
 
+    saveSegments();
     btn.disabled = false;
     btn.textContent = '✅ Analyzed';
     setTimeout(() => { btn.textContent = '🔍 Analyze Video'; }, 3000);
@@ -2133,6 +2172,7 @@
       seg.nbPrompt = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
       seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
     });
+    saveSegments();
     renderSegments();
     const saveAllBtn = document.getElementById('saveAllBtn');
     if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
@@ -2146,6 +2186,7 @@
     const productName = productSel ? (productSel.options[productSel.selectedIndex].text || 'the product') : 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
     seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
+    saveSegments();
     // Update just the veo block in the DOM without full re-render
     const veoEl = document.getElementById('veo-seg-' + i);
     if (veoEl) {
