@@ -4384,12 +4384,35 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
       alert('Generate prompts first (click ⚡ Generate All Prompts), then use this button.');
       return;
     }
-    navigator.clipboard.writeText(el.value).catch(() => {
-      // Fallback for non-HTTPS environments
-      el.select();
-      document.execCommand('copy');
-    });
-    window.open('https://labs.google/flow/about', '_blank');
+    const doCopy = () => {
+      try { el.select(); document.execCommand('copy'); } catch(e) {}
+    };
+    navigator.clipboard.writeText(el.value).catch(doCopy);
+    window.open('https://labs.google/flow', '_blank');
+    // Show a persistent toast reminding user to paste
+    showVeo3Toast(i + 1);
+  }
+
+  let _veo3ToastTimer = null;
+  function showVeo3Toast(sceneNum) {
+    let toast = document.getElementById('veo3Toast');
+    if (!toast) {
+      toast = document.createElement('div');
+      toast.id = 'veo3Toast';
+      toast.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a2e;border:1px solid var(--accent);border-radius:8px;padding:12px 20px;display:flex;align-items:center;gap:12px;z-index:9999;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:inherit;min-width:280px;max-width:90vw;';
+      document.body.appendChild(toast);
+    }
+    toast.innerHTML = `
+      <div style="font-size:20px;flex-shrink:0;">📋</div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:700;color:var(--accent-2);margin-bottom:2px;">Scene ${sceneNum} prompt copied!</div>
+        <div style="font-size:11px;color:var(--text-2);">Google Flow is opening — just press <kbd style="background:#2a2a3a;border:1px solid #444;border-radius:3px;padding:1px 5px;font-size:10px;">Ctrl+V</kbd> <span style="color:var(--text-3);">/ </span><kbd style="background:#2a2a3a;border:1px solid #444;border-radius:3px;padding:1px 5px;font-size:10px;">⌘V</kbd> to paste.</div>
+      </div>
+      <button onclick="document.getElementById('veo3Toast').style.display='none'" style="background:none;border:none;color:var(--text-3);font-size:16px;cursor:pointer;flex-shrink:0;padding:0;line-height:1;">✕</button>
+    `;
+    toast.style.display = 'flex';
+    clearTimeout(_veo3ToastTimer);
+    _veo3ToastTimer = setTimeout(() => { if (toast) toast.style.display = 'none'; }, 8000);
   }
 
   // --- Refresh Veo 3 prompt for a single segment after script/action edit ---
