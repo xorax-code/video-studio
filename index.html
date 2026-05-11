@@ -3862,14 +3862,23 @@ TECHNICAL SPECS:
     const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
     document.getElementById('calMonthLabel').textContent = `${monthNames[calMonth]} ${calYear}`;
 
-    // Build day → entries map for this month
+    // Build day → logged entries map (done videos)
     const dayMap = {};
     videoLog.forEach(e => {
-      const d = e.date;
-      const [ey, em] = d.split('-').map(Number);
+      const [ey, em] = e.date.split('-').map(Number);
       if (ey === calYear && em === calMonth+1) {
-        if (!dayMap[d]) dayMap[d] = [];
-        dayMap[d].push(e);
+        if (!dayMap[e.date]) dayMap[e.date] = [];
+        dayMap[e.date].push({ ...e, _type: 'logged' });
+      }
+    });
+
+    // Also include planned daily items (not yet done) for this month
+    dailyItems.forEach(item => {
+      if (item.done) return; // done ones are already in videoLog
+      const [ey, em] = item.date.split('-').map(Number);
+      if (ey === calYear && em === calMonth+1) {
+        if (!dayMap[item.date]) dayMap[item.date] = [];
+        dayMap[item.date].push({ ...item, _type: 'planned' });
       }
     });
 
@@ -3895,7 +3904,11 @@ TECHNICAL SPECS:
       const dots = entries.map(e => {
         const acct = accounts.find(a => a.id === e.accountId);
         const color = platformColors[acct?.platform] || 'var(--accent)';
-        return `<div class="cal-dot" style="background:${color};" title="${escHtml(acct?.username||'?')}"></div>`;
+        if (e._type === 'planned') {
+          // Hollow ring dot for planned-but-not-done entries
+          return `<div class="cal-dot" style="background:transparent;border:2px solid ${color};box-sizing:border-box;" title="📋 Planned: ${escHtml(acct?.username||'?')}"></div>`;
+        }
+        return `<div class="cal-dot" style="background:${color};" title="✅ Done: ${escHtml(acct?.username||'?')}"></div>`;
       }).join('');
       cell.innerHTML = `<div class="cal-day-num">${d}</div><div class="cal-dots">${dots}</div>${entries.length>3?`<div class="cal-count-badge">${entries.length}</div>`:''}`;
       grid.appendChild(cell);
@@ -4340,12 +4353,17 @@ TECHNICAL SPECS:
     saveDailyItems();
     closeDailyItemModal();
     renderDailyPlan();
+    // Keep calendar in sync so the dot appears immediately
+    const calEl = document.getElementById('calViewCalendar');
+    if (calEl && calEl.style.display !== 'none') renderCalendar();
   }
 
   function deleteDailyItem(id) {
     dailyItems = dailyItems.filter(i => i.id !== id);
     saveDailyItems();
     renderDailyPlan();
+    const calEl = document.getElementById('calViewCalendar');
+    if (calEl && calEl.style.display !== 'none') renderCalendar();
   }
 
   // ===== ASYNC INIT =====
