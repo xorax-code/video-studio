@@ -263,6 +263,9 @@
   .tab-content { display: none; }
   #tab-video-studio { display: none !important; }
   #tab-video-studio.active { display: flex !important; }
+  /* Studio mode show/hide */
+  #tab-video-studio.studio-producer .replicator-only { display: none !important; }
+  #tab-video-studio.studio-replicator .producer-only { display: none !important; }
   .tab-content.active { display: block; }
 
   /* ===== BUTTONS ===== */
@@ -727,6 +730,11 @@
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
   .vs-panel-body { padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  /* Studio mode sub-tab pill bar */
+  .studio-modebar { display:flex;gap:4px;padding:0 2px;flex-shrink:0; }
+  .studio-modetab { font-size:10px;font-weight:700;letter-spacing:0.4px;padding:4px 14px;border-radius:20px;border:1px solid var(--border-2);background:transparent;color:var(--text-3);cursor:pointer;transition:all 0.15s;font-family:inherit; }
+  .studio-modetab:hover { border-color:var(--border-2);color:var(--text-2);background:var(--surface-2); }
+  .studio-modetab.active { background:var(--accent);border-color:var(--accent);color:#fff; }
   .vs-scene-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
   .vs-scene-num {
     background: var(--surface-3);
@@ -793,6 +801,21 @@
     font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
     max-height: 160px;
     overflow-y: auto;
+  }
+  /* Editable prompt textareas */
+  #segmentsContainer textarea:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px var(--accent-glow-sm);
+    outline: none;
+  }
+  #segmentsContainer textarea[id^="nb-"],
+  #segmentsContainer textarea[id^="veo-"] {
+    font-family: 'SF Mono', 'Consolas', 'Menlo', monospace;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+  #segmentsContainer textarea[id^="action-"] {
+    color: #6ee7b7;
   }
   .lib-item { border-bottom: 1px solid var(--border); padding: 9px 0; }
   .lib-item:last-child { border-bottom: none; }
@@ -1008,31 +1031,35 @@
 
 <!-- ===== TOP NAVBAR ===== -->
 <div class="topnav">
-  <a class="topnav-brand" href="index.html">
+  <a class="topnav-brand" href="index.html" onclick="onLogoClick(); return false;">
     <div class="topnav-brand-icon">⚡</div>
     <span class="topnav-brand-text">SocialOS</span>
   </a>
 
   <div class="tab-bar">
-    <button class="tab active" onclick="switchTab('my-accounts')" title="My Accounts">
+    <button class="tab active" data-tab="my-accounts" onclick="switchTab('my-accounts')" title="My Accounts">
       <span class="nav-icon">📊</span>
       <span class="nav-label">My Accounts</span>
     </button>
-    <button class="tab" onclick="switchTab('competitors')" title="Competitors">
+    <button class="tab" data-tab="competitors" onclick="switchTab('competitors')" title="Competitors">
       <span class="nav-icon">🔍</span>
       <span class="nav-label">Competitors</span>
     </button>
-    <button class="tab" onclick="switchTab('viral-scripts')" title="Viral Scripts">
+    <button class="tab" data-tab="viral-scripts" onclick="switchTab('viral-scripts')" title="Viral Scripts">
       <span class="nav-icon">🔥</span>
       <span class="nav-label">Viral Scripts</span>
     </button>
-    <button class="tab" onclick="switchTab('calendar')" title="Calendar">
+    <button class="tab" data-tab="calendar" onclick="switchTab('calendar')" title="Calendar">
       <span class="nav-icon">📅</span>
       <span class="nav-label">Calendar</span>
     </button>
-    <button class="tab" onclick="switchTab('video-studio')" title="Video Studio">
+    <button class="tab" data-tab="video-replicator" onclick="switchTab('video-replicator')" title="Video Replicator">
       <span class="nav-icon">🎬</span>
-      <span class="nav-label">Video Studio</span>
+      <span class="nav-label">Video Replicator</span>
+    </button>
+    <button class="tab" data-tab="video-producer" onclick="switchTab('video-producer')" title="Video Producer">
+      <span class="nav-icon">✏️</span>
+      <span class="nav-label">Video Producer</span>
     </button>
   </div>
 
@@ -1431,10 +1458,16 @@
 </div><!-- end .container -->
 
 <!-- ===== VIDEO STUDIO — outside .container for fixed-height full-bleed layout ===== -->
-<div id="tab-video-studio" class="tab-content" style="height:calc(100vh - 50px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
+<div id="tab-video-studio" class="tab-content studio-replicator" style="height:calc(100vh - 50px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
 
-    <!-- PROJECT BAR -->
-    <div id="projectBar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);flex-shrink:0;"></div>
+    <!-- MODE + PROJECT BAR row -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-shrink:0;">
+      <div class="studio-modebar">
+        <button class="studio-modetab active" id="studioModetab_replicator" onclick="switchStudioMode('replicator')">🎬 Video Replicator</button>
+        <button class="studio-modetab" id="studioModetab_producer" onclick="switchStudioMode('producer')">✏️ Video Producer</button>
+      </div>
+      <div id="projectBar" style="display:flex;align-items:center;gap:8px;flex:1;padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);"></div>
+    </div>
 
     <!-- 2-COLUMN BODY -->
     <div style="display:grid;grid-template-columns:300px 1fr;gap:10px;flex:1;overflow:hidden;min-height:0;">
@@ -1471,38 +1504,57 @@
           </div>
         </div>
 
+        <!-- Background — producer only -->
+        <div class="vs-panel producer-only" style="flex-shrink:0;">
+          <div class="vs-panel-header">
+            <span>Background</span>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <span id="bgSavedNote" style="display:none;font-size:10px;color:#5a8a5a;">✓ Saved</span>
+              <button class="btn" onclick="clearBgImage()" id="clearBgBtn" style="padding:2px 7px;font-size:10px;display:none;color:var(--text-3);">Clear</button>
+            </div>
+          </div>
+          <div class="vs-panel-body" style="padding:8px;gap:6px;">
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <!-- Upload zone -->
+              <div style="flex:1;">
+                <div id="bgUploadZone" onclick="document.getElementById('bgImgInput').click()"
+                  style="border:1px dashed var(--border-2);border-radius:4px;height:60px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;background:var(--bg);position:relative;">
+                  <span id="bgImgPlaceholder" style="font-size:11px;color:var(--text-3);text-align:center;line-height:1.4;padding:4px;">📷 Upload<br>background</span>
+                  <img id="bgImgEl" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:3px;">
+                </div>
+                <input type="file" id="bgImgInput" accept="image/*" style="display:none;" onchange="onBgImageChange(event)">
+              </div>
+              <!-- Use Avatar BG button -->
+              <div style="flex:1;display:flex;flex-direction:column;gap:4px;justify-content:center;height:60px;">
+                <button class="btn" onclick="useAvatarAsBg()" style="height:100%;font-size:10px;line-height:1.3;text-align:center;white-space:normal;padding:4px 6px;border-color:var(--accent);color:var(--accent-2);">🖼 Use Avatar<br>Photo BG</button>
+              </div>
+            </div>
+            <div id="bgActiveLabel" style="display:none;font-size:9px;color:var(--text-3);line-height:1.4;">Background set — will be included in NB Pro &amp; Veo 3 prompts.</div>
+          </div>
+        </div>
+
         <!-- Original Transcript -->
         <div class="vs-panel" style="flex-shrink:0;">
           <div class="vs-panel-header" style="padding:5px 10px;">
-            <span>Original Transcript</span>
+            <span>Script / Transcript</span>
             <div style="display:flex;gap:4px;align-items:center;">
               <span id="transcribeStatus" style="font-size:10px;color:var(--text-3);display:none;"></span>
-              <button class="btn" onclick="transcribeVideo()" id="transcribeBtn" style="padding:1px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">🎙 Transcribe</button>
+              <button class="btn producer-only" onclick="splitScriptToScenes()" style="padding:1px 8px;font-size:10px;font-weight:700;border-color:var(--accent);color:var(--accent-2);" title="Split script into scenes by paragraph — no video needed">✂ Split into Scenes</button>
+              <button class="btn replicator-only" onclick="transcribeVideo()" id="transcribeBtn" style="padding:1px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">🎙 Transcribe</button>
               <button class="btn" onclick="clearTranscript()" style="padding:1px 8px;font-size:10px;color:var(--text-3);" title="Clear transcript">✕ Clear</button>
-              <button class="btn" onclick="showApiKeyInput()" style="padding:1px 6px;font-size:10px;color:var(--text-3);">⚙</button>
             </div>
           </div>
           <div style="padding:6px 10px;">
-            <div id="apiKeyRow" style="display:none;margin-bottom:5px;">
-              <div style="display:flex;gap:4px;">
-                <input type="password" id="openaiKeyInput" placeholder="sk-… OpenAI key (for Transcribe)" style="flex:1;font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);outline:none;font-family:inherit;" />
-                <button class="btn" onclick="saveApiKey()" style="padding:2px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">Save</button>
-                <button class="btn" onclick="hideApiKeyInput()" style="padding:2px 6px;font-size:10px;color:var(--text-3);">✕</button>
-              </div>
-            </div>
             <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments()" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
           </div>
         </div>
 
-        <!-- Video Downloader -->
-        <div class="vs-panel" style="flex-shrink:0;">
+        <!-- Video Downloader — replicator only -->
+        <div class="vs-panel replicator-only" style="flex-shrink:0;">
           <div class="vs-panel-header" style="padding:5px 10px;">
             <span>📥 Video Downloader</span>
           </div>
           <div style="padding:7px 10px;display:flex;flex-direction:column;gap:6px;">
-            <input id="fbReelUrl" type="url" placeholder="Paste FB, TikTok, Instagram, or YouTube link…"
-              style="width:100%;font-size:10px;padding:5px 8px;background:var(--bg);border:1px solid var(--border-2);border-radius:4px;color:var(--text-1);font-family:inherit;outline:none;"
-              oninput="updateDlButtons()">
             <div style="display:flex;flex-direction:column;gap:5px;">
 
               <!-- SnapSave -->
@@ -1550,6 +1602,42 @@
           </div>
         </div>
 
+        <!-- Video Settings — producer only -->
+        <div class="vs-panel producer-only" style="flex-shrink:0;">
+          <div class="vs-panel-header">
+            <span>Video Settings</span>
+          </div>
+          <div class="vs-panel-body" style="padding:8px;gap:6px;">
+            <div style="display:flex;gap:6px;">
+              <div style="flex:1;">
+                <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Product</div>
+                <select id="studioProduct" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— No product —</option>
+                  <option value="keto">Keto / Weight Loss</option>
+                  <option value="skincare">Skincare</option>
+                  <option value="fitness">Fitness Program</option>
+                  <option value="supplement">Supplement</option>
+                  <option value="course">Course / Training</option>
+                  <option value="affiliate">Affiliate Product</option>
+                </select>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Format</div>
+                <select id="studioFormat" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="talking-head">Talking Head</option>
+                  <option value="greenscreen">Greenscreen</option>
+                  <option value="lifestyle">Lifestyle / B-Roll</option>
+                  <option value="tutorial">Tutorial</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Setting / Location</div>
+              <input type="text" id="studioSetting" placeholder="e.g. modern kitchen, gym, outdoor park…" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;">
+            </div>
+          </div>
+        </div>
+
         <!-- Saved Library -->
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
           <div class="vs-panel-header" style="padding:5px 10px;">
@@ -1566,12 +1654,11 @@
       <!-- ===== RIGHT COLUMN ===== -->
       <div style="display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0;">
 
-        <!-- Video player -->
-        <div class="vs-panel" style="flex-shrink:0;">
+        <!-- Video player — replicator only -->
+        <div class="vs-panel replicator-only" style="flex-shrink:0;">
           <div class="vs-panel-header">
             <span>Reference Video</span>
             <div style="display:flex;gap:6px;align-items:center;">
-              <span id="apiKeyStatus" style="font-size:10px;font-family:monospace;padding:1px 7px;border-radius:2px;display:none;"></span>
               <span id="videoTimestamp" style="font-size:10px;color:var(--text-3);font-family:monospace;">0:00 / 0:00</span>
               <button class="btn" id="clearVideoBtn" onclick="clearVideo()" style="padding:2px 8px;font-size:10px;display:none;">Clear</button>
             </div>
@@ -1604,8 +1691,8 @@
           <div class="vs-panel-header">
             <span>Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
             <div style="display:flex;gap:6px;align-items:center;">
-              <button class="btn" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
-              <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
+              <button class="btn replicator-only" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
+              <div class="replicator-only" style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
                 <span style="font-size:9px;color:var(--text-3);white-space:nowrap;">NB bg:</span>
                 <select id="nbBgSource" style="font-size:10px;padding:1px 4px;background:transparent;border:none;color:var(--text-2);font-family:inherit;outline:none;cursor:pointer;">
                   <option value="photo2">Photo 2 (Reference)</option>
@@ -1617,7 +1704,7 @@
             </div>
           </div>
           <div id="segmentsContainer" style="flex:1;overflow-y:auto;padding:10px;">
-            <div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
+            <div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
               Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
             </div>
           </div>
@@ -1633,6 +1720,51 @@
 
   </div><!-- end .page-body -->
 </div><!-- end .main-area -->
+
+<!-- ===== ADMIN KEY MODAL (hidden — click logo 5× fast to open) ===== -->
+<div id="adminKeyModal" style="display:none;position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.75);align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:24px;width:340px;display:flex;flex-direction:column;gap:14px;">
+
+    <!-- SCREEN 1: Password gate -->
+    <div id="adminGateScreen">
+      <div style="font-size:13px;font-weight:800;letter-spacing:-0.3px;color:var(--text-1);margin-bottom:12px;">🔒 Admin Access</div>
+      <div style="font-size:11px;color:var(--text-3);line-height:1.5;margin-bottom:10px;">Enter the admin password to continue.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <div class="auth-pass-wrap" style="flex:1;">
+          <input type="password" id="adminGateInput" placeholder="Admin password" autocomplete="off"
+            onkeydown="if(event.key==='Enter')checkAdminPassword()"
+            style="width:100%;font-size:11px;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:6px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;" />
+          <button type="button" class="auth-pass-eye" onclick="toggleAuthPass('adminGateInput',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div id="adminGateError" style="font-size:10px;color:var(--danger);display:none;margin-bottom:8px;">Incorrect password.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeAdminKeyModal()" style="font-size:11px;padding:6px 14px;background:transparent;border:1px solid var(--border-2);border-radius:6px;color:var(--text-3);cursor:pointer;font-family:inherit;">Cancel</button>
+        <button onclick="checkAdminPassword()" style="font-size:11px;padding:6px 14px;background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-weight:700;font-family:inherit;">Unlock →</button>
+      </div>
+    </div>
+
+    <!-- SCREEN 2: Key panel (shown after password passes) -->
+    <div id="adminKeyScreen" style="display:none;">
+      <div style="font-size:13px;font-weight:800;letter-spacing:-0.3px;color:var(--text-1);margin-bottom:6px;">⚙ Admin — OpenAI Key</div>
+      <div style="font-size:11px;color:var(--text-3);line-height:1.5;margin-bottom:10px;">Shared across all users. Never shown in the UI.</div>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <div class="auth-pass-wrap" style="flex:1;">
+          <input type="password" id="adminKeyInput" placeholder="sk-proj-…" autocomplete="off"
+            onkeydown="if(event.key==='Enter')saveAdminKey()"
+            style="width:100%;font-size:11px;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:6px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;" />
+          <button type="button" class="auth-pass-eye" onclick="toggleAuthPass('adminKeyInput',this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div id="adminKeyStatus" style="font-size:10px;color:#5a8a5a;display:none;margin-bottom:6px;">✓ Key saved — all users can now transcribe.</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button onclick="closeAdminKeyModal()" style="font-size:11px;padding:6px 14px;background:transparent;border:1px solid var(--border-2);border-radius:6px;color:var(--text-3);cursor:pointer;font-family:inherit;">Cancel</button>
+        <button onclick="saveAdminKey()" style="font-size:11px;padding:6px 14px;background:var(--accent);border:none;border-radius:6px;color:#fff;cursor:pointer;font-weight:700;font-family:inherit;">Save Key</button>
+      </div>
+    </div>
+
+  </div>
+</div>
 
 <!-- ===== AUTH WALL ===== -->
 <div class="auth-wall" id="authWall">
@@ -1919,28 +2051,31 @@
       });
     }
 
-    async function get(key) {
+    async function get(key, unscoped) {
       const db = await open();
+      const k = unscoped ? key : uKey(key);
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(uKey(key));
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(k);
         req.onsuccess = () => resolve(req.result ?? null);
         req.onerror   = e => reject(e.target.error);
       });
     }
 
-    async function set(key, value) {
+    async function set(key, value, unscoped) {
       const db = await open();
+      const k = unscoped ? key : uKey(key);
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(value, uKey(key));
+        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(value, k);
         req.onsuccess = () => resolve();
         req.onerror   = e => reject(e.target.error);
       });
     }
 
-    async function remove(key) {
+    async function remove(key, unscoped) {
       const db = await open();
+      const k = unscoped ? key : uKey(key);
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(uKey(key));
+        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(k);
         req.onsuccess = () => resolve();
         req.onerror   = e => reject(e.target.error);
       });
@@ -1950,7 +2085,8 @@
     async function migrateLocalStorage() {
       const keys = ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library',
                     'sm_whisper_segments','sm_segments','sm_avatar_img','sm_avatar_image',
-                    'sm_openai_key','sm_avatar_profile','sm_video_log','sm_post_plans','sm_daily_items'];
+                    'sm_openai_key','sm_avatar_profile','sm_video_log','sm_post_plans','sm_daily_items',
+                    'sm_bg_image','sm_studio_mode'];
       for (const key of keys) {
         const val = localStorage.getItem(key);
         if (val !== null) {
@@ -1976,19 +2112,31 @@
     'competitors': 'Competitors',
     'viral-scripts': 'Viral Scripts',
     'calendar': 'Video Calendar',
-    'video-studio': 'Video Studio'
+    'video-replicator': 'Video Replicator',
+    'video-producer': 'Video Producer',
   };
 
   function switchTab(tab) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + tab).classList.add('active');
-    event.target.classList.add('active');
+
+    // Both studio sub-tabs share the same #tab-video-studio div
+    const isStudio = tab === 'video-replicator' || tab === 'video-producer';
+    const divId = isStudio ? 'video-studio' : tab;
+    document.getElementById('tab-' + divId).classList.add('active');
+
+    // Activate the correct nav button via data-tab attribute
+    const navBtn = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    else if (event && event.target) event.target.classList.add('active');
+
     // Update topbar title
     const titleEl = document.getElementById('topbarTitle');
     if (titleEl) titleEl.textContent = _tabTitles[tab] || tab;
-    if (tab === 'video-studio') {
-      initVideoStudio();
+
+    if (isStudio) {
+      const requestedMode = tab === 'video-replicator' ? 'replicator' : 'producer';
+      initVideoStudio(requestedMode);
     } else {
       if (tab === 'competitors') renderCompetitors();
       if (tab === 'viral-scripts') renderScripts();
@@ -2876,17 +3024,22 @@
   }
 
   // ===== VIDEO STUDIO =====
-  const OPENAI_KEY_BAKED = ''; // Key removed — use the ⚙ settings field instead
+  // Optionally hardcode a key here — or use the hidden admin panel (click logo 5× fast)
+  const OPENAI_KEY_BAKED = '';
   let _cachedApiKey = '';
+  let _adminApiKey = ''; // loaded from DB on boot, shared across all users
   let studioLibrary = [];
+  let studioMode = 'replicator'; // 'replicator' | 'producer'
   let avatarImageDataUrl = null;
+  let bgImageDataUrl = null;
+  let bgFromAvatar = false; // true when background was taken from the avatar photo (Photo 1)
   let refVideoObjectUrl = null;
   let refVideoFile = null; // Raw File object for Whisper transcription
   let segments = []; // [{startTime, endTime, frameDataUrl, script, action, nbPrompt, veoPrompt}]
   // Timestamped transcript chunks from Whisper verbose_json — [{start, end, text}]
   let whisperSegments = [];
 
-  function saveStudioLibrary() { DB.set('sm_studio_library', JSON.stringify(studioLibrary)); }
+  function saveStudioLibrary() { DB.set(modeKey('sm_studio_library'), JSON.stringify(studioLibrary)); }
 
   // --- Save/load segments — delegated to project system ---
   function saveSegments() { saveCurrentProjectData(); }
@@ -2933,6 +3086,71 @@
     });
   }
 
+  // --- Background image ---
+  function _applyBgToUI(dataUrl) {
+    bgImageDataUrl = dataUrl;
+    const img = document.getElementById('bgImgEl');
+    const placeholder = document.getElementById('bgImgPlaceholder');
+    const clearBtn = document.getElementById('clearBgBtn');
+    const activeLabel = document.getElementById('bgActiveLabel');
+    if (dataUrl) {
+      img.src = dataUrl;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+      clearBtn.style.display = 'inline-flex';
+      if (activeLabel) activeLabel.style.display = 'block';
+    } else {
+      img.src = '';
+      img.style.display = 'none';
+      placeholder.style.display = 'block';
+      clearBtn.style.display = 'none';
+      if (activeLabel) activeLabel.style.display = 'none';
+    }
+  }
+
+  function onBgImageChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      bgFromAvatar = false;
+      DB.remove('sm_bg_from_avatar');
+      _applyBgToUI(ev.target.result);
+      DB.set('sm_bg_image', bgImageDataUrl);
+      const note = document.getElementById('bgSavedNote');
+      if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearBgImage() {
+    bgFromAvatar = false;
+    DB.remove('sm_bg_from_avatar');
+    _applyBgToUI(null);
+    document.getElementById('bgImgInput').value = '';
+    DB.remove('sm_bg_image');
+  }
+
+  function useAvatarAsBg() {
+    if (!avatarImageDataUrl) {
+      alert('No avatar photo loaded yet — upload one in the Avatar panel first.');
+      return;
+    }
+    bgFromAvatar = true;
+    _applyBgToUI(avatarImageDataUrl);
+    DB.set('sm_bg_image', bgImageDataUrl);
+    DB.set('sm_bg_from_avatar', '1');
+    const note = document.getElementById('bgSavedNote');
+    if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
+  }
+
+  function loadBgImage() {
+    Promise.all([DB.get('sm_bg_image'), DB.get('sm_bg_from_avatar')]).then(([saved, fromAvatar]) => {
+      bgFromAvatar = fromAvatar === '1';
+      if (saved) _applyBgToUI(saved);
+    });
+  }
+
   // --- Reference video ---
   function onVideoFileChange(e) {
     const file = e.target.files[0];
@@ -2968,34 +3186,23 @@
   }
 
   // --- OpenAI API key management ---
-  function showApiKeyInput() {
-    const row = document.getElementById('apiKeyRow');
-    row.style.display = 'block';
-    if (_cachedApiKey) document.getElementById('openaiKeyInput').value = _cachedApiKey;
-    document.getElementById('openaiKeyInput').focus();
-  }
-
-  function hideApiKeyInput() {
-    document.getElementById('apiKeyRow').style.display = 'none';
-  }
-
-  function saveApiKey() {
-    const key = document.getElementById('openaiKeyInput').value.trim();
-    if (key) { _cachedApiKey = key; DB.set('sm_openai_key', key); }
-    hideApiKeyInput();
-    const status = document.getElementById('transcribeStatus');
-    status.textContent = '✓ Key saved';
-    status.style.color = '#5a8a5a';
-    status.style.display = 'inline';
-    setTimeout(() => status.style.display = 'none', 2500);
-    renderApiKeyStatus();
-  }
-
+  // Key is baked in by the app owner — users never see or manage it.
   function getApiKey() {
-    return OPENAI_KEY_BAKED || _cachedApiKey || '';
+    return OPENAI_KEY_BAKED || _adminApiKey || _cachedApiKey || '';
   }
 
   function renderApiKeyStatus() {
+    // Badge removed — key is managed server-side by app owner
+  }
+
+  // Legacy stubs (kept so old DB data doesn't break anything)
+  function showApiKeyInput() {}
+  function hideApiKeyInput() {}
+  function saveApiKey() {
+    // no-op — key is baked in
+  }
+
+  function _unused_renderApiKeyStatus_old() {
     const badge = document.getElementById('apiKeyStatus');
     if (!badge) return;
     const key = getApiKey();
@@ -3016,22 +3223,15 @@
 
   // ===== VIDEO DOWNLOADER =====
   const DL_SERVICES = {
-    snapsave:  u => `https://snapsave.app/?url=${encodeURIComponent(u)}`,
-    ssstik:    u => `https://ssstik.io/en?url=${encodeURIComponent(u)}`,
-    fdown:     u => `https://fdown.net/?URLz=${encodeURIComponent(u)}`,
-    savefrom:  u => `https://en.savefrom.net/#url=${encodeURIComponent(u)}`,
+    snapsave:  { home: 'https://snapsave.app/',           withUrl: u => `https://snapsave.app/?url=${encodeURIComponent(u)}` },
+    ssstik:    { home: 'https://ssstik.io/en',            withUrl: u => `https://ssstik.io/en?url=${encodeURIComponent(u)}` },
+    fdown:     { home: 'https://fdown.net/',              withUrl: u => `https://fdown.net/?URLz=${encodeURIComponent(u)}` },
+    savefrom:  { home: 'https://en.savefrom.net/',        withUrl: u => `https://en.savefrom.net/#url=${encodeURIComponent(u)}` },
   };
 
-  function updateDlButtons() { /* live preview future use */ }
-
   function openDownloader(service) {
-    const url = (document.getElementById('fbReelUrl')?.value || '').trim();
-    if (!url) {
-      alert('Paste a video link first.');
-      return;
-    }
-    const builder = DL_SERVICES[service];
-    if (builder) window.open(builder(url), '_blank');
+    const svc = DL_SERVICES[service];
+    if (svc) window.open(svc.home, '_blank');
   }
 
   // --- Clear transcript ---
@@ -3055,8 +3255,7 @@
     }
     let apiKey = getApiKey();
     if (!apiKey) {
-      showApiKeyInput();
-      alert('Enter your OpenAI API key first (click ⚙), then click Transcribe again.');
+      alert('Transcription is not available right now. Please contact the app owner.');
       return;
     }
     const btn = document.getElementById('transcribeBtn');
@@ -3500,6 +3699,22 @@
     }
   }
 
+  // --- Auto-grow a textarea to fit its content ---
+  function autoGrow(el) {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 300) + 'px';
+  }
+
+  // --- Shared debounced save ---
+  function debounceSave() {
+    clearTimeout(window._segSaveTimer);
+    window._segSaveTimer = setTimeout(saveSegments, 800);
+  }
+
+  // --- Prompt textarea CSS (inlined so it applies inside innerHTML) ---
+  const PROMPT_TA_STYLE = `width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:monospace;outline:none;resize:none;overflow:hidden;line-height:1.5;min-height:52px;box-sizing:border-box;`;
+  const ACTION_TA_STYLE = `width:100%;font-size:10px;padding:4px 7px;background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.2);border-radius:3px;color:#6ee7b7;font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;min-height:36px;box-sizing:border-box;`;
+
   // --- Render segment cards ---
   function renderSegments() {
     const container = document.getElementById('segmentsContainer');
@@ -3507,14 +3722,59 @@
     if (!container) return;
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
     if (segments.length === 0) {
-      container.innerHTML = '<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching to mark changes manually.</div>';
+      const emptyMsg = studioMode === 'producer'
+        ? 'Paste your script and click <strong style="color:var(--text-2);">✂ Split into Scenes</strong> to create segments.'
+        : 'Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.';
+      container.innerHTML = `<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">${emptyMsg}</div>`;
       const saveAllBtn = document.getElementById('saveAllBtn');
       if (saveAllBtn) saveAllBtn.style.display = 'none';
       return;
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     container.innerHTML = segments.map((seg, i) => `
-      <div style="display:grid;grid-template-columns:182px 1fr;gap:10px;border-bottom:1px solid #161616;padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
+      <div style="display:grid;grid-template-columns:182px 1fr;gap:10px;border-bottom:1px solid var(--border);padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
+
+        <!-- Left: scene description (Producer) OR frame thumbnails (Replicator) -->
+        ${seg._scriptOnly ? `
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:9px;font-weight:700;color:var(--accent-2);letter-spacing:0.6px;text-transform:uppercase;">Scene ${i+1} &nbsp;<span style="font-weight:400;color:var(--text-3);">~${Math.round(seg.endTime - seg.startTime)}s</span></div>
+
+          <!-- Visual Description -->
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);margin-bottom:3px;">🎨 Visual Description</div>
+            <textarea id="framedesc-seg-${i}"
+              oninput="segments[${i}].frameDesc=this.value;autoGrow(this);debounceSave()"
+              style="width:100%;font-size:10px;padding:5px 7px;background:rgba(251,191,36,0.04);border:1px solid rgba(251,191,36,0.2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;resize:none;overflow:hidden;min-height:60px;box-sizing:border-box;line-height:1.5;"
+              placeholder="Describe the frame — location, lighting, background, mood, clothing, camera angle…"
+            >${escHtml(seg.frameDesc || '')}</textarea>
+          </div>
+
+          <!-- Reference Photo -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#a78bfa;">📎 Reference Photo</span>
+              ${seg.refPhotoDataUrl ? `<button onclick="clearSegRefPhoto(${i})" style="font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;">✕ Clear</button>` : ''}
+            </div>
+            <!-- Upload zone -->
+            <div id="refphoto-zone-${i}"
+              onclick="document.getElementById('refphoto-input-${i}').click()"
+              style="width:100%;height:${seg.refPhotoDataUrl ? 'auto' : '52px'};border:1px dashed rgba(167,139,250,0.3);border-radius:3px;background:rgba(167,139,250,0.04);cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;margin-bottom:4px;">
+              ${seg.refPhotoDataUrl
+                ? `<img src="${seg.refPhotoDataUrl}" style="width:100%;max-height:110px;object-fit:cover;border-radius:2px;">`
+                : `<span style="font-size:10px;color:rgba(167,139,250,0.6);">+ Upload photo</span>`}
+            </div>
+            <input type="file" id="refphoto-input-${i}" accept="image/*" style="display:none;" onchange="onSegRefPhotoChange(${i}, this)">
+            <!-- What to use it for -->
+            <textarea id="refphotodesc-seg-${i}"
+              oninput="segments[${i}].refPhotoDesc=this.value;autoGrow(this);debounceSave()"
+              style="width:100%;font-size:10px;padding:4px 6px;background:rgba(167,139,250,0.04);border:1px solid rgba(167,139,250,0.2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;resize:none;overflow:hidden;min-height:38px;box-sizing:border-box;line-height:1.5;"
+              placeholder="Describe how to use this photo — e.g. 'match the lighting', 'use this background', 'replicate the outfit colour'…"
+            >${escHtml(seg.refPhotoDesc || '')}</textarea>
+            <div style="font-size:9px;color:var(--text-3);margin-top:2px;line-height:1.4;">Attach as ${(bgImageDataUrl && !bgFromAvatar) ? 'Photo 3' : 'Photo 2'} in NB Pro.</div>
+          </div>
+
+        </div>
+        ` : `
         <div>
           <div style="display:flex;gap:4px;">
             <div style="flex:1;">
@@ -3522,57 +3782,100 @@
               ${seg.frameDataUrl
                 ? `<img src="${seg.frameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
-              ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Start</button>` : ''}
+              ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;">⬇ Start</button>` : ''}
             </div>
             <div style="flex:1;">
               <div style="font-size:8px;color:var(--text-3);text-align:center;margin-bottom:2px;">End</div>
               ${seg.endFrameDataUrl
                 ? `<img src="${seg.endFrameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
-              ${seg.endFrameDataUrl ? `<button onclick="downloadEndFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ End</button>` : ''}
+              ${seg.endFrameDataUrl ? `<button onclick="downloadEndFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;">⬇ End</button>` : ''}
             </div>
           </div>
-          <div style="font-size:9px;color:var(--text-3);margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
-          <div style="font-size:9px;color:var(--text-3);text-align:center;">Seg ${i+1}</div>
+          <div style="font-size:9px;color:var(--text-3);margin-top:4px;text-align:center;">Seg ${i+1}</div>
+          <div style="font-size:9px;color:var(--text-3);text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
         </div>
-        <div>
-          <div style="display:flex;gap:4px;align-items:flex-start;">
-            <div style="flex:1;">
-              ${seg.action ? `<div style="font-size:9px;color:var(--success);margin-bottom:4px;line-height:1.4;background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.15);border-radius:2px;padding:3px 6px;" id="action-seg-${i}">🎬 ${escHtml(seg.action)}</div>` : `<div style="font-size:9px;color:var(--text-3);margin-bottom:4px;" id="action-seg-${i}"></div>`}
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);margin-bottom:3px;">Script slice</div>
-              <textarea oninput="segments[${i}].script=this.value;clearTimeout(window._segSaveTimer);window._segSaveTimer=setTimeout(saveSegments,800)" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
+        `}
+
+        <!-- Right: all editable fields -->
+        <div style="display:flex;flex-direction:column;gap:6px;">
+
+          <!-- Script -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script</span>
+              <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);font-size:10px;padding:1px 6px;cursor:pointer;">✕ Remove</button>
             </div>
-            <div style="display:flex;flex-direction:column;gap:4px;margin-top:14px;">
-              <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 prompt from current script" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:10px;padding:3px 6px;cursor:pointer;white-space:nowrap;">↻ Veo 3</button>
-              <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;">✕</button>
-            </div>
+            <textarea id="script-seg-${i}"
+              oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
+              style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;resize:none;overflow:hidden;min-height:38px;box-sizing:border-box;line-height:1.5;"
+              placeholder="Script for this scene…"
+            >${escHtml(seg.script || '')}</textarea>
           </div>
-          ${seg.nbPrompt ? `
-          <div style="margin-top:6px;">
+
+          <!-- Scene Action -->
+          <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--warning);">🍌 Nano Banana — Start Frame</div>
-              <button class="btn-copy" onclick="copyPromptBlock('nb-seg-${i}')">Copy</button>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#6ee7b7;">🎬 Scene Action</span>
+              <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 from current action + script" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Veo 3</button>
             </div>
-            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-seg-${i}">${escHtml(seg.nbPrompt)}</div>
-          </div>` : ''}
-          ${seg.nbEndPrompt ? `
-          <div style="margin-top:6px;">
+            <textarea id="action-seg-${i}"
+              oninput="segments[${i}].action=this.value;autoGrow(this);debounceSave()"
+              style="${ACTION_TA_STYLE}"
+              placeholder="Describe what the person is doing — posture, gestures, expression, energy…"
+            >${escHtml(seg.action || '')}</textarea>
+          </div>
+
+          <!-- NB Pro prompt -->
+          <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--warning);">🍌 Nano Banana — End Frame</div>
-              <button class="btn-copy" onclick="copyPromptBlock('nb-end-seg-${i}')">Copy</button>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">${seg._scriptOnly ? '🎨 NB Pro — Starting Frame' : '🍌 NB Pro — Start Frame'}</span>
+              <div style="display:flex;gap:4px;align-items:center;">
+                ${seg._scriptOnly ? `<button onclick="refreshSegmentNB(${i})" title="Regenerate NB Pro prompt using current visual description" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen</button>` : ''}
+                <button class="btn-copy" onclick="copyPromptTA('nb-seg-${i}')">Copy</button>
+              </div>
             </div>
-            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-end-seg-${i}">${escHtml(seg.nbEndPrompt)}</div>
-          </div>` : ''}
-          ${seg.veoPrompt ? `
-          <div style="margin-top:6px;">
+            <textarea id="nb-seg-${i}"
+              oninput="segments[${i}].nbPrompt=this.value;autoGrow(this);debounceSave()"
+              style="${PROMPT_TA_STYLE}"
+              placeholder="Describe the scene for NB Pro — lighting, framing, background, mood, what the person looks like in this frame…"
+            >${escHtml(seg.nbPrompt || '')}</textarea>
+          </div>
+
+          ${seg.nbEndPrompt !== undefined && !seg._scriptOnly ? `
+          <!-- NB Pro End Frame -->
+          <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent-2);">🎬 Veo 3</div>
-              <button class="btn-copy" onclick="copyPromptBlock('veo-seg-${i}')">Copy</button>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">🍌 NB Pro — End Frame</span>
+              <button class="btn-copy" onclick="copyPromptTA('nb-end-seg-${i}')">Copy</button>
             </div>
-            <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="veo-seg-${i}">${escHtml(seg.veoPrompt)}</div>
+            <textarea id="nb-end-seg-${i}"
+              oninput="segments[${i}].nbEndPrompt=this.value;autoGrow(this);debounceSave()"
+              style="${PROMPT_TA_STYLE}"
+              placeholder="Describe the end frame for NB Pro…"
+            >${escHtml(seg.nbEndPrompt || '')}</textarea>
           </div>` : ''}
+
+          <!-- Veo 3 prompt -->
+          <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt</span>
+              <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
+            </div>
+            <textarea id="veo-seg-${i}"
+              oninput="segments[${i}].veoPrompt=this.value;autoGrow(this);debounceSave()"
+              style="${PROMPT_TA_STYLE}"
+              placeholder="Describe the video clip — action, speech, camera, background, audio…"
+            >${escHtml(seg.veoPrompt || '')}</textarea>
+          </div>
+
         </div>
       </div>`).join('');
+
+    // Auto-grow all textareas after render
+    requestAnimationFrame(() => {
+      container.querySelectorAll('textarea').forEach(ta => autoGrow(ta));
+    });
   }
 
   // --- Get current NB background source setting ---
@@ -3610,15 +3913,19 @@
   }
 
   // --- Build Veo 3 prompt for one segment ---
-  function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName) {
+  function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
     const seg = segments[i];
     const analyzedAction = seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures';
+    const bgNote = bgDataUrl
+      ? 'Match the background/environment from the reference background image provided. Keep it consistent and realistic.'
+      : (setting || 'clean neutral background or lifestyle environment');
     const obj = {
       action: analyzedAction,
       speech: scriptSlice || '',
       audio: 'natural ambient sound, clear voice, no background music',
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
-      camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16'
+      camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
+      background: bgNote,
     };
     return JSON.stringify(obj, null, 2);
   }
@@ -3647,7 +3954,7 @@
   async function analyzeAllFrames() {
     if (segments.length === 0) { alert('No segments yet — run Auto 8s first.'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('Add your OpenAI API key in ⚙ Settings first.'); return; }
+    if (!apiKey) { alert('AI analysis is not available right now. Please contact the app owner.'); return; }
 
     const pronoun = getAvatarPronoun();
     const btn = document.getElementById('analyzeFramesBtn');
@@ -3751,9 +4058,191 @@
   }
 
   // --- Generate all segment prompts ---
+  // ===== SCRIPT-FIRST MODE =====
+
+  // ─── Speech-timing constants ───────────────────────────────────────────────
+  // Average conversational speaking rate ≈ 2.3 words/second (≈138 wpm).
+  // At this rate, 8 seconds ≈ 18–19 words. We target 18 words per scene and
+  // always cut at the nearest sentence boundary — never mid-sentence.
+  const WORDS_PER_SEC  = 2.3;
+  const TARGET_SCENE_S = 8;            // target seconds per scene
+  const TARGET_WORDS   = Math.round(TARGET_SCENE_S * WORDS_PER_SEC); // ≈18
+
+  // Derive a meaningful Veo 3 action description from the scene text
+  function deriveSceneAction(text, sceneIndex, totalScenes) {
+    const t = text.toLowerCase();
+    if (sceneIndex === 0)
+      return 'person delivers opening hook directly to camera — confident eye contact, slight forward lean, engaging energy';
+    if (sceneIndex === totalScenes - 1)
+      return 'person delivers closing call-to-action with conviction — direct eye contact, warm smile, natural hand gesture';
+    if (/\?/.test(text))
+      return 'person asks question with raised eyebrows and a brief pause — inviting expression, slight head tilt';
+    if (/(wow|amazing|incredible|unbelievable|crazy|insane|shocking|!{2,})/.test(t))
+      return 'person speaks with high energy and excitement — emphatic hand gestures, expressive face';
+    if (/(calm|relax|breath|peace|gentle|slow|easy|simple)/.test(t))
+      return 'person speaks calmly and deliberately — measured pace, soft confident expression';
+    if (/(important|critical|key|remember|listen|never|always|must|warning|stop)/.test(t))
+      return 'person emphasises a key point — leans slightly forward, firm eye contact, deliberate pacing';
+    if (/(when i|i was|i used to|back when|one day|story|my|personally)/.test(t))
+      return 'person shares personal story — reflective expression, natural relaxed gestures, warm tone';
+    if (/(step|first|second|third|number \d|tip \d|rule \d|#\d)/.test(t))
+      return 'person lists a point — counts on fingers or gestures purposefully, clear and direct delivery';
+    if (/(result|transform|before|after|changed|worked|proof|evidence)/.test(t))
+      return 'person reveals a result — slight smile of satisfaction, measured confident delivery';
+    return 'person speaks naturally to camera — confident posture, real eye contact, natural hand gestures';
+  }
+
+  // Split the script into ~8s scenes at sentence boundaries
+  function splitScriptToScenes() {
+    const scriptEl = document.getElementById('originalScript');
+    const raw = scriptEl ? scriptEl.value.trim() : '';
+    if (!raw) {
+      alert('Paste your script into the Script / Transcript box first, then click ✂ Split into Scenes.');
+      return;
+    }
+
+    // ── Step 1: tokenise into individual sentences ─────────────────────────
+    // Handle  .  !  ?  …  and common abbreviations (Mr. Dr. vs sentence ends)
+    const sentenceRe = /(?<=[^A-Z][.!?…]{1,3})\s+(?=[A-Z"'])|(?<=[.!?…]{1,3})\s*$/gm;
+    const rawSentences = raw
+      .replace(/\r\n|\r/g, '\n')             // normalise line endings
+      .replace(/\n+/g, ' ')                  // flatten all newlines to spaces
+      .split(/(?<=[.!?…])\s+/)               // split after sentence-ending punctuation
+      .map(s => s.trim())
+      .filter(s => s.length > 0);
+
+    if (rawSentences.length === 0) {
+      alert('Could not parse any sentences. Make sure your script has punctuation (. ! ?).');
+      return;
+    }
+
+    // ── Step 2: group sentences into ~8s chunks ────────────────────────────
+    const sceneTexts = [];
+    let bucket = [];
+    let bucketWords = 0;
+
+    for (let si = 0; si < rawSentences.length; si++) {
+      const s = rawSentences[si];
+      const wc = s.split(/\s+/).filter(Boolean).length;
+      bucket.push(s);
+      bucketWords += wc;
+
+      const isLast = si === rawSentences.length - 1;
+      if (bucketWords >= TARGET_WORDS || isLast) {
+        // If we're just one short sentence over the limit and there are more
+        // sentences to come, check whether adding the NEXT sentence would push
+        // us further from 8s than stopping now
+        sceneTexts.push(bucket.join(' '));
+        bucket = [];
+        bucketWords = 0;
+      }
+    }
+
+    // Merge any trailing scene that is too short (< 4 words) into the previous
+    if (sceneTexts.length > 1) {
+      const last = sceneTexts[sceneTexts.length - 1];
+      if (last.split(/\s+/).filter(Boolean).length < 4) {
+        sceneTexts[sceneTexts.length - 2] += ' ' + last;
+        sceneTexts.pop();
+      }
+    }
+
+    if (sceneTexts.length === 0) {
+      alert('Could not create any scenes. Try adding more text to your script.');
+      return;
+    }
+
+    // ── Step 3: build segment objects with real speech-based timestamps ─────
+    let elapsed = 0;
+    segments = sceneTexts.map((text, i) => {
+      const words    = text.split(/\s+/).filter(Boolean).length;
+      const duration = Math.max(Math.round((words / WORDS_PER_SEC) * 10) / 10, 2);
+      const start    = Math.round(elapsed * 10) / 10;
+      elapsed += duration;
+      const end = Math.round(elapsed * 10) / 10;
+      return {
+        startTime:       start,
+        endTime:         end,
+        script:          text,
+        action:          deriveSceneAction(text, i, sceneTexts.length),
+        frameDataUrl:    null,
+        endFrameDataUrl: null,
+        nbPrompt:        '',
+        nbEndPrompt:     '',
+        veoPrompt:       '',
+        frameDesc:       '',
+        refPhotoDataUrl: null,
+        refPhotoDesc:    '',
+        _scriptOnly:     true,
+      };
+    });
+
+    saveSegments();
+    renderSegments();
+
+    const total  = segments.length;
+    const totSec = Math.round(elapsed);
+    const countEl = document.getElementById('segmentCount');
+    if (countEl) countEl.textContent = `${total} scene${total !== 1 ? 's' : ''}`;
+    alert(`✓ ${total} scene${total !== 1 ? 's' : ''} created (≈${totSec}s total).\n\nEach scene is timed to ~8s of speech and ends at a natural sentence boundary.\n\nNow click ⚡ Generate All Prompts.`);
+  }
+
+  // NB Pro starting-frame prompt for script-only scenes (no video frame reference)
+  function buildScriptOnlyNBPrompt(sceneIndex, scriptSlice, setting, avatarDesc, bgDataUrl, frameDesc, refPhotoDataUrl, refPhotoDesc) {
+    const total = segments.length;
+    const isFirst = sceneIndex === 0;
+    const settingNote = setting ? `Setting: ${setting}.` : 'Setting: clean neutral background or lifestyle environment.';
+
+    // Extract first sentence as the pose hint
+    const firstSentence = (scriptSlice || '').split(/[.!?]/)[0].trim();
+    const poseHint = firstSentence
+      ? `The person is about to say: "${firstSentence}"`
+      : 'The person is looking confidently at the camera, natural expression.';
+
+    const avatarNote = avatarDesc ? `Person description from Photo 1: ${avatarDesc}.` : '';
+
+    // Creator-supplied visual description
+    const visualNote = frameDesc ? ` Visual scene description from creator: ${frameDesc}.` : '';
+
+    // Reference photo slot — Photo 2 is consumed by an uploaded bg; avatar-as-bg uses no extra slot
+    const hasRefPhoto = !!refPhotoDataUrl;
+    const refSlot = (bgDataUrl && !bgFromAvatar) ? 'Photo 3' : 'Photo 2';
+    const refNote = hasRefPhoto && refPhotoDesc
+      ? ` Reference ${refSlot}: ${refPhotoDesc}.`
+      : hasRefPhoto
+        ? ` Use the reference image attached as ${refSlot} for visual guidance on this scene.`
+        : '';
+
+    const obj = {
+      instruction: `Using the person from reference Photo 1 as the subject, generate a photorealistic starting frame for Scene ${sceneIndex + 1} of ${total}. ${poseHint}. ${settingNote} ${avatarNote}${visualNote}${refNote} The frame should feel like a natural video freeze-frame — vertical 9:16, slight natural lighting. This image will be used as the first frame of a Veo 3 video clip.`,
+      framing: 'vertical 9:16, medium close-up, person centered',
+      expression: isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
+      no_text: true,
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, multiple people, blurry face, cartoon, illustration, painting, extra limbs, distorted hands',
+    };
+    if (frameDesc) {
+      obj.visual_description = frameDesc;
+    }
+    if (bgDataUrl) {
+      if (bgFromAvatar) {
+        // Background is already inside Photo 1 — no extra photo needed
+        obj.background_reference = 'Recreate the background/environment visible in Photo 1 as the scene backdrop. Keep it realistic and consistent — do not replace or reimagine it.';
+      } else {
+        obj.background_reference = 'Use the environment / background from reference Photo 2 as the scene backdrop. Keep the background realistic and consistent across scenes — do not alter or reimagine it.';
+        obj.photo_2 = '(attach your background photo as Photo 2 in NB Pro)';
+      }
+    }
+    if (hasRefPhoto) {
+      obj[refSlot.toLowerCase().replace(' ', '_')] = refPhotoDesc
+        ? `(attach your scene reference photo as ${refSlot} in NB Pro) — ${refPhotoDesc}`
+        : `(attach your scene reference photo as ${refSlot} in NB Pro)`;
+    }
+    return JSON.stringify(obj, null, 2);
+  }
+
   function generateAllSegmentPrompts() {
     if (segments.length === 0) {
-      alert('No segments yet. Upload a video and click ⚡ Auto 8s or ✂ Mark Scene first.');
+      alert('No scenes yet.\n\n• Paste your script and click ✂ Split into Scenes, or\n• Upload a video and click ⚡ Auto 8s.');
       return;
     }
     const productSel = document.getElementById('studioProduct');
@@ -3763,7 +4252,7 @@
 
     // Sync any live textarea edits into the segments array
     segments.forEach((seg, i) => {
-      const ta = document.querySelector('#seg-card-' + i + ' textarea');
+      const ta = document.getElementById('script-seg-' + i);
       if (ta) seg.script = ta.value;
     });
 
@@ -3772,10 +4261,19 @@
       distributeScript();
     }
 
+    const avatarDesc = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
+
     segments.forEach((seg, i) => {
-      seg.nbPrompt = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
-      seg.nbEndPrompt = buildSegmentNanoBananaEndPrompt(i, setting, productName, product);
-      seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
+      if (seg._scriptOnly || !seg.frameDataUrl) {
+        // Script-first mode: generate a starting-frame image prompt instead of a character swap
+        seg.nbPrompt    = buildScriptOnlyNBPrompt(i, seg.script, setting, avatarDesc, bgImageDataUrl, seg.frameDesc || '', seg.refPhotoDataUrl || null, seg.refPhotoDesc || '');
+        seg.nbEndPrompt = '';   // no end-frame in script mode
+      } else {
+        // Video mode: swap avatar into the captured frame
+        seg.nbPrompt    = buildSegmentNanoBananaPrompt(i, seg.frameDataUrl, seg.script, setting, productName, product);
+        seg.nbEndPrompt = buildSegmentNanoBananaEndPrompt(i, setting, productName, product);
+      }
+      seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
     });
     saveSegments();
     renderSegments();
@@ -3783,23 +4281,97 @@
     if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
   }
 
-  // --- Refresh Veo 3 prompt for a single segment after script edit ---
+  // --- Refresh Veo 3 prompt for a single segment after script/action edit ---
   function refreshSegmentVeo3(i) {
     const seg = segments[i];
     if (!seg) return;
+    // Sync the action field from the textarea before regenerating
+    const actionEl = document.getElementById('action-seg-' + i);
+    if (actionEl) seg.action = actionEl.value;
     const productSel = document.getElementById('studioProduct');
     const productName = productSel ? (productSel.options[productSel.selectedIndex].text || 'the product') : 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
-    seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName);
+    seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
     saveSegments();
-    // Update just the veo block in the DOM without full re-render
+    // Update the textarea in place without full re-render
     const veoEl = document.getElementById('veo-seg-' + i);
     if (veoEl) {
-      veoEl.textContent = seg.veoPrompt;
-    } else {
-      // Veo block doesn't exist yet (prompts never generated) — do a full render
-      renderSegments();
+      veoEl.value = seg.veoPrompt;
+      autoGrow(veoEl);
     }
+  }
+
+  // --- Refresh NB Pro prompt for a single script-only segment after visual description / ref photo edit ---
+  function refreshSegmentNB(i) {
+    const seg = segments[i];
+    if (!seg) return;
+    // Sync live textarea values before rebuilding
+    const frameDescEl = document.getElementById('framedesc-seg-' + i);
+    if (frameDescEl) seg.frameDesc = frameDescEl.value;
+    const refPhotoDescEl = document.getElementById('refphotodesc-seg-' + i);
+    if (refPhotoDescEl) seg.refPhotoDesc = refPhotoDescEl.value;
+    const scriptEl = document.getElementById('script-seg-' + i);
+    if (scriptEl) seg.script = scriptEl.value;
+    const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
+    const avatarDesc = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
+    seg.nbPrompt = buildScriptOnlyNBPrompt(i, seg.script, setting, avatarDesc, bgImageDataUrl, seg.frameDesc || '', seg.refPhotoDataUrl || null, seg.refPhotoDesc || '');
+    saveSegments();
+    // Update textarea in-place without full re-render
+    const nbEl = document.getElementById('nb-seg-' + i);
+    if (nbEl) {
+      nbEl.value = seg.nbPrompt;
+      autoGrow(nbEl);
+      // Flash the border amber to confirm update
+      nbEl.style.borderColor = 'var(--warning)';
+      setTimeout(() => nbEl.style.borderColor = '', 800);
+    }
+  }
+
+  // --- Per-segment reference photo upload/clear ---
+  function onSegRefPhotoChange(i, input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      segments[i].refPhotoDataUrl = ev.target.result;
+      saveSegments();
+      // Update the upload zone in place
+      const zone = document.getElementById('refphoto-zone-' + i);
+      if (zone) {
+        zone.style.height = 'auto';
+        zone.innerHTML = `<img src="${ev.target.result}" style="width:100%;max-height:110px;object-fit:cover;border-radius:2px;">`;
+      }
+      // Show the Clear button
+      const hdr = zone ? zone.previousElementSibling : null;
+      if (hdr && !hdr.querySelector('.refphoto-clear-btn')) {
+        const btn = document.createElement('button');
+        btn.className = 'refphoto-clear-btn';
+        btn.style.cssText = 'font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;';
+        btn.textContent = '✕ Clear';
+        btn.onclick = () => clearSegRefPhoto(i);
+        hdr.appendChild(btn);
+      }
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearSegRefPhoto(i) {
+    if (!segments[i]) return;
+    segments[i].refPhotoDataUrl = null;
+    saveSegments();
+    // Re-render just this card's upload zone
+    const zone = document.getElementById('refphoto-zone-' + i);
+    if (zone) {
+      zone.style.height = '52px';
+      zone.innerHTML = `<span style="font-size:10px;color:rgba(167,139,250,0.6);">+ Upload photo</span>`;
+    }
+    // Remove the clear button
+    const hdr = zone ? zone.previousElementSibling : null;
+    const clearBtn = hdr ? hdr.querySelector('.refphoto-clear-btn') : null;
+    if (clearBtn) clearBtn.remove();
+    // Reset the file input so the same file can be re-added
+    const inp = document.getElementById('refphoto-input-' + i);
+    if (inp) inp.value = '';
   }
 
   function saveAvatarProfile() {
@@ -3994,11 +4566,26 @@ TECHNICAL SPECS:
     return prompts;
   }
 
+  // Copy from a div (legacy)
   function copyPromptBlock(id) {
     const el = document.getElementById(id);
     if (!el) return;
-    navigator.clipboard.writeText(el.innerText).then(() => {
-      const btn = el.previousElementSibling.querySelector('.btn-copy');
+    const text = el.tagName === 'TEXTAREA' ? el.value : el.innerText;
+    navigator.clipboard.writeText(text).then(() => {
+      const btn = el.previousElementSibling?.querySelector('.btn-copy') || el.parentElement?.querySelector('.btn-copy');
+      if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); }
+    });
+  }
+
+  // Copy from a textarea prompt field
+  function copyPromptTA(id) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const text = el.value || el.innerText || '';
+    navigator.clipboard.writeText(text).then(() => {
+      // Find the Copy button in the same header row (previous sibling div)
+      const header = el.previousElementSibling;
+      const btn = header ? header.querySelector('.btn-copy') : null;
       if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); }
     });
   }
@@ -4098,8 +4685,8 @@ TECHNICAL SPECS:
     img.style.display = 'block';
     placeholder.style.display = 'none';
     clearBtn.style.display = 'block';
-    // Persist it so it survives save
-    DB.set('sm_avatar_image', acct.avatar);
+    // Persist it so it survives save (must match the key loadAvatarImage() reads: sm_avatar_img)
+    DB.set('sm_avatar_img', acct.avatar);
     // Pre-fill notes with the account username if desc is empty
     const desc = document.getElementById('avatarDesc');
     if (!desc.value.trim()) desc.value = acct.username;
@@ -4110,6 +4697,12 @@ TECHNICAL SPECS:
   let projects = [];
   let activeProjectId = null;
 
+  // Returns a mode-namespaced DB key so Replicator and Producer
+  // never share the same projects, library, or active-project pointer.
+  function modeKey(base) {
+    return base + (studioMode === 'producer' ? '_p' : '_r');
+  }
+
   function getActiveProject() {
     return projects.find(p => p.id === activeProjectId) || null;
   }
@@ -4117,7 +4710,7 @@ TECHNICAL SPECS:
   function saveCurrentProjectData() {
     const p = getActiveProject();
     if (!p) return;
-    p.originalScript  = document.getElementById('originalScript').value;
+    p.originalScript  = document.getElementById('originalScript')?.value || '';
     p.whisperSegments = whisperSegments;
     p.segments = segments.map(s => ({
       startTime: s.startTime, endTime: s.endTime,
@@ -4125,9 +4718,13 @@ TECHNICAL SPECS:
       endFrameDataUrl: s.endFrameDataUrl || null,
       script: s.script || '', action: s.action || '',
       nbPrompt: s.nbPrompt || '', nbEndPrompt: s.nbEndPrompt || '',
-      veoPrompt: s.veoPrompt || ''
+      veoPrompt: s.veoPrompt || '',
+      frameDesc: s.frameDesc || '',
+      refPhotoDataUrl: s.refPhotoDataUrl || null,
+      refPhotoDesc: s.refPhotoDesc || '',
+      _scriptOnly: s._scriptOnly || false,
     }));
-    DB.set('sm_projects', JSON.stringify(projects));
+    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
   }
 
   function loadProjectData() {
@@ -4155,42 +4752,55 @@ TECHNICAL SPECS:
   }
 
   async function loadProjects() {
-    const raw      = await DB.get('sm_projects');
-    const savedId  = await DB.get('sm_active_project');
+    const raw     = await DB.get(modeKey('sm_projects'));
+    const savedId = await DB.get(modeKey('sm_active_project'));
     projects = JSON.parse(raw || '[]');
 
     if (projects.length === 0) {
-      // Migrate old single-project segment data if it exists
-      const oldSegs    = JSON.parse(await DB.get('sm_segments') || '[]');
-      const oldWhisper = whisperSegments || [];
-      projects.push({
-        id: Date.now().toString(),
-        name: 'Project 1',
-        segments: oldSegs,
-        originalScript: '',
-        whisperSegments: oldWhisper
-      });
+      // For Replicator: try to migrate legacy un-namespaced data (one-time)
+      if (studioMode === 'replicator') {
+        const legacyRaw = await DB.get('sm_projects');
+        const legacyProjects = JSON.parse(legacyRaw || '[]');
+        if (legacyProjects.length > 0) {
+          projects = legacyProjects;
+        }
+      }
+      // Still empty? Create a default project
+      if (projects.length === 0) {
+        const oldSegs = JSON.parse(await DB.get('sm_segments') || '[]');
+        const label = studioMode === 'producer' ? 'Producer Project 1' : 'Project 1';
+        projects.push({
+          id: Date.now().toString(),
+          name: label,
+          segments: studioMode === 'replicator' ? oldSegs : [],
+          originalScript: '',
+          whisperSegments: []
+        });
+      }
     }
 
     activeProjectId = (savedId && projects.find(p => p.id === savedId))
       ? savedId
       : projects[0].id;
 
-    DB.set('sm_projects', JSON.stringify(projects));
-    DB.set('sm_active_project', activeProjectId);
+    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
+    DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
   }
 
   function newProject() {
     saveCurrentProjectData();
-    const name = prompt('Project name:', `Project ${projects.length + 1}`);
+    const defaultName = studioMode === 'producer'
+      ? `Producer ${projects.length + 1}`
+      : `Project ${projects.length + 1}`;
+    const name = prompt('Project name:', defaultName);
     if (!name) return;
     const p = { id: Date.now().toString(), name, segments: [], originalScript: '', whisperSegments: [] };
     projects.push(p);
     activeProjectId = p.id;
-    DB.set('sm_projects', JSON.stringify(projects));
-    DB.set('sm_active_project', activeProjectId);
+    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
+    DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
     clearVideo();
@@ -4200,7 +4810,7 @@ TECHNICAL SPECS:
     if (id === activeProjectId) return;
     saveCurrentProjectData();
     activeProjectId = id;
-    DB.set('sm_active_project', activeProjectId);
+    DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
     clearVideo();
@@ -4212,7 +4822,7 @@ TECHNICAL SPECS:
     const name = prompt('Rename project:', p.name);
     if (!name || name === p.name) return;
     p.name = name;
-    DB.set('sm_projects', JSON.stringify(projects));
+    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
     renderProjectBar();
   }
 
@@ -4221,19 +4831,79 @@ TECHNICAL SPECS:
     if (!confirm('Delete this project and all its segments?')) return;
     projects = projects.filter(p => p.id !== id);
     if (activeProjectId === id) activeProjectId = projects[0].id;
-    DB.set('sm_projects', JSON.stringify(projects));
-    DB.set('sm_active_project', activeProjectId);
+    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
+    DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
   }
 
-  function initVideoStudio() {
+  // Apply only the visual/CSS parts of a mode switch (no data loading)
+  function _applyModeVisuals(mode) {
+    const studio = document.getElementById('tab-video-studio');
+    if (!studio) return;
+    studio.classList.remove('studio-replicator', 'studio-producer');
+    studio.classList.add('studio-' + mode);
+    ['replicator', 'producer'].forEach(m => {
+      const btn = document.getElementById('studioModetab_' + m);
+      if (btn) btn.classList.toggle('active', m === mode);
+    });
+    document.querySelectorAll('.tab[data-tab]').forEach(t => t.classList.remove('active'));
+    const navBtn = document.querySelector(`.tab[data-tab="video-${mode}"]`);
+    if (navBtn) navBtn.classList.add('active');
+    const emptyEl = document.getElementById('segmentsEmpty');
+    if (emptyEl) {
+      emptyEl.innerHTML = mode === 'producer'
+        ? 'Paste your script above and click <strong style="color:var(--text-2);">✂ Split into Scenes</strong> to create segments.'
+        : 'Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.';
+    }
+  }
+
+  async function switchStudioMode(mode) {
+    const prevMode = studioMode;
+
+    // ── 1. Save current mode's state BEFORE changing studioMode ──────────────
+    // (modeKey() still points to the old mode at this point)
+    if (projects.length > 0) {
+      saveCurrentProjectData();
+      await DB.set(modeKey('sm_active_project'), activeProjectId);
+    }
+    if (studioLibrary.length > 0) {
+      saveStudioLibrary();
+    }
+
+    // ── 2. Switch mode ────────────────────────────────────────────────────────
+    studioMode = mode;
+    DB.set('sm_studio_mode', mode);
+
+    // ── 3. Load new mode's library ────────────────────────────────────────────
+    const libRaw = await DB.get(modeKey('sm_studio_library'));
+    // Migrate legacy unnamespaced library into Replicator on first run
+    const legacyLib = (mode === 'replicator' && !libRaw)
+      ? await DB.get('sm_studio_library') : null;
+    studioLibrary = JSON.parse(libRaw || legacyLib || '[]');
+    renderStudioLibrary();
+
+    // ── 4. Load new mode's projects + segments ────────────────────────────────
+    await loadProjects();
+
+    // ── 5. Apply visual changes ───────────────────────────────────────────────
+    _applyModeVisuals(mode);
+  }
+
+  function initVideoStudio(forcedMode) {
     loadAvatarProfile();
     loadAvatarImage();
+    loadBgImage();
     populateAvatarAccountPicker();
-    renderStudioLibrary();
     renderApiKeyStatus();
-    loadProjects();
+    // switchStudioMode handles library + projects loading
+    if (forcedMode) {
+      switchStudioMode(forcedMode);
+    } else {
+      DB.get('sm_studio_mode').then(saved => {
+        switchStudioMode(saved || 'replicator');
+      });
+    }
   }
 
   // ===== VIDEO CALENDAR =====
@@ -4791,11 +5461,14 @@ TECHNICAL SPECS:
     accounts      = JSON.parse(await DB.get('sm_accounts')       || '[]');
     competitors   = JSON.parse(await DB.get('sm_competitors')    || '[]');
     viralScripts  = JSON.parse(await DB.get('sm_viral_scripts')  || '[]');
-    studioLibrary = JSON.parse(await DB.get('sm_studio_library') || '[]');
+    // Studio library is mode-specific — loaded properly when studio opens
+    studioLibrary = [];
     videoLog      = JSON.parse(await DB.get('sm_video_log')      || '[]');
     postPlans     = JSON.parse(await DB.get('sm_post_plans')     || '[]');
     dailyItems    = JSON.parse(await DB.get('sm_daily_items')    || '[]');
     _cachedApiKey = await DB.get('sm_openai_key') || '';
+    // Load the shared admin key (not user-scoped — same for all users on this device)
+    _adminApiKey  = await DB.get('admin_openai_key', true) || '';
 
     // Render
     renderTable();
@@ -4945,6 +5618,63 @@ TECHNICAL SPECS:
     if (chip) chip.style.display = 'flex';
     if (initial) initial.textContent = (username || '?')[0].toUpperCase();
     if (name) name.textContent = username || '';
+  }
+
+  // ===== HIDDEN ADMIN KEY PANEL =====
+  // Change this password to whatever you want
+  const ADMIN_PASSWORD = 'socialos2025';
+
+  let _logoClickCount = 0, _logoClickTimer = null;
+  function onLogoClick() {
+    _logoClickCount++;
+    clearTimeout(_logoClickTimer);
+    _logoClickTimer = setTimeout(() => { _logoClickCount = 0; }, 1500);
+    if (_logoClickCount >= 5) {
+      _logoClickCount = 0;
+      openAdminKeyModal();
+    }
+  }
+  function openAdminKeyModal() {
+    const modal = document.getElementById('adminKeyModal');
+    modal.style.display = 'flex';
+    // Always start at the password gate
+    document.getElementById('adminGateScreen').style.display = 'block';
+    document.getElementById('adminKeyScreen').style.display = 'none';
+    document.getElementById('adminGateError').style.display = 'none';
+    const gateInput = document.getElementById('adminGateInput');
+    gateInput.value = '';
+    gateInput.focus();
+  }
+  function checkAdminPassword() {
+    const entered = document.getElementById('adminGateInput').value;
+    if (entered === ADMIN_PASSWORD) {
+      document.getElementById('adminGateScreen').style.display = 'none';
+      document.getElementById('adminKeyScreen').style.display = 'block';
+      document.getElementById('adminKeyStatus').style.display = 'none';
+      const keyInput = document.getElementById('adminKeyInput');
+      if (_adminApiKey) keyInput.value = _adminApiKey;
+      keyInput.focus();
+    } else {
+      const err = document.getElementById('adminGateError');
+      err.style.display = 'block';
+      document.getElementById('adminGateInput').value = '';
+      document.getElementById('adminGateInput').focus();
+      setTimeout(() => err.style.display = 'none', 2500);
+    }
+  }
+  function closeAdminKeyModal() {
+    document.getElementById('adminKeyModal').style.display = 'none';
+    document.getElementById('adminGateInput').value = '';
+    document.getElementById('adminGateError').style.display = 'none';
+    document.getElementById('adminKeyStatus').style.display = 'none';
+  }
+  async function saveAdminKey() {
+    const key = document.getElementById('adminKeyInput').value.trim();
+    if (!key) return;
+    _adminApiKey = key;
+    await DB.set('admin_openai_key', key, true); // unscoped — shared for all users
+    document.getElementById('adminKeyStatus').style.display = 'block';
+    setTimeout(() => closeAdminKeyModal(), 2000);
   }
 
   function doLogout() {
