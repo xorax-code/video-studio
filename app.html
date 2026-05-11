@@ -1558,7 +1558,7 @@
           <div style="padding:7px 10px;display:flex;flex-direction:column;gap:6px;">
             <!-- URL input -->
             <div style="display:flex;gap:5px;">
-              <input id="dlUrlInput" type="url" placeholder="Paste video URL here…"
+              <input id="dlUrlInput" type="text" placeholder="Paste video URL here…"
                 style="flex:1;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;"
                 onkeydown="if(event.key==='Enter'){event.preventDefault();}"
               >
@@ -1596,18 +1596,8 @@
                 <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">fdown.net</div>
               </div>
 
-              <!-- SaveFrom -->
-              <div class="dl-service-row" title="en.savefrom.net" onclick="openDownloader('savefrom')"
-                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
-                <div>
-                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ SaveFrom</div>
-                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">YouTube · Facebook · Twitter · Vimeo · Dailymotion</div>
-                </div>
-                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">savefrom.net</div>
-              </div>
-
             </div>
-            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Paste a link · pick a service · downloads open in a new tab. Hover any row to see the site URL.</div>
+            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Paste a link · pick a service · opens with your URL pre-filled.</div>
           </div>
         </div>
 
@@ -3263,10 +3253,9 @@
 
   // ===== VIDEO DOWNLOADER =====
   const DL_SERVICES = {
-    snapsave:  { home: 'https://snapsave.app/',           withUrl: u => `https://snapsave.app/?url=${encodeURIComponent(u)}` },
-    ssstik:    { home: 'https://ssstik.io/en',            withUrl: u => `https://ssstik.io/en?url=${encodeURIComponent(u)}` },
-    fdown:     { home: 'https://fdown.net/',              withUrl: u => `https://fdown.net/?URLz=${encodeURIComponent(u)}` },
-    savefrom:  { home: 'https://en.savefrom.net/',        withUrl: u => `https://en.savefrom.net/#url=${encodeURIComponent(u)}` },
+    snapsave:  { home: 'https://snapsave.app/',  withUrl: u => `https://snapsave.app/?url=${encodeURIComponent(u)}` },
+    ssstik:    { home: 'https://ssstik.io/en',   withUrl: u => `https://ssstik.io/en?url=${encodeURIComponent(u)}` },
+    fdown:     { home: 'https://fdown.net/',     withUrl: u => `https://fdown.net/?URLz=${encodeURIComponent(u)}` },
   };
 
   function openDownloader(service) {
