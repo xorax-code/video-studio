@@ -3088,12 +3088,15 @@
           ...imageContent
         ];
 
+        console.log('[Analyze] seg', i, '| frames:', frameList.length, '| calling API…');
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
+        console.log('[Analyze] seg', i, '| status:', res.status);
         const data = await res.json();
+        console.log('[Analyze] seg', i, '| response:', JSON.stringify(data).substring(0, 200));
         if (data.error) {
           btn.disabled = false;
           btn.textContent = '❌ ' + (data.error.code || data.error.type || 'Error');
