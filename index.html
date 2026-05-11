@@ -3157,9 +3157,9 @@
       alert('No segments yet. Upload a video and click ⚡ Auto 8s or ✂ Mark Scene first.');
       return;
     }
-    const product = document.getElementById('studioProduct').value;
     const productSel = document.getElementById('studioProduct');
-    const productName = productSel.options[productSel.selectedIndex].text || 'the product';
+    const product = productSel ? productSel.value : '';
+    const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
 
     // Sync any live textarea edits into the segments array
@@ -3247,9 +3247,9 @@
   function generateStudioPrompts() {
     const avatar = document.getElementById('avatarDesc').value.trim() || '[YOUR AVATAR — add description in Avatar Profile]';
     const videoUrl = document.getElementById('refVideoUrl').value.trim();
-    const product = document.getElementById('studioProduct').value;
-    const format = document.getElementById('studioFormat').value;
-    const setting = document.getElementById('studioSetting').value.trim() || 'clean neutral background';
+    const product = document.getElementById('studioProduct') ? document.getElementById('studioProduct').value : '';
+    const format = document.getElementById('studioFormat') ? document.getElementById('studioFormat').value : '';
+    const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : 'clean neutral background';
     const script = document.getElementById('originalScript').value.trim();
     const scenes = getScenes();
 
@@ -3258,7 +3258,8 @@
       return;
     }
 
-    const productName = document.getElementById('studioProduct').options[document.getElementById('studioProduct').selectedIndex].text || 'the product';
+    const _pSel = document.getElementById('studioProduct');
+    const productName = _pSel ? (_pSel.options[_pSel.selectedIndex]?.text || 'the product') : 'the product';
 
     // Build Nano Banana prompt
     const nbPrompt = buildNanoBananaPrompt(avatar, script, setting, format, productName, product);
