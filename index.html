@@ -3045,6 +3045,7 @@
 
   // --- Analyze all segment videos with GPT-4o Vision ---
   async function analyzeAllFrames() {
+    console.log('[Analyze] segments:', segments.length, '| key:', getApiKey() ? 'SET' : 'EMPTY', '| seg0 frame:', segments[0]?.frameDataUrl ? 'HAS IMAGE' : 'NO IMAGE');
     if (segments.length === 0) { alert('No segments yet — run Auto 8s first.'); return; }
     const apiKey = getApiKey();
     if (!apiKey) { alert('Add your OpenAI API key in ⚙ Settings first.'); return; }
