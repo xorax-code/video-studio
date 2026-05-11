@@ -1556,14 +1556,6 @@
             <span>📥 Video Downloader</span>
           </div>
           <div style="padding:7px 10px;display:flex;flex-direction:column;gap:6px;">
-            <!-- URL input -->
-            <div style="display:flex;gap:5px;">
-              <input id="dlUrlInput" type="text" placeholder="Paste video URL here…"
-                style="flex:1;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;"
-                onkeydown="if(event.key==='Enter'){event.preventDefault();}"
-              >
-              <button onclick="clearDlUrl()" title="Clear URL" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-3);font-size:11px;cursor:pointer;">✕</button>
-            </div>
             <div style="display:flex;flex-direction:column;gap:5px;">
 
               <!-- SnapSave -->
@@ -1597,7 +1589,7 @@
               </div>
 
             </div>
-            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Paste a link · pick a service · opens with your URL pre-filled.</div>
+            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Click a service to open it in a new tab.</div>
           </div>
         </div>
 
@@ -3260,14 +3252,7 @@
 
   function openDownloader(service) {
     const svc = DL_SERVICES[service];
-    if (!svc) return;
-    const url = (document.getElementById('dlUrlInput')?.value || '').trim();
-    window.open(url ? svc.withUrl(url) : svc.home, '_blank');
-  }
-
-  function clearDlUrl() {
-    const inp = document.getElementById('dlUrlInput');
-    if (inp) inp.value = '';
+    if (svc) window.open(svc.home, '_blank');
   }
 
   // --- Clear transcript ---
