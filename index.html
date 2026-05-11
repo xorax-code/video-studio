@@ -1023,6 +1023,9 @@
 <!-- ===== VIDEO STUDIO — outside .container for fixed-height full-bleed layout ===== -->
 <div id="tab-video-studio" class="tab-content" style="height:calc(100vh - 42px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
 
+    <!-- PROJECT BAR -->
+    <div id="projectBar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);flex-shrink:0;"></div>
+
     <!-- 2-COLUMN BODY -->
     <div style="display:grid;grid-template-columns:300px 1fr;gap:10px;flex:1;overflow:hidden;min-height:0;">
 
@@ -2306,31 +2309,9 @@
 
   function saveStudioLibrary() { DB.set('sm_studio_library', JSON.stringify(studioLibrary)); }
 
-  // --- Save/load segments (frameDataUrl excluded — too large for localStorage) ---
-  function saveSegments() {
-    const slim = segments.map(s => ({
-      startTime: s.startTime,
-      endTime: s.endTime,
-      script: s.script || '',
-      action: s.action || '',
-      nbPrompt: s.nbPrompt || '',
-      nbEndPrompt: s.nbEndPrompt || '',
-      veoPrompt: s.veoPrompt || ''
-      // frameDataUrl and endFrameDataUrl omitted — too large for localStorage
-    }));
-    DB.set('sm_segments', JSON.stringify(slim));
-  }
-
-  async function loadSegments() {
-    try {
-      const raw = await DB.get('sm_segments');
-      const saved = JSON.parse(raw || '[]');
-      if (saved.length > 0) {
-        segments = saved.map(s => ({ ...s, frameDataUrl: null }));
-        renderSegments();
-      }
-    } catch(e) {}
-  }
+  // --- Save/load segments — delegated to project system ---
+  function saveSegments() { saveCurrentProjectData(); }
+  async function loadSegments() { /* handled by loadProjects() in initVideoStudio */ }
 
 
   // --- Avatar image ---
@@ -2395,7 +2376,7 @@
     refVideoFile = null;
     // Clear timestamps — they belong to the old video
     whisperSegments = [];
-    DB.remove('sm_whisper_segments');
+    saveCurrentProjectData();
     const videoEl = document.getElementById('refVideoEl');
     videoEl.src = '';
     videoEl.style.display = 'none';
@@ -2507,7 +2488,7 @@
         end: s.end,
         text: s.text.trim()
       }));
-      DB.set('sm_whisper_segments', JSON.stringify(whisperSegments));
+      saveCurrentProjectData();
       document.getElementById('originalScript').value = (data.text || '').trim();
       const tsNote = whisperSegments.length > 0 ? ` (${whisperSegments.length} timed chunks)` : '';
       status.textContent = '✓ Transcribed' + tsNote;
@@ -3463,13 +3444,132 @@ TECHNICAL SPECS:
     sel.value = '';
   }
 
+  // ===== VIDEO STUDIO PROJECTS =====
+  let projects = [];
+  let activeProjectId = null;
+
+  function getActiveProject() {
+    return projects.find(p => p.id === activeProjectId) || null;
+  }
+
+  function saveCurrentProjectData() {
+    const p = getActiveProject();
+    if (!p) return;
+    p.originalScript  = document.getElementById('originalScript').value;
+    p.whisperSegments = whisperSegments;
+    p.segments = segments.map(s => ({
+      startTime: s.startTime, endTime: s.endTime,
+      script: s.script || '', action: s.action || '',
+      nbPrompt: s.nbPrompt || '', nbEndPrompt: s.nbEndPrompt || '',
+      veoPrompt: s.veoPrompt || ''
+    }));
+    DB.set('sm_projects', JSON.stringify(projects));
+  }
+
+  function loadProjectData() {
+    const p = getActiveProject();
+    if (!p) return;
+    segments        = (p.segments || []).map(s => ({ ...s, frameDataUrl: null }));
+    whisperSegments = p.whisperSegments || [];
+    document.getElementById('originalScript').value = p.originalScript || '';
+    renderSegments();
+  }
+
+  function renderProjectBar() {
+    const bar = document.getElementById('projectBar');
+    if (!bar) return;
+    const p = getActiveProject();
+    bar.innerHTML = `
+      <span style="font-size:11px;color:var(--text-3);flex-shrink:0;">Project</span>
+      <select onchange="switchProject(this.value)" style="font-size:11px;padding:3px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:4px;color:var(--text-1);font-family:inherit;outline:none;max-width:220px;flex:1;">
+        ${projects.map(pr => `<option value="${escHtml(pr.id)}" ${pr.id === activeProjectId ? 'selected' : ''}>${escHtml(pr.name)}</option>`).join('')}
+      </select>
+      <button class="btn" onclick="renameProject()" style="padding:2px 8px;font-size:10px;" title="Rename">✏</button>
+      <button class="btn" onclick="newProject()" style="padding:2px 10px;font-size:11px;flex-shrink:0;">+ New Project</button>
+      ${projects.length > 1 ? `<button class="btn" onclick="deleteProject('${escHtml(p.id)}')" style="padding:2px 8px;font-size:10px;color:var(--danger);border-color:#3a2020;" title="Delete project">🗑</button>` : ''}
+    `;
+  }
+
+  async function loadProjects() {
+    const raw      = await DB.get('sm_projects');
+    const savedId  = await DB.get('sm_active_project');
+    projects = JSON.parse(raw || '[]');
+
+    if (projects.length === 0) {
+      // Migrate old single-project segment data if it exists
+      const oldSegs    = JSON.parse(await DB.get('sm_segments') || '[]');
+      const oldWhisper = whisperSegments || [];
+      projects.push({
+        id: Date.now().toString(),
+        name: 'Project 1',
+        segments: oldSegs,
+        originalScript: '',
+        whisperSegments: oldWhisper
+      });
+    }
+
+    activeProjectId = (savedId && projects.find(p => p.id === savedId))
+      ? savedId
+      : projects[0].id;
+
+    DB.set('sm_projects', JSON.stringify(projects));
+    DB.set('sm_active_project', activeProjectId);
+    loadProjectData();
+    renderProjectBar();
+  }
+
+  function newProject() {
+    saveCurrentProjectData();
+    const name = prompt('Project name:', `Project ${projects.length + 1}`);
+    if (!name) return;
+    const p = { id: Date.now().toString(), name, segments: [], originalScript: '', whisperSegments: [] };
+    projects.push(p);
+    activeProjectId = p.id;
+    DB.set('sm_projects', JSON.stringify(projects));
+    DB.set('sm_active_project', activeProjectId);
+    loadProjectData();
+    renderProjectBar();
+    clearVideo();
+  }
+
+  function switchProject(id) {
+    if (id === activeProjectId) return;
+    saveCurrentProjectData();
+    activeProjectId = id;
+    DB.set('sm_active_project', activeProjectId);
+    loadProjectData();
+    renderProjectBar();
+    clearVideo();
+  }
+
+  function renameProject() {
+    const p = getActiveProject();
+    if (!p) return;
+    const name = prompt('Rename project:', p.name);
+    if (!name || name === p.name) return;
+    p.name = name;
+    DB.set('sm_projects', JSON.stringify(projects));
+    renderProjectBar();
+  }
+
+  function deleteProject(id) {
+    if (projects.length <= 1) { alert("Can't delete the only project."); return; }
+    if (!confirm('Delete this project and all its segments?')) return;
+    projects = projects.filter(p => p.id !== id);
+    if (activeProjectId === id) activeProjectId = projects[0].id;
+    DB.set('sm_projects', JSON.stringify(projects));
+    DB.set('sm_active_project', activeProjectId);
+    loadProjectData();
+    renderProjectBar();
+  }
+
   function initVideoStudio() {
     loadAvatarProfile();
     loadAvatarImage();
     populateAvatarAccountPicker();
-    renderSegments();
     renderStudioLibrary();
     renderApiKeyStatus();
+    loadProjects();
   }
 
   // ===== ASYNC INIT =====
@@ -3482,7 +3582,6 @@ TECHNICAL SPECS:
     competitors   = JSON.parse(await DB.get('sm_competitors')    || '[]');
     viralScripts  = JSON.parse(await DB.get('sm_viral_scripts')  || '[]');
     studioLibrary = JSON.parse(await DB.get('sm_studio_library') || '[]');
-    whisperSegments = JSON.parse(await DB.get('sm_whisper_segments') || '[]');
     _cachedApiKey = await DB.get('sm_openai_key') || '';
 
     // Seed demo data if empty
