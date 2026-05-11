@@ -2305,27 +2305,23 @@
   }
 
   // Assign each video segment the exact Whisper words spoken during its time window.
-  // Each Whisper chunk is assigned to EXACTLY ONE segment (the one containing its midpoint)
-  // so text never appears doubled across adjacent segments.
+  // Each Whisper chunk goes to EXACTLY ONE segment (the one containing its midpoint).
+  // Returns true ONLY if every segment received text — otherwise returns false so
+  // the proportional fallback handles everything instead.
   function distributeScriptFromTimestamps() {
     if (!whisperSegments || whisperSegments.length === 0) return false;
 
-    // Build one text bucket per segment
     const buckets = segments.map(() => []);
 
     whisperSegments.forEach(ws => {
       const mid = (ws.start + ws.end) / 2;
-
-      // Find the segment whose range contains the chunk midpoint
       let target = -1;
       for (let i = 0; i < segments.length; i++) {
         if (mid >= segments[i].startTime && mid < segments[i].endTime) {
-          target = i;
-          break;
+          target = i; break;
         }
       }
-
-      // If midpoint falls outside all segments, assign to the nearest one
+      // If midpoint falls outside all segments, use nearest
       if (target === -1) {
         let minDist = Infinity;
         segments.forEach((seg, i) => {
@@ -2333,18 +2329,17 @@
           if (dist < minDist) { minDist = dist; target = i; }
         });
       }
-
       if (target >= 0) buckets[target].push(ws.text);
     });
 
-    let anyAssigned = false;
+    // Only commit if ALL segments got text — any gap means fall back to proportional
+    const allCovered = buckets.every(b => b.length > 0);
+    if (!allCovered) return false;
+
     buckets.forEach((texts, i) => {
-      if (texts.length > 0) {
-        segments[i].script = texts.join(' ').trim();
-        anyAssigned = true;
-      }
+      segments[i].script = texts.join(' ').trim();
     });
-    return anyAssigned;
+    return true;
   }
 
   function distributeScript() {
