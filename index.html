@@ -2386,7 +2386,8 @@
     whisperSegments = [];
     saveCurrentProjectData();
     const videoEl = document.getElementById('refVideoEl');
-    videoEl.src = '';
+    videoEl.removeAttribute('src');
+    videoEl.load();
     videoEl.style.display = 'none';
     document.getElementById('videoUploadPlaceholder').style.display = 'block';
     document.getElementById('clearVideoBtn').style.display = 'none';
@@ -2534,7 +2535,7 @@
   function captureFrame(time) {
     return new Promise((resolve) => {
       const videoEl = document.getElementById('refVideoEl');
-      if (!videoEl || !videoEl.src) { resolve(null); return; }
+      if (!videoEl || !videoEl.duration || isNaN(videoEl.duration) || videoEl.readyState < 1) { resolve(null); return; }
       const canvas = document.getElementById('frameCanvas');
       const doCapture = () => {
         canvas.width = videoEl.videoWidth || 360;
@@ -2555,7 +2556,7 @@
   // --- Auto-segment every 8 seconds ---
   async function autoSegment() {
     const videoEl = document.getElementById('refVideoEl');
-    if (!videoEl || !videoEl.src || !videoEl.duration) {
+    if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) {
       alert('Please upload a video first and wait for it to load.');
       return;
     }
@@ -2612,7 +2613,7 @@
   // (spike relative to recent rolling average, weighted toward hand/object region)
   async function autoSegmentBySceneChange() {
     const videoEl = document.getElementById('refVideoEl');
-    if (!videoEl || !videoEl.src || !videoEl.duration) {
+    if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) {
       alert('Please upload a video first and wait for it to load.');
       return;
     }
@@ -2734,7 +2735,7 @@
   // --- Mark scene change manually at current playback time ---
   async function markSceneChange() {
     const videoEl = document.getElementById('refVideoEl');
-    if (!videoEl || !videoEl.src) { alert('Please upload a video first.'); return; }
+    if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) { alert('Please upload a video first.'); return; }
     const t = videoEl.currentTime;
     if (segments.length > 0) {
       const prev = segments[segments.length - 1];
