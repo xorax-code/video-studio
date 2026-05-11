@@ -76,6 +76,20 @@
   .cal-entry-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 8px; background:var(--surface-2); border-radius:var(--radius-xs); font-size:11px; }
   .cal-acct-row { display:flex; align-items:center; justify-content:space-between; padding:5px 8px; background:var(--surface-2); border-radius:var(--radius-xs); }
   .cal-acct-bar { height:3px; border-radius:2px; margin-top:3px; }
+  .plan-day-btn { padding:3px 8px; font-size:10px; font-weight:600; border-radius:var(--radius-xs); border:1px solid var(--border-2); background:var(--surface-3); color:var(--text-3); cursor:pointer; transition:all 0.1s; font-family:inherit; }
+  .plan-day-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .plan-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .plan-card:hover { border-color:var(--border-2); }
+  .plan-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .plan-inspo-link { font-size:11px; color:var(--accent); text-decoration:none; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width:280px; display:inline-block; }
+  .plan-inspo-link:hover { text-decoration:underline; }
+  .daily-item { background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;transition:border-color 0.12s; }
+  .daily-item.done { opacity:0.55; }
+  .daily-item:hover { border-color:var(--border-2); }
+  .daily-item-header { display:flex;align-items:center;justify-content:space-between;margin-bottom:10px; }
+  .daily-check { width:18px;height:18px;border-radius:50%;border:2px solid var(--border-2);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all 0.12s; }
+  .daily-check.checked { border-color:var(--success);background:var(--success); }
+  .daily-script-box { padding:10px 12px;background:var(--surface-2);border-radius:var(--radius-xs);font-size:11px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;border-left:2px solid var(--border-2);margin-top:8px; }
 
   /* ===== SCROLLBAR ===== */
   ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -1039,7 +1053,16 @@
 
   <!-- ===== CALENDAR TAB ===== -->
   <div id="tab-calendar" class="tab-content">
-    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;">
+
+    <!-- View toggle -->
+    <div style="display:flex;gap:6px;margin-bottom:18px;">
+      <button id="calViewCalBtn" class="btn btn-primary" onclick="switchCalView('calendar')" style="padding:4px 14px;font-size:11px;">📅 Calendar</button>
+      <button id="calViewPlanBtn" class="btn btn-secondary" onclick="switchCalView('plans')" style="padding:4px 14px;font-size:11px;">📋 Schedules</button>
+      <button id="calViewDailyBtn" class="btn btn-secondary" onclick="switchCalView('daily')" style="padding:4px 14px;font-size:11px;">✏️ Daily Plan</button>
+    </div>
+
+    <!-- CALENDAR VIEW -->
+    <div id="calViewCalendar" style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;">
 
       <!-- Calendar grid -->
       <div>
@@ -1063,6 +1086,119 @@
         <div id="calRecentList" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;"></div>
       </div>
 
+    </div>
+
+    <!-- PLANS VIEW -->
+    <div id="calViewPlans" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-1);">Post Schedules</span>
+        <button class="btn btn-primary" onclick="openPlanModal()" style="padding:4px 14px;font-size:11px;">+ New Plan</button>
+      </div>
+      <div id="plansList" style="display:flex;flex-direction:column;gap:10px;"></div>
+      <div id="plansEmpty" style="display:none;text-align:center;padding:40px 0;font-size:12px;color:var(--text-3);">
+        No plans yet — click <strong style="color:var(--text-2);">+ New Plan</strong> to set up a posting schedule.
+      </div>
+    </div>
+
+  </div>
+
+    <!-- DAILY PLAN VIEW -->
+    <div id="calViewDaily" style="display:none;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:4px 10px;">‹</button>
+          <span id="dailyDateLabel" style="font-size:14px;font-weight:600;color:var(--text-1);min-width:160px;text-align:center;"></span>
+          <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:4px 10px;">›</button>
+          <button class="btn btn-secondary" onclick="goToToday()" style="padding:4px 10px;font-size:10px;">Today</button>
+          <button class="btn btn-secondary" onclick="goToTomorrow()" style="padding:4px 10px;font-size:10px;">Tomorrow</button>
+        </div>
+        <button class="btn btn-primary" onclick="openDailyItemModal()" style="padding:4px 14px;font-size:11px;">+ Add Post</button>
+      </div>
+
+      <!-- Auto-populated from schedules -->
+      <div id="dailyScheduledBanner" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:var(--radius-sm);font-size:11px;color:var(--accent);"></div>
+
+      <div id="dailyList" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div id="dailyEmpty" style="display:none;text-align:center;padding:40px 0;font-size:12px;color:var(--text-3);">
+        Nothing planned for this day yet. Click <strong style="color:var(--text-2);">+ Add Post</strong> to plan a post, or set up a Schedule to auto-populate.
+      </div>
+    </div>
+
+  <!-- Daily item modal -->
+  <div id="dailyItemModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)closeDailyItemModal()">
+    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:22px;width:460px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:16px;" id="dailyItemModalTitle">Plan a Post</div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Account</label>
+        <select id="dailyItemAccount" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;"></select>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Inspiration / reference video link</label>
+        <input type="url" id="dailyItemInspo" placeholder="https://www.tiktok.com/…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="form-label">Script / content plan</label>
+        <textarea id="dailyItemScript" rows="6" placeholder="Write or paste the script, talking points, hooks, or content ideas for this post…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;resize:vertical;line-height:1.6;"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeDailyItemModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveDailyItem()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plan modal -->
+  <div id="planModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)closePlanModal()">
+    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:22px;width:420px;max-width:95vw;max-height:90vh;overflow-y:auto;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:16px;" id="planModalTitle">New Post Plan</div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Account</label>
+        <select id="planAccountSel" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;"></select>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+        <div class="form-group">
+          <label class="form-label">Videos per day</label>
+          <input type="number" id="planVidsPerDay" min="1" max="20" value="1" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Start date</label>
+          <input type="date" id="planStartDate" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;color-scheme:dark;">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Post days</label>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;" id="planDaysBtns">
+          <button class="plan-day-btn active" data-day="0">Sun</button>
+          <button class="plan-day-btn active" data-day="1">Mon</button>
+          <button class="plan-day-btn active" data-day="2">Tue</button>
+          <button class="plan-day-btn active" data-day="3">Wed</button>
+          <button class="plan-day-btn active" data-day="4">Thu</button>
+          <button class="plan-day-btn active" data-day="5">Fri</button>
+          <button class="plan-day-btn active" data-day="6">Sat</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:12px;">
+        <label class="form-label">Inspiration video link</label>
+        <input type="url" id="planInspoUrl" placeholder="https://www.tiktok.com/@account/video/…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+      </div>
+
+      <div class="form-group" style="margin-bottom:16px;">
+        <label class="form-label">Script / content notes</label>
+        <textarea id="planScript" rows="4" placeholder="Paste a script, talking points, or content ideas to use as reference for this schedule…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;resize:vertical;"></textarea>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closePlanModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="savePlan()">Save Plan</button>
+      </div>
     </div>
   </div>
 
@@ -1471,7 +1607,7 @@
     async function migrateLocalStorage() {
       const keys = ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library',
                     'sm_whisper_segments','sm_segments','sm_avatar_img','sm_avatar_image',
-                    'sm_openai_key','sm_avatar_profile','sm_video_log'];
+                    'sm_openai_key','sm_avatar_profile','sm_video_log','sm_post_plans','sm_daily_items'];
       for (const key of keys) {
         const val = localStorage.getItem(key);
         if (val !== null) {
@@ -3898,6 +4034,320 @@ TECHNICAL SPECS:
     calSelectedDate = null;
   }
 
+  // ===== POST PLANS =====
+  let postPlans = [];
+  let editingPlanId = null;
+
+  function savePlans() { DB.set('sm_post_plans', JSON.stringify(postPlans)); }
+
+  // switchCalView defined below (handles all 3 views)
+
+  function openPlanModal(id) {
+    editingPlanId = id || null;
+    const plan = id ? postPlans.find(p => p.id === id) : null;
+    document.getElementById('planModalTitle').textContent = plan ? 'Edit Plan' : 'New Post Plan';
+    // Populate account selector
+    const sel = document.getElementById('planAccountSel');
+    sel.innerHTML = accounts.map(a => `<option value="${a.id}" ${plan?.accountId===a.id?'selected':''}>${platformEmojis[a.platform]||'🌐'} ${escHtml(a.username)} (${a.platform})</option>`).join('');
+    document.getElementById('planVidsPerDay').value = plan?.videosPerDay || 1;
+    document.getElementById('planStartDate').value  = plan?.startDate || new Date().toISOString().slice(0,10);
+    document.getElementById('planInspoUrl').value   = plan?.inspirationUrl || '';
+    document.getElementById('planScript').value     = plan?.scriptNotes || '';
+    // Day buttons
+    const days = plan?.days || [0,1,2,3,4,5,6];
+    document.querySelectorAll('.plan-day-btn').forEach(btn => {
+      const d = parseInt(btn.dataset.day);
+      btn.classList.toggle('active', days.includes(d));
+      btn.onclick = () => btn.classList.toggle('active');
+    });
+    document.getElementById('planModalOverlay').style.display = 'flex';
+  }
+
+  function closePlanModal() {
+    document.getElementById('planModalOverlay').style.display = 'none';
+    editingPlanId = null;
+  }
+
+  function savePlan() {
+    const accountId = document.getElementById('planAccountSel').value;
+    if (!accountId) { alert('Select an account.'); return; }
+    const days = Array.from(document.querySelectorAll('.plan-day-btn.active')).map(b => parseInt(b.dataset.day));
+    if (days.length === 0) { alert('Select at least one posting day.'); return; }
+    const data = {
+      accountId,
+      videosPerDay:   parseInt(document.getElementById('planVidsPerDay').value) || 1,
+      startDate:      document.getElementById('planStartDate').value,
+      days,
+      inspirationUrl: document.getElementById('planInspoUrl').value.trim(),
+      scriptNotes:    document.getElementById('planScript').value.trim(),
+    };
+    if (editingPlanId) {
+      const idx = postPlans.findIndex(p => p.id === editingPlanId);
+      if (idx > -1) postPlans[idx] = { ...postPlans[idx], ...data };
+    } else {
+      postPlans.push({ id: Date.now().toString(), ...data });
+    }
+    savePlans();
+    closePlanModal();
+    renderPlans();
+  }
+
+  function deletePlan(id) {
+    if (!confirm('Delete this plan?')) return;
+    postPlans = postPlans.filter(p => p.id !== id);
+    savePlans();
+    renderPlans();
+  }
+
+  function renderPlans() {
+    const list  = document.getElementById('plansList');
+    const empty = document.getElementById('plansEmpty');
+    const dayNames = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    if (postPlans.length === 0) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+    list.innerHTML = postPlans.map(plan => {
+      const acct  = accounts.find(a => a.id === plan.accountId);
+      const color = platformColors[acct?.platform] || 'var(--accent)';
+      const dayStr = plan.days.sort((a,b)=>a-b).map(d => dayNames[d]).join(', ');
+      const totalPerWeek = plan.days.length * plan.videosPerDay;
+      return `<div class="plan-card">
+        <div class="plan-card-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            ${acct?.avatar ? `<img src="${acct.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--border);">` : `<div style="width:28px;height:28px;border-radius:50%;background:${color};opacity:0.3;"></div>`}
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">${escHtml(acct?.username||'Unknown')}</div>
+              <div style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-secondary" onclick="openPlanModal('${plan.id}')" style="padding:2px 8px;font-size:10px;">Edit</button>
+            <button class="btn" onclick="deletePlan('${plan.id}')" style="padding:2px 8px;font-size:10px;color:var(--danger);border-color:#3a2020;">Delete</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:16px;flex-wrap:wrap;margin-bottom:10px;">
+          <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:6px 12px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:${color};">${plan.videosPerDay}</div>
+            <div style="font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.4px;">per day</div>
+          </div>
+          <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:6px 12px;text-align:center;">
+            <div style="font-size:18px;font-weight:700;color:var(--text-1);">${totalPerWeek}</div>
+            <div style="font-size:9px;color:var(--text-3);text-transform:uppercase;letter-spacing:0.4px;">per week</div>
+          </div>
+          <div style="background:var(--surface-2);border-radius:var(--radius-sm);padding:6px 12px;flex:1;">
+            <div style="font-size:10px;color:var(--text-2);font-weight:600;margin-bottom:2px;">Post days</div>
+            <div style="display:flex;gap:3px;flex-wrap:wrap;">
+              ${dayNames.map((n,i) => `<span style="padding:1px 5px;border-radius:2px;font-size:9px;font-weight:600;${plan.days.includes(i)?`background:${color}22;color:${color};`:'background:var(--surface-3);color:var(--text-4);'}">${n}</span>`).join('')}
+            </div>
+          </div>
+        </div>
+
+        ${plan.startDate ? `<div style="font-size:10px;color:var(--text-3);margin-bottom:6px;">Starting ${plan.startDate}</div>` : ''}
+
+        ${plan.inspirationUrl ? `<div style="margin-bottom:8px;padding:6px 10px;background:var(--surface-2);border-radius:var(--radius-xs);display:flex;align-items:center;gap:6px;">
+          <span style="font-size:10px;color:var(--text-3);">🎬</span>
+          <a href="${escHtml(plan.inspirationUrl)}" target="_blank" class="plan-inspo-link">${escHtml(plan.inspirationUrl)}</a>
+        </div>` : ''}
+
+        ${plan.scriptNotes ? `<div style="padding:8px 10px;background:var(--surface-2);border-radius:var(--radius-xs);border-left:2px solid ${color};">
+          <div style="font-size:9px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:4px;">Script / Notes</div>
+          <div style="font-size:11px;color:var(--text-2);line-height:1.6;white-space:pre-wrap;">${escHtml(plan.scriptNotes.substring(0,300))}${plan.scriptNotes.length>300?'…':''}</div>
+        </div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  // ===== DAILY PLAN =====
+  let dailyItems = [];  // [{id, date, accountId, inspoUrl, script, done, fromPlanId}]
+  let dailyDate  = new Date().toISOString().slice(0,10);
+  let editingDailyId = null;
+
+  function saveDailyItems() { DB.set('sm_daily_items', JSON.stringify(dailyItems)); }
+
+  function fmtDailyDate(d) {
+    const dt = new Date(d + 'T12:00:00');
+    const today = new Date().toISOString().slice(0,10);
+    const tomorrow = new Date(Date.now()+86400000).toISOString().slice(0,10);
+    const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const label = d===today ? 'Today' : d===tomorrow ? 'Tomorrow' : names[dt.getDay()];
+    return `${label} · ${months[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
+  }
+
+  function switchCalView(view) {
+    // Hide all views, reset all buttons
+    document.getElementById('calViewCalendar').style.display = 'none';
+    document.getElementById('calViewPlans').style.display    = 'none';
+    document.getElementById('calViewDaily').style.display    = 'none';
+    document.getElementById('calViewCalBtn').className   = 'btn btn-secondary';
+    document.getElementById('calViewPlanBtn').className  = 'btn btn-secondary';
+    document.getElementById('calViewDailyBtn').className = 'btn btn-secondary';
+    // Show selected view
+    if (view === 'calendar') {
+      document.getElementById('calViewCalendar').style.display = 'grid';
+      document.getElementById('calViewCalBtn').className = 'btn btn-primary';
+      renderCalendar();
+    } else if (view === 'plans') {
+      document.getElementById('calViewPlans').style.display = 'block';
+      document.getElementById('calViewPlanBtn').className = 'btn btn-primary';
+      renderPlans();
+    } else if (view === 'daily') {
+      document.getElementById('calViewDaily').style.display = 'block';
+      document.getElementById('calViewDailyBtn').className = 'btn btn-primary';
+      renderDailyPlan();
+    }
+  }
+
+  function goToToday()    { dailyDate = new Date().toISOString().slice(0,10); renderDailyPlan(); }
+  function goToTomorrow() { dailyDate = new Date(Date.now()+86400000).toISOString().slice(0,10); renderDailyPlan(); }
+  function dailyPrevDay() { const d = new Date(dailyDate+'T12:00:00'); d.setDate(d.getDate()-1); dailyDate = d.toISOString().slice(0,10); renderDailyPlan(); }
+  function dailyNextDay() { const d = new Date(dailyDate+'T12:00:00'); d.setDate(d.getDate()+1); dailyDate = d.toISOString().slice(0,10); renderDailyPlan(); }
+
+  function getScheduledForDate(dateStr) {
+    const dt = new Date(dateStr + 'T12:00:00');
+    const dow = dt.getDay();
+    const slots = [];
+    postPlans.forEach(plan => {
+      if (!plan.days.includes(dow)) return;
+      if (plan.startDate && dateStr < plan.startDate) return;
+      for (let i = 0; i < (plan.videosPerDay || 1); i++) {
+        slots.push({ planId: plan.id, accountId: plan.accountId, inspoUrl: plan.inspirationUrl || '', script: plan.scriptNotes || '' });
+      }
+    });
+    return slots;
+  }
+
+  function autoPopulateDay(dateStr) {
+    const scheduled = getScheduledForDate(dateStr);
+    if (scheduled.length === 0) return;
+    const existing = dailyItems.filter(i => i.date === dateStr);
+    let added = 0;
+    scheduled.forEach(slot => {
+      const alreadyExists = existing.some(e => e.fromPlanId === slot.planId && e.accountId === slot.accountId && !e.done);
+      if (!alreadyExists) {
+        dailyItems.push({ id: Date.now().toString() + Math.random(), date: dateStr, accountId: slot.accountId, inspoUrl: slot.inspoUrl, script: slot.script, done: false, fromPlanId: slot.planId });
+        added++;
+      }
+    });
+    if (added > 0) saveDailyItems();
+  }
+
+  function renderDailyPlan() {
+    document.getElementById('dailyDateLabel').textContent = fmtDailyDate(dailyDate);
+    autoPopulateDay(dailyDate);
+
+    const items = dailyItems.filter(i => i.date === dailyDate);
+    const list  = document.getElementById('dailyList');
+    const empty = document.getElementById('dailyEmpty');
+    const banner = document.getElementById('dailyScheduledBanner');
+
+    const scheduled = getScheduledForDate(dailyDate);
+    if (scheduled.length > 0) {
+      const acctNames = [...new Set(scheduled.map(s => accounts.find(a=>a.id===s.accountId)?.username).filter(Boolean))];
+      banner.style.display = 'block';
+      banner.textContent = `📋 ${scheduled.length} post${scheduled.length>1?'s':''} scheduled for this day from your active plans (${acctNames.join(', ')})`;
+    } else {
+      banner.style.display = 'none';
+    }
+
+    if (items.length === 0) { list.innerHTML = ''; empty.style.display = 'block'; return; }
+    empty.style.display = 'none';
+
+    const done  = items.filter(i => i.done).length;
+    list.innerHTML = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;">
+      <div style="font-size:11px;color:var(--text-3);">${done}/${items.length} done</div>
+      <div style="flex:1;height:4px;background:var(--surface-3);border-radius:2px;">
+        <div style="width:${items.length?Math.round(done/items.length*100):0}%;height:100%;background:var(--success);border-radius:2px;transition:width 0.3s;"></div>
+      </div>
+    </div>` + items.map(item => {
+      const acct  = accounts.find(a => a.id === item.accountId);
+      const color = platformColors[acct?.platform] || 'var(--accent)';
+      const fromPlan = item.fromPlanId ? postPlans.find(p => p.id === item.fromPlanId) : null;
+      return `<div class="daily-item${item.done?' done':''}" id="daily-item-${item.id}">
+        <div class="daily-item-header">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div class="daily-check${item.done?' checked':''}" onclick="toggleDailyDone('${item.id}')" title="${item.done?'Mark undone':'Mark done'}">
+              ${item.done?'<span style="color:#fff;font-size:10px;line-height:1;">✓</span>':''}
+            </div>
+            ${acct?.avatar?`<img src="${acct.avatar}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid var(--border);">`:`<div style="width:26px;height:26px;border-radius:50%;background:${color};opacity:0.35;flex-shrink:0;"></div>`}
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">${escHtml(acct?.username||'Unknown')}</div>
+              <div style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}${fromPlan?' · from schedule':''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:5px;">
+            <button class="btn btn-secondary" onclick="openDailyItemModal('${item.id}')" style="padding:2px 7px;font-size:10px;">Edit</button>
+            <button class="btn" onclick="deleteDailyItem('${item.id}')" style="padding:2px 7px;font-size:10px;color:var(--danger);border-color:#3a2020;">✕</button>
+          </div>
+        </div>
+        ${item.inspoUrl?`<div style="margin-bottom:6px;padding:5px 10px;background:var(--surface-2);border-radius:var(--radius-xs);display:flex;align-items:center;gap:6px;">
+          <span style="font-size:10px;color:var(--text-3);">🎬 Inspo:</span>
+          <a href="${escHtml(item.inspoUrl)}" target="_blank" class="plan-inspo-link">${escHtml(item.inspoUrl)}</a>
+        </div>`:''}
+        ${item.script?`<div class="daily-script-box" style="border-left-color:${color};">${escHtml(item.script)}</div>`:''}
+      </div>`;
+    }).join('');
+  }
+
+  function toggleDailyDone(id) {
+    const item = dailyItems.find(i => i.id === id);
+    if (!item) return;
+    item.done = !item.done;
+    // Auto-log to video calendar when marked done
+    if (item.done) {
+      videoLog.push({ id: Date.now().toString(), accountId: item.accountId, date: item.date, notes: item.script ? item.script.substring(0,60) : '' });
+      saveDailyItems(); saveVideoLog();
+    } else {
+      // Remove the auto-log entry
+      videoLog = videoLog.filter(e => !(e.accountId === item.accountId && e.date === item.date && e.notes === (item.script?item.script.substring(0,60):'')));
+      saveDailyItems(); saveVideoLog();
+    }
+    renderDailyPlan();
+  }
+
+  function openDailyItemModal(id) {
+    editingDailyId = id || null;
+    const item = id ? dailyItems.find(i => i.id === id) : null;
+    document.getElementById('dailyItemModalTitle').textContent = item ? 'Edit Post' : 'Plan a Post';
+    const sel = document.getElementById('dailyItemAccount');
+    sel.innerHTML = accounts.map(a => `<option value="${a.id}" ${item?.accountId===a.id?'selected':''}>${platformEmojis[a.platform]||'🌐'} ${escHtml(a.username)} (${a.platform})</option>`).join('');
+    document.getElementById('dailyItemInspo').value  = item?.inspoUrl || '';
+    document.getElementById('dailyItemScript').value = item?.script || '';
+    document.getElementById('dailyItemModalOverlay').style.display = 'flex';
+  }
+
+  function closeDailyItemModal() {
+    document.getElementById('dailyItemModalOverlay').style.display = 'none';
+    editingDailyId = null;
+  }
+
+  function saveDailyItem() {
+    const accountId = document.getElementById('dailyItemAccount').value;
+    if (!accountId) { alert('Select an account.'); return; }
+    const data = {
+      accountId,
+      inspoUrl: document.getElementById('dailyItemInspo').value.trim(),
+      script:   document.getElementById('dailyItemScript').value.trim(),
+      date:     dailyDate,
+      done:     false,
+    };
+    if (editingDailyId) {
+      const idx = dailyItems.findIndex(i => i.id === editingDailyId);
+      if (idx > -1) dailyItems[idx] = { ...dailyItems[idx], ...data };
+    } else {
+      dailyItems.push({ id: Date.now().toString(), ...data });
+    }
+    saveDailyItems();
+    closeDailyItemModal();
+    renderDailyPlan();
+  }
+
+  function deleteDailyItem(id) {
+    dailyItems = dailyItems.filter(i => i.id !== id);
+    saveDailyItems();
+    renderDailyPlan();
+  }
+
   // ===== ASYNC INIT =====
   async function initApp() {
     // Migrate any old localStorage data first
@@ -3909,6 +4359,8 @@ TECHNICAL SPECS:
     viralScripts  = JSON.parse(await DB.get('sm_viral_scripts')  || '[]');
     studioLibrary = JSON.parse(await DB.get('sm_studio_library') || '[]');
     videoLog      = JSON.parse(await DB.get('sm_video_log')      || '[]');
+    postPlans     = JSON.parse(await DB.get('sm_post_plans')     || '[]');
+    dailyItems    = JSON.parse(await DB.get('sm_daily_items')    || '[]');
     _cachedApiKey = await DB.get('sm_openai_key') || '';
 
     // Seed demo data if empty
