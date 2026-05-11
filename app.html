@@ -93,6 +93,7 @@
     font-size: 13px;
     line-height: 1.5;
     display: flex;
+    flex-direction: column;
     -webkit-font-smoothing: antialiased;
   }
 
@@ -132,28 +133,29 @@
   ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
   ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
 
-  /* ===== SIDEBAR ===== */
-  .sidebar {
-    width: 210px;
-    flex-shrink: 0;
-    height: 100vh;
-    background: var(--sidebar-bg);
-    border-right: 1px solid var(--border);
-    display: flex;
-    flex-direction: column;
-    z-index: 50;
-  }
-
-  .sidebar-brand {
+  /* ===== TOP NAVBAR ===== */
+  .topnav {
     height: 50px;
+    background: var(--topbar-bg);
+    border-bottom: 1px solid var(--border);
     display: flex;
     align-items: center;
-    padding: 0 16px;
-    gap: 9px;
-    border-bottom: 1px solid var(--border);
+    padding: 0 20px;
+    gap: 0;
     flex-shrink: 0;
+    z-index: 50;
+    transition: background 0.22s, border-color 0.22s;
   }
-  .sidebar-brand-icon {
+
+  .topnav-brand {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-right: 24px;
+    flex-shrink: 0;
+    text-decoration: none;
+  }
+  .topnav-brand-icon {
     width: 26px; height: 26px;
     background: var(--accent);
     border-radius: 6px;
@@ -161,117 +163,67 @@
     font-size: 13px;
     flex-shrink: 0;
   }
-  .sidebar-brand-text {
+  .topnav-brand-text {
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 800;
     color: var(--text-1);
-    letter-spacing: -0.3px;
-    line-height: 1.2;
-  }
-  .sidebar-brand-sub {
-    font-size: 9px;
-    font-weight: 500;
-    color: var(--text-3);
-    letter-spacing: 0.4px;
-    text-transform: uppercase;
+    letter-spacing: -0.4px;
+    transition: color 0.22s;
   }
 
-  .sidebar-nav {
+  /* ===== NAV TABS (horizontal) ===== */
+  .tab-bar {
     display: flex;
-    flex-direction: column;
-    padding: 8px 6px;
-    gap: 1px;
-    flex: 1;
-    overflow-y: auto;
-  }
-
-  .sidebar-section-label {
-    font-size: 9px;
-    font-weight: 700;
-    text-transform: uppercase;
-    letter-spacing: 1.2px;
-    color: var(--text-3);
-    padding: 12px 10px 4px;
-  }
-
-  /* ===== NAV TABS ===== */
-  .tab {
-    width: 100%;
-    height: 32px;
-    border-radius: var(--radius-xs);
-    display: flex;
-    flex-direction: row;
     align-items: center;
-    gap: 8px;
+    gap: 2px;
+    flex: 1;
+    height: 100%;
+  }
+
+  .tab {
+    height: 100%;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
     border: none;
     background: transparent;
     cursor: pointer;
     color: var(--text-3);
-    transition: all 0.12s ease;
-    padding: 0 10px;
+    transition: color 0.12s, background 0.12s;
     white-space: nowrap;
-    text-align: left;
+    font-family: 'Inter', sans-serif;
+    position: relative;
+    border-radius: 0;
   }
-  .tab:hover { background: var(--surface-2); color: var(--text-2); }
+  .tab:hover { color: var(--text-2); background: var(--surface-2); }
   .tab.active {
-    background: var(--surface-2);
     color: var(--text-1);
-    border: none;
+    background: transparent;
   }
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 8px;
+    right: 8px;
+    height: 2px;
+    background: var(--accent);
+    border-radius: 2px 2px 0 0;
+  }
+  .nav-icon { font-size: 13px; line-height: 1; flex-shrink: 0; opacity: 0.7; }
   .tab.active .nav-icon { opacity: 1; }
-  .nav-icon { font-size: 13px; line-height: 1; flex-shrink: 0; opacity: 0.6; }
   .nav-label { font-size: 12px; font-weight: 500; letter-spacing: 0px; }
 
-  /* ===== MAIN AREA ===== */
-  .main-area {
-    flex: 1;
+  /* ===== TOPNAV RIGHT ===== */
+  .topnav-right {
     display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    margin-left: 16px;
   }
 
-  /* ===== TOPBAR ===== */
-  .topbar {
-    height: 44px;
-    background: var(--topbar-bg);
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 20px;
-    flex-shrink: 0;
-    z-index: 40;
-  }
-  .topbar-title {
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text-2);
-    letter-spacing: 0px;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .topbar-title::before {
-    content: 'SocialOS';
-    color: var(--text-3);
-    font-weight: 500;
-  }
-  .topbar-title::after {
-    content: '/';
-    color: var(--text-3);
-    font-weight: 400;
-    order: -1;
-    margin: 0 -2px;
-    display: none;
-  }
-  .topbar-breadcrumb {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 12px; color: var(--text-3);
-  }
-  .topbar-breadcrumb .crumb-sep { color: var(--text-4); }
-  .topbar-breadcrumb .crumb-active { color: var(--text-1); font-weight: 600; }
   .header-count {
     font-size: 10px;
     color: var(--text-3);
@@ -279,7 +231,19 @@
     border: 1px solid var(--border);
     padding: 2px 8px;
     border-radius: 20px;
+    transition: background 0.22s, border-color 0.22s, color 0.22s;
   }
+
+  /* ===== MAIN AREA ===== */
+  .main-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 50px);
+    overflow: hidden;
+    min-width: 0;
+  }
+
   .topbar-actions { display: flex; align-items: center; gap: 6px; }
 
   /* ===== PAGE BODY ===== */
@@ -823,12 +787,9 @@
 
   @media (max-width: 900px) {
     #tab-video-studio > div { grid-template-columns: 1fr !important; }
-    .sidebar { width: 56px; }
-    .sidebar-brand { padding: 0; justify-content: center; }
-    .sidebar-brand-text, .sidebar-brand-sub { display: none; }
+    .topnav-brand-text { display: none; }
+    .tab { padding: 0 10px; }
     .nav-label { display: none; }
-    .tab { justify-content: center; padding: 0; width: 44px; height: 44px; border-radius: 8px; }
-    .sidebar-nav { align-items: center; }
   }
   @media (max-width: 768px) {
     .container { padding: 14px 16px; }
@@ -841,17 +802,14 @@
 </head>
 <body>
 
-<!-- ===== SIDEBAR ===== -->
-<div class="sidebar">
-  <div class="sidebar-brand">
-    <div class="sidebar-brand-icon">⚡</div>
-    <div>
-      <div class="sidebar-brand-text">SocialOS</div>
-      <div class="sidebar-brand-sub">Studio</div>
-    </div>
+<!-- ===== TOP NAVBAR ===== -->
+<div class="topnav">
+  <div class="topnav-brand">
+    <div class="topnav-brand-icon">⚡</div>
+    <span class="topnav-brand-text">SocialOS</span>
   </div>
-  <nav class="sidebar-nav">
-    <div class="sidebar-section-label">Workspace</div>
+
+  <div class="tab-bar">
     <button class="tab active" onclick="switchTab('my-accounts')" title="My Accounts">
       <span class="nav-icon">📊</span>
       <span class="nav-label">My Accounts</span>
@@ -864,19 +822,18 @@
       <span class="nav-icon">🔥</span>
       <span class="nav-label">Viral Scripts</span>
     </button>
-    <button class="tab" onclick="switchTab('calendar')" title="Video Calendar">
+    <button class="tab" onclick="switchTab('calendar')" title="Calendar">
       <span class="nav-icon">📅</span>
       <span class="nav-label">Calendar</span>
     </button>
-    <div class="sidebar-section-label">Create</div>
     <button class="tab" onclick="switchTab('video-studio')" title="Video Studio">
       <span class="nav-icon">🎬</span>
       <span class="nav-label">Video Studio</span>
     </button>
-  </nav>
-  <!-- Theme toggle at bottom of sidebar -->
-  <div style="padding:10px 10px;border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;transition:border-color 0.22s;">
-    <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);transition:color 0.22s;" id="themeLabel">Dark</span>
+  </div>
+
+  <div class="topnav-right">
+    <span class="header-count" id="headerCount">0 accounts</span>
     <button onclick="toggleAppTheme()" id="themeToggleBtn" title="Toggle light/dark mode" style="width:38px;height:21px;border-radius:11px;background:var(--surface-3);border:1px solid var(--border-2);cursor:pointer;position:relative;padding:0;transition:background 0.22s,border-color 0.22s;flex-shrink:0;">
       <span id="themeToggleThumb" style="position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:var(--accent);transition:transform 0.2s,background 0.22s;display:block;"></span>
     </button>
@@ -885,18 +842,6 @@
 
 <!-- ===== MAIN AREA ===== -->
 <div class="main-area">
-
-  <!-- TOPBAR -->
-  <div class="topbar">
-    <div class="topbar-breadcrumb">
-      <span style="color:var(--text-3);font-size:12px;">SocialOS</span>
-      <span class="crumb-sep">/</span>
-      <span class="crumb-active" id="topbarTitle">My Accounts</span>
-    </div>
-    <div class="topbar-actions">
-      <span class="header-count" id="headerCount">0 accounts</span>
-    </div>
-  </div>
 
   <!-- PAGE BODY -->
   <div class="page-body">
@@ -1277,7 +1222,7 @@
 </div><!-- end .container -->
 
 <!-- ===== VIDEO STUDIO — outside .container for fixed-height full-bleed layout ===== -->
-<div id="tab-video-studio" class="tab-content" style="height:calc(100vh - 42px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
+<div id="tab-video-studio" class="tab-content" style="height:calc(100vh - 50px);overflow:hidden;flex-direction:column;padding:8px 16px;box-sizing:border-box;">
 
     <!-- PROJECT BAR -->
     <div id="projectBar" style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);flex-shrink:0;"></div>
