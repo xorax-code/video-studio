@@ -2088,11 +2088,11 @@
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Scanning…'; }
 
     const dur = videoEl.duration;
-    const sampleInterval = 0.2;     // sample every 0.2s for better accuracy
+    const sampleInterval = 0.1;     // sample every 0.1s — catches sub-second scene changes
     const hardCutThreshold = 25;    // absolute diff for obvious scene cuts
     const spikeMultiplier = 2.8;    // sudden change = diff > rolling_avg × this
     const minSpikeAbs = 10;         // ignore spikes below this (noise floor)
-    const minSegmentLen = 1.2;      // ignore cuts closer than 1.2s apart
+    const minSegmentLen = 0.4;      // allow segments as short as 0.4s
     const thumbW = 80, thumbH = 45;
 
     const canvas = document.getElementById('frameCanvas');
@@ -2106,7 +2106,7 @@
     const cutTimes = [0];
     let prevData = null;
     const recentDiffs = []; // rolling window of composite diff scores
-    const rollingWindow = 8; // ~1.6s of history
+    const rollingWindow = 15; // ~1.5s of history at 0.1s sample rate
     const totalFrames = Math.ceil(dur / sampleInterval);
 
     for (let k = 0; k <= totalFrames; k++) {
