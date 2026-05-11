@@ -1136,8 +1136,15 @@
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
           <div class="vs-panel-header">
             <span>Segments <span id="segmentCount" style="font-size:10px;color:#555;font-weight:400;"></span></span>
-            <div style="display:flex;gap:6px;">
+            <div style="display:flex;gap:6px;align-items:center;">
               <button class="btn" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
+              <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
+                <span style="font-size:9px;color:var(--text-3);white-space:nowrap;">NB bg:</span>
+                <select id="nbBgSource" style="font-size:10px;padding:1px 4px;background:transparent;border:none;color:var(--text-2);font-family:inherit;outline:none;cursor:pointer;">
+                  <option value="photo2">Photo 2 (Reference)</option>
+                  <option value="photo1">Photo 1 (Avatar)</option>
+                </select>
+              </div>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:#555;color:#f0f0f0;">⚡ Generate All Prompts</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
@@ -2967,22 +2974,36 @@
       </div>`).join('');
   }
 
+  // --- Get current NB background source setting ---
+  function getNbBgSource() {
+    const el = document.getElementById('nbBgSource');
+    return el ? el.value : 'photo2';
+  }
+
   // --- Build Nano Banana prompt for the START frame of a segment ---
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
+    const useAvatarBg = getNbBgSource() === 'photo1';
+    const instruction = useAvatarBg
+      ? 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.'
+      : 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
     const obj = {
-      instruction: 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.',
+      instruction,
       no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing'
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, ' + (useAvatarBg ? 'changed background, changed environment, changed clothing, changed props' : 'changed background, changed props, changed clothing')
     };
     return JSON.stringify(obj, null, 2);
   }
 
   // --- Build Nano Banana prompt for the END frame of a segment ---
   function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
+    const useAvatarBg = getNbBgSource() === 'photo1';
+    const instruction = useAvatarBg
+      ? 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.'
+      : 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
     const obj = {
-      instruction: 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.',
+      instruction,
       no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing'
+      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, ' + (useAvatarBg ? 'changed background, changed environment, changed clothing, changed props' : 'changed background, changed props, changed clothing')
     };
     return JSON.stringify(obj, null, 2);
   }
