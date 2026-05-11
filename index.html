@@ -3115,8 +3115,11 @@
           actionEl.textContent = '🎬 ' + description;
         }
       } catch (e) {
-        console.error('Segment ' + i + ' analysis failed:', e);
-        skipped++;
+        btn.disabled = false;
+        btn.textContent = '❌ Error';
+        alert('Segment ' + (i+1) + ' failed:\n' + (e.message || String(e)));
+        saveSegments();
+        return;
       }
     }
 
