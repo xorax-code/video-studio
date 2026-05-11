@@ -6,21 +6,21 @@
 <title>Social Media Account Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
   /* ============================================================
      PREMIUM DARK SAAS — Full UI Overhaul
   ============================================================ */
 
   :root {
-    --bg: #0e0e11;
-    --sidebar-bg: #111114;
-    --topbar-bg: #111114;
-    --surface: #161619;
-    --surface-2: #1c1c20;
-    --surface-3: #222226;
-    --border: #25252a;
-    --border-2: #2e2e34;
+    --bg: #141416;
+    --sidebar-bg: #181819;
+    --topbar-bg: #181819;
+    --surface: #1c1c1e;
+    --surface-2: #222225;
+    --surface-3: #28282c;
+    --border: #2e2e33;
+    --border-2: #38383f;
     --accent: #7c6af7;
     --accent-2: #a598ff;
     --accent-glow: rgba(124,106,247,0.15);
@@ -95,6 +95,8 @@
     display: flex;
     flex-direction: column;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'cv01';
   }
 
   /* ===== CALENDAR ===== */
@@ -164,11 +166,12 @@
     flex-shrink: 0;
   }
   .topnav-brand-text {
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 14px;
+    font-weight: 900;
     color: var(--text-1);
-    letter-spacing: -0.4px;
+    letter-spacing: -0.7px;
     transition: color 0.22s;
+    text-transform: uppercase;
   }
 
   /* ===== NAV TABS (horizontal) ===== */
@@ -213,7 +216,7 @@
   }
   .nav-icon { font-size: 13px; line-height: 1; flex-shrink: 0; opacity: 0.7; }
   .tab.active .nav-icon { opacity: 1; }
-  .nav-label { font-size: 12px; font-weight: 500; letter-spacing: 0px; }
+  .nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1px; }
 
   /* ===== TOPNAV RIGHT ===== */
   .topnav-right {
@@ -264,10 +267,10 @@
 
   /* ===== BUTTONS ===== */
   .btn {
-    padding: 5px 12px;
+    padding: 6px 13px;
     border-radius: var(--radius-xs);
     font-size: 11px;
-    font-weight: 500;
+    font-weight: 600;
     cursor: pointer;
     border: 1px solid var(--border-2);
     background: var(--surface-2);
@@ -275,6 +278,7 @@
     transition: all 0.12s ease;
     white-space: nowrap;
     font-family: 'Inter', sans-serif;
+    letter-spacing: 0.1px;
   }
   .btn:hover { background: var(--surface-3); color: var(--text-1); }
 
@@ -354,8 +358,8 @@
     background: var(--border-2);
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
-  .stat-card .stat-num { font-size: 22px; font-weight: 800; color: var(--text-1); line-height: 1.1; letter-spacing: -0.5px; }
-  .stat-card .stat-label { font-size: 10px; color: var(--text-3); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.7px; font-weight: 600; }
+  .stat-card .stat-num { font-size: 26px; font-weight: 900; color: var(--text-1); line-height: 1; letter-spacing: -1.5px; }
+  .stat-card .stat-label { font-size: 9px; color: var(--text-3); margin-top: 4px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; }
 
   .stat-tiktok::before { background: var(--tiktok); }
   .stat-instagram::before { background: var(--instagram); }
@@ -379,10 +383,10 @@
   th {
     padding: 8px 14px;
     text-align: left;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 9px;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 1.3px;
     color: var(--text-3);
     border-bottom: 1px solid var(--border);
   }
@@ -470,9 +474,9 @@
 
   /* ===== EMPTY STATE ===== */
   .empty-state { text-align: center; padding: 60px 20px; }
-  .empty-state .empty-icon { font-size: 36px; margin-bottom: 14px; opacity: 0.15; }
-  .empty-state h3 { font-size: 14px; color: var(--text-3); margin-bottom: 6px; font-weight: 600; }
-  .empty-state p { font-size: 12px; color: var(--text-4); }
+  .empty-state .empty-icon { font-size: 36px; margin-bottom: 16px; opacity: 0.12; }
+  .empty-state h3 { font-size: 15px; color: var(--text-3); margin-bottom: 6px; font-weight: 800; letter-spacing: -0.3px; }
+  .empty-state p { font-size: 12px; color: var(--text-4); font-weight: 400; }
 
   /* ===== VIRAL SCRIPTS ===== */
   .scripts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
@@ -488,7 +492,7 @@
   }
   .script-card:hover { border-color: var(--border-2); }
   .script-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
-  .script-title { font-size: 12px; font-weight: 600; color: var(--text-1); flex: 1; padding-right: 8px; line-height: 1.4; }
+  .script-title { font-size: 12px; font-weight: 700; color: var(--text-1); flex: 1; padding-right: 8px; line-height: 1.4; letter-spacing: -0.2px; }
   .script-hook {
     background: var(--surface-2);
     border-left: 2px solid var(--accent);
@@ -498,7 +502,7 @@
     font-style: italic;
     line-height: 1.5;
   }
-  .script-hook-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: var(--text-3); margin-bottom: 3px; }
+  .script-hook-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.3px; color: var(--text-3); margin-bottom: 3px; }
   .script-body {
     font-size: 11px;
     color: var(--text-2);
@@ -568,11 +572,11 @@
     font-size: 14px;
     flex-shrink: 0;
   }
-  .comp-name { font-size: 12px; font-weight: 700; color: var(--text-1); }
+  .comp-name { font-size: 13px; font-weight: 800; color: var(--text-1); letter-spacing: -0.3px; }
   .comp-handle { font-size: 11px; color: var(--text-3); margin-top: 1px; }
   .comp-card-actions { display: flex; gap: 4px; flex-shrink: 0; }
   .comp-section { margin-bottom: 6px; }
-  .comp-section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.9px; color: var(--text-3); margin-bottom: 2px; }
+  .comp-section-label { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.3px; color: var(--text-3); margin-bottom: 3px; }
   .comp-section-value { font-size: 11px; color: var(--text-2); line-height: 1.4; }
   .comp-niche {
     display: inline-block;
@@ -585,7 +589,7 @@
     text-transform: uppercase;
     margin-bottom: 8px;
   }
-  .comp-followers { font-size: 15px; color: var(--text-1); font-weight: 800; letter-spacing: -0.5px; }
+  .comp-followers { font-size: 18px; color: var(--text-1); font-weight: 900; letter-spacing: -0.8px; }
   .comp-inspiration {
     background: var(--surface-2);
     border-radius: var(--radius-xs);
@@ -616,21 +620,22 @@
     box-shadow: 0 20px 60px rgba(0,0,0,0.5);
   }
   .modal h2 {
-    font-size: 14px;
-    font-weight: 700;
-    margin-bottom: 16px;
+    font-size: 16px;
+    font-weight: 800;
+    margin-bottom: 18px;
     color: var(--text-1);
-    letter-spacing: -0.2px;
+    letter-spacing: -0.5px;
+    line-height: 1.2;
   }
   .form-group { margin-bottom: 10px; }
   .form-group label {
     display: block;
-    font-size: 10px;
-    font-weight: 600;
+    font-size: 9px;
+    font-weight: 700;
     color: var(--text-3);
     text-transform: uppercase;
-    letter-spacing: 0.7px;
-    margin-bottom: 4px;
+    letter-spacing: 1.2px;
+    margin-bottom: 5px;
   }
   .form-group input,
   .form-group select,
@@ -663,9 +668,18 @@
   .pass-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); background: none; border: none; color: var(--text-3); cursor: pointer; font-size: 14px; }
 
   /* Section heading */
-  .section-heading { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
-  .section-heading h2 { font-size: 14px; font-weight: 700; color: var(--text-1); }
-  .section-heading p { font-size: 12px; color: var(--text-3); }
+  .section-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .section-heading h2 { font-size: 17px; font-weight: 800; color: var(--text-1); letter-spacing: -0.5px; line-height: 1.2; }
+  .section-heading p { font-size: 12px; color: var(--text-3); font-weight: 400; }
+  .section-label {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-3);
+    margin-bottom: 10px;
+    display: block;
+  }
 
   /* Avatar upload hover */
   #fAvatarPreview:hover { border-color: var(--accent) !important; }
@@ -699,13 +713,13 @@
     flex-direction: column;
   }
   .vs-panel-header {
-    padding: 8px 12px;
+    padding: 9px 14px;
     border-bottom: 1px solid var(--border);
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     color: var(--text-3);
     text-transform: uppercase;
-    letter-spacing: 0.8px;
+    letter-spacing: 1.4px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -764,8 +778,8 @@
     font-size: 9px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.9px;
-    color: var(--text-4);
+    letter-spacing: 1.4px;
+    color: var(--text-3);
     margin-bottom: 6px;
     display: flex;
     justify-content: space-between;
@@ -784,6 +798,192 @@
   .lib-item:last-child { border-bottom: none; }
   .lib-item-title { font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 3px; display: flex; justify-content: space-between; align-items: center; }
   .lib-item-meta { font-size: 10px; color: var(--text-4); }
+
+  /* ===== AUTH WALL ===== */
+  .auth-wall {
+    position: fixed; inset: 0;
+    background: var(--bg);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 400px;
+    background: var(--surface);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    padding: 32px;
+    box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+  }
+  .auth-logo {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 28px;
+    justify-content: center;
+  }
+  .auth-logo-icon {
+    width: 30px; height: 30px;
+    background: var(--accent);
+    border-radius: 7px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px;
+  }
+  .auth-logo-text {
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: -0.7px;
+    text-transform: uppercase;
+    color: var(--text-1);
+  }
+  .auth-tabs {
+    display: flex;
+    background: var(--surface-2);
+    border-radius: 7px;
+    padding: 3px;
+    margin-bottom: 24px;
+    gap: 2px;
+  }
+  .auth-tab {
+    flex: 1;
+    padding: 7px;
+    border: none;
+    background: transparent;
+    color: var(--text-3);
+    font-size: 12px;
+    font-weight: 600;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-family: 'Inter', sans-serif;
+  }
+  .auth-tab.active {
+    background: var(--surface);
+    color: var(--text-1);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+  }
+  .auth-form { display: flex; flex-direction: column; gap: 12px; }
+  .auth-form .form-group { margin-bottom: 0; }
+  .auth-form .form-group label {
+    font-size: 9px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.2px; color: var(--text-3); display: block; margin-bottom: 5px;
+  }
+  .auth-form input {
+    width: 100%;
+    padding: 9px 12px;
+    background: var(--bg);
+    border: 1px solid var(--border-2);
+    border-radius: 6px;
+    color: var(--text-1);
+    font-size: 13px;
+    outline: none;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .auth-form input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow-sm);
+  }
+  .auth-form input::placeholder { color: var(--text-3); }
+  .auth-submit {
+    width: 100%;
+    padding: 10px;
+    background: var(--accent);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: opacity 0.15s;
+    margin-top: 4px;
+    letter-spacing: 0.1px;
+  }
+  .auth-submit:hover { opacity: 0.88; }
+  .auth-error {
+    font-size: 11px;
+    color: var(--danger);
+    background: rgba(248,113,113,0.08);
+    border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 5px;
+    padding: 8px 10px;
+    display: none;
+  }
+  .auth-pass-wrap { position: relative; }
+  .auth-pass-wrap input { padding-right: 38px; }
+  .auth-pass-eye {
+    position: absolute;
+    right: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-3);
+    cursor: pointer;
+    font-size: 15px;
+    padding: 2px;
+    line-height: 1;
+    transition: color 0.12s;
+    display: flex;
+    align-items: center;
+  }
+  .auth-pass-eye:hover { color: var(--text-2); }
+
+  .auth-footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 18px;
+  }
+  .auth-footer a {
+    color: var(--accent-2);
+    text-decoration: none;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .auth-footer a:hover { text-decoration: underline; }
+  .auth-user-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 10px 3px 6px;
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    font-size: 11px;
+    color: var(--text-2);
+    font-weight: 600;
+    flex-shrink: 0;
+    transition: background 0.22s, border-color 0.22s, color 0.22s;
+  }
+  .auth-user-avatar {
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    color: #fff;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+  .auth-logout-btn {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 600;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    font-family: 'Inter', sans-serif;
+    transition: all 0.12s;
+    flex-shrink: 0;
+  }
+  .auth-logout-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.07); }
 
   @media (max-width: 900px) {
     #tab-video-studio > div { grid-template-columns: 1fr !important; }
@@ -804,10 +1004,10 @@
 
 <!-- ===== TOP NAVBAR ===== -->
 <div class="topnav">
-  <div class="topnav-brand">
+  <a class="topnav-brand" href="index.html">
     <div class="topnav-brand-icon">⚡</div>
     <span class="topnav-brand-text">SocialOS</span>
-  </div>
+  </a>
 
   <div class="tab-bar">
     <button class="tab active" onclick="switchTab('my-accounts')" title="My Accounts">
@@ -834,6 +1034,11 @@
 
   <div class="topnav-right">
     <span class="header-count" id="headerCount">0 accounts</span>
+    <div class="auth-user-chip" id="authUserChip" style="display:none;">
+      <div class="auth-user-avatar" id="authUserInitial">?</div>
+      <span id="authUserName"></span>
+    </div>
+    <button class="auth-logout-btn" onclick="doLogout()" title="Sign out">Sign out</button>
     <button onclick="toggleAppTheme()" id="themeToggleBtn" title="Toggle light/dark mode" style="width:38px;height:21px;border-radius:11px;background:var(--surface-3);border:1px solid var(--border-2);cursor:pointer;position:relative;padding:0;transition:background 0.22s,border-color 0.22s;flex-shrink:0;">
       <span id="themeToggleThumb" style="position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:var(--accent);transition:transform 0.2s,background 0.22s;display:block;"></span>
     </button>
@@ -1256,7 +1461,7 @@
                 <input type="file" id="avatarImgInput" accept="image/*" style="display:none;" onchange="onAvatarImageChange(event)">
                 <button class="btn" id="clearAvatarImgBtn" onclick="clearAvatarImage()" style="width:100%;margin-top:2px;font-size:9px;padding:1px 0;display:none;">Clear</button>
               </div>
-              <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #252525;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
+              <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
             </div>
             <div id="avatarSavedNote" style="display:none;font-size:10px;color:#5a8a5a;">✓ Saved</div>
           </div>
@@ -1267,20 +1472,21 @@
           <div class="vs-panel-header" style="padding:5px 10px;">
             <span>Original Transcript</span>
             <div style="display:flex;gap:4px;align-items:center;">
-              <span id="transcribeStatus" style="font-size:10px;color:#666;display:none;"></span>
+              <span id="transcribeStatus" style="font-size:10px;color:var(--text-3);display:none;"></span>
               <button class="btn" onclick="transcribeVideo()" id="transcribeBtn" style="padding:1px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">🎙 Transcribe</button>
-              <button class="btn" onclick="showApiKeyInput()" style="padding:1px 6px;font-size:10px;color:#888;">⚙</button>
+              <button class="btn" onclick="clearTranscript()" style="padding:1px 8px;font-size:10px;color:var(--text-3);" title="Clear transcript">✕ Clear</button>
+              <button class="btn" onclick="showApiKeyInput()" style="padding:1px 6px;font-size:10px;color:var(--text-3);">⚙</button>
             </div>
           </div>
           <div style="padding:6px 10px;">
             <div id="apiKeyRow" style="display:none;margin-bottom:5px;">
               <div style="display:flex;gap:4px;">
-                <input type="password" id="openaiKeyInput" placeholder="sk-… OpenAI key (for Transcribe)" style="flex:1;font-size:10px;padding:3px 6px;background:#0d0d0d;border:1px solid #2a3a2a;border-radius:2px;color:#c8c8c8;outline:none;" />
+                <input type="password" id="openaiKeyInput" placeholder="sk-… OpenAI key (for Transcribe)" style="flex:1;font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);outline:none;font-family:inherit;" />
                 <button class="btn" onclick="saveApiKey()" style="padding:2px 8px;font-size:10px;border-color:#3a5a3a;color:#7acc7a;">Save</button>
-                <button class="btn" onclick="hideApiKeyInput()" style="padding:2px 6px;font-size:10px;color:#888;">✕</button>
+                <button class="btn" onclick="hideApiKeyInput()" style="padding:2px 6px;font-size:10px;color:var(--text-3);">✕</button>
               </div>
             </div>
-            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments()" style="width:100%;font-size:10px;padding:5px 7px;background:#0d0d0d;border:1px solid #222;border-radius:2px;color:#c8c8c8;font-family:inherit;outline:none;resize:none;"></textarea>
+            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments()" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
           </div>
         </div>
 
@@ -1288,10 +1494,10 @@
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
           <div class="vs-panel-header" style="padding:5px 10px;">
             <span>Saved</span>
-            <span id="libCount" style="font-size:10px;color:#555;"></span>
+            <span id="libCount" style="font-size:10px;color:var(--text-3);"></span>
           </div>
           <div id="studioLibrary" style="flex:1;overflow-y:auto;padding:6px 10px;">
-            <div style="font-size:11px;color:#444;text-align:center;padding:10px 0;">No saved recreations yet</div>
+            <div style="font-size:11px;color:var(--text-3);text-align:center;padding:10px 0;">No saved recreations yet</div>
           </div>
         </div>
 
@@ -1306,17 +1512,17 @@
             <span>Reference Video</span>
             <div style="display:flex;gap:6px;align-items:center;">
               <span id="apiKeyStatus" style="font-size:10px;font-family:monospace;padding:1px 7px;border-radius:2px;display:none;"></span>
-              <span id="videoTimestamp" style="font-size:10px;color:#666;font-family:monospace;">0:00 / 0:00</span>
+              <span id="videoTimestamp" style="font-size:10px;color:var(--text-3);font-family:monospace;">0:00 / 0:00</span>
               <button class="btn" id="clearVideoBtn" onclick="clearVideo()" style="padding:2px 8px;font-size:10px;display:none;">Clear</button>
             </div>
           </div>
           <div style="padding:6px 10px 8px;">
             <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:start;">
               <div>
-                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed #333;border-radius:3px;padding:12px;text-align:center;cursor:pointer;background:#0d0d0d;">
+                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;padding:12px;text-align:center;cursor:pointer;background:var(--bg);">
                   <div id="videoUploadPlaceholder">
                     <div style="font-size:20px;opacity:0.25;margin-bottom:4px;">🎬</div>
-                    <div style="font-size:11px;color:#555;">Click to upload MP4</div>
+                    <div style="font-size:11px;color:var(--text-3);">Click to upload MP4</div>
                   </div>
                   <video id="refVideoEl" controls style="display:none;width:100%;max-height:180px;border-radius:2px;" ontimeupdate="updateTimestamp()"></video>
                 </div>
@@ -1324,10 +1530,10 @@
               </div>
               <!-- Scene buttons -->
               <div style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;">
-                <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;width:100%;">✂ Mark Scene</button>
-                <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;width:100%;">⚡ Auto 8s</button>
-                <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:#3a3a5a;color:#9999dd;width:100%;" title="Auto-detect scene cuts and object changes">🎞 Detect Cuts</button>
-                <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:#9a6060;border-color:#251e1e;width:100%;">🗑 Clear</button>
+                <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--border-2);color:var(--text-1);width:100%;">✂ Mark Scene</button>
+                <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:var(--border-2);color:var(--text-1);width:100%;">⚡ Auto 8s</button>
+                <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--accent);color:var(--accent-2);width:100%;" title="Auto-detect scene cuts and object changes">🎞 Detect Cuts</button>
+                <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:var(--danger);border-color:rgba(248,113,113,0.2);width:100%;">🗑 Clear</button>
               </div>
             </div>
           </div>
@@ -1336,7 +1542,7 @@
         <!-- Segments panel — fills remaining height -->
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
           <div class="vs-panel-header">
-            <span>Segments <span id="segmentCount" style="font-size:10px;color:#555;font-weight:400;"></span></span>
+            <span>Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
             <div style="display:flex;gap:6px;align-items:center;">
               <button class="btn" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
               <div style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
@@ -1346,13 +1552,13 @@
                   <option value="photo1">Photo 1 (Avatar)</option>
                 </select>
               </div>
-              <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:#555;color:#f0f0f0;">⚡ Generate All Prompts</button>
+              <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
           </div>
           <div id="segmentsContainer" style="flex:1;overflow-y:auto;padding:10px;">
-            <div style="text-align:center;padding:24px;font-size:11px;color:#3a3a3a;">
-              Upload a video then click <strong style="color:#666;">Auto 8s</strong> to split into segments, or <strong style="color:#666;">✂ Mark Scene</strong> while watching.
+            <div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
+              Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
             </div>
           </div>
         </div>
@@ -1367,6 +1573,71 @@
 
   </div><!-- end .page-body -->
 </div><!-- end .main-area -->
+
+<!-- ===== AUTH WALL ===== -->
+<div class="auth-wall" id="authWall">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <div class="auth-logo-icon">⚡</div>
+      <span class="auth-logo-text">SocialOS</span>
+    </div>
+
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="authTab_login" onclick="switchAuthTab('login')">Sign In</button>
+      <button class="auth-tab" id="authTab_signup" onclick="switchAuthTab('signup')">Create Account</button>
+    </div>
+
+    <div id="authError" class="auth-error"></div>
+
+    <!-- LOGIN FORM -->
+    <form id="authFormLogin" class="auth-form" onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label>Email or Username</label>
+        <input type="text" id="loginIdentifier" placeholder="you@example.com" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="auth-pass-wrap">
+          <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="auth-pass-eye" onclick="toggleAuthPass('loginPassword', this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <button type="submit" class="auth-submit">Sign In →</button>
+    </form>
+
+    <!-- SIGNUP FORM -->
+    <form id="authFormSignup" class="auth-form" style="display:none;" onsubmit="doSignup(event)">
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" id="signupUsername" placeholder="yourname" autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <div class="auth-pass-wrap">
+          <input type="password" id="signupPassword" placeholder="Min. 6 characters" autocomplete="new-password">
+          <button type="button" class="auth-pass-eye" onclick="toggleAuthPass('signupPassword', this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Confirm Password</label>
+        <div class="auth-pass-wrap">
+          <input type="password" id="signupConfirm" placeholder="••••••••" autocomplete="new-password">
+          <button type="button" class="auth-pass-eye" onclick="toggleAuthPass('signupConfirm', this)" tabindex="-1">👁</button>
+        </div>
+      </div>
+      <button type="submit" class="auth-submit">Create Account →</button>
+    </form>
+
+    <div class="auth-footer">
+      <span id="authFooterLogin">Don't have an account? <a onclick="switchAuthTab('signup')">Sign up free</a></span>
+      <span id="authFooterSignup" style="display:none;">Already have an account? <a onclick="switchAuthTab('login')">Sign in</a></span>
+    </div>
+  </div>
+</div>
 
 <!-- ===== MY ACCOUNTS MODAL ===== -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModalOnBg(event)">
@@ -1758,7 +2029,7 @@
         const sClass = 'status-' + a.status.toLowerCase();
         const tags = a.tags ? a.tags.split(',').map((t,i) => t.trim()).filter(Boolean).map((t,i) => `<span class="tag tag-c${i%6}">${escHtml(t)}</span>`).join('') : '';
         const linkBtn = a.url ? `<a href="${escHtml(a.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-left:7px;padding:2px 7px;border-radius:2px;background:#1a1a1a;color:#aaa;font-size:10px;font-weight:500;text-decoration:none;border:1px solid #333;white-space:nowrap;" title="${escHtml(a.url)}">↗ Open</a>` : '';
-        const productLine = a.notes ? `<div style="font-size:10px;color:#888;margin-top:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(a.notes)}">${escHtml(a.notes)}</div>` : '';
+        const productLine = a.notes ? `<div style="font-size:10px;color:var(--text-3);margin-top:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(a.notes)}">${escHtml(a.notes)}</div>` : '';
         const avatarHtml = a.avatar
           ? `<img src="${a.avatar}" class="acct-avatar" alt="avatar">`
           : `<div class="acct-avatar-placeholder">${emoji}</div>`;
@@ -2678,6 +2949,14 @@
     }
   }
 
+  // --- Clear transcript ---
+  function clearTranscript() {
+    const ta = document.getElementById('originalScript');
+    if (ta) { ta.value = ''; saveSegments(); }
+    const status = document.getElementById('transcribeStatus');
+    if (status) { status.textContent = ''; status.style.display = 'none'; }
+  }
+
   // --- Whisper transcription ---
   async function transcribeVideo() {
     if (!refVideoFile) {
@@ -2803,7 +3082,7 @@
       times.push({ start: t, end: Math.min(t + interval, dur) });
     }
     document.getElementById('segmentsContainer').innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
+      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
     for (let i = 0; i < times.length; i++) {
       const frameDataUrl = await captureFrame(times[i].start);
       const endFrameDataUrl = await captureFrame(Math.max(times[i].end - 0.1, times[i].start));
@@ -2870,7 +3149,7 @@
     canvas.height = thumbH;
 
     document.getElementById('segmentsContainer').innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">🎞 Scanning for scene cuts &amp; object changes… <span id="captureProgress">0%</span></div>';
+      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">🎞 Scanning for scene cuts &amp; object changes… <span id="captureProgress">0%</span></div>';
 
     const cutTimes = [0];
     let prevData = null;
@@ -2945,7 +3224,7 @@
 
     // Capture start + end frames at full resolution
     document.getElementById('segmentsContainer').innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">Capturing frames… <span id="captureProgress">0/' + segments.length + '</span></div>';
+      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + segments.length + '</span></div>';
 
     canvas.width = videoEl.videoWidth || 360;
     canvas.height = videoEl.videoHeight || 640;
@@ -3143,7 +3422,7 @@
     if (!container) return;
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
     if (segments.length === 0) {
-      container.innerHTML = '<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:#3a3a3a;">Upload a video then click <strong style="color:#666;">Auto 8s</strong> to split into segments, or <strong style="color:#666;">✂ Mark Scene</strong> while watching to mark changes manually.</div>';
+      container.innerHTML = '<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching to mark changes manually.</div>';
       const saveAllBtn = document.getElementById('saveAllBtn');
       if (saveAllBtn) saveAllBtn.style.display = 'none';
       return;
@@ -3154,39 +3433,39 @@
         <div>
           <div style="display:flex;gap:4px;">
             <div style="flex:1;">
-              <div style="font-size:8px;color:#444;text-align:center;margin-bottom:2px;">Start</div>
+              <div style="font-size:8px;color:var(--text-3);text-align:center;margin-bottom:2px;">Start</div>
               ${seg.frameDataUrl
                 ? `<img src="${seg.frameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
               ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ Start</button>` : ''}
             </div>
             <div style="flex:1;">
-              <div style="font-size:8px;color:#444;text-align:center;margin-bottom:2px;">End</div>
+              <div style="font-size:8px;color:var(--text-3);text-align:center;margin-bottom:2px;">End</div>
               ${seg.endFrameDataUrl
                 ? `<img src="${seg.endFrameDataUrl}" style="width:87px;height:49px;object-fit:cover;border-radius:2px;border:1px solid #252525;">`
                 : `<div style="width:87px;height:49px;background:#161616;border:1px solid #222;border-radius:2px;display:flex;align-items:center;justify-content:center;"><span style="font-size:18px;opacity:0.3;">🎞</span></div>`}
               ${seg.endFrameDataUrl ? `<button onclick="downloadEndFrame(${i})" style="margin-top:3px;width:100%;font-size:9px;padding:2px 0;background:#0d1a0d;border:1px solid #1e3a1e;border-radius:2px;color:#4a9a4a;cursor:pointer;text-align:center;">⬇ End</button>` : ''}
             </div>
           </div>
-          <div style="font-size:9px;color:#555;margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
-          <div style="font-size:9px;color:#444;text-align:center;">Seg ${i+1}</div>
+          <div style="font-size:9px;color:var(--text-3);margin-top:3px;text-align:center;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</div>
+          <div style="font-size:9px;color:var(--text-3);text-align:center;">Seg ${i+1}</div>
         </div>
         <div>
           <div style="display:flex;gap:4px;align-items:flex-start;">
             <div style="flex:1;">
-              ${seg.action ? `<div style="font-size:9px;color:#6a9a4a;margin-bottom:4px;line-height:1.4;background:#0a150a;border:1px solid #1a2a1a;border-radius:2px;padding:3px 6px;" id="action-seg-${i}">🎬 ${escHtml(seg.action)}</div>` : `<div style="font-size:9px;color:#333;margin-bottom:4px;" id="action-seg-${i}"></div>`}
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#555;margin-bottom:3px;">Script slice</div>
-              <textarea oninput="segments[${i}].script=this.value;clearTimeout(window._segSaveTimer);window._segSaveTimer=setTimeout(saveSegments,800)" style="width:100%;font-size:10px;padding:4px 6px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;color:#bbb;font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
+              ${seg.action ? `<div style="font-size:9px;color:var(--success);margin-bottom:4px;line-height:1.4;background:rgba(52,211,153,0.07);border:1px solid rgba(52,211,153,0.15);border-radius:2px;padding:3px 6px;" id="action-seg-${i}">🎬 ${escHtml(seg.action)}</div>` : `<div style="font-size:9px;color:var(--text-3);margin-bottom:4px;" id="action-seg-${i}"></div>`}
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--text-3);margin-bottom:3px;">Script slice</div>
+              <textarea oninput="segments[${i}].script=this.value;clearTimeout(window._segSaveTimer);window._segSaveTimer=setTimeout(saveSegments,800)" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:vertical;min-height:40px;" placeholder="Script for this segment…">${escHtml(seg.script || '')}</textarea>
             </div>
             <div style="display:flex;flex-direction:column;gap:4px;margin-top:14px;">
-              <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 prompt from current script" style="background:#0a1a2a;border:1px solid #1a3a5a;border-radius:2px;color:#4a8acc;font-size:10px;padding:3px 6px;cursor:pointer;white-space:nowrap;">↻ Veo 3</button>
-              <button onclick="removeSegment(${i})" style="background:#1a1212;border:1px solid #2a1e1e;border-radius:2px;color:#7a4040;font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;">✕</button>
+              <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3 prompt from current script" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:10px;padding:3px 6px;cursor:pointer;white-space:nowrap;">↻ Veo 3</button>
+              <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);font-size:11px;padding:3px 6px;cursor:pointer;white-space:nowrap;">✕</button>
             </div>
           </div>
           ${seg.nbPrompt ? `
           <div style="margin-top:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana — Start Frame</div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--warning);">🍌 Nano Banana — Start Frame</div>
               <button class="btn-copy" onclick="copyPromptBlock('nb-seg-${i}')">Copy</button>
             </div>
             <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-seg-${i}">${escHtml(seg.nbPrompt)}</div>
@@ -3194,7 +3473,7 @@
           ${seg.nbEndPrompt ? `
           <div style="margin-top:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#7a5a2a;">🍌 Nano Banana — End Frame</div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--warning);">🍌 Nano Banana — End Frame</div>
               <button class="btn-copy" onclick="copyPromptBlock('nb-end-seg-${i}')">Copy</button>
             </div>
             <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="nb-end-seg-${i}">${escHtml(seg.nbEndPrompt)}</div>
@@ -3202,7 +3481,7 @@
           ${seg.veoPrompt ? `
           <div style="margin-top:6px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:#2a5a7a;">🎬 Veo 3</div>
+              <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent-2);">🎬 Veo 3</div>
               <button class="btn-copy" onclick="copyPromptBlock('veo-seg-${i}')">Copy</button>
             </div>
             <div class="prompt-block-text" style="font-size:10px;max-height:70px;overflow-y:auto;" id="veo-seg-${i}">${escHtml(seg.veoPrompt)}</div>
@@ -3511,8 +3790,8 @@
       const refRow = document.createElement('div');
       refRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:8px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;';
       refRow.innerHTML = (avatarImageDataUrl ? `<img src="${avatarImageDataUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:2px;border:1px solid #2a2a2a;flex-shrink:0;">` : '') +
-        `<div style="flex:1;"><div style="font-size:10px;color:#888;font-weight:600;">Avatar photo ${avatarImageDataUrl ? '✓ uploaded' : '— not set'}</div>
-        <div style="font-size:10px;color:#555;margin-top:2px;">Product: ${escHtml(productName)}</div></div>`;
+        `<div style="flex:1;"><div style="font-size:10px;color:var(--text-2);font-weight:600;">Avatar photo ${avatarImageDataUrl ? '✓ uploaded' : '— not set'}</div>
+        <div style="font-size:10px;color:var(--text-3);margin-top:2px;">Product: ${escHtml(productName)}</div></div>`;
       output.appendChild(refRow);
     }
 
@@ -3666,7 +3945,7 @@ TECHNICAL SPECS:
     if (!container) return;
     if (count) count.textContent = studioLibrary.length + ' saved';
     if (studioLibrary.length === 0) {
-      container.innerHTML = '<div style="font-size:11px;color:#444;text-align:center;padding:16px 0;">No saved recreations yet</div>';
+      container.innerHTML = '<div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet</div>';
       return;
     }
     container.innerHTML = studioLibrary.map((item, i) => `
@@ -4443,8 +4722,6 @@ TECHNICAL SPECS:
     await loadSegments();
   }
 
-  initApp();
-
   // ===== THEME TOGGLE =====
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
@@ -4463,6 +4740,153 @@ TECHNICAL SPECS:
 
   // Load saved theme (default = dark)
   applyTheme(localStorage.getItem('socialos_theme') || 'dark');
+
+  // ===== AUTH SYSTEM =====
+  const AUTH_USERS_KEY = 'socialos_users';
+  const AUTH_SESSION_KEY = 'socialos_session';
+  const SESSION_DAYS = 30;
+
+  async function hashPassword(password) {
+    const enc = new TextEncoder().encode(password + 'socialos_salt_v1');
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+  }
+
+  function getUsers() {
+    return JSON.parse(localStorage.getItem(AUTH_USERS_KEY) || '[]');
+  }
+  function saveUsers(users) {
+    localStorage.setItem(AUTH_USERS_KEY, JSON.stringify(users));
+  }
+  function getSession() {
+    try {
+      const s = JSON.parse(localStorage.getItem(AUTH_SESSION_KEY) || 'null');
+      if (!s || !s.userId || !s.expires) return null;
+      if (Date.now() > s.expires) { localStorage.removeItem(AUTH_SESSION_KEY); return null; }
+      return s;
+    } catch { return null; }
+  }
+  function saveSession(userId, username) {
+    const session = { userId, username, expires: Date.now() + SESSION_DAYS * 86400000 };
+    localStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(session));
+  }
+  function clearSession() {
+    localStorage.removeItem(AUTH_SESSION_KEY);
+  }
+  function generateId() {
+    return Date.now().toString(36) + Math.random().toString(36).slice(2);
+  }
+
+  function toggleAuthPass(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const show = input.type === 'password';
+    input.type = show ? 'text' : 'password';
+    btn.textContent = show ? '🙈' : '👁';
+    btn.style.color = show ? 'var(--accent)' : '';
+  }
+
+  function showAuthError(msg) {
+    const el = document.getElementById('authError');
+    if (el) { el.textContent = msg; el.style.display = 'block'; }
+  }
+  function hideAuthError() {
+    const el = document.getElementById('authError');
+    if (el) el.style.display = 'none';
+  }
+
+  function switchAuthTab(tab) {
+    document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
+    document.getElementById('authTab_' + tab).classList.add('active');
+    document.getElementById('authFormLogin').style.display = tab === 'login' ? 'flex' : 'none';
+    document.getElementById('authFormSignup').style.display = tab === 'signup' ? 'flex' : 'none';
+    const fl = document.getElementById('authFooterLogin');
+    const fs = document.getElementById('authFooterSignup');
+    if (fl) fl.style.display = tab === 'login' ? '' : 'none';
+    if (fs) fs.style.display = tab === 'signup' ? '' : 'none';
+    hideAuthError();
+  }
+
+  async function doLogin(e) {
+    e && e.preventDefault();
+    hideAuthError();
+    const identifier = document.getElementById('loginIdentifier').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    if (!identifier || !password) { showAuthError('Please fill in all fields.'); return; }
+    const hash = await hashPassword(password);
+    const users = getUsers();
+    const user = users.find(u =>
+      (u.email.toLowerCase() === identifier.toLowerCase() ||
+       u.username.toLowerCase() === identifier.toLowerCase()) && u.passwordHash === hash
+    );
+    if (!user) { showAuthError('Incorrect email/username or password.'); return; }
+    saveSession(user.id, user.username);
+    onAuthSuccess(user.username);
+  }
+
+  async function doSignup(e) {
+    e && e.preventDefault();
+    hideAuthError();
+    const username = document.getElementById('signupUsername').value.trim();
+    const email = document.getElementById('signupEmail').value.trim().toLowerCase();
+    const password = document.getElementById('signupPassword').value;
+    const confirm = document.getElementById('signupConfirm').value;
+    if (!username || !email || !password) { showAuthError('Please fill in all fields.'); return; }
+    if (password.length < 6) { showAuthError('Password must be at least 6 characters.'); return; }
+    if (password !== confirm) { showAuthError('Passwords do not match.'); return; }
+    const users = getUsers();
+    if (users.find(u => u.email === email)) { showAuthError('An account with that email already exists.'); return; }
+    if (users.find(u => u.username.toLowerCase() === username.toLowerCase())) { showAuthError('That username is already taken.'); return; }
+    const hash = await hashPassword(password);
+    const newUser = { id: generateId(), username, email, passwordHash: hash, createdAt: Date.now() };
+    users.push(newUser);
+    saveUsers(users);
+    saveSession(newUser.id, newUser.username);
+    onAuthSuccess(newUser.username);
+  }
+
+  function onAuthSuccess(username) {
+    // Hide auth wall
+    const wall = document.getElementById('authWall');
+    if (wall) wall.style.display = 'none';
+    // Update topnav user chip
+    updateUserChip(username);
+    // Boot the app
+    initApp();
+  }
+
+  function updateUserChip(username) {
+    const chip = document.getElementById('authUserChip');
+    const initial = document.getElementById('authUserInitial');
+    const name = document.getElementById('authUserName');
+    if (chip) chip.style.display = 'flex';
+    if (initial) initial.textContent = (username || '?')[0].toUpperCase();
+    if (name) name.textContent = username || '';
+  }
+
+  function doLogout() {
+    clearSession();
+    // Reload to show auth wall
+    location.reload();
+  }
+
+  function checkAuthAndBoot() {
+    const session = getSession();
+    if (session) {
+      // Valid session — hide wall and boot app
+      const wall = document.getElementById('authWall');
+      if (wall) wall.style.display = 'none';
+      updateUserChip(session.username);
+      initApp();
+      return;
+    }
+    // No session — show the correct tab based on URL hash
+    const hash = location.hash;
+    if (hash === '#signup') switchAuthTab('signup');
+    // else: login tab is default
+  }
+
+  checkAuthAndBoot();
 </script>
 </body>
 </html>

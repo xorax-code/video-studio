@@ -61,6 +61,8 @@
     font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv11', 'cv01';
     transition: background 0.25s, color 0.25s;
     overflow-x: hidden;
   }
@@ -85,14 +87,15 @@
   }
 
   .nav-logo {
-    font-size: 16px;
-    font-weight: 800;
+    font-size: 15px;
+    font-weight: 900;
     color: var(--text1);
-    letter-spacing: -0.5px;
+    letter-spacing: -0.3px;
     text-decoration: none;
     display: flex;
     align-items: center;
     gap: 8px;
+    text-transform: uppercase;
   }
 
   .nav-logo-dot {
@@ -186,11 +189,11 @@
     align-items: center;
     gap: 18px;
     padding: 0 28px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 11px;
+    font-weight: 700;
     color: var(--ticker-text);
     text-transform: uppercase;
-    letter-spacing: 0.6px;
+    letter-spacing: 1.4px;
     transition: color 0.25s;
   }
 
@@ -291,10 +294,10 @@
   }
 
   .section-label {
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 1px;
+    letter-spacing: 2px;
     color: var(--accent);
     margin-bottom: 14px;
   }
@@ -683,7 +686,8 @@
     <a href="#features" class="nav-link">Features</a>
     <a href="#workflow" class="nav-link">How it works</a>
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
-    <a href="app.html" class="nav-cta">Open App →</a>
+    <a href="app.html#login" class="nav-link" style="font-weight:600;">Sign In</a>
+    <a href="app.html#signup" class="nav-cta">Get Started →</a>
   </div>
 </nav>
 
@@ -936,7 +940,7 @@
   <h2>Your accounts.<br>Your calendar.<br>Your content.</h2>
   <p>Everything runs in your browser — no server, no subscription, no data sent anywhere. Just open and go.</p>
   <div class="hero-actions">
-    <a href="app.html" class="btn-primary">Open SocialOS →</a>
+    <a href="app.html#signup" class="btn-primary">Get Started Free →</a>
   </div>
 </div>
 
