@@ -1555,12 +1555,13 @@
   }
 
   function updateStats() {
-    document.getElementById('statTotal').textContent = accounts.length;
-    document.getElementById('statTikTok').textContent = accounts.filter(a => a.platform === 'TikTok').length;
-    document.getElementById('statInstagram').textContent = accounts.filter(a => a.platform === 'Instagram').length;
-    document.getElementById('statFacebook').textContent = accounts.filter(a => a.platform === 'Facebook').length;
-    document.getElementById('statYouTube').textContent = accounts.filter(a => a.platform === 'YouTube').length;
-    document.getElementById('headerCount').textContent = accounts.length + ' account' + (accounts.length !== 1 ? 's' : '');
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('statTotal',     accounts.length);
+    set('statTikTok',    accounts.filter(a => a.platform === 'TikTok').length);
+    set('statInstagram', accounts.filter(a => a.platform === 'Instagram').length);
+    set('statFacebook',  accounts.filter(a => a.platform === 'Facebook').length);
+    set('statYouTube',   accounts.filter(a => a.platform === 'YouTube').length);
+    set('headerCount',   accounts.length + ' account' + (accounts.length !== 1 ? 's' : ''));
   }
 
   function openModal(id = null) {
