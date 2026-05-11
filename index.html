@@ -3046,7 +3046,6 @@
 
   // --- Analyze all segment videos with GPT-4o Vision ---
   async function analyzeAllFrames() {
-    console.log('[Analyze] segments:', segments.length, '| key:', getApiKey() ? 'SET' : 'EMPTY', '| seg0 frame:', segments[0]?.frameDataUrl ? 'HAS IMAGE' : 'NO IMAGE');
     if (segments.length === 0) { alert('No segments yet — run Auto 8s first.'); return; }
     const apiKey = getApiKey();
     if (!apiKey) { alert('Add your OpenAI API key in ⚙ Settings first.'); return; }
@@ -3089,15 +3088,15 @@
           ...imageContent
         ];
 
-        console.log('[Analyze] seg', i, '| frames:', frameList.length, '| calling API…');
+
         const res = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
-        console.log('[Analyze] seg', i, '| status:', res.status);
+
         const data = await res.json();
-        console.log('[Analyze] seg', i, '| response:', JSON.stringify(data).substring(0, 200));
+
         if (data.error) {
           btn.disabled = false;
           btn.textContent = '❌ ' + (data.error.code || data.error.type || 'Error');
@@ -3105,8 +3104,25 @@
           saveSegments();
           return;
         }
-        const description = data.choices?.[0]?.message?.content?.trim() || '';
-        if (!description) { skipped++; continue; }
+        let description = data.choices?.[0]?.message?.content?.trim() || '';
+
+        // If OpenAI refused the image, retry with only the start frame (no end frame)
+        const isRefusal = !description || /i('m| am) sorry|can't assist|cannot assist|I apologize|unable to (help|assist)/i.test(description);
+        if (isRefusal && (frameList.length > 1 || endFrame)) {
+          const retryContent = [
+            { type: 'text', text: `Describe only the physical movements and body actions happening in this image using the pronoun "${pronoun}". Short action sentences only. No appearance, background, or environment details.` },
+            { type: 'image_url', image_url: { url: frameList[0], detail: 'low' } }
+          ];
+          const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'gpt-4o', max_tokens: 200, messages: [{ role: 'user', content: retryContent }] })
+          });
+          const retryData = await retryRes.json();
+          description = retryData.choices?.[0]?.message?.content?.trim() || '';
+        }
+
+        if (!description || /i('m| am) sorry|can't assist|cannot assist/i.test(description)) { skipped++; continue; }
         seg.action = description;
 
         // Update the action display in the card immediately
