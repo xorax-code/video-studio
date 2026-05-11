@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="dark">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -45,6 +45,41 @@
     --radius: 8px;
     --radius-sm: 5px;
     --radius-xs: 3px;
+  }
+
+  /* ===== LIGHT MODE ===== */
+  :root { color-scheme: dark; }
+  html[data-theme="light"] { color-scheme: light; }
+
+  html[data-theme="light"] {
+    --bg: #f9f9f7;
+    --sidebar-bg: #ffffff;
+    --topbar-bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f4f4f1;
+    --surface-3: #eeeeeb;
+    --border: #e4e4e8;
+    --border-2: #d0d0d8;
+    --accent: #7c6af7;
+    --accent-2: #6355e0;
+    --accent-glow: rgba(124,106,247,0.1);
+    --accent-glow-sm: rgba(124,106,247,0.05);
+    --text-1: #0e0e11;
+    --text-2: #4a4a5a;
+    --text-3: #8a8a9a;
+    --text-4: #c0c0cc;
+    --success: #059669;
+    --warning: #d97706;
+    --danger: #dc2626;
+  }
+
+  /* Smooth transitions for theme switching */
+  body, .sidebar, .sidebar-brand, .main-area, .topbar, .page-body,
+  .surface, .table-wrap, .stat-card, .modal, .search-box input,
+  .filter-select, .btn, .tab, .vs-panel, .modal-overlay,
+  .plan-card, .daily-item, .cal-day {
+    transition: background 0.22s ease, color 0.22s ease,
+                border-color 0.22s ease, box-shadow 0.22s ease;
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -839,6 +874,13 @@
       <span class="nav-label">Video Studio</span>
     </button>
   </nav>
+  <!-- Theme toggle at bottom of sidebar -->
+  <div style="padding:10px 10px;border-top:1px solid var(--border);flex-shrink:0;display:flex;align-items:center;justify-content:space-between;transition:border-color 0.22s;">
+    <span style="font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);transition:color 0.22s;" id="themeLabel">Dark</span>
+    <button onclick="toggleAppTheme()" id="themeToggleBtn" title="Toggle light/dark mode" style="width:38px;height:21px;border-radius:11px;background:var(--surface-3);border:1px solid var(--border-2);cursor:pointer;position:relative;padding:0;transition:background 0.22s,border-color 0.22s;flex-shrink:0;">
+      <span id="themeToggleThumb" style="position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:var(--accent);transition:transform 0.2s,background 0.22s;display:block;"></span>
+    </button>
+  </div>
 </div>
 
 <!-- ===== MAIN AREA ===== -->
@@ -1054,19 +1096,12 @@
   <!-- ===== CALENDAR TAB ===== -->
   <div id="tab-calendar" class="tab-content">
 
-    <!-- View toggle -->
-    <div style="display:flex;gap:6px;margin-bottom:18px;">
-      <button id="calViewCalBtn" class="btn btn-primary" onclick="switchCalView('calendar')" style="padding:4px 14px;font-size:11px;">📅 Calendar</button>
-      <button id="calViewPlanBtn" class="btn btn-secondary" onclick="switchCalView('plans')" style="padding:4px 14px;font-size:11px;">📋 Schedules</button>
-      <button id="calViewDailyBtn" class="btn btn-secondary" onclick="switchCalView('daily')" style="padding:4px 14px;font-size:11px;">✏️ Daily Plan</button>
-    </div>
-
-    <!-- CALENDAR VIEW -->
-    <div id="calViewCalendar" style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;">
+    <!-- ── TOP: Month Calendar + sidebar ── -->
+    <div style="display:grid;grid-template-columns:1fr 220px;gap:20px;align-items:start;margin-bottom:24px;">
 
       <!-- Calendar grid -->
       <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
           <button class="btn btn-secondary" onclick="calPrevMonth()" style="padding:4px 12px;">‹</button>
           <span id="calMonthLabel" style="font-size:15px;font-weight:600;color:var(--text-1);"></span>
           <button class="btn btn-secondary" onclick="calNextMonth()" style="padding:4px 12px;">›</button>
@@ -1078,51 +1113,55 @@
         <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
       </div>
 
-      <!-- Right sidebar: account totals + log list -->
-      <div style="display:flex;flex-direction:column;gap:12px;">
-        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">This Month</div>
+      <!-- Right sidebar -->
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">This Month</div>
         <div id="calAccountTotals" style="display:flex;flex-direction:column;gap:4px;"></div>
-        <div style="margin-top:8px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">Recent Videos</div>
-        <div id="calRecentList" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;"></div>
+        <div style="margin-top:6px;font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">Recent Videos</div>
+        <div id="calRecentList" style="display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;"></div>
       </div>
-
     </div>
 
-    <!-- PLANS VIEW -->
-    <div id="calViewPlans" style="display:none;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
-        <span style="font-size:13px;font-weight:600;color:var(--text-1);">Post Schedules</span>
-        <button class="btn btn-primary" onclick="openPlanModal()" style="padding:4px 14px;font-size:11px;">+ New Plan</button>
+    <!-- ── BOTTOM: Daily Plan + Schedules side by side ── -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+
+      <!-- Daily Plan -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <span style="font-size:12px;font-weight:700;color:var(--text-1);text-transform:uppercase;letter-spacing:0.4px;">✏️ Daily Plan</span>
+          <button class="btn btn-primary" onclick="openDailyItemModal()" style="padding:3px 12px;font-size:11px;">+ Add Post</button>
+        </div>
+        <!-- Date nav -->
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+          <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:3px 9px;">‹</button>
+          <span id="dailyDateLabel" style="font-size:12px;font-weight:600;color:var(--text-1);flex:1;text-align:center;"></span>
+          <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:3px 9px;">›</button>
+          <input type="date" id="dailyDatePicker" onchange="jumpToDate(this.value)" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;cursor:pointer;color-scheme:dark;">
+          <button class="btn btn-secondary" onclick="goToToday()" style="padding:3px 8px;font-size:10px;">Today</button>
+          <button class="btn btn-secondary" onclick="goToTomorrow()" style="padding:3px 8px;font-size:10px;">Tomorrow</button>
+        </div>
+        <div id="dailyScheduledBanner" style="display:none;margin-bottom:10px;padding:7px 10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:var(--radius-sm);font-size:11px;color:var(--accent);"></div>
+        <div id="dailyList" style="display:flex;flex-direction:column;gap:8px;"></div>
+        <div id="dailyEmpty" style="display:none;text-align:center;padding:30px 0;font-size:11px;color:var(--text-3);">
+          Nothing planned yet. Click <strong style="color:var(--text-2);">+ Add Post</strong> above.
+        </div>
       </div>
-      <div id="plansList" style="display:flex;flex-direction:column;gap:10px;"></div>
-      <div id="plansEmpty" style="display:none;text-align:center;padding:40px 0;font-size:12px;color:var(--text-3);">
-        No plans yet — click <strong style="color:var(--text-2);">+ New Plan</strong> to set up a posting schedule.
+
+      <!-- Schedules -->
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <span style="font-size:12px;font-weight:700;color:var(--text-1);text-transform:uppercase;letter-spacing:0.4px;">📋 Schedules</span>
+          <button class="btn btn-primary" onclick="openPlanModal()" style="padding:3px 12px;font-size:11px;">+ New Plan</button>
+        </div>
+        <div id="plansList" style="display:flex;flex-direction:column;gap:10px;"></div>
+        <div id="plansEmpty" style="display:none;text-align:center;padding:30px 0;font-size:11px;color:var(--text-3);">
+          No schedules yet — click <strong style="color:var(--text-2);">+ New Plan</strong> above.
+        </div>
       </div>
+
     </div>
 
   </div>
-
-    <!-- DAILY PLAN VIEW -->
-    <div id="calViewDaily" style="display:none;">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
-        <div style="display:flex;align-items:center;gap:10px;">
-          <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:4px 10px;">‹</button>
-          <span id="dailyDateLabel" style="font-size:14px;font-weight:600;color:var(--text-1);min-width:160px;text-align:center;"></span>
-          <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:4px 10px;">›</button>
-          <button class="btn btn-secondary" onclick="goToToday()" style="padding:4px 10px;font-size:10px;">Today</button>
-          <button class="btn btn-secondary" onclick="goToTomorrow()" style="padding:4px 10px;font-size:10px;">Tomorrow</button>
-        </div>
-        <button class="btn btn-primary" onclick="openDailyItemModal()" style="padding:4px 14px;font-size:11px;">+ Add Post</button>
-      </div>
-
-      <!-- Auto-populated from schedules -->
-      <div id="dailyScheduledBanner" style="display:none;margin-bottom:12px;padding:8px 12px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:var(--radius-sm);font-size:11px;color:var(--accent);"></div>
-
-      <div id="dailyList" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <div id="dailyEmpty" style="display:none;text-align:center;padding:40px 0;font-size:12px;color:var(--text-3);">
-        Nothing planned for this day yet. Click <strong style="color:var(--text-2);">+ Add Post</strong> to plan a post, or set up a Schedule to auto-populate.
-      </div>
-    </div>
 
   <!-- Daily item modal -->
   <div id="dailyItemModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)closeDailyItemModal()">
@@ -1204,20 +1243,33 @@
 
   <!-- Calendar log modal -->
   <div id="calModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)closeCalModal()">
-    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:20px;width:340px;max-width:90vw;">
-      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:14px;" id="calModalTitle">Log Video</div>
-      <div class="form-group" style="margin-bottom:10px;">
-        <label class="form-label">Account</label>
-        <select id="calAccountSel" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;"></select>
+    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:20px;width:520px;max-width:95vw;max-height:88vh;overflow-y:auto;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <span style="font-size:13px;font-weight:600;color:var(--text-1);" id="calModalTitle">Day View</span>
+        <button onclick="closeCalModal()" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:16px;padding:0;line-height:1;">✕</button>
       </div>
-      <div class="form-group" style="margin-bottom:10px;">
-        <label class="form-label">Notes (optional)</label>
-        <input type="text" id="calNotes" placeholder="e.g. Product review, trending audio…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+
+      <!-- Planned posts for this day -->
+      <div id="calPlannedSection">
+        <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">📋 Planned Posts</div>
+        <div id="calPlannedList" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
       </div>
-      <div id="calDayEntries" style="margin-bottom:12px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closeCalModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveCalEntry()">+ Log Video</button>
+
+      <!-- Logged (done) videos for this day -->
+      <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">✅ Logged Videos</div>
+      <div id="calDayEntries" style="margin-bottom:12px;display:flex;flex-direction:column;gap:4px;max-height:140px;overflow-y:auto;"></div>
+
+      <!-- Log a new video -->
+      <div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px;">
+        <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">+ Log a Video</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <select id="calAccountSel" style="padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;"></select>
+          <input type="text" id="calNotes" placeholder="Notes (optional)" style="padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button class="btn btn-secondary" onclick="closeCalModal()">Close</button>
+          <button class="btn btn-primary" onclick="saveCalEntry()">+ Log Video</button>
+        </div>
       </div>
     </div>
   </div>
@@ -1438,6 +1490,16 @@
       <label>Notes</label>
       <textarea id="fNotes" placeholder="Add any notes about this account..."></textarea>
     </div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        Brand Color <span style="font-size:10px;color:var(--text-3);">Used for calendar dots &amp; charts</span>
+      </label>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input type="color" id="fBrandColor" value="#7c6af7" oninput="updateBrandColorPreview()" style="width:40px;height:32px;padding:2px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);cursor:pointer;">
+        <button type="button" onclick="resetBrandColor()" style="padding:4px 10px;font-size:11px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-3);cursor:pointer;font-family:inherit;">↺ Use platform default</button>
+        <span id="fBrandColorPreview" style="width:18px;height:18px;border-radius:50%;border:2px solid var(--border-2);display:inline-block;"></span>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveAccount()">Save Account</button>
@@ -1649,7 +1711,7 @@
     } else {
       if (tab === 'competitors') renderCompetitors();
       if (tab === 'viral-scripts') renderScripts();
-      if (tab === 'calendar') renderCalendar();
+      if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
     }
   }
 
@@ -1703,6 +1765,18 @@
   function clearAccountAvatar() {
     currentAccountAvatar = null;
     setAccountAvatarPreview(null);
+  }
+
+  function updateBrandColorPreview() {
+    const color = document.getElementById('fBrandColor').value;
+    document.getElementById('fBrandColorPreview').style.background = color;
+    document.getElementById('fBrandColorPreview').style.borderColor = color;
+  }
+
+  function resetBrandColor() {
+    const platform = document.getElementById('fPlatform').value;
+    document.getElementById('fBrandColor').value = platformColors[platform] || '#7c6af7';
+    updateBrandColorPreview();
   }
 
   function saveAccounts() {
@@ -1785,6 +1859,9 @@
       document.getElementById('fNotes').value = a.notes || '';
       currentAccountAvatar = a.avatar || null;
       setAccountAvatarPreview(currentAccountAvatar);
+      const defaultColor = platformColors[a.platform] || '#7c6af7';
+      document.getElementById('fBrandColor').value = a.brandColor || defaultColor;
+      updateBrandColorPreview();
     } else {
       ['fPlatform','fStatus','fUsername','fEmail','fPassword','fUrl','fTags','fNotes'].forEach(id => {
         const el = document.getElementById(id);
@@ -1793,6 +1870,8 @@
       });
       currentAccountAvatar = null;
       setAccountAvatarPreview(null);
+      document.getElementById('fBrandColor').value = '#7c6af7';
+      updateBrandColorPreview();
     }
     document.getElementById('modalOverlay').style.display = 'flex';
     setTimeout(() => document.getElementById('fUsername').focus(), 100);
@@ -1804,8 +1883,11 @@
   function saveAccount() {
     const username = document.getElementById('fUsername').value.trim();
     if (!username) { alert('Username is required.'); return; }
+    const platform = document.getElementById('fPlatform').value;
+    const pickedColor = document.getElementById('fBrandColor').value;
+    const defaultColor = platformColors[platform] || '#7c6af7';
     const data = {
-      platform: document.getElementById('fPlatform').value,
+      platform,
       status: document.getElementById('fStatus').value,
       username,
       email: document.getElementById('fEmail').value.trim(),
@@ -1814,6 +1896,8 @@
       tags: document.getElementById('fTags').value.trim(),
       notes: document.getElementById('fNotes').value.trim(),
       avatar: currentAccountAvatar || null,
+      // Only store brandColor if it differs from the platform default
+      brandColor: pickedColor !== defaultColor ? pickedColor : null,
     };
     if (editingId) {
       const idx = accounts.findIndex(a => a.id === editingId);
@@ -3850,6 +3934,8 @@ TECHNICAL SPECS:
   let calSelectedDate = null;
 
   const platformColors = { TikTok:'#ff2d55', Instagram:'#e1306c', Facebook:'#1877f2', YouTube:'#ff0000', Other:'#7c6af7' };
+  // Returns the account's custom brand color, or falls back to platform default
+  function acctColor(acct) { return acct?.brandColor || platformColors[acct?.platform] || 'var(--accent)'; }
 
   function saveVideoLog() { DB.set('sm_video_log', JSON.stringify(videoLog)); }
 
@@ -3903,7 +3989,7 @@ TECHNICAL SPECS:
       cell.onclick = () => openCalModal(key);
       const dots = entries.map(e => {
         const acct = accounts.find(a => a.id === e.accountId);
-        const color = platformColors[acct?.platform] || 'var(--accent)';
+        const color = acctColor(acct);
         if (e._type === 'planned') {
           // Hollow ring dot for planned-but-not-done entries
           return `<div class="cal-dot" style="background:transparent;border:2px solid ${color};box-sizing:border-box;" title="📋 Planned: ${escHtml(acct?.username||'?')}"></div>`;
@@ -3946,7 +4032,7 @@ TECHNICAL SPECS:
     } else {
       totalsEl.innerHTML = sorted.map(([id, count]) => {
         const acct = accounts.find(a => a.id === id);
-        const color = platformColors[acct?.platform] || 'var(--accent)';
+        const color = acctColor(acct);
         const pct = Math.round((count / maxVal) * 100);
         return `<div class="cal-acct-row" style="flex-direction:column;align-items:stretch;">
           <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -3966,7 +4052,7 @@ TECHNICAL SPECS:
     } else {
       recentEl.innerHTML = recent.map(e => {
         const acct = accounts.find(a => a.id === e.accountId);
-        const color = platformColors[acct?.platform] || 'var(--accent)';
+        const color = acctColor(acct);
         return `<div class="cal-entry-row">
           <div style="display:flex;align-items:center;gap:6px;min-width:0;">
             <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
@@ -3996,23 +4082,60 @@ TECHNICAL SPECS:
 
   function openCalModal(dateKey) {
     calSelectedDate = dateKey;
-    const [y, m, d] = dateKey.split('-');
-    document.getElementById('calModalTitle').textContent = `Log Video — ${m}/${d}/${y}`;
+    const dt = new Date(dateKey + 'T12:00:00');
+    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const days   = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    document.getElementById('calModalTitle').textContent = `${days[dt.getDay()]}, ${months[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
     // Populate account picker
     const sel = document.getElementById('calAccountSel');
     sel.innerHTML = accounts.map(a => `<option value="${a.id}">${platformEmojis[a.platform]||'🌐'} ${escHtml(a.username)} (${a.platform})</option>`).join('');
     document.getElementById('calNotes').value = '';
     renderCalDayEntries(dateKey);
+    renderCalPlanned(dateKey);
     document.getElementById('calModalOverlay').style.display = 'flex';
+  }
+
+  function renderCalPlanned(dateKey) {
+    const items = dailyItems.filter(i => i.date === dateKey);
+    const el = document.getElementById('calPlannedList');
+    const section = document.getElementById('calPlannedSection');
+    if (items.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+    section.style.display = 'block';
+    el.innerHTML = items.map(item => {
+      const acct  = accounts.find(a => a.id === item.accountId);
+      const color = acctColor(acct);
+      const emoji = platformEmojis[acct?.platform] || '🌐';
+      const statusDot = item.done
+        ? `<span style="font-size:10px;color:var(--success);font-weight:600;">✓ Done</span>`
+        : `<span style="font-size:10px;color:var(--warning);font-weight:600;">Pending</span>`;
+      return `<div style="background:var(--surface-2);border:1px solid var(--border);border-left:3px solid ${color};border-radius:var(--radius-sm);padding:10px 12px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;gap:7px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+            <span style="font-size:12px;font-weight:600;color:var(--text-1);">${emoji} ${escHtml(acct?.username||'Unknown')}</span>
+            <span style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}</span>
+          </div>
+          ${statusDot}
+        </div>
+        ${item.inspoUrl ? `<div style="margin-bottom:6px;"><a href="${escHtml(item.inspoUrl)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:100%;" title="${escHtml(item.inspoUrl)}">🔗 ${escHtml(item.inspoUrl)}</a></div>` : ''}
+        ${item.script ? `<div style="padding:8px 10px;background:var(--surface-3);border-radius:var(--radius-xs);font-size:11px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;border-left:2px solid ${color};max-height:180px;overflow-y:auto;">${escHtml(item.script)}</div>` : '<div style="font-size:11px;color:var(--text-4);font-style:italic;">No script written yet.</div>'}
+      </div>`;
+    }).join('');
   }
 
   function renderCalDayEntries(dateKey) {
     const entries = videoLog.filter(e => e.date === dateKey);
     const el = document.getElementById('calDayEntries');
-    if (entries.length === 0) { el.innerHTML = ''; return; }
+    if (entries.length === 0) {
+      el.innerHTML = '<div style="font-size:11px;color:var(--text-4);padding:4px 0;">No videos logged for this day yet.</div>';
+      return;
+    }
     el.innerHTML = entries.map(e => {
       const acct = accounts.find(a => a.id === e.accountId);
-      const color = platformColors[acct?.platform] || 'var(--accent)';
+      const color = acctColor(acct);
       return `<div class="cal-entry-row">
         <div style="display:flex;align-items:center;gap:6px;">
           <div style="width:6px;height:6px;border-radius:50%;background:${color};"></div>
@@ -4120,7 +4243,7 @@ TECHNICAL SPECS:
     empty.style.display = 'none';
     list.innerHTML = postPlans.map(plan => {
       const acct  = accounts.find(a => a.id === plan.accountId);
-      const color = platformColors[acct?.platform] || 'var(--accent)';
+      const color = acctColor(acct);
       const dayStr = plan.days.sort((a,b)=>a-b).map(d => dayNames[d]).join(', ');
       const totalPerWeek = plan.days.length * plan.videosPerDay;
       return `<div class="plan-card">
@@ -4187,34 +4310,18 @@ TECHNICAL SPECS:
     return `${label} · ${months[dt.getMonth()]} ${dt.getDate()}, ${dt.getFullYear()}`;
   }
 
-  function switchCalView(view) {
-    // Hide all views, reset all buttons
-    document.getElementById('calViewCalendar').style.display = 'none';
-    document.getElementById('calViewPlans').style.display    = 'none';
-    document.getElementById('calViewDaily').style.display    = 'none';
-    document.getElementById('calViewCalBtn').className   = 'btn btn-secondary';
-    document.getElementById('calViewPlanBtn').className  = 'btn btn-secondary';
-    document.getElementById('calViewDailyBtn').className = 'btn btn-secondary';
-    // Show selected view
-    if (view === 'calendar') {
-      document.getElementById('calViewCalendar').style.display = 'grid';
-      document.getElementById('calViewCalBtn').className = 'btn btn-primary';
-      renderCalendar();
-    } else if (view === 'plans') {
-      document.getElementById('calViewPlans').style.display = 'block';
-      document.getElementById('calViewPlanBtn').className = 'btn btn-primary';
-      renderPlans();
-    } else if (view === 'daily') {
-      document.getElementById('calViewDaily').style.display = 'block';
-      document.getElementById('calViewDailyBtn').className = 'btn btn-primary';
-      renderDailyPlan();
-    }
+  function switchCalView() {
+    // All sections are always visible — just refresh all three
+    renderCalendar();
+    renderPlans();
+    renderDailyPlan();
   }
 
   function goToToday()    { dailyDate = new Date().toISOString().slice(0,10); renderDailyPlan(); }
   function goToTomorrow() { dailyDate = new Date(Date.now()+86400000).toISOString().slice(0,10); renderDailyPlan(); }
   function dailyPrevDay() { const d = new Date(dailyDate+'T12:00:00'); d.setDate(d.getDate()-1); dailyDate = d.toISOString().slice(0,10); renderDailyPlan(); }
   function dailyNextDay() { const d = new Date(dailyDate+'T12:00:00'); d.setDate(d.getDate()+1); dailyDate = d.toISOString().slice(0,10); renderDailyPlan(); }
+  function jumpToDate(val) { if (val) { dailyDate = val; renderDailyPlan(); } }
 
   function getScheduledForDate(dateStr) {
     const dt = new Date(dateStr + 'T12:00:00');
@@ -4247,6 +4354,8 @@ TECHNICAL SPECS:
 
   function renderDailyPlan() {
     document.getElementById('dailyDateLabel').textContent = fmtDailyDate(dailyDate);
+    const picker = document.getElementById('dailyDatePicker');
+    if (picker) picker.value = dailyDate;
     autoPopulateDay(dailyDate);
 
     const items = dailyItems.filter(i => i.date === dailyDate);
@@ -4274,7 +4383,7 @@ TECHNICAL SPECS:
       </div>
     </div>` + items.map(item => {
       const acct  = accounts.find(a => a.id === item.accountId);
-      const color = platformColors[acct?.platform] || 'var(--accent)';
+      const color = acctColor(acct);
       const fromPlan = item.fromPlanId ? postPlans.find(p => p.id === item.fromPlanId) : null;
       return `<div class="daily-item${item.done?' done':''}" id="daily-item-${item.id}">
         <div class="daily-item-header">
@@ -4354,16 +4463,14 @@ TECHNICAL SPECS:
     closeDailyItemModal();
     renderDailyPlan();
     // Keep calendar in sync so the dot appears immediately
-    const calEl = document.getElementById('calViewCalendar');
-    if (calEl && calEl.style.display !== 'none') renderCalendar();
+    renderCalendar();
   }
 
   function deleteDailyItem(id) {
     dailyItems = dailyItems.filter(i => i.id !== id);
     saveDailyItems();
     renderDailyPlan();
-    const calEl = document.getElementById('calViewCalendar');
-    if (calEl && calEl.style.display !== 'none') renderCalendar();
+    renderCalendar();
   }
 
   // ===== ASYNC INIT =====
@@ -4392,6 +4499,25 @@ TECHNICAL SPECS:
   }
 
   initApp();
+
+  // ===== THEME TOGGLE =====
+  function applyTheme(theme) {
+    document.documentElement.setAttribute('data-theme', theme);
+    localStorage.setItem('socialos_theme', theme);
+    const isLight = theme === 'light';
+    const label = document.getElementById('themeLabel');
+    const thumb = document.getElementById('themeToggleThumb');
+    if (label) label.textContent = isLight ? 'Light' : 'Dark';
+    if (thumb) thumb.style.transform = isLight ? 'translateX(17px)' : 'translateX(0)';
+  }
+
+  function toggleAppTheme() {
+    const current = document.documentElement.getAttribute('data-theme') || 'dark';
+    applyTheme(current === 'dark' ? 'light' : 'dark');
+  }
+
+  // Load saved theme (default = dark)
+  applyTheme(localStorage.getItem('socialos_theme') || 'dark');
 </script>
 </body>
 </html>
