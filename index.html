@@ -679,11 +679,11 @@
                 <input type="file" id="refVideoInput" accept="video/mp4,video/*" style="display:none;" onchange="onVideoFileChange(event)">
               </div>
               <!-- Scene buttons -->
-              <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
-                <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">✂ Mark Scene</button>
-                <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">⚡ Auto 8s</button>
-                <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:#3a3a5a;color:#9999dd;" title="Automatically detect scene cuts by comparing frames">🎞 Detect Cuts</button>
-                <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:#9a6060;border-color:#251e1e;">🗑 Clear</button>
+              <div style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;">
+                <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;width:100%;">✂ Mark Scene</button>
+                <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;width:100%;">⚡ Auto 8s</button>
+                <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:#3a3a5a;color:#9999dd;width:100%;" title="Auto-detect scene cuts and object changes">🎞 Detect Cuts</button>
+                <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:#9a6060;border-color:#251e1e;width:100%;">🗑 Clear</button>
               </div>
             </div>
           </div>
@@ -1722,6 +1722,8 @@
   let refVideoObjectUrl = null;
   let refVideoFile = null; // Raw File object for Whisper transcription
   let segments = []; // [{startTime, endTime, frameDataUrl, script, action, nbPrompt, veoPrompt}]
+  // Timestamped transcript chunks from Whisper verbose_json — [{start, end, text}]
+  let whisperSegments = JSON.parse(localStorage.getItem('sm_whisper_segments') || '[]');
 
   function saveStudioLibrary() { localStorage.setItem('sm_studio_library', JSON.stringify(studioLibrary)); }
 
@@ -1846,6 +1848,9 @@
   function clearVideo() {
     if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
     refVideoFile = null;
+    // Clear timestamps — they belong to the old video
+    whisperSegments = [];
+    localStorage.removeItem('sm_whisper_segments');
     const videoEl = document.getElementById('refVideoEl');
     videoEl.src = '';
     videoEl.style.display = 'none';
@@ -1932,7 +1937,8 @@
       const formData = new FormData();
       formData.append('file', refVideoFile, refVideoFile.name);
       formData.append('model', 'whisper-1');
-      formData.append('response_format', 'text');
+      formData.append('response_format', 'verbose_json');
+      formData.append('timestamp_granularities[]', 'segment');
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + apiKey },
@@ -1950,9 +1956,17 @@
         }
         return;
       }
-      const transcript = await response.text();
-      document.getElementById('originalScript').value = transcript.trim();
-      status.textContent = '✓ Transcribed!';
+      const data = await response.json();
+      // Store timestamped segments for accurate script-to-frame matching
+      whisperSegments = (data.segments || []).map(s => ({
+        start: s.start,
+        end: s.end,
+        text: s.text.trim()
+      }));
+      try { localStorage.setItem('sm_whisper_segments', JSON.stringify(whisperSegments)); } catch(e) {}
+      document.getElementById('originalScript').value = (data.text || '').trim();
+      const tsNote = whisperSegments.length > 0 ? ` (${whisperSegments.length} timed chunks)` : '';
+      status.textContent = '✓ Transcribed' + tsNote;
       status.style.color = '#5a8a5a';
       setTimeout(() => status.style.display = 'none', 3000);
     } catch (err) {
@@ -2032,10 +2046,11 @@
     renderSegments();
   }
 
-  // --- Compute mean absolute pixel difference between two ImageData arrays ---
+  // --- Frame diff helpers ---
+
+  // Global mean absolute diff (sampled every 4th pixel for speed)
   function computeFrameDiff(data1, data2) {
     let total = 0;
-    // Sample every 4th RGBA pixel (skip alpha channel) for speed
     for (let i = 0; i < data1.length; i += 16) {
       total += Math.abs(data1[i]   - data2[i]);
       total += Math.abs(data1[i+1] - data2[i+1]);
@@ -2044,7 +2059,24 @@
     return total / (data1.length / 16 * 3);
   }
 
+  // Regional diff — compare only a rect within the frame (pixel coords in thumb space)
+  function computeRegionDiff(data1, data2, w, x0, y0, x1, y1) {
+    let total = 0, count = 0;
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const idx = (y * w + x) * 4;
+        total += Math.abs(data1[idx]   - data2[idx]);
+        total += Math.abs(data1[idx+1] - data2[idx+1]);
+        total += Math.abs(data1[idx+2] - data2[idx+2]);
+        count++;
+      }
+    }
+    return count > 0 ? total / (count * 3) : 0;
+  }
+
   // --- Automatically detect scene cuts by frame differencing ---
+  // Detects: hard scene cuts (global diff) AND sudden object/item changes
+  // (spike relative to recent rolling average, weighted toward hand/object region)
   async function autoSegmentBySceneChange() {
     const videoEl = document.getElementById('refVideoEl');
     if (!videoEl || !videoEl.src || !videoEl.duration) {
@@ -2056,10 +2088,12 @@
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Scanning…'; }
 
     const dur = videoEl.duration;
-    const sampleInterval = 0.25;   // sample every 0.25s
-    const diffThreshold = 30;      // pixel diff 0-255 — lower = more sensitive
-    const minSegmentLen = 1.5;     // ignore cuts closer than 1.5s together
-    const thumbW = 80, thumbH = 45; // downscale for speed
+    const sampleInterval = 0.2;     // sample every 0.2s for better accuracy
+    const hardCutThreshold = 25;    // absolute diff for obvious scene cuts
+    const spikeMultiplier = 2.8;    // sudden change = diff > rolling_avg × this
+    const minSpikeAbs = 10;         // ignore spikes below this (noise floor)
+    const minSegmentLen = 1.2;      // ignore cuts closer than 1.2s apart
+    const thumbW = 80, thumbH = 45;
 
     const canvas = document.getElementById('frameCanvas');
     const ctx = canvas.getContext('2d');
@@ -2067,18 +2101,19 @@
     canvas.height = thumbH;
 
     document.getElementById('segmentsContainer').innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">🎞 Scanning for scene cuts… <span id="captureProgress">0%</span></div>';
+      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">🎞 Scanning for scene cuts &amp; object changes… <span id="captureProgress">0%</span></div>';
 
-    const cutTimes = [0]; // always include video start
+    const cutTimes = [0];
     let prevData = null;
+    const recentDiffs = []; // rolling window of composite diff scores
+    const rollingWindow = 8; // ~1.6s of history
     const totalFrames = Math.ceil(dur / sampleInterval);
 
     for (let k = 0; k <= totalFrames; k++) {
       const t = Math.min(k * sampleInterval, dur);
 
-      // Seek and capture
       await new Promise(resolve => {
-        if (Math.abs(videoEl.currentTime - t) < 0.05) { resolve(); return; }
+        if (Math.abs(videoEl.currentTime - t) < 0.04) { resolve(); return; }
         videoEl.currentTime = t;
         videoEl.onseeked = () => { videoEl.onseeked = null; resolve(); };
       });
@@ -2087,29 +2122,51 @@
       const currData = ctx.getImageData(0, 0, thumbW, thumbH).data;
 
       if (prevData) {
-        const diff = computeFrameDiff(prevData, currData);
-        if (diff > diffThreshold) {
+        // 1. Global diff — catches hard cuts
+        const globalDiff = computeFrameDiff(prevData, currData);
+
+        // 2. Center-lower region diff — where hands/objects appear in talking-head shots
+        //    (bottom 60% of frame, center 70% horizontally)
+        const cx0 = Math.floor(thumbW * 0.15), cx1 = Math.floor(thumbW * 0.85);
+        const cy0 = Math.floor(thumbH * 0.35), cy1 = thumbH;
+        const centerDiff = computeRegionDiff(prevData, currData, thumbW, cx0, cy0, cx1, cy1);
+
+        // 3. Composite score: weight center region 1.5× vs global
+        const score = (globalDiff + centerDiff * 1.5) / 2.5;
+
+        // 4. Rolling average of recent scores (tracks "normal" motion level)
+        recentDiffs.push(score);
+        if (recentDiffs.length > rollingWindow) recentDiffs.shift();
+        const rollingAvg = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
+
+        // 5. Cut if hard cut OR sudden spike above the rolling baseline
+        const isHardCut = score > hardCutThreshold;
+        const isSuddenChange = score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
+
+        if (isHardCut || isSuddenChange) {
           const lastCut = cutTimes[cutTimes.length - 1];
           if (t - lastCut >= minSegmentLen) {
             cutTimes.push(t);
+            // Reset rolling avg after a cut so next segment starts fresh
+            recentDiffs.length = 0;
           }
         }
       }
 
-      prevData = new Uint8ClampedArray(currData); // clone before next frame
+      prevData = new Uint8ClampedArray(currData);
 
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = Math.min(100, Math.round((k / totalFrames) * 100)) + '%';
     }
 
-    cutTimes.push(dur); // always include video end
+    cutTimes.push(dur);
 
-    // Build segment list from cut points
+    // Build segments
     segments = [];
     for (let i = 0; i < cutTimes.length - 1; i++) {
       const start = cutTimes[i];
       const end = cutTimes[i + 1];
-      if (end - start < 0.5) continue; // skip micro-segments
+      if (end - start < 0.5) continue;
       segments.push({
         startTime: start, endTime: end,
         frameDataUrl: null, endFrameDataUrl: null,
@@ -2137,7 +2194,7 @@
     if (btn) {
       btn.disabled = false;
       btn.textContent = '✅ ' + segments.length + ' cuts found';
-      setTimeout(() => { btn.textContent = '🎞 Detect Cuts'; }, 3500);
+      setTimeout(() => { btn.textContent = '🎞 Detect Cuts'; }, 4000);
     }
   }
 
@@ -2247,7 +2304,53 @@
     return result;
   }
 
+  // Assign each video segment the exact Whisper words spoken during its time window.
+  // Each Whisper chunk is assigned to EXACTLY ONE segment (the one containing its midpoint)
+  // so text never appears doubled across adjacent segments.
+  function distributeScriptFromTimestamps() {
+    if (!whisperSegments || whisperSegments.length === 0) return false;
+
+    // Build one text bucket per segment
+    const buckets = segments.map(() => []);
+
+    whisperSegments.forEach(ws => {
+      const mid = (ws.start + ws.end) / 2;
+
+      // Find the segment whose range contains the chunk midpoint
+      let target = -1;
+      for (let i = 0; i < segments.length; i++) {
+        if (mid >= segments[i].startTime && mid < segments[i].endTime) {
+          target = i;
+          break;
+        }
+      }
+
+      // If midpoint falls outside all segments, assign to the nearest one
+      if (target === -1) {
+        let minDist = Infinity;
+        segments.forEach((seg, i) => {
+          const dist = Math.min(Math.abs(mid - seg.startTime), Math.abs(mid - seg.endTime));
+          if (dist < minDist) { minDist = dist; target = i; }
+        });
+      }
+
+      if (target >= 0) buckets[target].push(ws.text);
+    });
+
+    let anyAssigned = false;
+    buckets.forEach((texts, i) => {
+      if (texts.length > 0) {
+        segments[i].script = texts.join(' ').trim();
+        anyAssigned = true;
+      }
+    });
+    return anyAssigned;
+  }
+
   function distributeScript() {
+    // Prefer timestamp-based distribution (accurate to the spoken word)
+    if (distributeScriptFromTimestamps()) return;
+    // Fall back to proportional split if no timestamps available
     const originalEl = document.getElementById('originalScript');
     const script = originalEl ? originalEl.value.trim() : '';
     const slices = splitScriptIntoSegments(script, segments);
