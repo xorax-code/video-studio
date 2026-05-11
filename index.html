@@ -61,6 +61,22 @@
     -webkit-font-smoothing: antialiased;
   }
 
+  /* ===== CALENDAR ===== */
+  .cal-dow { text-align:center; font-size:10px; font-weight:600; color:var(--text-3); padding:4px 0; text-transform:uppercase; letter-spacing:0.4px; }
+  .cal-day { min-height:72px; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-sm); padding:5px; cursor:pointer; transition:border-color 0.12s; position:relative; }
+  .cal-day:hover { border-color:var(--accent); }
+  .cal-day.today { border-color:var(--accent); background:var(--accent-glow-sm); }
+  .cal-day.other-month { opacity:0.3; cursor:default; }
+  .cal-day.other-month:hover { border-color:var(--border); }
+  .cal-day-num { font-size:11px; font-weight:600; color:var(--text-2); margin-bottom:4px; }
+  .cal-day.today .cal-day-num { color:var(--accent); }
+  .cal-dots { display:flex; flex-wrap:wrap; gap:2px; }
+  .cal-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
+  .cal-count-badge { position:absolute; top:4px; right:5px; font-size:9px; font-weight:700; color:var(--text-3); }
+  .cal-entry-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:5px 8px; background:var(--surface-2); border-radius:var(--radius-xs); font-size:11px; }
+  .cal-acct-row { display:flex; align-items:center; justify-content:space-between; padding:5px 8px; background:var(--surface-2); border-radius:var(--radius-xs); }
+  .cal-acct-bar { height:3px; border-radius:2px; margin-top:3px; }
+
   /* ===== SCROLLBAR ===== */
   ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -799,6 +815,10 @@
       <span class="nav-icon">🔥</span>
       <span class="nav-label">Viral Scripts</span>
     </button>
+    <button class="tab" onclick="switchTab('calendar')" title="Video Calendar">
+      <span class="nav-icon">📅</span>
+      <span class="nav-label">Calendar</span>
+    </button>
     <div class="sidebar-section-label">Create</div>
     <button class="tab" onclick="switchTab('video-studio')" title="Video Studio">
       <span class="nav-icon">🎬</span>
@@ -1017,6 +1037,54 @@
 
   </div>
 
+  <!-- ===== CALENDAR TAB ===== -->
+  <div id="tab-calendar" class="tab-content">
+    <div style="display:grid;grid-template-columns:1fr 260px;gap:20px;align-items:start;">
+
+      <!-- Calendar grid -->
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <button class="btn btn-secondary" onclick="calPrevMonth()" style="padding:4px 12px;">‹</button>
+          <span id="calMonthLabel" style="font-size:15px;font-weight:600;color:var(--text-1);"></span>
+          <button class="btn btn-secondary" onclick="calNextMonth()" style="padding:4px 12px;">›</button>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin-bottom:4px;">
+          <div class="cal-dow">Sun</div><div class="cal-dow">Mon</div><div class="cal-dow">Tue</div>
+          <div class="cal-dow">Wed</div><div class="cal-dow">Thu</div><div class="cal-dow">Fri</div><div class="cal-dow">Sat</div>
+        </div>
+        <div id="calGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;"></div>
+      </div>
+
+      <!-- Right sidebar: account totals + log list -->
+      <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">This Month</div>
+        <div id="calAccountTotals" style="display:flex;flex-direction:column;gap:4px;"></div>
+        <div style="margin-top:8px;font-size:11px;font-weight:600;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;">Recent Videos</div>
+        <div id="calRecentList" style="display:flex;flex-direction:column;gap:4px;max-height:320px;overflow-y:auto;"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Calendar log modal -->
+  <div id="calModalOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center;" onclick="if(event.target===this)closeCalModal()">
+    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:20px;width:340px;max-width:90vw;">
+      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:14px;" id="calModalTitle">Log Video</div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label class="form-label">Account</label>
+        <select id="calAccountSel" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;"></select>
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label class="form-label">Notes (optional)</label>
+        <input type="text" id="calNotes" placeholder="e.g. Product review, trending audio…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
+      </div>
+      <div id="calDayEntries" style="margin-bottom:12px;display:flex;flex-direction:column;gap:4px;max-height:160px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeCalModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveCalEntry()">+ Log Video</button>
+      </div>
+    </div>
+  </div>
 
 </div><!-- end .container -->
 
@@ -1403,7 +1471,7 @@
     async function migrateLocalStorage() {
       const keys = ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library',
                     'sm_whisper_segments','sm_segments','sm_avatar_img','sm_avatar_image',
-                    'sm_openai_key','sm_avatar_profile'];
+                    'sm_openai_key','sm_avatar_profile','sm_video_log'];
       for (const key of keys) {
         const val = localStorage.getItem(key);
         if (val !== null) {
@@ -1428,6 +1496,7 @@
     'my-accounts': 'My Accounts',
     'competitors': 'Competitors',
     'viral-scripts': 'Viral Scripts',
+    'calendar': 'Video Calendar',
     'video-studio': 'Video Studio'
   };
 
@@ -1444,6 +1513,7 @@
     } else {
       if (tab === 'competitors') renderCompetitors();
       if (tab === 'viral-scripts') renderScripts();
+      if (tab === 'calendar') renderCalendar();
     }
   }
 
@@ -3637,6 +3707,197 @@ TECHNICAL SPECS:
     loadProjects();
   }
 
+  // ===== VIDEO CALENDAR =====
+  let videoLog = [];
+  let calYear  = new Date().getFullYear();
+  let calMonth = new Date().getMonth(); // 0-indexed
+  let calSelectedDate = null;
+
+  const platformColors = { TikTok:'#ff2d55', Instagram:'#e1306c', Facebook:'#1877f2', YouTube:'#ff0000', Other:'#7c6af7' };
+
+  function saveVideoLog() { DB.set('sm_video_log', JSON.stringify(videoLog)); }
+
+  function calKey(y, m, d) { return `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+
+  function renderCalendar() {
+    const now = new Date();
+    const firstDay = new Date(calYear, calMonth, 1).getDay();
+    const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    document.getElementById('calMonthLabel').textContent = `${monthNames[calMonth]} ${calYear}`;
+
+    // Build day → entries map for this month
+    const dayMap = {};
+    videoLog.forEach(e => {
+      const d = e.date;
+      const [ey, em] = d.split('-').map(Number);
+      if (ey === calYear && em === calMonth+1) {
+        if (!dayMap[d]) dayMap[d] = [];
+        dayMap[d].push(e);
+      }
+    });
+
+    const grid = document.getElementById('calGrid');
+    grid.innerHTML = '';
+
+    // Pad start
+    for (let i = 0; i < firstDay; i++) {
+      const prev = new Date(calYear, calMonth, -firstDay + i + 1);
+      const cell = document.createElement('div');
+      cell.className = 'cal-day other-month';
+      cell.innerHTML = `<div class="cal-day-num">${prev.getDate()}</div>`;
+      grid.appendChild(cell);
+    }
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = calKey(calYear, calMonth, d);
+      const entries = dayMap[key] || [];
+      const isToday = now.getFullYear()===calYear && now.getMonth()===calMonth && now.getDate()===d;
+      const cell = document.createElement('div');
+      cell.className = 'cal-day' + (isToday ? ' today' : '');
+      cell.onclick = () => openCalModal(key);
+      const dots = entries.map(e => {
+        const acct = accounts.find(a => a.id === e.accountId);
+        const color = platformColors[acct?.platform] || 'var(--accent)';
+        return `<div class="cal-dot" style="background:${color};" title="${escHtml(acct?.username||'?')}"></div>`;
+      }).join('');
+      cell.innerHTML = `<div class="cal-day-num">${d}</div><div class="cal-dots">${dots}</div>${entries.length>3?`<div class="cal-count-badge">${entries.length}</div>`:''}`;
+      grid.appendChild(cell);
+    }
+
+    // Pad end
+    const totalCells = firstDay + daysInMonth;
+    const remainder = totalCells % 7;
+    if (remainder > 0) {
+      for (let i = 1; i <= 7 - remainder; i++) {
+        const cell = document.createElement('div');
+        cell.className = 'cal-day other-month';
+        cell.innerHTML = `<div class="cal-day-num">${i}</div>`;
+        grid.appendChild(cell);
+      }
+    }
+
+    renderCalSidebar();
+  }
+
+  function renderCalSidebar() {
+    // Account totals for current month
+    const totals = {};
+    videoLog.forEach(e => {
+      const [ey, em] = e.date.split('-').map(Number);
+      if (ey === calYear && em === calMonth+1) {
+        totals[e.accountId] = (totals[e.accountId] || 0) + 1;
+      }
+    });
+    const sorted = Object.entries(totals).sort((a,b) => b[1]-a[1]);
+    const maxVal = sorted[0]?.[1] || 1;
+    const totalsEl = document.getElementById('calAccountTotals');
+    if (sorted.length === 0) {
+      totalsEl.innerHTML = '<div style="font-size:11px;color:var(--text-4);padding:4px 0;">No videos logged this month.</div>';
+    } else {
+      totalsEl.innerHTML = sorted.map(([id, count]) => {
+        const acct = accounts.find(a => a.id === id);
+        const color = platformColors[acct?.platform] || 'var(--accent)';
+        const pct = Math.round((count / maxVal) * 100);
+        return `<div class="cal-acct-row" style="flex-direction:column;align-items:stretch;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:11px;color:var(--text-2);">${escHtml(acct?.username || 'Unknown')}</span>
+            <span style="font-size:11px;font-weight:700;color:var(--text-1);">${count}</span>
+          </div>
+          <div class="cal-acct-bar" style="background:var(--surface-3);"><div style="width:${pct}%;height:100%;background:${color};border-radius:2px;"></div></div>
+        </div>`;
+      }).join('');
+    }
+
+    // Recent 10 entries across all time
+    const recent = [...videoLog].sort((a,b) => b.date.localeCompare(a.date)).slice(0,10);
+    const recentEl = document.getElementById('calRecentList');
+    if (recent.length === 0) {
+      recentEl.innerHTML = '<div style="font-size:11px;color:var(--text-4);">No videos logged yet.</div>';
+    } else {
+      recentEl.innerHTML = recent.map(e => {
+        const acct = accounts.find(a => a.id === e.accountId);
+        const color = platformColors[acct?.platform] || 'var(--accent)';
+        return `<div class="cal-entry-row">
+          <div style="display:flex;align-items:center;gap:6px;min-width:0;">
+            <div style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;"></div>
+            <span style="color:var(--text-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escHtml(acct?.username||'?')}</span>
+            ${e.notes ? `<span style="color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">· ${escHtml(e.notes)}</span>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <span style="font-size:10px;color:var(--text-3);">${e.date}</span>
+            <button onclick="deleteCalEntry('${e.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-4);font-size:11px;padding:0;" title="Remove">✕</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  function calPrevMonth() {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+    renderCalendar();
+  }
+
+  function calNextMonth() {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+    renderCalendar();
+  }
+
+  function openCalModal(dateKey) {
+    calSelectedDate = dateKey;
+    const [y, m, d] = dateKey.split('-');
+    document.getElementById('calModalTitle').textContent = `Log Video — ${m}/${d}/${y}`;
+    // Populate account picker
+    const sel = document.getElementById('calAccountSel');
+    sel.innerHTML = accounts.map(a => `<option value="${a.id}">${platformEmojis[a.platform]||'🌐'} ${escHtml(a.username)} (${a.platform})</option>`).join('');
+    document.getElementById('calNotes').value = '';
+    renderCalDayEntries(dateKey);
+    document.getElementById('calModalOverlay').style.display = 'flex';
+  }
+
+  function renderCalDayEntries(dateKey) {
+    const entries = videoLog.filter(e => e.date === dateKey);
+    const el = document.getElementById('calDayEntries');
+    if (entries.length === 0) { el.innerHTML = ''; return; }
+    el.innerHTML = entries.map(e => {
+      const acct = accounts.find(a => a.id === e.accountId);
+      const color = platformColors[acct?.platform] || 'var(--accent)';
+      return `<div class="cal-entry-row">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:${color};"></div>
+          <span style="color:var(--text-2);">${escHtml(acct?.username||'?')}</span>
+          ${e.notes ? `<span style="color:var(--text-3);">· ${escHtml(e.notes)}</span>` : ''}
+        </div>
+        <button onclick="deleteCalEntry('${e.id}',true)" style="background:none;border:none;cursor:pointer;color:var(--text-4);font-size:11px;padding:0;">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  function saveCalEntry() {
+    const accountId = document.getElementById('calAccountSel').value;
+    if (!accountId) { alert('Select an account.'); return; }
+    const notes = document.getElementById('calNotes').value.trim();
+    videoLog.push({ id: Date.now().toString(), accountId, date: calSelectedDate, notes });
+    saveVideoLog();
+    document.getElementById('calNotes').value = '';
+    renderCalDayEntries(calSelectedDate);
+    renderCalendar();
+  }
+
+  function deleteCalEntry(id, fromModal) {
+    videoLog = videoLog.filter(e => e.id !== id);
+    saveVideoLog();
+    if (fromModal && calSelectedDate) renderCalDayEntries(calSelectedDate);
+    renderCalendar();
+  }
+
+  function closeCalModal() {
+    document.getElementById('calModalOverlay').style.display = 'none';
+    calSelectedDate = null;
+  }
+
   // ===== ASYNC INIT =====
   async function initApp() {
     // Migrate any old localStorage data first
@@ -3647,6 +3908,7 @@ TECHNICAL SPECS:
     competitors   = JSON.parse(await DB.get('sm_competitors')    || '[]');
     viralScripts  = JSON.parse(await DB.get('sm_viral_scripts')  || '[]');
     studioLibrary = JSON.parse(await DB.get('sm_studio_library') || '[]');
+    videoLog      = JSON.parse(await DB.get('sm_video_log')      || '[]');
     _cachedApiKey = await DB.get('sm_openai_key') || '';
 
     // Seed demo data if empty
