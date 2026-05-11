@@ -622,6 +622,29 @@
   .section-heading h2 { font-size: 14px; font-weight: 700; color: var(--text-1); }
   .section-heading p { font-size: 12px; color: var(--text-3); }
 
+  /* Avatar upload hover */
+  #fAvatarPreview:hover { border-color: var(--accent) !important; }
+  #fAvatarPreview:hover #fAvatarHover { opacity: 1 !important; }
+
+  /* Account avatar in table */
+  .acct-avatar {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--border-2);
+    flex-shrink: 0;
+  }
+  .acct-avatar-placeholder {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    background: var(--surface-3);
+    border: 2px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px;
+    flex-shrink: 0;
+    color: var(--text-3);
+  }
+
   /* ===== VIDEO STUDIO PANELS ===== */
   .vs-panel {
     background: var(--surface);
@@ -1117,6 +1140,26 @@
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModalOnBg(event)">
   <div class="modal">
     <h2 id="modalTitle">Add Account</h2>
+
+    <!-- Avatar Upload -->
+    <div class="form-group" style="display:flex;align-items:center;gap:16px;margin-bottom:16px;">
+      <div style="flex-shrink:0;position:relative;">
+        <div id="fAvatarPreview" onclick="document.getElementById('fAvatarInput').click()" style="width:72px;height:72px;border-radius:50%;background:var(--surface-3);border:2px dashed var(--border-2);cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:border-color 0.2s;position:relative;" title="Click to upload avatar">
+          <span id="fAvatarPlaceholder" style="font-size:28px;opacity:0.35;pointer-events:none;">👤</span>
+          <img id="fAvatarImg" src="" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:50%;">
+          <div style="position:absolute;inset:0;background:rgba(0,0,0,0.45);border-radius:50%;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;" id="fAvatarHover">
+            <span style="font-size:18px;">📷</span>
+          </div>
+        </div>
+        <input type="file" id="fAvatarInput" accept="image/*" style="display:none;" onchange="onAccountAvatarChange(event)">
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px;font-weight:600;color:var(--text-2);margin-bottom:4px;">Profile Picture</div>
+        <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Click the circle to upload an avatar for this account. JPG, PNG, or WebP.</div>
+        <button type="button" id="fAvatarClearBtn" onclick="clearAccountAvatar()" style="display:none;margin-top:6px;padding:3px 10px;font-size:11px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25);color:var(--danger);border-radius:4px;cursor:pointer;font-family:inherit;">✕ Remove</button>
+      </div>
+    </div>
+
     <div class="form-row">
       <div class="form-group">
         <label>Platform</label>
@@ -1316,6 +1359,41 @@
   // ===== MY ACCOUNTS =====
   let accounts = JSON.parse(localStorage.getItem('sm_accounts') || '[]');
   let editingId = null;
+  let currentAccountAvatar = null; // base64 data URL
+
+  function onAccountAvatarChange(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(ev) {
+      currentAccountAvatar = ev.target.result;
+      setAccountAvatarPreview(currentAccountAvatar);
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  }
+
+  function setAccountAvatarPreview(src) {
+    const img = document.getElementById('fAvatarImg');
+    const placeholder = document.getElementById('fAvatarPlaceholder');
+    const clearBtn = document.getElementById('fAvatarClearBtn');
+    if (src) {
+      img.src = src;
+      img.style.display = 'block';
+      placeholder.style.display = 'none';
+      clearBtn.style.display = 'inline-block';
+    } else {
+      img.src = '';
+      img.style.display = 'none';
+      placeholder.style.display = 'block';
+      clearBtn.style.display = 'none';
+    }
+  }
+
+  function clearAccountAvatar() {
+    currentAccountAvatar = null;
+    setAccountAvatarPreview(null);
+  }
 
   function saveAccounts() { localStorage.setItem('sm_accounts', JSON.stringify(accounts)); }
 
@@ -1350,11 +1428,14 @@
         const tags = a.tags ? a.tags.split(',').map(t => t.trim()).filter(Boolean).map(t => `<span class="tag">${escHtml(t)}</span>`).join('') : '';
         const linkBtn = a.url ? `<a href="${escHtml(a.url)}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;margin-left:7px;padding:2px 7px;border-radius:2px;background:#1a1a1a;color:#aaa;font-size:10px;font-weight:500;text-decoration:none;border:1px solid #333;white-space:nowrap;" title="${escHtml(a.url)}">↗ Open</a>` : '';
         const productLine = a.notes ? `<div style="font-size:10px;color:#888;margin-top:2px;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${escHtml(a.notes)}">${escHtml(a.notes)}</div>` : '';
+        const avatarHtml = a.avatar
+          ? `<img src="${a.avatar}" class="acct-avatar" alt="avatar">`
+          : `<div class="acct-avatar-placeholder">${emoji}</div>`;
         return `<tr>
           <td><span class="platform-badge ${pClass}">${emoji} ${a.platform}</span></td>
-          <td><div style="display:flex;align-items:center;flex-wrap:wrap;gap:2px;"><strong style="font-size:12px;">${escHtml(a.username)}</strong>${linkBtn}</div>${productLine}</td>
-          <td style="color:#d8d8d8">${escHtml(a.email)}</td>
-          <td><div class="tags">${tags || '<span style="color:#777">—</span>'}</div></td>
+          <td><div style="display:flex;align-items:center;gap:10px;">${avatarHtml}<div><div style="display:flex;align-items:center;flex-wrap:wrap;gap:4px;"><strong style="font-size:12px;color:var(--text-1);">${escHtml(a.username)}</strong>${linkBtn}</div>${productLine}</div></div></td>
+          <td style="color:var(--text-2)">${escHtml(a.email)}</td>
+          <td><div class="tags">${tags || '<span style="color:var(--text-4)">—</span>'}</div></td>
           <td><span class="status-badge ${sClass}">${a.status}</span></td>
           <td><div class="actions">
             <button class="action-btn action-edit" onclick="editAccount('${a.id}')">Edit</button>
@@ -1389,12 +1470,16 @@
       document.getElementById('fUrl').value = a.url || '';
       document.getElementById('fTags').value = a.tags || '';
       document.getElementById('fNotes').value = a.notes || '';
+      currentAccountAvatar = a.avatar || null;
+      setAccountAvatarPreview(currentAccountAvatar);
     } else {
       ['fPlatform','fStatus','fUsername','fEmail','fPassword','fUrl','fTags','fNotes'].forEach(id => {
         const el = document.getElementById(id);
         if (el.tagName === 'SELECT') el.selectedIndex = 0;
         else el.value = '';
       });
+      currentAccountAvatar = null;
+      setAccountAvatarPreview(null);
     }
     document.getElementById('modalOverlay').style.display = 'flex';
     setTimeout(() => document.getElementById('fUsername').focus(), 100);
@@ -1415,6 +1500,7 @@
       url: document.getElementById('fUrl').value.trim(),
       tags: document.getElementById('fTags').value.trim(),
       notes: document.getElementById('fNotes').value.trim(),
+      avatar: currentAccountAvatar || null,
     };
     if (editingId) {
       const idx = accounts.findIndex(a => a.id === editingId);
