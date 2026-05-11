@@ -1530,6 +1530,7 @@
               </div>
             </div>
             <div id="bgActiveLabel" style="display:none;font-size:9px;color:var(--text-3);line-height:1.4;">Background set — will be included in NB Pro &amp; Veo 3 prompts.</div>
+            <div id="bgAvatarBadge" style="display:none;font-size:9px;color:var(--accent-2);background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;padding:3px 7px;margin-top:2px;">🖼 Using avatar photo as background — no Photo 2 needed in NB Pro.</div>
           </div>
         </div>
 
@@ -1555,6 +1556,14 @@
             <span>📥 Video Downloader</span>
           </div>
           <div style="padding:7px 10px;display:flex;flex-direction:column;gap:6px;">
+            <!-- URL input -->
+            <div style="display:flex;gap:5px;">
+              <input id="dlUrlInput" type="url" placeholder="Paste video URL here…"
+                style="flex:1;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;"
+                onkeydown="if(event.key==='Enter'){event.preventDefault();}"
+              >
+              <button onclick="clearDlUrl()" title="Clear URL" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-3);font-size:11px;cursor:pointer;">✕</button>
+            </div>
             <div style="display:flex;flex-direction:column;gap:5px;">
 
               <!-- SnapSave -->
@@ -1700,6 +1709,7 @@
                 </select>
               </div>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
+              <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe Scenes</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
           </div>
@@ -2767,6 +2777,7 @@
           <div class="script-card-footer">
             ${tags}
             <button class="btn-copy" onclick="copyScript('${s.id}', this)" title="Copy script to clipboard">📋 Copy</button>
+            <button onclick="sendScriptToProducer('${s.id}')" title="Load into Video Producer" style="padding:2px 9px;font-size:10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);cursor:pointer;font-weight:600;">→ Producer</button>
             ${urlBtn}
           </div>
         </div>`;
@@ -2783,6 +2794,29 @@
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
     });
+  }
+
+  function sendScriptToProducer(id) {
+    const s = viralScripts.find(x => x.id === id);
+    if (!s) return;
+    // Build the full script text (hook first if present, then body)
+    const text = [s.hook ? s.hook : '', s.script].filter(Boolean).join('\n\n');
+    // Switch to the Video Producer tab
+    switchTab('video-studio-producer');
+    // Wait for the studio to initialise, then load the script
+    setTimeout(() => {
+      const ta = document.getElementById('originalScript');
+      if (ta) {
+        ta.value = text;
+        // Persist it inside the active project
+        saveSegments();
+      }
+      // Flash the script box so the user sees it was loaded
+      if (ta) {
+        ta.style.borderColor = 'var(--accent)';
+        setTimeout(() => ta.style.borderColor = '', 1200);
+      }
+    }, 300);
   }
 
   function openScriptModal(id = null) {
@@ -3129,6 +3163,8 @@
     _applyBgToUI(null);
     document.getElementById('bgImgInput').value = '';
     DB.remove('sm_bg_image');
+    const badge = document.getElementById('bgAvatarBadge');
+    if (badge) badge.style.display = 'none';
   }
 
   function useAvatarAsBg() {
@@ -3140,6 +3176,8 @@
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl);
     DB.set('sm_bg_from_avatar', '1');
+    const badge = document.getElementById('bgAvatarBadge');
+    if (badge) badge.style.display = 'block';
     const note = document.getElementById('bgSavedNote');
     if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
   }
@@ -3148,6 +3186,8 @@
     Promise.all([DB.get('sm_bg_image'), DB.get('sm_bg_from_avatar')]).then(([saved, fromAvatar]) => {
       bgFromAvatar = fromAvatar === '1';
       if (saved) _applyBgToUI(saved);
+      const badge = document.getElementById('bgAvatarBadge');
+      if (badge) badge.style.display = bgFromAvatar && saved ? 'block' : 'none';
     });
   }
 
@@ -3231,7 +3271,14 @@
 
   function openDownloader(service) {
     const svc = DL_SERVICES[service];
-    if (svc) window.open(svc.home, '_blank');
+    if (!svc) return;
+    const url = (document.getElementById('dlUrlInput')?.value || '').trim();
+    window.open(url ? svc.withUrl(url) : svc.home, '_blank');
+  }
+
+  function clearDlUrl() {
+    const inp = document.getElementById('dlUrlInput');
+    if (inp) inp.value = '';
   }
 
   // --- Clear transcript ---
@@ -3860,7 +3907,10 @@
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
               <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt</span>
-              <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <button onclick="copyAndOpenVeo3(${i})" title="Copy prompt and open Google Flow" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">▶ Open in Veo 3</button>
+                <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
+              </div>
             </div>
             <textarea id="veo-seg-${i}"
               oninput="segments[${i}].veoPrompt=this.value;autoGrow(this);debounceSave()"
@@ -4281,6 +4331,93 @@
     if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
   }
 
+  // --- AI Describe Scenes (Producer mode) ---
+  // Sends each scene's script to GPT and fills in Action + Visual Description fields
+  async function aiDescribeScenes() {
+    if (segments.length === 0) { alert('Split your script into scenes first.'); return; }
+    const apiKey = getApiKey();
+    if (!apiKey) { alert('No API key set. Click the logo 5× to open the admin panel.'); return; }
+
+    const btn = document.getElementById('aiDescribeBtn');
+    if (btn) { btn.textContent = '⏳ Describing…'; btn.disabled = true; }
+
+    const avatarDesc = document.getElementById('avatarDesc')?.value.trim() || 'a person';
+    const setting = document.getElementById('studioSetting')?.value.trim() || '';
+
+    const sceneList = segments.map((s, i) =>
+      `Scene ${i + 1} (~${Math.round(s.endTime - s.startTime)}s): "${s.script.trim()}"`
+    ).join('\n');
+
+    const systemPrompt = `You are a video director writing shot descriptions for a social media video.
+For each scene you will output two fields:
+- action: what the on-screen presenter is doing — body language, gestures, posture, energy, facial expression. Max 1 sentence. Third person. No camera direction.
+- visual: a visual scene description for an AI image generator — location, environment, lighting, mood, background details, any props. Max 1 sentence.
+
+Respond with a JSON array, one object per scene, in order. No extra text.
+Example: [{"action":"Person leans in slightly, pointing at camera with conviction.","visual":"Modern home office, warm sunset light through window, minimal desk."}]`;
+
+    const userPrompt = `Creator/presenter: ${avatarDesc}.${setting ? ' Setting preference: ' + setting + '.' : ''}
+
+Here are the scenes:\n${sceneList}
+
+Return a JSON array of ${segments.length} objects, each with "action" and "visual" keys.`;
+
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+          temperature: 0.7,
+          response_format: { type: 'json_object' },
+        })
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || 'API error ' + res.status); }
+      const data = await res.json();
+      let parsed;
+      try {
+        const raw = data.choices[0].message.content;
+        // GPT wraps the array in a key sometimes — find the array
+        const obj = JSON.parse(raw);
+        parsed = Array.isArray(obj) ? obj : (obj.scenes || obj.data || Object.values(obj)[0]);
+      } catch(e) { throw new Error('Could not parse GPT response as JSON.'); }
+
+      if (!Array.isArray(parsed) || parsed.length === 0) throw new Error('Unexpected response format.');
+
+      parsed.forEach((desc, i) => {
+        if (!segments[i]) return;
+        if (desc.action) segments[i].action = desc.action;
+        if (desc.visual) segments[i].frameDesc = desc.visual;
+        // Update textareas in place without full re-render
+        const actionEl = document.getElementById('action-seg-' + i);
+        if (actionEl) { actionEl.value = desc.action || ''; autoGrow(actionEl); }
+        const frameDescEl = document.getElementById('framedesc-seg-' + i);
+        if (frameDescEl) { frameDescEl.value = desc.visual || ''; autoGrow(frameDescEl); }
+      });
+      saveSegments();
+      if (btn) { btn.textContent = '✅ Done!'; setTimeout(() => { btn.textContent = '✨ AI Describe Scenes'; btn.disabled = false; }, 2500); }
+    } catch(err) {
+      alert('AI Describe failed: ' + err.message);
+      if (btn) { btn.textContent = '✨ AI Describe Scenes'; btn.disabled = false; }
+    }
+  }
+
+  // --- Copy Veo 3 prompt and open Google Flow ---
+  function copyAndOpenVeo3(i) {
+    const el = document.getElementById('veo-seg-' + i);
+    if (!el || !el.value.trim()) {
+      alert('Generate prompts first (click ⚡ Generate All Prompts), then use this button.');
+      return;
+    }
+    navigator.clipboard.writeText(el.value).catch(() => {
+      // Fallback for non-HTTPS environments
+      el.select();
+      document.execCommand('copy');
+    });
+    window.open('https://labs.google/flow/about', '_blank');
+  }
+
   // --- Refresh Veo 3 prompt for a single segment after script/action edit ---
   function refreshSegmentVeo3(i) {
     const seg = segments[i];
@@ -4594,14 +4731,29 @@ TECHNICAL SPECS:
     if (segments.length === 0) { alert('Generate prompts first.'); return; }
     const productSel = document.getElementById('studioProduct');
     const productName = productSel ? productSel.options[productSel.selectedIndex].text : 'Untitled';
+    const settingVal = document.getElementById('studioSetting')?.value.trim() || '';
+    const avatarDescVal = document.getElementById('avatarDesc')?.value.trim() || '';
     const item = {
       id: Date.now().toString(),
       product: productName,
+      setting: settingVal,
+      avatarDesc: avatarDescVal,
+      avatarImageDataUrl: avatarImageDataUrl || null,
+      bgImageDataUrl: bgImageDataUrl || null,
+      bgFromAvatar: bgFromAvatar,
       date: new Date().toLocaleDateString(),
       segmentCount: segments.length,
       segments: segments.map(s => ({
         startTime: s.startTime, endTime: s.endTime,
-        script: s.script, nbPrompt: s.nbPrompt, veoPrompt: s.veoPrompt
+        frameDataUrl: s.frameDataUrl || null,
+        endFrameDataUrl: s.endFrameDataUrl || null,
+        script: s.script, action: s.action || '',
+        nbPrompt: s.nbPrompt, nbEndPrompt: s.nbEndPrompt || '',
+        veoPrompt: s.veoPrompt,
+        frameDesc: s.frameDesc || '',
+        refPhotoDataUrl: s.refPhotoDataUrl || null,
+        refPhotoDesc: s.refPhotoDesc || '',
+        _scriptOnly: s._scriptOnly || false,
       }))
     };
     studioLibrary.unshift(item);
@@ -4636,18 +4788,47 @@ TECHNICAL SPECS:
   function loadLibraryItem(i) {
     const item = studioLibrary[i];
     if (!item) return;
+
+    // Restore segments
     if (item.segments && item.segments.length > 0) {
-      // Load into segments array and render
-      segments = item.segments.map(s => ({
-        startTime: s.startTime || 0,
-        endTime: s.endTime || 0,
-        frameDataUrl: s.frameDataUrl || null,
-        script: s.script || '',
-        nbPrompt: s.nbPrompt || '',
-        veoPrompt: s.veoPrompt || ''
-      }));
+      segments = item.segments.map(s => ({ ...s }));
       renderSegments();
     }
+
+    // Restore avatar description + product + setting
+    const avatarDescEl = document.getElementById('avatarDesc');
+    if (avatarDescEl && item.avatarDesc) avatarDescEl.value = item.avatarDesc;
+    const productSel = document.getElementById('studioProduct');
+    if (productSel && item.product) {
+      const opt = Array.from(productSel.options).find(o => o.text === item.product);
+      if (opt) productSel.value = opt.value;
+    }
+    const settingEl = document.getElementById('studioSetting');
+    if (settingEl && item.setting) settingEl.value = item.setting;
+
+    // Restore avatar image
+    if (item.avatarImageDataUrl) {
+      avatarImageDataUrl = item.avatarImageDataUrl;
+      const img = document.getElementById('avatarImgEl');
+      const placeholder = document.getElementById('avatarImgPlaceholder');
+      if (img) { img.src = avatarImageDataUrl; img.style.display = 'block'; }
+      if (placeholder) placeholder.style.display = 'none';
+      const clearBtn = document.getElementById('clearAvatarImgBtn');
+      if (clearBtn) clearBtn.style.display = 'block';
+    }
+
+    // Restore background image + flag
+    if (item.bgImageDataUrl) {
+      bgFromAvatar = item.bgFromAvatar || false;
+      DB.set('sm_bg_from_avatar', bgFromAvatar ? '1' : '');
+      _applyBgToUI(item.bgImageDataUrl);
+    }
+
+    // Persist everything
+    saveCurrentProjectData();
+    if (item.avatarImageDataUrl) DB.set('sm_avatar_img', item.avatarImageDataUrl);
+    if (item.bgImageDataUrl) DB.set('sm_bg_image', item.bgImageDataUrl);
+    if (avatarDescEl) DB.set('sm_avatar_profile', avatarDescEl.value);
   }
 
   function deleteLibraryItem(i) {
@@ -5097,12 +5278,41 @@ TECHNICAL SPECS:
             <span style="font-size:12px;font-weight:600;color:var(--text-1);">${emoji} ${escHtml(acct?.username||'Unknown')}</span>
             <span style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}</span>
           </div>
-          ${statusDot}
+          <div style="display:flex;align-items:center;gap:6px;">
+            ${statusDot}
+            ${item.done
+              ? `<button onclick="calMarkDone('${item.id}', false)" style="font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:3px;color:var(--success);cursor:pointer;">↩ Undo</button>`
+              : `<button onclick="calMarkDone('${item.id}', true)" style="font-size:9px;padding:2px 7px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.3);border-radius:3px;color:var(--success);cursor:pointer;font-weight:600;">✓ Done</button>`
+            }
+          </div>
         </div>
         ${item.inspoUrl ? `<div style="margin-bottom:6px;"><a href="${escHtml(item.inspoUrl)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:100%;" title="${escHtml(item.inspoUrl)}">🔗 ${escHtml(item.inspoUrl)}</a></div>` : ''}
         ${item.script ? `<div style="padding:8px 10px;background:var(--surface-3);border-radius:var(--radius-xs);font-size:11px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;border-left:2px solid ${color};max-height:180px;overflow-y:auto;">${escHtml(item.script)}</div>` : '<div style="font-size:11px;color:var(--text-4);font-style:italic;">No script written yet.</div>'}
       </div>`;
     }).join('');
+  }
+
+  // Mark a planned post done/undone from inside the calendar day modal
+  function calMarkDone(itemId, done) {
+    const item = dailyItems.find(i => i.id === itemId);
+    if (!item) return;
+    item.done = done;
+    if (done) {
+      // Auto-log to video calendar
+      const note = item.script ? item.script.substring(0, 60) : '';
+      const alreadyLogged = videoLog.some(e => e.accountId === item.accountId && e.date === item.date && e.notes === note);
+      if (!alreadyLogged) videoLog.push({ id: Date.now().toString(), accountId: item.accountId, date: item.date, notes: note });
+      saveVideoLog();
+    } else {
+      // Remove the auto-log entry
+      const note = item.script ? item.script.substring(0, 60) : '';
+      videoLog = videoLog.filter(e => !(e.accountId === item.accountId && e.date === item.date && e.notes === note));
+      saveVideoLog();
+    }
+    saveDailyItems();
+    renderCalPlanned(calSelectedDate);
+    renderCalDayEntries(calSelectedDate);
+    renderCalendar();
   }
 
   function renderCalDayEntries(dateKey) {
@@ -5621,8 +5831,9 @@ TECHNICAL SPECS:
   }
 
   // ===== HIDDEN ADMIN KEY PANEL =====
-  // Change this password to whatever you want
-  const ADMIN_PASSWORD = 'socialos2025';
+  // SHA-256 hash of the admin password (default: 'socialos2025').
+  // To change: run hashPassword('yournewpassword') in the browser console and paste the result here.
+  const ADMIN_PASSWORD_HASH = '9f2076bc7b2301578527698143e4551eb9099e94fdcddfd65e958687bad1d924';
 
   let _logoClickCount = 0, _logoClickTimer = null;
   function onLogoClick() {
@@ -5645,9 +5856,10 @@ TECHNICAL SPECS:
     gateInput.value = '';
     gateInput.focus();
   }
-  function checkAdminPassword() {
+  async function checkAdminPassword() {
     const entered = document.getElementById('adminGateInput').value;
-    if (entered === ADMIN_PASSWORD) {
+    const hash = await hashPassword(entered);
+    if (hash === ADMIN_PASSWORD_HASH) {
       document.getElementById('adminGateScreen').style.display = 'none';
       document.getElementById('adminKeyScreen').style.display = 'block';
       document.getElementById('adminKeyStatus').style.display = 'none';
