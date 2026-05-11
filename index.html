@@ -682,6 +682,7 @@
               <div style="display:flex;flex-direction:column;gap:4px;min-width:110px;">
                 <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">✂ Mark Scene</button>
                 <button class="btn" onclick="autoSegment()" style="font-size:10px;padding:4px 6px;border-color:#444;color:#e0e0e0;">⚡ Auto 8s</button>
+                <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:#3a3a5a;color:#9999dd;" title="Automatically detect scene cuts by comparing frames">🎞 Detect Cuts</button>
                 <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:#9a6060;border-color:#251e1e;">🗑 Clear</button>
               </div>
             </div>
@@ -2029,6 +2030,115 @@
     }
     distributeScript();
     renderSegments();
+  }
+
+  // --- Compute mean absolute pixel difference between two ImageData arrays ---
+  function computeFrameDiff(data1, data2) {
+    let total = 0;
+    // Sample every 4th RGBA pixel (skip alpha channel) for speed
+    for (let i = 0; i < data1.length; i += 16) {
+      total += Math.abs(data1[i]   - data2[i]);
+      total += Math.abs(data1[i+1] - data2[i+1]);
+      total += Math.abs(data1[i+2] - data2[i+2]);
+    }
+    return total / (data1.length / 16 * 3);
+  }
+
+  // --- Automatically detect scene cuts by frame differencing ---
+  async function autoSegmentBySceneChange() {
+    const videoEl = document.getElementById('refVideoEl');
+    if (!videoEl || !videoEl.src || !videoEl.duration) {
+      alert('Please upload a video first and wait for it to load.');
+      return;
+    }
+
+    const btn = document.getElementById('detectCutsBtn');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Scanning…'; }
+
+    const dur = videoEl.duration;
+    const sampleInterval = 0.25;   // sample every 0.25s
+    const diffThreshold = 30;      // pixel diff 0-255 — lower = more sensitive
+    const minSegmentLen = 1.5;     // ignore cuts closer than 1.5s together
+    const thumbW = 80, thumbH = 45; // downscale for speed
+
+    const canvas = document.getElementById('frameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = thumbW;
+    canvas.height = thumbH;
+
+    document.getElementById('segmentsContainer').innerHTML =
+      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">🎞 Scanning for scene cuts… <span id="captureProgress">0%</span></div>';
+
+    const cutTimes = [0]; // always include video start
+    let prevData = null;
+    const totalFrames = Math.ceil(dur / sampleInterval);
+
+    for (let k = 0; k <= totalFrames; k++) {
+      const t = Math.min(k * sampleInterval, dur);
+
+      // Seek and capture
+      await new Promise(resolve => {
+        if (Math.abs(videoEl.currentTime - t) < 0.05) { resolve(); return; }
+        videoEl.currentTime = t;
+        videoEl.onseeked = () => { videoEl.onseeked = null; resolve(); };
+      });
+
+      ctx.drawImage(videoEl, 0, 0, thumbW, thumbH);
+      const currData = ctx.getImageData(0, 0, thumbW, thumbH).data;
+
+      if (prevData) {
+        const diff = computeFrameDiff(prevData, currData);
+        if (diff > diffThreshold) {
+          const lastCut = cutTimes[cutTimes.length - 1];
+          if (t - lastCut >= minSegmentLen) {
+            cutTimes.push(t);
+          }
+        }
+      }
+
+      prevData = new Uint8ClampedArray(currData); // clone before next frame
+
+      const prog = document.getElementById('captureProgress');
+      if (prog) prog.textContent = Math.min(100, Math.round((k / totalFrames) * 100)) + '%';
+    }
+
+    cutTimes.push(dur); // always include video end
+
+    // Build segment list from cut points
+    segments = [];
+    for (let i = 0; i < cutTimes.length - 1; i++) {
+      const start = cutTimes[i];
+      const end = cutTimes[i + 1];
+      if (end - start < 0.5) continue; // skip micro-segments
+      segments.push({
+        startTime: start, endTime: end,
+        frameDataUrl: null, endFrameDataUrl: null,
+        script: '', action: '', nbPrompt: '', nbEndPrompt: '', veoPrompt: ''
+      });
+    }
+
+    // Capture start + end frames at full resolution
+    document.getElementById('segmentsContainer').innerHTML =
+      '<div style="text-align:center;padding:24px;font-size:11px;color:#555;">Capturing frames… <span id="captureProgress">0/' + segments.length + '</span></div>';
+
+    canvas.width = videoEl.videoWidth || 360;
+    canvas.height = videoEl.videoHeight || 640;
+
+    for (let i = 0; i < segments.length; i++) {
+      segments[i].frameDataUrl = await captureFrame(segments[i].startTime);
+      segments[i].endFrameDataUrl = await captureFrame(Math.max(segments[i].endTime - 0.1, segments[i].startTime));
+      const prog = document.getElementById('captureProgress');
+      if (prog) prog.textContent = (i + 1) + '/' + segments.length;
+    }
+
+    distributeScript();
+    renderSegments();
+
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = '✅ ' + segments.length + ' cuts found';
+      setTimeout(() => { btn.textContent = '🎞 Detect Cuts'; }, 3500);
+    }
   }
 
   // --- Mark scene change manually at current playback time ---
