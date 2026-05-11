@@ -3882,7 +3882,7 @@
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
               <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt</span>
               <div style="display:flex;gap:4px;align-items:center;">
-                <button onclick="copyAndOpenVeo3(${i})" title="Copy prompt and open Google Flow" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">▶ Open in Veo 3</button>
+                <button onclick="copyClaudeInstruction(${i})" title="Copy a Claude in Chrome instruction to auto-submit this prompt" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.4);border-radius:2px;color:#a78bfa;font-size:9px;padding:1px 6px;cursor:pointer;">🤖 Claude Browser</button>
                 <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
               </div>
             </div>
@@ -4375,6 +4375,179 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
       alert('AI Describe failed: ' + err.message);
       if (btn) { btn.textContent = '✨ AI Describe Scenes'; btn.disabled = false; }
     }
+  }
+
+  // --- Claude in Chrome instruction builder ---
+  function downloadFrameAsFile(dataUrl, filename) {
+    const a = document.createElement('a');
+    a.href = dataUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  function getVeoDuration(script) {
+    // Choose 6s or 8s based on how long the dialogue will take at 2.3 words/sec
+    const words = (script || '').trim().split(/\s+/).filter(Boolean).length;
+    const secs  = words / WORDS_PER_SEC;
+    return secs <= 6.5 ? 6 : 8;
+  }
+
+  function copyClaudeInstruction(i) {
+    const seg = segments[i];
+    if (!seg || !seg.veoPrompt?.trim()) {
+      alert('Generate prompts first, then use this button.');
+      return;
+    }
+
+    const hasAvatar     = !!avatarImageDataUrl;
+    const hasStartFrame = !!seg.frameDataUrl;
+    const hasEndFrame   = !!seg.endFrameDataUrl;
+    const avatarName    = `avatar-photo-1.png`;
+    const startName     = `scene-${i + 1}-start-frame.png`;
+    const endName       = `scene-${i + 1}-end-frame.png`;
+    const duration      = getVeoDuration(seg.script);
+    const wordCount     = (seg.script || '').trim().split(/\s+/).filter(Boolean).length;
+
+    // Auto-download all needed files to Downloads
+    if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarName);
+    if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl, startName);
+    if (hasEndFrame)   downloadFrameAsFile(seg.endFrameDataUrl, endName);
+
+    const nbPrompt  = seg.nbPrompt  || '(no NB Pro prompt generated yet)';
+    const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
+
+    const instruction = `You are going to generate a video clip for Scene ${i + 1}. Follow these two steps exactly in order.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — Generate the starting frame in Nano Banana Pro
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+I have downloaded the following files to your Downloads folder:
+${hasAvatar     ? `• ${avatarName} — the avatar/character photo (upload as Photo 1)` : '• (no avatar downloaded — skip Photo 1 upload)'}
+${hasStartFrame ? `• ${startName} — the starting frame from the reference video (upload as Photo 2)` : '• (no start frame downloaded)'}
+
+1. Go to Nano Banana Pro (search for it if needed, it is an AI image generation tool)
+2. Upload "${avatarName}" from Downloads as Photo 1
+${hasStartFrame ? `3. Upload "${startName}" from Downloads as Photo 2` : '3. Skip Photo 2'}
+4. Make sure the output format is set to 9:16 vertical
+5. Paste the following prompt into the prompt field:
+
+${nbPrompt}
+
+6. Click Generate
+7. When the image generates, carefully check: does it show the correct person from the avatar photo in the right pose and setting? If it looks wrong, regenerate once.
+8. Once you have a good result, click the "Add to prompt" button on the generated image — this will set it as the starting frame for the video
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 2 — Generate the video in Veo 3
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+After completing Step 1 and clicking "Add to prompt":
+
+1. Go to https://labs.google/flow and sign in if needed
+2. The starting frame image from Step 1 should already be attached — if not, upload "${startName}" from Downloads manually
+3. Select the model: Veo 3 Fast
+4. Set the duration to ${duration} seconds (the dialogue for this scene is ${wordCount} words, which runs ~${Math.round(wordCount / WORDS_PER_SEC)}s)
+5. Paste the following Veo 3 prompt into the prompt field:
+
+${veoPrompt}
+
+6. Click Generate
+7. When the video is ready, let me know and show me the result`;
+
+    navigator.clipboard.writeText(instruction).catch(() => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = instruction;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch(e) {}
+    });
+
+    showClaudeBrowserModal(i + 1, hasStartFrame || hasAvatar, duration, wordCount);
+  }
+
+  function showClaudeBrowserModal(sceneNum, hasFiles, duration, wordCount) {
+    const existing = document.getElementById('claudeBrowserModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'claudeBrowserModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+
+    const fileNote = hasFiles ? `
+      <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
+        <div style="font-size:15px;flex-shrink:0;">📁</div>
+        <div>
+          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Images saved to your Downloads folder</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Avatar photo + scene frame downloaded. Claude's instruction tells it exactly which files to upload and where.</div>
+        </div>
+      </div>` : '';
+
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid rgba(139,92,246,0.4);border-radius:12px;padding:24px;width:500px;max-width:92vw;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="font-size:22px;">🤖</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-1);">Use Claude in Chrome — Scene ${sceneNum}</div>
+            <div style="font-size:11px;color:var(--text-3);">Full workflow instruction copied to clipboard</div>
+          </div>
+        </div>
+        ${fileNote}
+
+        <!-- Workflow summary -->
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+
+          <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:10px 12px;">
+            <div style="font-size:10px;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 1 — Nano Banana Pro</div>
+            <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
+              Upload avatar as Photo 1 · Upload start frame as Photo 2<br>
+              Set <strong style="color:var(--text-1);">9:16 vertical</strong> · Paste NB Pro prompt · Generate<br>
+              ✓ Check result looks right · Click <strong style="color:var(--text-1);">"Add to prompt"</strong>
+            </div>
+          </div>
+
+          <div style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:6px;padding:10px 12px;">
+            <div style="font-size:10px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 2 — Veo 3</div>
+            <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
+              NB Pro image becomes the starting frame<br>
+              Select <strong style="color:var(--text-1);">Veo 3 Fast</strong> · Set duration to <strong style="color:var(--text-1);">${duration} seconds</strong><br>
+              <span style="font-size:10px;color:var(--text-3);">(${wordCount} words ≈ ${Math.round(wordCount / WORDS_PER_SEC)}s of speech)</span><br>
+              Paste Veo 3 prompt · Generate
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);color:#a78bfa;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">1</div>
+            <div style="font-size:12px;color:var(--text-2);line-height:1.5;">Open <strong style="color:var(--text-1);">Claude.ai</strong> with the <strong style="color:var(--text-1);">Claude in Chrome</strong> extension active.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);color:#a78bfa;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">2</div>
+            <div style="font-size:12px;color:var(--text-2);line-height:1.5;">Press <kbd style="background:#2a2a3a;border:1px solid #444;border-radius:3px;padding:1px 6px;font-size:11px;">Ctrl+V</kbd> / <kbd style="background:#2a2a3a;border:1px solid #444;border-radius:3px;padding:1px 6px;font-size:11px;">⌘V</kbd> to paste, then send.</div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:flex-start;">
+            <div style="width:22px;height:22px;border-radius:50%;background:rgba(139,92,246,0.2);border:1px solid rgba(139,92,246,0.4);color:#a78bfa;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;">3</div>
+            <div style="font-size:12px;color:var(--text-2);line-height:1.5;">Claude handles the full workflow — NB Pro first, then Veo 3.</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(139,92,246,0.07);border:1px solid rgba(139,92,246,0.2);border-radius:6px;padding:10px 12px;margin-bottom:18px;">
+          <div style="font-size:10px;color:#a78bfa;font-weight:600;margin-bottom:3px;">Don't have Claude in Chrome?</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Install it free from the <a href="https://chromewebstore.google.com" target="_blank" style="color:#a78bfa;text-decoration:none;">Chrome Web Store</a> — search "Claude in Chrome" by Anthropic.</div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <button onclick="document.getElementById('claudeBrowserModal').remove()" style="padding:8px 20px;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);border-radius:6px;color:#a78bfa;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Got it</button>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
   // --- Copy Veo 3 prompt and open Google Flow ---
