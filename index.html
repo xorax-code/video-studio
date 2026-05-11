@@ -2348,20 +2348,28 @@
   }
 
   function distributeScript() {
-    // Try timestamp-based distribution first (requires Whisper transcription)
-    distributeScriptFromTimestamps();
+    // If Whisper timestamps exist and cover the transcript, use them (most accurate)
+    if (whisperSegments && whisperSegments.length > 0) {
+      if (distributeScriptFromTimestamps()) return;
+    }
 
-    // Always run proportional fallback for any segments still empty
-    // (catches segments with no matching Whisper chunk, or when no timestamps exist)
+    // Proportional word-by-time split — never duplicates, OK to break mid-sentence
     const originalEl = document.getElementById('originalScript');
     const script = originalEl ? originalEl.value.trim() : '';
-    if (!script) return;
-    const slices = splitScriptIntoSegments(script, segments);
-    segments.forEach((seg, i) => {
-      if (!seg.script || !seg.script.trim()) {
-        seg.script = slices[i] || '';
-      }
-    });
+    if (!script || segments.length === 0) return;
+
+    const words = script.split(/\s+/).filter(Boolean);
+    const totalDur = (segments[segments.length - 1].endTime - segments[0].startTime) || 1;
+    let wordIdx = 0;
+
+    for (let i = 0; i < segments.length; i++) {
+      const segDur = segments[i].endTime - segments[i].startTime;
+      const wordCount = i < segments.length - 1
+        ? Math.max(1, Math.round((segDur / totalDur) * words.length))
+        : words.length - wordIdx; // last segment gets all remaining words
+      segments[i].script = words.slice(wordIdx, wordIdx + wordCount).join(' ');
+      wordIdx = Math.min(wordIdx + wordCount, words.length);
+    }
   }
 
   // --- Render segment cards ---
