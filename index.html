@@ -686,8 +686,8 @@
     <a href="#features" class="nav-link">Features</a>
     <a href="#workflow" class="nav-link">How it works</a>
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
-    <a href="app.html#login" class="nav-link" style="font-weight:600;">Sign In</a>
-    <a href="app.html#signup" class="nav-cta">Get Started →</a>
+    <a href="app.html#login" class="nav-link" style="font-weight:600;" id="navSignIn">Sign In</a>
+    <a href="app.html#signup" class="nav-cta" id="navCta">Get Started →</a>
   </div>
 </nav>
 
@@ -1003,6 +1003,21 @@
 
   buildTicker();
   buildMock();
+
+  // Check if user already has a valid session — swap nav to "Open App"
+  (function checkLandingSession() {
+    try {
+      const raw = localStorage.getItem('socialos_session');
+      if (!raw) return;
+      const s = JSON.parse(raw);
+      if (!s || !s.userId || !s.expires || Date.now() > s.expires) return;
+      // Valid session — update nav
+      const signIn = document.getElementById('navSignIn');
+      const cta    = document.getElementById('navCta');
+      if (signIn) signIn.style.display = 'none';
+      if (cta) { cta.textContent = 'Open App →'; cta.href = 'app.html'; }
+    } catch(e) {}
+  })();
 
   // Smooth scroll for anchor links
   document.querySelectorAll('a[href^="#"]').forEach(a => {

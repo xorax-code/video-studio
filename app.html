@@ -804,11 +804,12 @@
     position: fixed; inset: 0;
     background: var(--bg);
     z-index: 9999;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     padding: 20px;
   }
+  .auth-wall.visible { display: flex; }
   .auth-card {
     width: 100%;
     max-width: 400px;
@@ -970,6 +971,9 @@
     font-weight: 800;
     flex-shrink: 0;
   }
+  .dl-service-row { transition: filter 0.12s, border-color 0.12s; }
+  .dl-service-row:hover { filter: brightness(1.12); }
+
   .auth-logout-btn {
     padding: 3px 9px;
     border-radius: 20px;
@@ -1490,6 +1494,62 @@
           </div>
         </div>
 
+        <!-- Video Downloader -->
+        <div class="vs-panel" style="flex-shrink:0;">
+          <div class="vs-panel-header" style="padding:5px 10px;">
+            <span>📥 Video Downloader</span>
+          </div>
+          <div style="padding:7px 10px;display:flex;flex-direction:column;gap:6px;">
+            <input id="fbReelUrl" type="url" placeholder="Paste FB, TikTok, Instagram, or YouTube link…"
+              style="width:100%;font-size:10px;padding:5px 8px;background:var(--bg);border:1px solid var(--border-2);border-radius:4px;color:var(--text-1);font-family:inherit;outline:none;"
+              oninput="updateDlButtons()">
+            <div style="display:flex;flex-direction:column;gap:5px;">
+
+              <!-- SnapSave -->
+              <div class="dl-service-row" title="snapsave.app" onclick="openDownloader('snapsave')"
+                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:5px;cursor:pointer;gap:8px;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--accent-2);">⬇ SnapSave</div>
+                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">Facebook · TikTok · Instagram · YouTube · Twitter</div>
+                </div>
+                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">snapsave.app</div>
+              </div>
+
+              <!-- SSSTik -->
+              <div class="dl-service-row" title="ssstik.io" onclick="openDownloader('ssstik')"
+                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ SSSTik</div>
+                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">TikTok (no watermark) · Facebook · Instagram</div>
+                </div>
+                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">ssstik.io</div>
+              </div>
+
+              <!-- FDown -->
+              <div class="dl-service-row" title="fdown.net" onclick="openDownloader('fdown')"
+                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ FDown.net</div>
+                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">Facebook only — HD &amp; SD quality options</div>
+                </div>
+                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">fdown.net</div>
+              </div>
+
+              <!-- SaveFrom -->
+              <div class="dl-service-row" title="en.savefrom.net" onclick="openDownloader('savefrom')"
+                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
+                <div>
+                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ SaveFrom</div>
+                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">YouTube · Facebook · Twitter · Vimeo · Dailymotion</div>
+                </div>
+                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">savefrom.net</div>
+              </div>
+
+            </div>
+            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Paste a link · pick a service · downloads open in a new tab. Hover any row to see the site URL.</div>
+          </div>
+        </div>
+
         <!-- Saved Library -->
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
           <div class="vs-panel-header" style="padding:5px 10px;">
@@ -1843,6 +1903,11 @@
     const DB_NAME = 'socialos_db';
     const STORE   = 'kv';
     let _db = null;
+    let _userId = '';
+
+    // Call this after login so all reads/writes are scoped to the user
+    function setUser(id) { _userId = id || ''; }
+    function uKey(key) { return _userId ? `u_${_userId}_${key}` : key; }
 
     function open() {
       return new Promise((resolve, reject) => {
@@ -1857,7 +1922,7 @@
     async function get(key) {
       const db = await open();
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(key);
+        const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(uKey(key));
         req.onsuccess = () => resolve(req.result ?? null);
         req.onerror   = e => reject(e.target.error);
       });
@@ -1866,7 +1931,7 @@
     async function set(key, value) {
       const db = await open();
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(value, key);
+        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).put(value, uKey(key));
         req.onsuccess = () => resolve();
         req.onerror   = e => reject(e.target.error);
       });
@@ -1875,7 +1940,7 @@
     async function remove(key) {
       const db = await open();
       return new Promise((resolve, reject) => {
-        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(key);
+        const req = db.transaction(STORE, 'readwrite').objectStore(STORE).delete(uKey(key));
         req.onsuccess = () => resolve();
         req.onerror   = e => reject(e.target.error);
       });
@@ -1895,7 +1960,7 @@
       }
     }
 
-    return { get, set, remove, migrateLocalStorage };
+    return { get, set, remove, migrateLocalStorage, setUser };
   })();
 
   // ===== SHARED =====
@@ -2947,6 +3012,26 @@
       badge.style.color = '#555';
       badge.style.border = '1px solid #252525';
     }
+  }
+
+  // ===== VIDEO DOWNLOADER =====
+  const DL_SERVICES = {
+    snapsave:  u => `https://snapsave.app/?url=${encodeURIComponent(u)}`,
+    ssstik:    u => `https://ssstik.io/en?url=${encodeURIComponent(u)}`,
+    fdown:     u => `https://fdown.net/?URLz=${encodeURIComponent(u)}`,
+    savefrom:  u => `https://en.savefrom.net/#url=${encodeURIComponent(u)}`,
+  };
+
+  function updateDlButtons() { /* live preview future use */ }
+
+  function openDownloader(service) {
+    const url = (document.getElementById('fbReelUrl')?.value || '').trim();
+    if (!url) {
+      alert('Paste a video link first.');
+      return;
+    }
+    const builder = DL_SERVICES[service];
+    if (builder) window.open(builder(url), '_blank');
   }
 
   // --- Clear transcript ---
@@ -4712,11 +4797,6 @@ TECHNICAL SPECS:
     dailyItems    = JSON.parse(await DB.get('sm_daily_items')    || '[]');
     _cachedApiKey = await DB.get('sm_openai_key') || '';
 
-    // Seed demo data if empty
-    seedMyAccounts();
-    seedCompetitors();
-    seedViralScripts();
-
     // Render
     renderTable();
     await loadSegments();
@@ -4846,9 +4926,12 @@ TECHNICAL SPECS:
   }
 
   function onAuthSuccess(username) {
+    // Scope all DB reads/writes to this user
+    const session = getSession();
+    if (session) DB.setUser(session.userId);
     // Hide auth wall
     const wall = document.getElementById('authWall');
-    if (wall) wall.style.display = 'none';
+    if (wall) wall.classList.remove('visible');
     // Update topnav user chip
     updateUserChip(username);
     // Boot the app
@@ -4873,14 +4956,16 @@ TECHNICAL SPECS:
   function checkAuthAndBoot() {
     const session = getSession();
     if (session) {
-      // Valid session — hide wall and boot app
-      const wall = document.getElementById('authWall');
-      if (wall) wall.style.display = 'none';
+      // Valid session — scope DB, skip wall, boot app immediately
+      DB.setUser(session.userId);
       updateUserChip(session.username);
       initApp();
       return;
     }
-    // No session — show the correct tab based on URL hash
+    // No session — show the auth wall
+    const wall = document.getElementById('authWall');
+    if (wall) wall.classList.add('visible');
+    // Open the correct tab based on URL hash
     const hash = location.hash;
     if (hash === '#signup') switchAuthTab('signup');
     // else: login tab is default
