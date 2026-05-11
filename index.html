@@ -2629,7 +2629,7 @@
     const thumbW = 80, thumbH = 45;
 
     const canvas = document.getElementById('frameCanvas');
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
     canvas.width = thumbW;
     canvas.height = thumbH;
 
@@ -3093,7 +3093,13 @@
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
         const data = await res.json();
-        if (data.error) { console.error('OpenAI error seg ' + i + ':', data.error.message); skipped++; continue; }
+        if (data.error) {
+          btn.disabled = false;
+          btn.textContent = '❌ ' + (data.error.code || data.error.type || 'Error');
+          alert('OpenAI error on segment ' + (i+1) + ':\n' + data.error.message);
+          saveSegments();
+          return;
+        }
         const description = data.choices?.[0]?.message?.content?.trim() || '';
         if (!description) { skipped++; continue; }
         seg.action = description;
