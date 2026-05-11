@@ -3083,7 +3083,7 @@
         const content = [
           {
             type: 'text',
-            text: `These frames are sampled evenly from a short video clip, followed by the final frame. Write a movement description using only the pronoun "${pronoun}" to refer to the person. STRICT RULES: Do NOT describe the environment, background, setting, lighting, atmosphere, or any surroundings. Do NOT describe the person's appearance, face, skin, hair, age, clothing, or accessories. ONLY describe the physical movements and actions happening. Include: exactly what ${pronoun} is doing with their body, how ${pronoun} is moving, hand and arm gestures, what ${pronoun} picks up, puts down, or interacts with, and the exact final pose or action state. Write in short, action-only sentences — example: "She lifts a bottle with both hands. She tilts it forward slowly, then sets it down. She reaches across and picks up a second item." Return only the movement description, no intro, no commentary, no environment details.`
+            text: `Analyze the physical actions and movements visible in these video frames. Describe ONLY the body movements, hand gestures, and object interactions shown — not who is doing them, not their appearance, not the background. Write in short action sentences using "${pronoun}" as the subject. Examples: "${pronoun} lifts a bottle with both hands and tilts it forward slowly." "${pronoun} reaches across and picks up an item." "${pronoun} holds an object up toward the camera." Focus on: hand and arm movements, what objects are picked up or put down, body positioning changes, and the final action state. Return only the movement description — no intro, no identity, no appearance, no environment.`
           },
           ...imageContent
         ];
@@ -3110,7 +3110,7 @@
         const isRefusal = !description || /i('m| am) sorry|can't assist|cannot assist|I apologize|unable to (help|assist)/i.test(description);
         if (isRefusal && (frameList.length > 1 || endFrame)) {
           const retryContent = [
-            { type: 'text', text: `Describe only the physical movements and body actions happening in this image using the pronoun "${pronoun}". Short action sentences only. No appearance, background, or environment details.` },
+            { type: 'text', text: `Describe the physical movements and actions visible in this image using "${pronoun}" as the subject. Short action sentences only — focus on what hands and arms are doing, what objects are being held or moved. No identity, no appearance, no background.` },
             { type: 'image_url', image_url: { url: frameList[0], detail: 'low' } }
           ];
           const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
