@@ -3863,13 +3863,28 @@ RULES — read carefully:
       while (naturalEnd < wordTimeline.length - 1 && wordTimeline[naturalEnd].time < segEnd) {
         naturalEnd++;
       }
-      let splitAfter = naturalEnd - 1;
+
+      // If no words fall in this segment's time window (e.g. a Whisper chunk starts
+      // exactly at the boundary), use a proportional word count as a floor so the
+      // bucket never starts empty.  This is the root cause of "watermelon" landing
+      // in Seg 3: its chunk starts at 8.0 s = Seg 3 boundary, so naturalEnd never
+      // advances and splitAfter becomes cursor-1, leaving Seg 2 with nothing.
+      let splitAfter;
+      if (naturalEnd === cursor) {
+        const totalWords   = wordTimeline.length;
+        const totalDur     = r1(segments[segments.length - 1].endTime) - r1(segments[0].startTime);
+        const segDur       = segEnd - r1(segments[si].startTime);
+        const targetWords  = Math.max(1, Math.round(totalWords * segDur / totalDur));
+        splitAfter = Math.min(cursor + targetWords - 1, wordTimeline.length - 2);
+      } else {
+        splitAfter = naturalEnd - 1;
+      }
 
       // Search within ±1.5s of scene cut for the closest sentence boundary
       // (word ending with . ! ? ,) — snap the split to that boundary so phrases
       // like "grab a few chunks of watermelon," stay whole in the current segment.
-      const lookFrom = Math.max(cursor, naturalEnd - 10);
-      const lookTo   = Math.min(wordTimeline.length - 2, naturalEnd + 8);
+      const lookFrom = Math.max(cursor, splitAfter - 8);
+      const lookTo   = Math.min(wordTimeline.length - 2, splitAfter + 8);
       let bestBoundary = -1;
       let bestDist = Infinity;
 
