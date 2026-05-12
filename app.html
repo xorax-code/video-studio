@@ -4438,29 +4438,80 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     const appUrl = window.location.href;
     let instruction = `You are fully automating video generation for ALL scenes on Google Flow using Claude in Chrome tools. Complete every scene sequentially without stopping. After each scene's video is saved, mark it done in the app.
 
-APP URL (for marking scenes done): ${appUrl}
+APP URL: ${appUrl}
 
-HOW TO MARK A SCENE DONE after saving its video:
-  1. Use tabs_context_mcp to find the tab with URL: ${appUrl}
-  2. Run in javascript_tool on that tab: window.markSceneDone(SCENE_INDEX)
-     (SCENE_INDEX is 0-based: Scene 1 = 0, Scene 2 = 1, etc.)
-
-HOW TO SAVE A VIDEO:
-  After Veo 3 generates, right-click the video → "Save video as" → save to:
-  Downloads\\FlowVideos\\Scene_SCENENUMBER.mp4
-  (Create the FlowVideos folder if it doesn't exist)
-
-HOW TO UPLOAD AN IMAGE (file_upload tool — never click upload buttons):
-  1. Use find or read_page to locate the <input type="file"> near the upload slot
-  2. Call file_upload with the absolute path and its ref + tabId
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GOOGLE FLOW UI MAP (memorize — do not explore)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Left sidebar: list of generations. TOP of sidebar has a "+ New prompt" button.
+• NB Pro panel (top of main area): has TWO image upload slots side by side.
+  — Photo 1 slot is on the LEFT, Photo 2 slot is on the RIGHT.
+  — Each slot is a clickable placeholder. The hidden <input type="file"> is nearby.
+• Veo 3 panel (below NB Pro): model dropdown, duration picker, text prompt, Generate button.
+• After generation: video appears with a ⬇ download icon button on hover.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE YOU START
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Run Bash: echo %USERPROFILE%\\Downloads  — save this as {dl} for the entire run
+2. Run Bash: mkdir "%USERPROFILE%\\Downloads\\FlowVideos"  — create output folder now
+3. Navigate to https://labs.google/fx/tools/flow — create ONE new project, keep tab open for all scenes
 
-1. Run in Bash to get Downloads path: echo %USERPROFILE%\\Downloads
-2. Navigate to https://labs.google/fx/tools/flow — create one new project for all scenes
-3. Keep that Flow tab open for the entire run — do not close or navigate away between scenes
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO UPLOAD AN IMAGE (use this EXACT sequence — do not improvise)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Flow hides file inputs in shadow DOM. Use this sequence every time:
+
+STEP A — run javascript_tool on the Flow tab to locate all file inputs:
+  const inputs = [];
+  (function scan(root) {
+    root.querySelectorAll('input[type="file"]').forEach(el => inputs.push(el));
+    root.querySelectorAll('*').forEach(el => { if (el.shadowRoot) scan(el.shadowRoot); });
+  })(document);
+  inputs.forEach((el, i) => {
+    const r = el.closest('[class],[id],[aria-label]');
+    console.log('INPUT', i, el.accept, r ? (r.className||r.id||r.getAttribute('aria-label')||'').slice(0,60) : 'no parent');
+  });
+  inputs.length;
+
+STEP B — use find tool with query "input[type=file]" to get the ref IDs.
+  Photo 1 is ref index 0 (first input), Photo 2 is ref index 1 (second input).
+
+STEP C — call file_upload with:
+  paths: ["{dl}\\{filename}"]   ← full absolute path
+  ref:   {ref from find for this slot}
+  tabId: {Flow tab ID from tabs_context_mcp}
+
+STEP D — take a screenshot to confirm the thumbnail appeared in the slot.
+  If the thumbnail is missing, use javascript_tool to simulate file selection:
+    const input = inputs[SLOT_INDEX];
+    const dt = new DataTransfer();
+    // fetch the file as blob via URL.createObjectURL — not possible from disk.
+    // Instead: click the input to trigger the native picker, then try file_upload again.
+    input.click();
+  Then retry file_upload with the same ref.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO SAVE A VIDEO (download button — NOT right-click)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+After Veo 3 generates, do NOT right-click the video. Instead:
+1. Hover over the video to reveal controls
+2. Click the ⬇ download button, or use find: "button[aria-label*='ownload']"
+3. Select any quality option — the file will auto-download to {dl}
+4. Wait 3 seconds for the download to finish
+5. Use Bash to rename and move it:
+   FOR /F "delims=" %%F IN ('dir /b /o-d "{dl}\\*.mp4"') DO (set newest=%%F & goto done)
+   :done
+   move "{dl}\\%newest%" "{dl}\\FlowVideos\\Scene_SCENENUMBER.mp4"
+
+   (Replace SCENENUMBER with the scene number, e.g. Scene_1.mp4)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO MARK A SCENE DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Use tabs_context_mcp to find the tab with URL: ${appUrl}
+2. Run javascript_tool on that tab: window.markSceneDone(SCENE_INDEX)
+   (SCENE_INDEX is 0-based: Scene 1 = 0, Scene 2 = 1, etc.)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 IMAGE FILES DOWNLOADED TO DOWNLOADS:
@@ -4499,30 +4550,35 @@ SCENE ${i+1} of ${segments.filter(s=>s.veoPrompt?.trim()).length}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ${i === 0
-  ? `You already have the Flow project open. Open Nano Banana Pro.`
-  : `Stay in the same Flow project. Look for a "New prompt", "+", or "Add" button to start a fresh generation — click it. Then open Nano Banana Pro.`
+  ? `Flow project is already open. Locate the Nano Banana Pro panel at the top of the main area.`
+  : `Stay in the same Flow tab. Click the "+ New prompt" button at the TOP of the LEFT sidebar to start a fresh generation. The NB Pro panel will reset — do not navigate away.`
 }
 
-NB PRO STEP:
-${avatarImageDataUrl ? `• Upload Photo 1: file_upload with path to ${avatarFile}` : '• No avatar — skip Photo 1'}
-${hasFrame ? `• Upload Photo 2: file_upload with path to ${frameFile}` : '• No start frame — skip Photo 2'}
-• Set 9:16 vertical
-• Paste this NB Pro prompt:
+━ NB PRO STEP:
+${avatarImageDataUrl
+  ? `1. Upload Photo 1 (avatar) using the HOW TO UPLOAD sequence above — slot index 0, file: {dl}\\${avatarFile}`
+  : `1. No avatar — skip Photo 1`}
+${hasFrame
+  ? `2. Upload Photo 2 (start frame) using the HOW TO UPLOAD sequence above — slot index 1, file: {dl}\\${frameFile}`
+  : `2. No start frame — skip Photo 2`}
+3. Set format to 9:16 vertical
+4. Click the NB Pro prompt field and paste this exactly:
 
 ${nbPrompt}
 
-• Click Generate → verify result → click "Add to prompt"
+5. Click Generate — wait until the image appears (up to 90 seconds)
+6. Verify the image looks correct, then click "Add to prompt"
 
-VEO 3 STEP:
-• Select Veo 3 Fast
-• Set duration: ${duration} seconds (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
-• Paste this Veo 3 prompt:
+━ VEO 3 STEP:
+1. Select model: Veo 3 Fast
+2. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
+3. Click the Veo 3 prompt field and paste this exactly:
 
 ${veoPrompt}
 
-• Click Generate → wait for video to finish
-• Right-click video → Save video as → Downloads\\FlowVideos\\Scene_${i+1}.mp4
-• Mark done: find the app tab (${appUrl}) → javascript_tool → window.markSceneDone(${i})
+4. Click Generate — wait for video to fully render (up to 3 minutes — do not interrupt)
+5. Save video using HOW TO SAVE A VIDEO above → rename to {dl}\\FlowVideos\\Scene_${i+1}.mp4
+6. Mark done: tabs_context_mcp → find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
 `;
     });
 
@@ -4530,7 +4586,8 @@ ${veoPrompt}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ALL SCENES COMPLETE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Report back: how many scenes completed, any issues, and where the videos are saved.`;
+Run Bash: dir "%USERPROFILE%\\Downloads\\FlowVideos\\*.mp4"
+Report back: how many scenes completed, any errors, and list the saved video files.`;
 
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
@@ -4593,80 +4650,85 @@ Report back: how many scenes completed, any issues, and where the videos are sav
     if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarFile);
     if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl,   startFrameFile);
 
-    const instruction = `You are fully automating a video generation workflow for Scene ${i + 1} on Google Flow using Claude in Chrome tools. Do not click file upload buttons — use the file_upload tool instead.
+    const instruction = `You are fully automating a video generation workflow for Scene ${i + 1} on Google Flow using Claude in Chrome tools.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-BEFORE YOU START — get the Downloads folder path
+GOOGLE FLOW UI MAP (memorize — do not explore)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
+• NB Pro panel (top): TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
+• File inputs are hidden in shadow DOM — use the upload sequence below
+• Veo 3 panel (below NB Pro): model dropdown, duration, prompt, Generate button
+• After video renders: hover to reveal ⬇ download button
 
-Run this in Bash to get the exact Downloads path:
-  Windows: echo %USERPROFILE%\\Downloads
-  Mac:     echo ~/Downloads
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE YOU START
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Run Bash: echo %USERPROFILE%\\Downloads  — save as {dl}
+2. Run Bash: mkdir "%USERPROFILE%\\Downloads\\FlowVideos"
+3. Verify files exist:
+   dir "{dl}\\${avatarFile}"
+   dir "{dl}\\${startFrameFile}"
+4. Navigate to https://labs.google/fx/tools/flow
 
-Save the result — you will use it as the base path for all file uploads.
+Image files in Downloads:
+${hasAvatar     ? `• ${avatarFile}  ← Photo 1 (avatar)` : ''}
+${hasStartFrame ? `• ${startFrameFile}  ← Photo 2 (start frame)` : ''}
 
-Image files waiting in Downloads:
-${hasAvatar     ? `• ${avatarFile}  ← Photo 1 (avatar character)` : ''}
-${hasStartFrame ? `• ${startFrameFile}  ← Photo 2 (scene start frame)` : ''}
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO UPLOAD AN IMAGE (use this EXACT sequence)
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+Flow hides file inputs in shadow DOM. Every time you upload:
 
-HOW TO UPLOAD AN IMAGE (use this for every upload — never click the upload button):
-  1. Use find or read_page to locate the <input type="file"> element near the upload slot
-  2. Call file_upload with:
-       paths: ["{downloads_path}\\${avatarFile}"]   ← full absolute path
-       ref:   {ref ID from find/read_page}
-       tabId: {current tab ID from tabs_context_mcp}
-  3. Confirm the thumbnail appears before moving on
+A) Run javascript_tool on the Flow tab:
+  const inputs = [];
+  (function scan(root) {
+    root.querySelectorAll('input[type="file"]').forEach(el => inputs.push(el));
+    root.querySelectorAll('*').forEach(el => { if (el.shadowRoot) scan(el.shadowRoot); });
+  })(document);
+  inputs.forEach((el,i) => console.log('INPUT',i,el.outerHTML.slice(0,80)));
+  inputs.length;
+
+B) Use find with query "input[type=file]" to get the ref.
+   Photo 1 = ref index 0 (first input), Photo 2 = ref index 1 (second input).
+
+C) Call file_upload:
+   paths: ["{dl}\\{filename}"]
+   ref:   {ref from find}
+   tabId: {Flow tab ID}
+
+D) Screenshot to confirm thumbnail appeared. If missing, re-run file_upload once more.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Navigate to https://labs.google/fx/tools/flow — sign in if needed
-2. Open Nano Banana Pro
-
-${hasAvatar ? `3. Upload Photo 1 (avatar):
-   — Use find to locate the Photo 1 file input (input[type="file"]) near the first upload slot
-   — Call file_upload with the full path to ${avatarFile}
-   — Confirm thumbnail appears` : '3. No avatar — skip Photo 1'}
-
-${hasStartFrame ? `4. Upload Photo 2 (start frame):
-   — Use find to locate the Photo 2 file input near the second upload slot
-   — Call file_upload with the full path to ${startFrameFile}
-   — Confirm thumbnail appears` : '4. No start frame — skip Photo 2'}
-
-5. Set output format to 9:16 vertical
-6. Click the prompt field and paste this exactly:
+1. Open Nano Banana Pro on the Flow project
+${hasAvatar ? `2. Upload Photo 1 (avatar) — slot index 0, file: {dl}\\${avatarFile}` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Upload Photo 2 (start frame) — slot index 1, file: {dl}\\${startFrameFile}` : '3. No start frame — skip Photo 2'}
+4. Set format: 9:16 vertical
+5. Paste this NB Pro prompt:
 
 ${nbPrompt}
 
-7. Click Generate and wait for the image
-8. Check — correct person, right pose and setting. Regenerate once if wrong.
-9. Click "Add to prompt" on the generated image
+6. Click Generate — wait up to 90s for image to appear
+7. Verify result looks correct, then click "Add to prompt"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — Veo 3 Fast
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Stay on https://labs.google/fx/tools/flow
-2. Check if the NB image is already attached as a starting frame (thumbnail near the prompt input).
-   IF NOT ATTACHED:
-   — Right-click the generated NB image → Save Image → save to Downloads as nb_result.jpg
-   — Use find to locate the starting frame file input in the Veo 3 section
-   — Call file_upload with the path to nb_result.jpg
-3. Select model: Veo 3 Fast
-4. Set duration: ${duration} seconds (${wordCount} words ≈ ${Math.round(wordCount / 2.3)}s of speech)
-5. Click the prompt field and paste this exactly:
+1. Select model: Veo 3 Fast
+2. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount / 2.3)}s speech)
+3. Paste this Veo 3 prompt:
 
 ${veoPrompt}
 
-6. Click Generate — wait for the video to finish rendering
-7. Right-click the video → "Save video as" → save to:
-   Downloads\\FlowVideos\\Scene_${i + 1}.mp4
-   (Create the FlowVideos folder if it doesn't exist)
-8. Mark this scene done in the app:
-   — Use tabs_context_mcp to find the tab at: ${window.location.href}
-   — Run javascript_tool on that tab: window.markSceneDone(${i})
-9. Report back with the result`;
+4. Click Generate — wait up to 3 minutes — do NOT interrupt
+5. Hover over video → click ⬇ download button → select any quality
+6. Wait for download, then run Bash to rename:
+   FOR /F "delims=" %%F IN ('dir /b /o-d "{dl}\\*.mp4"') DO (set n=%%F & goto done)
+   :done
+   move "{dl}\\%n%" "{dl}\\FlowVideos\\Scene_${i + 1}.mp4"
+7. Mark done: tabs_context_mcp → find tab ${window.location.href} → javascript_tool → window.markSceneDone(${i})
+8. Report back with the result`;
 
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
