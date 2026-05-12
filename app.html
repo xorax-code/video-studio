@@ -3844,11 +3844,23 @@ RULES — read carefully:
       const endTarget = segmentForTime(ws.end - 0.05);
       const spansMultiple = endTarget !== startTarget;
 
+      // Pull-back: if a chunk starts within 0.3s of its target segment's start boundary,
+      // it was spoken right at a scene cut — assign it to the PREVIOUS segment so the
+      // phrase stays with the scene where it visually belongs (e.g. "watermelon" spoken
+      // at exactly 8.0s = Seg3 start should stay with Seg2 where watermelon is on screen).
+      let assignTarget = startTarget;
+      if (startTarget > 0) {
+        const segStartTime = r1(segments[startTarget].startTime);
+        if (r1(ws.start) < segStartTime + 0.3) {
+          assignTarget = startTarget - 1;
+        }
+      }
+
       // Keep chunk atomic unless it's both long (> 6 words) AND spans multiple segments.
       // This prevents mid-phrase splits while still distributing very long chunks fairly.
       if (!spansMultiple || chunkWords.length <= 6) {
-        // Atomic: all words go to the segment where speaking started
-        chunkWords.forEach(word => buckets[startTarget].push(word));
+        // Atomic: all words go to the segment where speaking started (with pull-back)
+        chunkWords.forEach(word => buckets[assignTarget].push(word));
       } else {
         // Long chunk spanning multiple segments: split at natural segment boundaries
         const secPerWord = chunkDur / chunkWords.length;
