@@ -4831,7 +4831,46 @@ ${hasFrame
 ${nbPrompt}
 
 5. Click Generate — wait until the image appears (up to 90 seconds)
-6. Verify the image looks correct, then click "Add to prompt"
+6. Take a screenshot of the generated NB Pro image
+7. VERIFY the image passes ALL of the following checks before clicking "Add to prompt":
+
+   ✅ CHECK 1 — Avatar present
+      The person from Photo 1 (the avatar) must be clearly visible in the image.
+      Their face, body, and clothing should be recognisable and unchanged from Photo 1.
+      FAIL if: the person looks like a completely different person, or there is no person at all.
+
+   ✅ CHECK 2 — Background is correct
+${bgFromAvatar ? `      ⚠ AVATAR BG MODE IS ON — Photo 1 is being used as BOTH the person AND the background source.
+      The background in the generated image must match the background visible in Photo 1 (the avatar photo itself).
+      Look at the environment behind the person in Photo 1 — the composite must preserve that same background.
+      FAIL if: the background has been replaced with something different from what was behind the avatar in Photo 1, or if it is a plain/blank background not present in Photo 1.`
+: hasFrame ? `      The background environment in the generated image must match the scene/location from Photo 2 (the start frame).
+      If Photo 2 shows a kitchen → the background should show a kitchen.
+      If Photo 2 shows an outdoor setting → the background should be outdoors.
+      Compare the generated image directly to Photo 2 — the setting, colours, and key objects in the background should match.
+      FAIL if: the background is a plain colour, entirely different location, or generic blur with no resemblance to Photo 2.`
+: `      No start frame or avatar background was provided — skip this check.`}
+
+   ✅ CHECK 3 — Items in hand / props match the source photo
+${bgFromAvatar ? `      ⚠ AVATAR BG MODE — props check is against Photo 1 (the avatar photo).
+      If Photo 1 shows the person holding or interacting with any object (bottle, fruit, product, tool, food, etc.), that same object must appear in approximately the same position in the generated image.
+      FAIL if: Photo 1 shows a visible prop/object but the generated image shows empty hands or a completely different unrelated object.`
+: hasFrame ? `      If Photo 2 shows the person holding an object (bottle, fruit, product, tool, food, etc.), that same object or a visually similar one must appear in the generated image in approximately the same position (hand, table, etc.).
+      FAIL if: Photo 2 shows a clearly visible prop but the generated image shows empty hands, or a completely different unrelated object.`
+: `      No reference frame provided — skip this check.`}
+
+   ✅ CHECK 4 — Image is not corrupted
+      The image must be a clean, realistic photo-quality composite.
+      FAIL if: the image is blank, heavily distorted, shows a cartoon/illustration, shows duplicated limbs, or has a face that is clearly melted/distorted.
+
+   IF ANY CHECK FAILS — RETRY ONCE:
+   • Click the NB Pro Generate button again (do not change the prompt or photos)
+   • Wait up to 90 seconds for a new result
+   • Take a screenshot and re-run all 4 checks on the new result
+   • If the second result also fails checks 1 or 4 (avatar missing or corrupted): log "Scene ${i+1} NB Pro failed — bad composite" and skip to the next scene
+   • If checks 2 or 3 fail on both attempts (background or prop wrong): proceed anyway and note "Scene ${i+1} NB Pro — background/prop mismatch" in your final report
+
+8. Once ALL checks pass (or after retry): click "Add to prompt"
 
 ━ VEO 3 STEP:
 1. Select model: Veo 3 Fast
@@ -4977,7 +5016,42 @@ ${hasStartFrame ? `3. Upload Photo 2 (start frame) — slot index 1, file: {dl}\
 ${nbPrompt}
 
 6. Click Generate — wait up to 90s for image to appear
-7. Verify result looks correct, then click "Add to prompt"
+7. Take a screenshot of the generated NB Pro image
+8. VERIFY the image passes ALL of the following checks before clicking "Add to prompt":
+
+   ✅ CHECK 1 — Avatar present
+      The person from Photo 1 (the avatar) must be clearly visible.
+      Their face, body, and clothing must be recognisable and unchanged from Photo 1.
+      FAIL if: completely different person, or no person at all.
+
+   ✅ CHECK 2 — Background is correct
+${bgFromAvatar ? `      ⚠ AVATAR BG MODE IS ON — Photo 1 is the source for BOTH the person AND the background.
+      The background in the generated image must match the background visible behind the person in Photo 1.
+      Look at Photo 1 carefully — what is behind the person? That same environment must appear in the composite.
+      FAIL if: the background has changed to something not in Photo 1, or it is a plain/blank background not present in Photo 1.`
+: hasStartFrame ? `      The background environment must match the scene/location shown in Photo 2 (the start frame).
+      Compare the generated image directly to Photo 2 — the setting, colours, and key objects in the background must match.
+      FAIL if: plain colour background, entirely different location, or no resemblance to Photo 2.`
+: `      No reference background provided — skip this check.`}
+
+   ✅ CHECK 3 — Items in hand / props match the source photo
+${bgFromAvatar ? `      ⚠ AVATAR BG MODE — the props reference is Photo 1 (the avatar photo).
+      If Photo 1 shows the person holding or interacting with any visible object (bottle, fruit, product, tool, food, etc.), that same object must appear in approximately the same position in the generated image.
+      FAIL if: Photo 1 shows a visible prop/object but the generated image shows empty hands or a completely different unrelated object.`
+: hasStartFrame ? `      If Photo 2 shows the person holding an object (bottle, fruit, product, food, etc.), that same object or a visually similar one must appear in the generated image in approximately the same position.
+      FAIL if: Photo 2 shows a visible prop but the generated image shows empty hands or a completely different unrelated object.`
+: `      No reference frame provided — skip this check.`}
+
+   ✅ CHECK 4 — Image is not corrupted
+      Must be a clean, realistic photo-quality composite — no blank, distorted, melted face, duplicate limbs, cartoon, or illustration.
+
+   IF ANY CHECK FAILS — RETRY ONCE:
+   • Click Generate again (same prompt, same photos) — wait up to 90s
+   • Re-run all 4 checks on the new result
+   • If avatar still missing or image still corrupted after retry: skip this scene, report "Scene NB Pro failed"
+   • If background/prop still wrong after retry: proceed anyway and note the mismatch in your report
+
+9. Once all checks pass (or after retry): click "Add to prompt"
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — Veo 3 Fast
