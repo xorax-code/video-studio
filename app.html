@@ -4446,67 +4446,58 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     }
 
     const appUrl = window.location.href;
-    let instruction = `You are fully automating video generation for ALL scenes on Google Flow using Claude in Chrome tools. Complete every scene sequentially without stopping. After each scene's video is saved, mark it done in the app.
+    const dlPath = 'C:\\Users\\x\\Downloads';
+    let instruction = `You are fully automating video generation for ALL scenes on Google Flow using Claude in Chrome tools. NEVER stop to ask questions — make your best judgment and continue. NEVER create new browser windows or Chrome profiles.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PRE-AUTHORIZED — READ ONCE, NEVER ASK AGAIN
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ Downloads: ALL video downloads are pre-authorized. Never ask permission to download.
+✅ Google account: Already signed in. Use the existing Google account on the Flow tab.
+✅ No Bash needed: Do NOT use Bash for any step. No folder creation, no file renaming.
+✅ Videos go to: ${dlPath}\\ with whatever filename Flow gives them. No renaming required.
+✅ No NB Pro required: If you do not see a Nano Banana Pro panel, skip it and go straight to Veo 3.
 
 APP URL: ${appUrl}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-GOOGLE FLOW UI MAP (memorize — do not explore)
+FLOW TAB — USE EXISTING, DO NOT CREATE NEW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Left sidebar: list of generations. TOP of sidebar has a "+ New prompt" button.
-• NB Pro panel (top of main area): has TWO image upload slots side by side.
-  — Photo 1 slot is on the LEFT, Photo 2 slot is on the RIGHT.
-  — Each slot is a clickable placeholder. The hidden <input type="file"> is nearby.
-• Veo 3 panel (below NB Pro): model dropdown, duration picker, text prompt, Generate button.
-• After generation: video appears with a ⬇ download icon button on hover.
+Use tabs_context_mcp to list ALL open tabs. Find a tab whose URL contains "labs.google/fx/tools/flow" AND whose title includes a date (e.g. "Flow - May 11"). That is the existing project — use it for every scene.
+• Do NOT navigate to flow and create a new project
+• Do NOT use a tab titled just "Flow" with no date (that is the homepage, not a project)
+• If multiple project tabs exist, use the most recent one
+• For each new scene: click the "+ New prompt" button in the LEFT sidebar to reset — do NOT open a new tab or navigate away
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-BEFORE YOU START
+HOW TO UPLOAD AN IMAGE (file_upload tool only — never click upload buttons)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Run Bash: echo %USERPROFILE%\\Downloads  — save this as {dl} for the entire run
-2. Run Bash: mkdir "%USERPROFILE%\\Downloads\\FlowVideos"  — create output folder now
-3. Navigate to https://labs.google/fx/tools/flow — create ONE new project, keep tab open for all scenes
+⚠️ NEVER click any upload slot or button — it opens a native picker you cannot control.
+⚠️ NEVER call input.click() in javascript_tool.
+
+Steps every time:
+  1. find tool: query "input type file" or "file input" on the Flow tab
+  2. file_upload: paths=["${dlPath}\\{filename}"], ref={first ref returned}, tabId={Flow tab}
+  3. Screenshot to confirm thumbnail appeared
+  4. If no thumbnail after one attempt, try once more with same ref — then move on regardless
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO UPLOAD AN IMAGE
+HOW TO DOWNLOAD A VIDEO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ DO NOT click any upload button or image slot — this opens a native file picker
-   you cannot interact with. DO NOT use input.click() in javascript_tool either.
-
-Use this exact method every time:
-  1. Use find tool with query "input[type=file]" to locate the hidden file input refs
-     — Photo 1 is the FIRST ref returned, Photo 2 is the SECOND ref returned
-  2. Call file_upload with:
-       paths: ["{dl}\\{filename}"]   ← full absolute Windows path
-       ref:   {ref from find}
-       tabId: {Flow tab ID from tabs_context_mcp}
-  3. Take a screenshot to confirm the thumbnail appeared in the slot
-  4. If file_upload returns an error, try once more with the same ref — do NOT click anything
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO SAVE A VIDEO (download button — NOT right-click)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-After Veo 3 generates, do NOT right-click the video. Instead:
-1. Hover over the video to reveal controls
-2. Click the ⬇ download button, or use find: "button[aria-label*='ownload']"
-3. Select any quality option — the file will auto-download to {dl}
-4. Wait 3 seconds for the download to finish
-5. Use Bash to rename and move it:
-   FOR /F "delims=" %%F IN ('dir /b /o-d "{dl}\\*.mp4"') DO (set newest=%%F & goto done)
-   :done
-   move "{dl}\\%newest%" "{dl}\\FlowVideos\\Scene_SCENENUMBER.mp4"
-
-   (Replace SCENENUMBER with the scene number, e.g. Scene_1.mp4)
+1. Hover over the generated video to reveal controls
+2. Click the ⬇ download button (find: "download" or "aria-label*=ownload")
+3. If a quality picker appears, click any option
+4. Wait 5 seconds — file auto-saves to ${dlPath}\\ with Flow's filename
+5. Do NOT rename or move the file
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO MARK A SCENE DONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Use tabs_context_mcp to find the tab with URL: ${appUrl}
-2. Run javascript_tool on that tab: window.markSceneDone(SCENE_INDEX)
-   (SCENE_INDEX is 0-based: Scene 1 = 0, Scene 2 = 1, etc.)
+After downloading: find the app tab (URL: ${appUrl}) → javascript_tool → window.markSceneDone(SCENE_INDEX)
+SCENE_INDEX is 0-based: Scene 1 = index 0, Scene 2 = index 1, etc.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMAGE FILES DOWNLOADED TO DOWNLOADS:
+IMAGE FILES IN DOWNLOADS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
@@ -4569,8 +4560,8 @@ ${nbPrompt}
 ${veoPrompt}
 
 4. Click Generate — wait for video to fully render (up to 3 minutes — do not interrupt)
-5. Save video using HOW TO SAVE A VIDEO above → rename to {dl}\\FlowVideos\\Scene_${i+1}.mp4
-6. Mark done: tabs_context_mcp → find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
+5. Download video using HOW TO DOWNLOAD A VIDEO above (no renaming needed)
+6. Mark done: find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
 `;
     });
 
@@ -4578,8 +4569,7 @@ ${veoPrompt}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ALL SCENES COMPLETE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Run Bash: dir "%USERPROFILE%\\Downloads\\FlowVideos\\*.mp4"
-Report back: how many scenes completed, any errors, and list the saved video files.`;
+Report back: how many scenes completed successfully, and note any that had issues.`;
 
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
