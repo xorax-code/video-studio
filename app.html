@@ -3782,22 +3782,68 @@ Rules:
       if (distributeScriptFromTimestamps()) return;
     }
 
-    // Proportional word-by-time split — never duplicates, OK to break mid-sentence
+    // Sentence-aware proportional split — never breaks mid-sentence
     const originalEl = document.getElementById('originalScript');
     const script = originalEl ? originalEl.value.trim() : '';
     if (!script || segments.length === 0) return;
 
-    const words = script.split(/\s+/).filter(Boolean);
-    const totalDur = (segments[segments.length - 1].endTime - segments[0].startTime) || 1;
-    let wordIdx = 0;
+    // Split into sentences, keeping punctuation attached
+    const rawSentences = script.match(/[^.!?]+[.!?]+\s*/g) || [];
+    // Handle trailing text with no ending punctuation
+    const lastPunctEnd = rawSentences.join('').length;
+    if (lastPunctEnd < script.length) {
+      const tail = script.slice(lastPunctEnd).trim();
+      if (tail) rawSentences.push(tail);
+    }
+    const sentences = rawSentences.map(s => s.trim()).filter(Boolean);
 
+    // Fallback: if no sentences detected, treat whole script as one
+    if (sentences.length === 0) { segments[0].script = script; return; }
+
+    const totalWords = sentences.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
+    const totalDur = (segments[segments.length - 1].endTime - segments[0].startTime) || 1;
+
+    // Calculate ideal word target per segment based on its duration
+    const targets = segments.map(seg =>
+      Math.max(1, Math.round(((seg.endTime - seg.startTime) / totalDur) * totalWords))
+    );
+
+    // Greedy sentence assignment — each sentence goes to exactly one segment
+    let si = 0; // sentence index
     for (let i = 0; i < segments.length; i++) {
-      const segDur = segments[i].endTime - segments[i].startTime;
-      const wordCount = i < segments.length - 1
-        ? Math.max(1, Math.round((segDur / totalDur) * words.length))
-        : words.length - wordIdx; // last segment gets all remaining words
-      segments[i].script = words.slice(wordIdx, wordIdx + wordCount).join(' ');
-      wordIdx = Math.min(wordIdx + wordCount, words.length);
+      const isLast = i === segments.length - 1;
+      const assigned = [];
+      let wCount = 0;
+
+      if (isLast) {
+        // Last segment absorbs all remaining sentences
+        while (si < sentences.length) { assigned.push(sentences[si++]); }
+      } else {
+        // Always assign at least one sentence
+        if (si < sentences.length) {
+          assigned.push(sentences[si]);
+          wCount += sentences[si].split(/\s+/).filter(Boolean).length;
+          si++;
+        }
+        // Keep adding sentences while we're below the target and there are enough sentences
+        // left to cover remaining segments (leave at least 1 per remaining segment)
+        while (si < sentences.length) {
+          const remaining = segments.length - i - 1;
+          const sentencesLeft = sentences.length - si;
+          if (sentencesLeft <= remaining) break; // must leave one per remaining segment
+          const nextWords = sentences[si].split(/\s+/).filter(Boolean).length;
+          // Add if still under target, or if next segment already has its sentence guaranteed
+          if (wCount < targets[i]) {
+            assigned.push(sentences[si]);
+            wCount += nextWords;
+            si++;
+          } else {
+            break;
+          }
+        }
+      }
+
+      segments[i].script = assigned.join(' ').trim();
     }
   }
 
