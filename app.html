@@ -1547,7 +1547,11 @@
             </div>
           </div>
           <div style="padding:6px 10px;">
-            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments()" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
+            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments();checkScriptFlagged(this.value)" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
+            <div id="scriptFlagWarning" style="display:none;margin-top:4px;padding:6px 8px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:4px;font-size:10px;color:var(--warning);display:none;gap:6px;align-items:center;">
+              <span>⚠ Flagged content detected. Consider rewriting before generating.</span>
+              <button onclick="rewriteScript()" style="margin-left:auto;padding:2px 7px;font-size:9px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:3px;color:var(--warning);cursor:pointer;flex-shrink:0;">Auto-fix</button>
+            </div>
           </div>
         </div>
 
@@ -1692,8 +1696,10 @@
                 </select>
               </div>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
-              <button class="btn" onclick="runAllScenes()" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Download all images and copy a single instruction that runs every scene automatically">▶ Run All Scenes</button>
+              <button class="btn" onclick="runAllScenes(false)" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Download all images and copy a single instruction that runs every scene automatically">▶ Run All Scenes</button>
+              <button class="btn" onclick="runAllScenes(true)" style="padding:3px 9px;font-size:10px;font-weight:600;background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.4);color:var(--warning);" title="Resume — skips scenes already marked ✅ DONE">⚡ Resume</button>
               <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe Scenes</button>
+              <button class="btn" onclick="openVideoAssembler()" style="padding:3px 10px;font-size:10px;color:#60a5fa;border-color:rgba(96,165,250,0.4);" title="Video Assembler — stitch downloaded scene videos">🎞 Assembler</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
           </div>
@@ -3214,6 +3220,25 @@
 
   // --- OpenAI API key management ---
   // Key is baked in by the app owner — users never see or manage it.
+  // ── Flagged content words / phrases ──────────────────────────────────────
+  const FLAGGED_PATTERNS = [
+    /\bcures?\b/i, /\bheals?\b/i, /\btreat(ment|s|ing)?\b/i,
+    /doctors? (hate|don'?t want)/i, /pharmacies? don'?t want/i,
+    /they don'?t want you to know/i, /\bban(ned)?\b/i,
+    /\bmiracle\b/i, /\bguaranteed?\b/i, /\bclinically proven\b/i,
+    /\bno side effects\b/i, /\blose \d+ (pounds?|lbs?|kg)/i,
+    /\bprevents? (cancer|diabetes|disease|heart)/i,
+    /\bfda (approved|cleared)\b/i, /\bscientifically proven\b/i,
+    /\bweight loss guarantee\b/i, /\bdetox\b/i,
+  ];
+
+  function checkScriptFlagged(text) {
+    const warn = document.getElementById('scriptFlagWarning');
+    if (!warn) return;
+    const flagged = FLAGGED_PATTERNS.some(p => p.test(text));
+    warn.style.display = flagged ? 'flex' : 'none';
+  }
+
   async function rewriteScript() {
     const scriptEl = document.getElementById('originalScript');
     const original = (scriptEl?.value || '').trim();
@@ -3273,6 +3298,8 @@ Rules:
             <button onclick="
               const val = document.getElementById('rewritePreview').value;
               document.getElementById('originalScript').value = val;
+              if(typeof distributeScript === 'function') distributeScript();
+              if(typeof renderSegments === 'function') renderSegments();
               if(typeof saveSegments === 'function') saveSegments();
               this.closest('div[style*=fixed]').remove();
             " style="flex:1;padding:7px;background:rgba(124,106,247,0.15);border:1px solid rgba(124,106,247,0.5);border-radius:6px;color:#b09af7;font-weight:600;cursor:pointer;font-size:11px;">✓ Use This Script</button>
@@ -3800,6 +3827,12 @@ Rules:
     // Fallback: if no sentences detected, treat whole script as one
     if (sentences.length === 0) { segments[0].script = script; return; }
 
+    // Fallback: fewer sentences than segments — give every segment the full script
+    if (sentences.length < segments.length) {
+      segments.forEach(s => { s.script = script; });
+      return;
+    }
+
     const totalWords = sentences.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const totalDur = (segments[segments.length - 1].endTime - segments[0].startTime) || 1;
 
@@ -3952,7 +3985,7 @@ Rules:
           <!-- Script -->
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script</span>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script ${(()=>{const wc=(seg.script||'').trim().split(/\s+/).filter(Boolean).length;return wc===0?'':`<span style="font-weight:400;color:${wc<5?'#f87171':wc>35?'#fbbf24':'var(--text-3)'};" title="${wc<5?'Too short — try 5+ words':wc>35?'Long — may exceed scene duration':''}"> ${wc}w${wc<5?' ⚠':wc>35?' ⚠':''}</span>`;})()}</span>
               <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);font-size:10px;padding:1px 6px;cursor:pointer;">✕ Remove</button>
             </div>
             <textarea id="script-seg-${i}"
@@ -3989,6 +4022,18 @@ Rules:
               style="${PROMPT_TA_STYLE}"
               placeholder="Describe the scene for NB Pro — lighting, framing, background, mood, what the person looks like in this frame…"
             >${escHtml(seg.nbPrompt || '')}</textarea>
+            <!-- NB Pro Composite Preview -->
+            <div style="margin-top:4px;display:flex;align-items:center;gap:6px;">
+              <div id="nbpreview-zone-${i}" onclick="document.getElementById('nbpreview-input-${i}').click()"
+                style="width:40px;height:40px;border:1px dashed rgba(251,191,36,0.3);border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:rgba(251,191,36,0.04);">
+                ${seg.nbPreviewDataUrl
+                  ? `<img src="${seg.nbPreviewDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:2px;">`
+                  : `<span style="font-size:14px;opacity:0.4;">🍌</span>`}
+              </div>
+              <span style="font-size:9px;color:var(--text-3);line-height:1.3;">Upload NB Pro<br>composite result</span>
+              ${seg.nbPreviewDataUrl ? `<button onclick="clearNbPreview(${i})" style="margin-left:auto;font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;">✕</button>` : ''}
+              <input type="file" id="nbpreview-input-${i}" accept="image/*" style="display:none;" onchange="onNbPreviewChange(${i}, this)">
+            </div>
           </div>
 
           ${seg.nbEndPrompt !== undefined && !seg._scriptOnly ? `
@@ -4010,6 +4055,7 @@ Rules:
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
               <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt</span>
               <div style="display:flex;gap:4px;align-items:center;">
+                ${seg.done ? `<button onclick="redoScene(${i})" title="Redo this scene — copies a fresh instruction for just this scene" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">🔄 Redo</button>` : ''}
                 <button onclick="copyClaudeInstruction(${i})" title="Copy a Claude in Chrome instruction to auto-submit this prompt" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.4);border-radius:2px;color:#a78bfa;font-size:9px;padding:1px 6px;cursor:pointer;">🤖 Claude Browser</button>
                 <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
               </div>
@@ -4083,7 +4129,7 @@ Rules:
       : analyzedAction;
     const obj = {
       action: actionWithSpeech,
-      speech: scriptSlice ? `They say: "${scriptSlice}"` : '',
+      speech: scriptSlice || '',
       audio: 'natural ambient sound, clear voice, no background music',
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
@@ -4545,6 +4591,41 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     return secs <= 6.5 ? 6 : 8;
   }
 
+  // ── Live Scene Status Panel ───────────────────────────────────────────────
+  function showStatusPanel() {
+    let panel = document.getElementById('sceneStatusPanel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'sceneStatusPanel';
+      panel.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:9998;background:var(--surface);border:1px solid var(--border-2);border-radius:10px;padding:12px 14px;min-width:200px;max-width:260px;box-shadow:0 4px 24px rgba(0,0,0,0.5);font-family:inherit;';
+      document.body.appendChild(panel);
+    }
+    const total = segments.filter(s => s.veoPrompt?.trim()).length;
+    const done  = segments.filter(s => s.veoPrompt?.trim() && s.done).length;
+    panel.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+        <span style="font-size:11px;font-weight:700;color:var(--text-1);">🎬 Scene Progress</span>
+        <button onclick="document.getElementById('sceneStatusPanel').remove()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        ${segments.filter(s => s.veoPrompt?.trim()).map((seg, idx) => {
+          const globalIdx = segments.indexOf(seg);
+          const statusIcon = seg.done ? '✅' : '⏳';
+          const statusColor = seg.done ? '#4ade80' : 'var(--text-3)';
+          return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;">
+            <span>${statusIcon}</span>
+            <span style="color:${statusColor};">Scene ${globalIdx + 1}</span>
+            ${seg.done ? '<span style="color:#4ade80;font-size:9px;margin-left:auto;">Done</span>' : ''}
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:10px;color:var(--text-3);">${done} / ${total} complete</div>
+      <div style="margin-top:6px;background:var(--surface-2);border-radius:3px;height:4px;overflow:hidden;">
+        <div style="width:${total>0?Math.round(done/total*100):0}%;height:100%;background:var(--success);border-radius:3px;transition:width 0.4s;"></div>
+      </div>`;
+    return panel;
+  }
+
   // ── Mark a scene done (called by Claude via javascript_tool) ──────────────
   window.markSceneDone = function(i) {
     if (!segments[i]) return;
@@ -4555,16 +4636,62 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
       const badge = card.querySelector('.scene-done-badge');
       if (badge) { badge.style.display = 'block'; }
     }
+    // Update live status panel if open
+    const panel = document.getElementById('sceneStatusPanel');
+    if (panel) showStatusPanel();
     console.log('[markSceneDone] Scene', i + 1, 'marked complete');
   };
 
-  // ── Run All Scenes — download all images + copy one combined instruction ──
-  function runAllScenes() {
-    const ready = segments.filter(s => s.veoPrompt?.trim());
-    if (!ready.length) { alert('Generate prompts first.'); return; }
+  // ── NB Pro preview upload / clear ────────────────────────────────────────
+  function onNbPreviewChange(i, input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      segments[i].nbPreviewDataUrl = ev.target.result;
+      debounceSave();
+      const zone = document.getElementById('nbpreview-zone-' + i);
+      if (zone) zone.innerHTML = `<img src="${ev.target.result}" style="width:100%;height:100%;object-fit:cover;border-radius:2px;">`;
+    };
+    reader.readAsDataURL(file);
+  }
 
-    const unready = segments.filter((s,i) => !s.veoPrompt?.trim());
-    if (unready.length) {
+  function clearNbPreview(i) {
+    segments[i].nbPreviewDataUrl = null;
+    debounceSave();
+    renderSegments();
+  }
+
+  // ── One-click Redo Scene (copies single-scene instruction) ────────────────
+  function redoScene(i) {
+    segments[i].done = false;
+    debounceSave();
+    renderSegments();
+    copyClaudeInstruction(i);
+  }
+
+  // ── Credit cost estimator ─────────────────────────────────────────────────
+  function estimateCredits(segsToRun) {
+    // Veo 3 Fast: ~2 credits/second. NB Pro: ~1 credit per generation.
+    let total = 0;
+    segsToRun.forEach(seg => {
+      const dur = getVeoDuration(seg.script);
+      total += dur * 2; // Veo 3
+      total += 1;       // NB Pro
+    });
+    return total;
+  }
+
+  // ── Run All Scenes — download all images + copy one combined instruction ──
+  function runAllScenes(skipDone) {
+    const allReady = segments.filter(s => s.veoPrompt?.trim());
+    if (!allReady.length) { alert('Generate prompts first.'); return; }
+
+    const ready = skipDone ? allReady.filter(s => !s.done) : allReady;
+    if (!ready.length) { alert('All scenes are already done! Use "Run All Scenes" to re-run them, or click "Redo" on individual scenes.'); return; }
+
+    const unready = segments.filter(s => !s.veoPrompt?.trim());
+    if (unready.length && !skipDone) {
       if (!confirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`)) return;
     }
 
@@ -4633,6 +4760,18 @@ After downloading: find the app tab (URL: ${appUrl}) → javascript_tool → win
 SCENE_INDEX is 0-based: Scene 1 = index 0, Scene 2 = index 1, etc.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IF GENERATION FAILS — AUTO RETRY RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+If Flow shows "Failed — unusual activity" or a content moderation error:
+  1. Click "+ New prompt" to reset
+  2. Open NB Pro again (same steps as above)
+  3. Shorten the Veo 3 prompt by removing any medical/health references
+  4. Replace any body part names with more neutral descriptors
+  5. Try again — up to 2 more attempts before moving on
+  6. If all 3 attempts fail, skip that scene and continue to the next one
+  7. At the end, report which scenes failed so user can manually retry
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 IMAGE FILES IN DOWNLOADS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
@@ -4644,18 +4783,24 @@ IMAGE FILES IN DOWNLOADS:
       instruction += `• ${avatarFile}  ← Avatar (Photo 1, reuse for every scene)\n`;
     }
 
-    segments.forEach((seg, i) => {
+    // Use the real segment index (globalI) for filenames/markSceneDone
+    segments.forEach((seg, globalI) => {
       if (!seg.veoPrompt?.trim()) return;
+      if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
-        const fname = `scene${i+1}_photo2_startframe.jpg`;
+        const fname = `scene${globalI+1}_photo2_startframe.jpg`;
         downloadFrameAsFile(seg.frameDataUrl, fname);
-        instruction += `• ${fname}  ← Scene ${i+1} start frame (Photo 2)\n`;
+        instruction += `• ${fname}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
       }
     });
 
     // Build per-scene instructions
+    let runSceneNum = 0;
+    const totalRunScenes = segments.filter(s => s.veoPrompt?.trim() && !(skipDone && s.done)).length;
     segments.forEach((seg, i) => {
       if (!seg.veoPrompt?.trim()) return;
+      if (skipDone && seg.done) return;
+      runSceneNum++;
       const duration   = getVeoDuration(seg.script);
       const wordCount  = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
       const nbPrompt   = seg.nbPrompt  || '(no NB Pro prompt)';
@@ -4665,20 +4810,20 @@ IMAGE FILES IN DOWNLOADS:
 
       instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SCENE ${i+1} of ${segments.filter(s=>s.veoPrompt?.trim()).length}
+SCENE ${runSceneNum} of ${totalRunScenes} (App Scene ${i+1})
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${i === 0
+${runSceneNum === 1
   ? `Flow project is already open. Locate the Nano Banana Pro panel at the top of the main area.`
   : `Stay in the same Flow tab. Click the "+ New prompt" button at the TOP of the LEFT sidebar to start a fresh generation. The NB Pro panel will reset — do not navigate away.`
 }
 
 ━ NB PRO STEP:
 ${avatarImageDataUrl
-  ? `1. Upload Photo 1 (avatar) using the HOW TO UPLOAD sequence above — slot index 0, file: {dl}\\${avatarFile}`
+  ? `1. Upload Photo 1 (avatar) using the HOW TO UPLOAD sequence above — slot index 0, file: ${dlPath}\\${avatarFile}`
   : `1. No avatar — skip Photo 1`}
 ${hasFrame
-  ? `2. Upload Photo 2 (start frame) using the HOW TO UPLOAD sequence above — slot index 1, file: {dl}\\${frameFile}`
+  ? `2. Upload Photo 2 (start frame) using the HOW TO UPLOAD sequence above — slot index 1, file: ${dlPath}\\${frameFile}`
   : `2. No start frame — skip Photo 2`}
 3. Set format to 9:16 vertical
 4. Click the NB Pro prompt field and paste this exactly:
@@ -4718,16 +4863,21 @@ Report back: how many scenes completed successfully, and note any that had issue
       } catch(e) {}
     });
 
+    // Show live status panel
+    showStatusPanel();
+
     // Show confirmation modal
-    const sceneCount = segments.filter(s => s.veoPrompt?.trim()).length;
+    const sceneCount = ready.length;
+    const doneCount  = segments.filter(s => s.veoPrompt?.trim() && s.done).length;
+    const estCredits = estimateCredits(ready);
     const modal = document.createElement('div');
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
     modal.innerHTML = `
-      <div style="background:var(--surface);border:1px solid rgba(34,197,94,0.4);border-radius:12px;padding:24px;width:460px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
+      <div style="background:var(--surface);border:1px solid rgba(34,197,94,0.4);border-radius:12px;padding:24px;width:480px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
           <div style="font-size:22px;">▶</div>
           <div>
-            <div style="font-size:14px;font-weight:700;color:var(--text-1);">Run All Scenes — ${sceneCount} scene${sceneCount>1?'s':''}</div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-1);">Run ${sceneCount} Scene${sceneCount>1?'s':''}${skipDone?' (Resume)':''}</div>
             <div style="font-size:11px;color:var(--text-3);">Full instruction copied to clipboard</div>
           </div>
         </div>
@@ -4735,12 +4885,23 @@ Report back: how many scenes completed successfully, and note any that had issue
           <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:10px 12px;">
             ✅ All images downloaded to Downloads folder<br>
             ✅ One instruction covers all ${sceneCount} scenes sequentially<br>
-            ✅ Videos auto-saved to Downloads/FlowVideos/<br>
+            ✅ Auto-retry included (up to 2 retries per failed scene)<br>
             ✅ Each scene auto-marked done in this app when complete
           </div>
+          <div style="background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:6px;padding:8px 12px;display:flex;align-items:center;gap:10px;">
+            <span style="font-size:15px;">💎</span>
+            <div>
+              <div style="font-size:11px;color:var(--accent-2);font-weight:600;">Estimated: ~${estCredits} Flow credits</div>
+              <div style="font-size:10px;color:var(--text-3);">Based on ${sceneCount} scenes × avg duration × Veo 3 Fast rate</div>
+            </div>
+          </div>
+          ${doneCount > 0 && !skipDone ? `<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:8px 12px;font-size:10px;color:var(--warning);">⚡ ${doneCount} scene${doneCount>1?'s are':' is'} already done. Use <strong>Resume</strong> to skip them and save ~${estimateCredits(segments.filter(s=>s.done&&s.veoPrompt?.trim()))} credits.</div>` : ''}
           <div style="color:var(--text-3);font-size:10px;">Paste the instruction into Claude desktop → it runs everything hands-free</div>
         </div>
-        <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
+        <div style="display:flex;gap:8px;">
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
+          ${doneCount > 0 && !skipDone ? `<button onclick="this.closest('div[style*=fixed]').remove();runAllScenes(true)" style="padding:8px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:6px;color:var(--warning);font-weight:600;cursor:pointer;font-size:12px;">⚡ Resume (skip done)</button>` : ''}
+        </div>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
@@ -5448,11 +5609,13 @@ TECHNICAL SPECS:
       endFrameDataUrl: s.endFrameDataUrl || null,
       script: s.script || '', action: s.action || '',
       nbPrompt: s.nbPrompt || '', nbEndPrompt: s.nbEndPrompt || '',
+      nbPreviewDataUrl: s.nbPreviewDataUrl || null,
       veoPrompt: s.veoPrompt || '',
       frameDesc: s.frameDesc || '',
       refPhotoDataUrl: s.refPhotoDataUrl || null,
       refPhotoDesc: s.refPhotoDesc || '',
       _scriptOnly: s._scriptOnly || false,
+      done: s.done || false,
     }));
     DB.set(modeKey('sm_projects'), JSON.stringify(projects));
   }
@@ -5477,6 +5640,9 @@ TECHNICAL SPECS:
       </select>
       <button class="btn" onclick="renameProject()" style="padding:2px 8px;font-size:10px;" title="Rename">✏</button>
       <button class="btn" onclick="newProject()" style="padding:2px 10px;font-size:11px;flex-shrink:0;">+ New Project</button>
+      <button class="btn" onclick="exportProjectJSON()" style="padding:2px 8px;font-size:10px;color:var(--accent-2);border-color:rgba(124,106,247,0.4);" title="Export project as JSON file">⬇ Export</button>
+      <button class="btn" onclick="document.getElementById('projectImportInput').click()" style="padding:2px 8px;font-size:10px;color:var(--text-2);" title="Import project from JSON file">⬆ Import</button>
+      <input type="file" id="projectImportInput" accept=".json" style="display:none;" onchange="importProjectJSON(this)">
       ${projects.length > 1 ? `<button class="btn" onclick="deleteProject('${escHtml(p.id)}')" style="padding:2px 8px;font-size:10px;color:var(--danger);border-color:#3a2020;" title="Delete project">🗑</button>` : ''}
     `;
   }
@@ -5565,6 +5731,134 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
+  }
+
+  // ── Export / Import project as JSON ──────────────────────────────────────
+  function exportProjectJSON() {
+    const p = getActiveProject();
+    if (!p) return;
+    const exportData = {
+      _app: 'SocialOS VideoStudio',
+      _version: 1,
+      _exported: new Date().toISOString(),
+      mode: studioMode,
+      project: JSON.parse(JSON.stringify(p)), // deep clone
+      avatarDesc: document.getElementById('avatarDesc')?.value || '',
+      setting: document.getElementById('studioSetting')?.value || '',
+      product: document.getElementById('studioProduct')?.value || '',
+      format: document.getElementById('studioFormat')?.value || '',
+    };
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const safeName = (p.name || 'project').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
+    a.href     = url;
+    a.download = `socialos_${safeName}_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function importProjectJSON(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        if (!data._app || !data.project) throw new Error('Not a valid SocialOS project file');
+        const imported = data.project;
+        imported.id   = Date.now().toString();
+        imported.name = (imported.name || 'Imported') + ' (imported)';
+        projects.push(imported);
+        activeProjectId = imported.id;
+        DB.set(modeKey('sm_projects'), JSON.stringify(projects));
+        DB.set(modeKey('sm_active_project'), activeProjectId);
+        loadProjectData();
+        renderProjectBar();
+        // Restore settings
+        if (data.setting && document.getElementById('studioSetting')) document.getElementById('studioSetting').value = data.setting;
+        if (data.product && document.getElementById('studioProduct')) document.getElementById('studioProduct').value = data.product;
+        if (data.format  && document.getElementById('studioFormat'))  document.getElementById('studioFormat').value  = data.format;
+        if (data.avatarDesc && document.getElementById('avatarDesc')) document.getElementById('avatarDesc').value = data.avatarDesc;
+        alert(`✅ Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`);
+      } catch (e) {
+        alert('Import failed: ' + e.message);
+      } finally {
+        input.value = '';
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  // ── Video Assembler ───────────────────────────────────────────────────────
+  function openVideoAssembler() {
+    const existing = document.getElementById('videoAssemblerModal');
+    if (existing) { existing.remove(); return; }
+
+    const doneSegs = segments.map((s,i) => ({...s, _idx: i})).filter(s => s.veoPrompt?.trim());
+    const dlPath   = 'C:\\Users\\x\\Downloads';
+
+    const fileList = doneSegs.map((seg, n) => {
+      const label = seg.done ? '✅' : '⏳';
+      return `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);font-size:10px;">
+        <span style="color:${seg.done?'#4ade80':'var(--text-3)'};">${label}</span>
+        <span style="color:var(--text-2);flex:1;">Scene ${seg._idx+1}</span>
+        <span style="color:var(--text-3);font-family:monospace;">${Math.round(getVeoDuration(seg.script))}s</span>
+      </div>`;
+    }).join('');
+
+    // Build FFmpeg command
+    const sceneFiles = doneSegs.map((seg, n) => `file '${dlPath}\\scene${seg._idx+1}_video.mp4'`).join('\n');
+    const totalSecs  = doneSegs.reduce((acc, seg) => acc + getVeoDuration(seg.script), 0);
+
+    const modal = document.createElement('div');
+    modal.id = 'videoAssemblerModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid rgba(96,165,250,0.35);border-radius:12px;padding:20px;width:580px;max-width:96vw;max-height:90vh;overflow-y:auto;font-family:inherit;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-1);">🎞 Video Assembler</div>
+            <div style="font-size:10px;color:var(--text-3);">${doneSegs.length} scene${doneSegs.length!==1?'s':''} — ~${totalSecs}s total</div>
+          </div>
+          <button onclick="document.getElementById('videoAssemblerModal').remove()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:18px;">✕</button>
+        </div>
+
+        <!-- Scene list -->
+        <div style="margin-bottom:14px;">${fileList}</div>
+
+        <!-- How to assemble -->
+        <div style="background:rgba(96,165,250,0.06);border:1px solid rgba(96,165,250,0.2);border-radius:6px;padding:12px;margin-bottom:12px;">
+          <div style="font-size:10px;font-weight:700;color:#60a5fa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">How to assemble with FFmpeg</div>
+          <div style="font-size:10px;color:var(--text-2);line-height:1.7;">
+            1. Download all scene videos from Flow (they save to Downloads)<br>
+            2. Rename each file to match: <code style="color:var(--accent-2);">scene1_video.mp4</code>, <code style="color:var(--accent-2);">scene2_video.mp4</code>, etc.<br>
+            3. Create a file list (see below) and run the FFmpeg command
+          </div>
+        </div>
+
+        <!-- File list content -->
+        <div style="margin-bottom:8px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">concat.txt (save this to Downloads)</div>
+          <textarea readonly rows="4" style="width:100%;font-size:10px;padding:6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-2);font-family:monospace;resize:vertical;">${sceneFiles}</textarea>
+          <button onclick="navigator.clipboard.writeText(document.querySelector('#videoAssemblerModal textarea').value)" style="margin-top:4px;padding:3px 10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);font-size:10px;cursor:pointer;">Copy file list</button>
+        </div>
+
+        <!-- FFmpeg command -->
+        <div style="margin-bottom:14px;">
+          <div style="font-size:10px;font-weight:700;color:var(--text-3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">FFmpeg command (run in Downloads folder)</div>
+          <div style="display:flex;gap:6px;align-items:stretch;">
+            <code style="flex:1;display:block;font-size:10px;padding:6px 8px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:#60a5fa;font-family:monospace;word-break:break-all;">ffmpeg -f concat -safe 0 -i concat.txt -c copy final_video.mp4</code>
+            <button onclick="navigator.clipboard.writeText('ffmpeg -f concat -safe 0 -i concat.txt -c copy final_video.mp4')" style="padding:4px 10px;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.3);border-radius:3px;color:#60a5fa;font-size:10px;cursor:pointer;flex-shrink:0;">Copy</button>
+          </div>
+        </div>
+
+        <div style="font-size:9px;color:var(--text-3);line-height:1.5;">
+          <strong>Don't have FFmpeg?</strong> Download free from <a href="https://ffmpeg.org/download.html" target="_blank" style="color:var(--accent-2);">ffmpeg.org</a> or ask Claude to assemble the files for you in the terminal.
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
   // Apply only the visual/CSS parts of a mode switch (no data loading)
