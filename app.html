@@ -3831,52 +3831,66 @@ RULES — read carefully:
   function distributeScriptFromTimestamps() {
     if (!whisperSegments || whisperSegments.length === 0) return false;
 
-    const buckets = segments.map(() => []);
-
+    // ── Build flat word timeline from Whisper phrase chunks ──────────────────
+    // Each Whisper chunk is a phrase with start/end; we estimate per-word times
+    // linearly within the chunk so we have a timestamp for every word.
+    const wordTimeline = [];
     whisperSegments.forEach(ws => {
       const chunkWords = ws.text.trim().split(/\s+/).filter(Boolean);
-      if (chunkWords.length === 0) return;
+      if (!chunkWords.length) return;
+      const secPerWord = Math.max(0.1, ws.end - ws.start) / chunkWords.length;
+      chunkWords.forEach((word, wi) => {
+        wordTimeline.push({ word, time: ws.start + wi * secPerWord });
+      });
+    });
+    if (!wordTimeline.length) return false;
 
-      const chunkDur = Math.max(0.1, ws.end - ws.start);
-      const startTarget = segmentForTime(ws.start);
+    const buckets = segments.map(() => []);
+    let cursor = 0;
 
-      // Check if this chunk spans more than one segment in time
-      const endTarget = segmentForTime(ws.end - 0.05);
-      const spansMultiple = endTarget !== startTarget;
+    for (let si = 0; si < segments.length; si++) {
+      const isLast = si === segments.length - 1;
+      if (isLast) {
+        // Last segment gets everything remaining
+        while (cursor < wordTimeline.length) buckets[si].push(wordTimeline[cursor++].word);
+        break;
+      }
 
-      // Pull-back: if a chunk starts in the first half of its target segment (up to 1s),
-      // it's finishing a sentence from the previous scene — pull it back so the phrase
-      // stays visually aligned (e.g. "watermelon" spoken 0–1s into Seg3 stays in Seg2
-      // where watermelon is actually on screen).
-      let assignTarget = startTarget;
-      if (startTarget > 0) {
-        const segStartTime = r1(segments[startTarget].startTime);
-        const segEndTime   = r1(segments[startTarget].endTime);
-        const segDur       = segEndTime - segStartTime;
-        // Pull back anything spoken within the first 50% of the segment (max 1.0s window)
-        const pullThreshold = Math.min(segDur * 0.5, 1.0);
-        if (r1(ws.start) < segStartTime + pullThreshold) {
-          assignTarget = startTarget - 1;
+      const segEnd = r1(segments[si].endTime);
+
+      // Find the first word whose estimated time reaches the scene cut
+      let naturalEnd = cursor;
+      while (naturalEnd < wordTimeline.length - 1 && wordTimeline[naturalEnd].time < segEnd) {
+        naturalEnd++;
+      }
+      let splitAfter = naturalEnd - 1;
+
+      // Search within ±1.5s of scene cut for the closest sentence boundary
+      // (word ending with . ! ? ,) — snap the split to that boundary so phrases
+      // like "grab a few chunks of watermelon," stay whole in the current segment.
+      const lookFrom = Math.max(cursor, naturalEnd - 10);
+      const lookTo   = Math.min(wordTimeline.length - 2, naturalEnd + 8);
+      let bestBoundary = -1;
+      let bestDist = Infinity;
+
+      for (let wi = lookFrom; wi <= lookTo; wi++) {
+        if (/[.!?,]$/.test(wordTimeline[wi].word)) {
+          const dist = Math.abs(wordTimeline[wi].time - segEnd);
+          if (dist < bestDist && dist <= 1.5) {
+            bestDist = dist;
+            bestBoundary = wi;
+          }
         }
       }
+      if (bestBoundary >= cursor) splitAfter = bestBoundary;
 
-      // Keep chunk atomic unless it's both long (> 6 words) AND spans multiple segments.
-      // This prevents mid-phrase splits while still distributing very long chunks fairly.
-      if (!spansMultiple || chunkWords.length <= 6) {
-        // Atomic: all words go to the segment where speaking started (with pull-back)
-        chunkWords.forEach(word => buckets[assignTarget].push(word));
-      } else {
-        // Long chunk spanning multiple segments: split at natural segment boundaries
-        const secPerWord = chunkDur / chunkWords.length;
-        chunkWords.forEach((word, wi) => {
-          const wordTime = ws.start + wi * secPerWord;
-          const target = segmentForTime(wordTime);
-          buckets[target].push(word);
-        });
+      // Push words up to and including splitAfter into this segment's bucket
+      while (cursor <= splitAfter && cursor < wordTimeline.length) {
+        buckets[si].push(wordTimeline[cursor++].word);
       }
-    });
+    }
 
-    // If any bucket is empty, bridge from nearest non-empty neighbour
+    // If any bucket is still empty, bridge from nearest non-empty neighbour
     buckets.forEach((bucket, i) => {
       if (bucket.length > 0) return;
       for (let d = 1; d < buckets.length; d++) {
