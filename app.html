@@ -1547,7 +1547,7 @@
             </div>
           </div>
           <div style="padding:6px 10px;">
-            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="saveSegments();checkScriptFlagged(this.value)" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
+            <textarea id="originalScript" rows="3" placeholder="Paste script or click 🎙 Transcribe." oninput="onMasterScriptInput(this)" style="width:100%;font-size:10px;padding:5px 7px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
             <div id="scriptFlagWarning" style="display:none;margin-top:4px;padding:6px 8px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:4px;font-size:10px;color:var(--warning);display:none;gap:6px;align-items:center;">
               <span>⚠ Flagged content detected. Consider rewriting before generating.</span>
               <button onclick="rewriteScript()" style="margin-left:auto;padding:2px 7px;font-size:9px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:3px;color:var(--warning);cursor:pointer;flex-shrink:0;">Auto-fix</button>
@@ -3239,6 +3239,33 @@
     warn.style.display = flagged ? 'flex' : 'none';
   }
 
+  // Called on every keystroke in the master script textarea.
+  // If the text has changed enough from the Whisper transcript, clear stale timestamps
+  // so distributeScript falls through to the sentence-proportional split instead.
+  let _lastWhisperText = '';
+  function onMasterScriptInput(el) {
+    const newText = el.value;
+    checkScriptFlagged(newText);
+    saveSegments();
+
+    // If Whisper segments exist, check whether the current text still resembles them.
+    // Similarity = shared words / total words (Jaccard-ish). Below 70% → stale → clear.
+    if (whisperSegments && whisperSegments.length > 0) {
+      const whisperText = whisperSegments.map(w => w.text).join(' ').toLowerCase();
+      const newLower    = newText.toLowerCase();
+      const wWords  = new Set(whisperText.split(/\s+/).filter(Boolean));
+      const nWords  = newLower.split(/\s+/).filter(Boolean);
+      const shared  = nWords.filter(w => wWords.has(w)).length;
+      const union   = new Set([...wWords, ...nWords]).size;
+      const similarity = union > 0 ? shared / union : 0;
+      if (similarity < 0.70) {
+        // Script has diverged enough — timestamps no longer match
+        whisperSegments = [];
+        saveCurrentProjectData();
+      }
+    }
+  }
+
   async function rewriteScript() {
     const scriptEl = document.getElementById('originalScript');
     const original = (scriptEl?.value || '').trim();
@@ -3258,21 +3285,29 @@
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-4o',
-          temperature: 0.7,
+          temperature: 0.2,
           messages: [
             {
               role: 'system',
-              content: `You are a video script editor. Rewrite the script so it passes AI content moderation without any flags, while keeping the exact same message, flow, energy, and approximate word count.
+              content: `You are a video script editor making the absolute minimum changes needed to pass AI content moderation. Your job is surgical — swap only the flagged words or short phrases and leave everything else completely untouched.
 
-Rules:
-- Remove or rephrase any unverified health or medical claims (e.g. "cures", "doctors hate", "pharmacies don't want you to know", "prevents disease")
-- Replace hype phrases with natural curiosity hooks (e.g. "This simple trick..." → "A lot of people don't know...")
-- Keep the same conversational tone, speaking style, and sentence rhythm
-- Keep the same call-to-action at the end
-- Do NOT add disclaimers or change the topic
-- Output ONLY the rewritten script — no preamble, no labels, no explanation`
+RULES — read carefully:
+1. KEEP THE STRUCTURE IDENTICAL. Every sentence, every line break, every pause, every word that is NOT flagged must stay exactly as written. Do not rephrase, reorder, shorten, or expand anything that is fine as-is.
+2. ONLY change words or short phrases (1–3 words maximum per swap) that would trigger content moderation — things like: "cures", "heals", "treats", "doctors hate", "pharmacies don't want you to know", "miracle", "guaranteed", "clinically proven", "no side effects", "lose X pounds", "prevents cancer/diabetes/disease", "FDA approved", "detox", "scientifically proven".
+3. SWAP WITH A NEAR-SYNONYM that sounds natural in speech and carries the same meaning without the medical/legal flag. Examples:
+   - "cures" → "helps with" or "supports"
+   - "heals" → "helps" or "soothes"
+   - "doctors hate this" → "most people don't know this"
+   - "prevents disease" → "supports your health"
+   - "lose 10 pounds" → "drop some weight"
+   - "miracle" → "amazing" or "game-changer"
+   - "guaranteed" → "works every time" or "consistent"
+   - "clinically proven" → "well-known" or "popular"
+   - "detox" → "cleanse" or "reset"
+4. Do NOT change: sentence length, sentence count, punctuation style, filler words, CTA phrasing, questions, story beats, energy words, exclamations, or anything not on the flagged list.
+5. Output ONLY the fixed script — same number of lines, same structure, no preamble, no explanation, no labels.`
             },
-            { role: 'user', content: original }
+            { role: 'user', content: `Here is the script. Make only the minimum surgical word swaps needed — change nothing else:\n\n${original}` }
           ]
         })
       });
@@ -3292,12 +3327,15 @@ Rules:
       modal.innerHTML = `
         <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:10px;padding:20px;width:560px;max-width:96vw;max-height:88vh;overflow-y:auto;display:flex;flex-direction:column;gap:12px;font-family:inherit;">
           <div style="font-size:13px;font-weight:700;color:var(--text-1);">✏ Rewritten Script</div>
-          <div style="font-size:10px;color:var(--text-3);">Health claims and flagged phrases have been rephrased. Review and accept if it looks good.</div>
+          <div style="font-size:10px;color:var(--text-3);">Only flagged words were swapped (1–3 words max per change). Structure, sentences, and everything else is unchanged.</div>
           <textarea id="rewritePreview" rows="10" style="width:100%;font-size:11px;padding:8px;background:var(--bg);border:1px solid var(--border-2);border-radius:4px;color:var(--text-1);font-family:inherit;resize:vertical;">${escHtml(rewritten)}</textarea>
+          ${whisperSegments && whisperSegments.length > 0 ? `<div style="padding:7px 10px;background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.25);border-radius:5px;font-size:10px;color:var(--warning);line-height:1.5;">⚠ Whisper timestamps from your original transcription will be cleared — the rewritten script will be split across segments by sentence proportion instead. Scene text will update automatically.</div>` : ''}
           <div style="display:flex;gap:8px;">
             <button onclick="
               const val = document.getElementById('rewritePreview').value;
               document.getElementById('originalScript').value = val;
+              whisperSegments = [];
+              saveCurrentProjectData();
               if(typeof distributeScript === 'function') distributeScript();
               if(typeof renderSegments === 'function') renderSegments();
               if(typeof saveSegments === 'function') saveSegments();
@@ -3765,118 +3803,141 @@ Rules:
     return result;
   }
 
-  // Assign each video segment the exact Whisper words spoken during its time window.
-  // Each Whisper chunk goes to EXACTLY ONE segment (the one containing its midpoint).
-  // Returns true ONLY if every segment received text — otherwise returns false so
-  // the proportional fallback handles everything instead.
+  // Round a time value to nearest 0.1s to absorb floating-point jitter
+  const r1 = t => Math.round(t * 10) / 10;
+
+  // Find which segment index owns a given timestamp (0.1s precision, 0.05s tolerance)
+  function segmentForTime(t) {
+    const tr = r1(t);
+    for (let i = 0; i < segments.length; i++) {
+      if (tr >= r1(segments[i].startTime) - 0.05 && tr < r1(segments[i].endTime) - 0.05) {
+        return i;
+      }
+    }
+    // Fallback: nearest segment by start-time distance
+    let best = 0, minDist = Infinity;
+    segments.forEach((seg, i) => {
+      const d = Math.abs(tr - r1(seg.startTime));
+      if (d < minDist) { minDist = d; best = i; }
+    });
+    return best;
+  }
+
+  // Assign each Whisper chunk atomically to the segment where the chunk STARTS.
+  // Keeping chunks together prevents mid-phrase splits (e.g. "grab a few chunks of"
+  // in seg 2 and "watermelon" in seg 3 when it's one continuous spoken phrase).
+  // For very long chunks (> 6 words AND spanning > 1 segment worth of time), we
+  // split at the midpoint so a single long chunk can't overwhelm a short segment.
   function distributeScriptFromTimestamps() {
     if (!whisperSegments || whisperSegments.length === 0) return false;
 
     const buckets = segments.map(() => []);
 
     whisperSegments.forEach(ws => {
-      const mid = (ws.start + ws.end) / 2;
-      let target = -1;
-      for (let i = 0; i < segments.length; i++) {
-        if (mid >= segments[i].startTime && mid < segments[i].endTime) {
-          target = i; break;
-        }
-      }
-      // If midpoint falls outside all segments, use nearest
-      if (target === -1) {
-        let minDist = Infinity;
-        segments.forEach((seg, i) => {
-          const dist = Math.min(Math.abs(mid - seg.startTime), Math.abs(mid - seg.endTime));
-          if (dist < minDist) { minDist = dist; target = i; }
+      const chunkWords = ws.text.trim().split(/\s+/).filter(Boolean);
+      if (chunkWords.length === 0) return;
+
+      const chunkDur = Math.max(0.1, ws.end - ws.start);
+      const startTarget = segmentForTime(ws.start);
+
+      // Check if this chunk spans more than one segment in time
+      const endTarget = segmentForTime(ws.end - 0.05);
+      const spansMultiple = endTarget !== startTarget;
+
+      // Keep chunk atomic unless it's both long (> 6 words) AND spans multiple segments.
+      // This prevents mid-phrase splits while still distributing very long chunks fairly.
+      if (!spansMultiple || chunkWords.length <= 6) {
+        // Atomic: all words go to the segment where speaking started
+        chunkWords.forEach(word => buckets[startTarget].push(word));
+      } else {
+        // Long chunk spanning multiple segments: split at natural segment boundaries
+        const secPerWord = chunkDur / chunkWords.length;
+        chunkWords.forEach((word, wi) => {
+          const wordTime = ws.start + wi * secPerWord;
+          const target = segmentForTime(wordTime);
+          buckets[target].push(word);
         });
       }
-      if (target >= 0) buckets[target].push(ws.text);
     });
 
-    // Only commit if ALL segments got text — any gap means fall back to proportional
-    const allCovered = buckets.every(b => b.length > 0);
-    if (!allCovered) return false;
+    // If any bucket is empty, bridge from nearest non-empty neighbour
+    buckets.forEach((bucket, i) => {
+      if (bucket.length > 0) return;
+      for (let d = 1; d < buckets.length; d++) {
+        if (i - d >= 0 && buckets[i - d].length > 1) {
+          bucket.push(buckets[i - d].pop()); break;
+        }
+        if (i + d < buckets.length && buckets[i + d].length > 1) {
+          bucket.push(buckets[i + d].shift()); break;
+        }
+      }
+    });
 
-    buckets.forEach((texts, i) => {
-      segments[i].script = texts.join(' ').trim();
+    // Still empty after bridging? Fall back to proportional
+    if (buckets.some(b => b.length === 0)) return false;
+
+    buckets.forEach((words, i) => {
+      segments[i].script = words.join(' ').trim();
     });
     return true;
   }
 
   function distributeScript() {
-    // If Whisper timestamps exist and cover the transcript, use them (most accurate)
+    // ── 1. Whisper timestamps — most accurate, use if available ──────────────
     if (whisperSegments && whisperSegments.length > 0) {
       if (distributeScriptFromTimestamps()) return;
     }
 
-    // Sentence-aware proportional split — never breaks mid-sentence
+    // ── 2. Time-proportional word slice — driven by VIDEO scene boundaries ───
+    // Split points come from the video segment start/end times, NOT from
+    // punctuation or line breaks. A new unit is only created where there is
+    // an actual scene change in the video. If no Whisper timing is available,
+    // we estimate speaking position by assuming uniform speaking rate.
     const originalEl = document.getElementById('originalScript');
     const script = originalEl ? originalEl.value.trim() : '';
     if (!script || segments.length === 0) return;
 
-    // Split into sentences, keeping punctuation attached
-    const rawSentences = script.match(/[^.!?]+[.!?]+\s*/g) || [];
-    // Handle trailing text with no ending punctuation
-    const lastPunctEnd = rawSentences.join('').length;
-    if (lastPunctEnd < script.length) {
-      const tail = script.slice(lastPunctEnd).trim();
-      if (tail) rawSentences.push(tail);
-    }
-    const sentences = rawSentences.map(s => s.trim()).filter(Boolean);
+    const words = script.split(/\s+/).filter(Boolean);
+    if (words.length === 0) return;
 
-    // Fallback: if no sentences detected, treat whole script as one
-    if (sentences.length === 0) { segments[0].script = script; return; }
+    // Single segment — give it everything
+    if (segments.length === 1) { segments[0].script = script; return; }
 
-    // Fallback: fewer sentences than segments — give every segment the full script
-    if (sentences.length < segments.length) {
-      segments.forEach(s => { s.script = script; });
-      return;
-    }
-
-    const totalWords = sentences.reduce((n, s) => n + s.split(/\s+/).filter(Boolean).length, 0);
     const totalDur = (segments[segments.length - 1].endTime - segments[0].startTime) || 1;
+    const startOffset = segments[0].startTime;
+    const wordsPerSec = words.length / totalDur;
 
-    // Calculate ideal word target per segment based on its duration
-    const targets = segments.map(seg =>
-      Math.max(1, Math.round(((seg.endTime - seg.startTime) / totalDur) * totalWords))
-    );
-
-    // Greedy sentence assignment — each sentence goes to exactly one segment
-    let si = 0; // sentence index
+    // Calculate the target word-end index for each segment boundary based on time
+    let wordIdx = 0;
     for (let i = 0; i < segments.length; i++) {
       const isLast = i === segments.length - 1;
-      const assigned = [];
-      let wCount = 0;
 
       if (isLast) {
-        // Last segment absorbs all remaining sentences
-        while (si < sentences.length) { assigned.push(sentences[si++]); }
-      } else {
-        // Always assign at least one sentence
-        if (si < sentences.length) {
-          assigned.push(sentences[si]);
-          wCount += sentences[si].split(/\s+/).filter(Boolean).length;
-          si++;
-        }
-        // Keep adding sentences while we're below the target and there are enough sentences
-        // left to cover remaining segments (leave at least 1 per remaining segment)
-        while (si < sentences.length) {
-          const remaining = segments.length - i - 1;
-          const sentencesLeft = sentences.length - si;
-          if (sentencesLeft <= remaining) break; // must leave one per remaining segment
-          const nextWords = sentences[si].split(/\s+/).filter(Boolean).length;
-          // Add if still under target, or if next segment already has its sentence guaranteed
-          if (wCount < targets[i]) {
-            assigned.push(sentences[si]);
-            wCount += nextWords;
-            si++;
-          } else {
-            break;
-          }
+        // Last segment always gets everything remaining
+        segments[i].script = words.slice(wordIdx).join(' ');
+        break;
+      }
+
+      const segDur = segments[i].endTime - segments[i].startTime;
+
+      // How many words should this segment cover based on its duration?
+      const rawTarget = Math.round(segDur * wordsPerSec);
+      let endIdx = Math.min(wordIdx + Math.max(1, rawTarget) - 1, words.length - 2);
+
+      // Segments shorter than 7s: cut exactly at the word count — the scene
+      // change is the only split criterion, no sentence completion attempted.
+      // Segments 7s or longer: the same start frame covers the whole scene,
+      // so look ahead up to ~4 words to land on a complete-word boundary
+      // that ends a natural phrase (word ending with .!?, or a comma).
+      if (segDur >= 7) {
+        const lookAhead = Math.min(endIdx + 4, words.length - 2);
+        for (let j = endIdx; j <= lookAhead; j++) {
+          if (/[.!?,]$/.test(words[j])) { endIdx = j; break; }
         }
       }
 
-      segments[i].script = assigned.join(' ').trim();
+      segments[i].script = words.slice(wordIdx, endIdx + 1).join(' ');
+      wordIdx = endIdx + 1;
     }
   }
 
