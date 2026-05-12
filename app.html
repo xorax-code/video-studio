@@ -3880,19 +3880,21 @@ RULES — read carefully:
         splitAfter = naturalEnd - 1;
       }
 
-      // Search within ±1.5s of scene cut for the closest sentence boundary
-      // (word ending with . ! ? ,) — snap the split to that boundary so phrases
-      // like "grab a few chunks of watermelon," stay whole in the current segment.
+      // Snap to the nearest sentence boundary (. ! ? ,) within ±8 words of
+      // splitAfter.  We use word-index proximity, NOT time distance, so that
+      // phrases like "grab a few chunks of watermelon," are always kept whole
+      // even when Whisper places the chunk start exactly at the segment boundary
+      // (making its per-word timestamps far from segEnd in seconds).
       const lookFrom = Math.max(cursor, splitAfter - 8);
       const lookTo   = Math.min(wordTimeline.length - 2, splitAfter + 8);
       let bestBoundary = -1;
-      let bestDist = Infinity;
+      let bestWordDist = Infinity;
 
       for (let wi = lookFrom; wi <= lookTo; wi++) {
         if (/[.!?,]$/.test(wordTimeline[wi].word)) {
-          const dist = Math.abs(wordTimeline[wi].time - segEnd);
-          if (dist < bestDist && dist <= 1.5) {
-            bestDist = dist;
+          const wdist = Math.abs(wi - splitAfter);
+          if (wdist < bestWordDist) {
+            bestWordDist = wdist;
             bestBoundary = wi;
           }
         }
