@@ -1956,7 +1956,7 @@
       <!-- ===== COLUMN RESIZE DIVIDER ===== -->
       <div id="vsColDivider" onmousedown="vsStartColResize(event)"
         style="width:6px;flex-shrink:0;cursor:col-resize;display:flex;align-items:center;justify-content:center;background:transparent;transition:background 0.15s;z-index:10;"
-        onmouseenter="this.style.background='var(--border-2)'" onmouseleave="this.style.background='transparent'">
+        onmouseenter="this.style.background='var(--border-2)'" onmouseleave="if(!_vsColDragging)this.style.background='transparent'">
         <div style="width:2px;height:32px;background:var(--border-2);border-radius:2px;pointer-events:none;"></div>
       </div>
 
@@ -3393,63 +3393,96 @@
 
   // ── Layout resize (column divider + per-panel drag handles) ──────────────
 
+  // Single active drag handler refs — prevents stale listener accumulation
+  // if mouseup is missed (window blur, rapid clicks, etc.)
+  let _vsColMove = null, _vsColUp = null;
+  let _vsPanMove = null, _vsPanUp = null;
+  let _vsColDragging = false;
+
   function vsStartColResize(e) {
     e.preventDefault();
+    // Clean up any stale listeners from a previous interrupted drag
+    if (_vsColMove) { document.removeEventListener('mousemove', _vsColMove); _vsColMove = null; }
+    if (_vsColUp)   { document.removeEventListener('mouseup',   _vsColUp);   _vsColUp   = null; }
     const leftCol = document.getElementById('vsLeftCol');
+    const divider = document.getElementById('vsColDivider');
     const startX  = e.clientX;
     const startW  = leftCol.getBoundingClientRect().width;
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
-    function onMove(e) {
-      const newW = Math.max(180, Math.min(520, startW + e.clientX - startX));
+    _vsColDragging = true;
+    if (divider) divider.style.background = 'var(--border-2)';
+    _vsColMove = function(ev) {
+      const newW = Math.max(180, Math.min(520, startW + ev.clientX - startX));
       leftCol.style.width = newW + 'px';
-    }
-    function onUp() {
+    };
+    _vsColUp = function() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      localStorage.setItem('socialos_leftColW', leftCol.style.width);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+      _vsColDragging = false;
+      if (divider) divider.style.background = 'transparent';
+      document.removeEventListener('mousemove', _vsColMove);
+      document.removeEventListener('mouseup',   _vsColUp);
+      _vsColMove = null; _vsColUp = null;
+      localStorage.setItem('affiliateos_leftColW', leftCol.style.width);
+    };
+    document.addEventListener('mousemove', _vsColMove);
+    document.addEventListener('mouseup',   _vsColUp);
   }
 
   function vsStartPanelResize(e, panelId) {
     e.preventDefault();
     e.stopPropagation();
-    const panel   = document.getElementById(panelId);
-    const startY  = e.clientY;
-    const startH  = panel.getBoundingClientRect().height;
+    // Clean up any stale listeners from a previous interrupted drag
+    if (_vsPanMove) { document.removeEventListener('mousemove', _vsPanMove); _vsPanMove = null; }
+    if (_vsPanUp)   { document.removeEventListener('mouseup',   _vsPanUp);   _vsPanUp   = null; }
+    const panel  = document.getElementById(panelId);
+    if (!panel) return;
+    const startY = e.clientY;
+    const startH = panel.getBoundingClientRect().height;
     document.body.style.cursor = 'row-resize';
     document.body.style.userSelect = 'none';
-    function onMove(e) {
-      const newH = Math.max(80, startH + e.clientY - startY);
-      panel.style.flexBasis = newH + 'px';
-      panel.style.flexGrow  = '0';
+    _vsPanMove = function(ev) {
+      const newH = Math.max(80, startH + ev.clientY - startY);
+      panel.style.flexBasis  = newH + 'px';
+      panel.style.flexGrow   = '0';
       panel.style.flexShrink = (panelId === 'vsPanelRefVideo') ? '1' : '0';
-      panel.style.overflow  = 'hidden';
-    }
-    function onUp() {
+    };
+    _vsPanUp = function() {
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      localStorage.setItem('socialos_panel_' + panelId, panel.style.flexBasis);
-    }
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
+      document.removeEventListener('mousemove', _vsPanMove);
+      document.removeEventListener('mouseup',   _vsPanUp);
+      _vsPanMove = null; _vsPanUp = null;
+      localStorage.setItem('affiliateos_panel_' + panelId, panel.style.flexBasis);
+    };
+    document.addEventListener('mousemove', _vsPanMove);
+    document.addEventListener('mouseup',   _vsPanUp);
   }
 
   function vsRestoreLayout() {
-    const w = localStorage.getItem('socialos_leftColW');
+    const w = localStorage.getItem('affiliateos_leftColW')
+           || localStorage.getItem('socialos_leftColW'); // migrate old key
     if (w) { const c = document.getElementById('vsLeftCol'); if (c) c.style.width = w; }
     ['vsPanelAvatar','vsPanelScript','vsPanelDownloader','vsPanelSaved','vsPanelRefVideo'].forEach(id => {
-      const h = localStorage.getItem('socialos_panel_' + id);
-      if (h) {
-        const p = document.getElementById(id);
-        if (p) { p.style.flexBasis = h; p.style.flexGrow = '0'; p.style.flexShrink = (id === 'vsPanelRefVideo') ? '1' : '0'; p.style.overflow = 'hidden'; }
+      const h = localStorage.getItem('affiliateos_panel_' + id)
+             || localStorage.getItem('socialos_panel_' + id); // migrate old key
+      if (!h) return;
+      const p = document.getElementById(id);
+      if (!p) return;
+      // Don't restore vsPanelDownloader if its body is currently hidden (collapsed state)
+      if (id === 'vsPanelDownloader') {
+        const body = p.querySelector('[id^="vsPanelDownloader"] > div:not(.vs-panel-header):not(.vs-panel-resize-handle)');
+        const allDivs = p.querySelectorAll(':scope > div');
+        const bodyDiv = Array.from(allDivs).find(d => !d.classList.contains('vs-panel-header') && !d.classList.contains('vs-panel-resize-handle'));
+        if (bodyDiv && bodyDiv.style.display === 'none') return; // skip — panel is collapsed
       }
+      // Validate: only apply sane pixel values
+      const parsed = parseFloat(h);
+      if (!isFinite(parsed) || parsed < 80) return;
+      p.style.flexBasis  = h;
+      p.style.flexGrow   = '0';
+      p.style.flexShrink = (id === 'vsPanelRefVideo') ? '1' : '0';
     });
   }
   document.addEventListener('DOMContentLoaded', vsRestoreLayout);
