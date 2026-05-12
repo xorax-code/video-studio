@@ -3955,8 +3955,11 @@
     const bgNote = bgDataUrl
       ? 'Match the background/environment from the reference background image provided. Keep it consistent and realistic.'
       : (setting || 'clean neutral background or lifestyle environment');
+    const actionWithSpeech = scriptSlice
+      ? `${analyzedAction}. They say: "${scriptSlice}"`
+      : analyzedAction;
     const obj = {
-      action: analyzedAction,
+      action: actionWithSpeech,
       speech: scriptSlice ? `They say: "${scriptSlice}"` : '',
       audio: 'natural ambient sound, clear voice, no background music',
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
@@ -4229,11 +4232,8 @@
     const isFirst = sceneIndex === 0;
     const settingNote = setting ? `Setting: ${setting}.` : 'Setting: clean neutral background or lifestyle environment.';
 
-    // Extract first sentence as the pose hint
-    const firstSentence = (scriptSlice || '').split(/[.!?]/)[0].trim();
-    const poseHint = firstSentence
-      ? `The person is about to say: "${firstSentence}"`
-      : 'The person is looking confidently at the camera, natural expression.';
+    // Pose hint — no script text, just a natural expression cue
+    const poseHint = 'The person is looking confidently at the camera with a natural expression, mid-conversation.';
 
     const avatarNote = avatarDesc ? `Person description from Photo 1: ${avatarDesc}.` : '';
 
@@ -4456,7 +4456,7 @@ PRE-AUTHORIZED — READ ONCE, NEVER ASK AGAIN
 ✅ Google account: Already signed in. Use the existing Google account on the Flow tab.
 ✅ No Bash needed: Do NOT use Bash for any step. No folder creation, no file renaming.
 ✅ Videos go to: ${dlPath}\\ with whatever filename Flow gives them. No renaming required.
-✅ No NB Pro required: If you do not see a Nano Banana Pro panel, skip it and go straight to Veo 3.
+✅ NB Pro is REQUIRED for every scene — do NOT skip it. See HOW TO OPEN NB PRO below.
 
 APP URL: ${appUrl}
 
@@ -4468,6 +4468,19 @@ Use tabs_context_mcp to list ALL open tabs. Find a tab whose URL contains "labs.
 • Do NOT use a tab titled just "Flow" with no date (that is the homepage, not a project)
 • If multiple project tabs exist, use the most recent one
 • For each new scene: click the "+ New prompt" button in the LEFT sidebar to reset — do NOT open a new tab or navigate away
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW TO OPEN NB PRO (Nano Banana Pro)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NB Pro is NOT a separate panel — you open it through the bottom prompt bar:
+  1. Look at the BOTTOM of the Flow page — there is a prompt bar with a submit arrow button
+  2. To the LEFT of the submit arrow, click the small icon (looks like a + or media icon)
+  3. A menu appears — click "Image"
+  4. Then select "Nano Banana Pro" from the options
+  5. The NB Pro panel will appear with Photo 1 and Photo 2 upload slots
+  6. Upload photos, fill in the prompt, click Generate
+  7. Once the composed image appears, click "Add to prompt" — it becomes the start frame for Veo 3
+Do this for EVERY scene before running Veo 3.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO UPLOAD AN IMAGE (file_upload tool only — never click upload buttons)
