@@ -3844,14 +3844,18 @@ RULES — read carefully:
       const endTarget = segmentForTime(ws.end - 0.05);
       const spansMultiple = endTarget !== startTarget;
 
-      // Pull-back: if a chunk starts within 0.3s of its target segment's start boundary,
-      // it was spoken right at a scene cut — assign it to the PREVIOUS segment so the
-      // phrase stays with the scene where it visually belongs (e.g. "watermelon" spoken
-      // at exactly 8.0s = Seg3 start should stay with Seg2 where watermelon is on screen).
+      // Pull-back: if a chunk starts in the first half of its target segment (up to 1s),
+      // it's finishing a sentence from the previous scene — pull it back so the phrase
+      // stays visually aligned (e.g. "watermelon" spoken 0–1s into Seg3 stays in Seg2
+      // where watermelon is actually on screen).
       let assignTarget = startTarget;
       if (startTarget > 0) {
         const segStartTime = r1(segments[startTarget].startTime);
-        if (r1(ws.start) < segStartTime + 0.3) {
+        const segEndTime   = r1(segments[startTarget].endTime);
+        const segDur       = segEndTime - segStartTime;
+        // Pull back anything spoken within the first 50% of the segment (max 1.0s window)
+        const pullThreshold = Math.min(segDur * 0.5, 1.0);
+        if (r1(ws.start) < segStartTime + pullThreshold) {
           assignTarget = startTarget - 1;
         }
       }
