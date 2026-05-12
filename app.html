@@ -3957,7 +3957,7 @@
       : (setting || 'clean neutral background or lifestyle environment');
     const obj = {
       action: analyzedAction,
-      speech: scriptSlice || '',
+      speech: scriptSlice ? `They say: "${scriptSlice}"` : '',
       audio: 'natural ambient sound, clear voice, no background music',
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
