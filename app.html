@@ -4458,38 +4458,20 @@ BEFORE YOU START
 3. Navigate to https://labs.google/fx/tools/flow — create ONE new project, keep tab open for all scenes
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO UPLOAD AN IMAGE (use this EXACT sequence — do not improvise)
+HOW TO UPLOAD AN IMAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Flow hides file inputs in shadow DOM. Use this sequence every time:
+⚠️ DO NOT click any upload button or image slot — this opens a native file picker
+   you cannot interact with. DO NOT use input.click() in javascript_tool either.
 
-STEP A — run javascript_tool on the Flow tab to locate all file inputs:
-  const inputs = [];
-  (function scan(root) {
-    root.querySelectorAll('input[type="file"]').forEach(el => inputs.push(el));
-    root.querySelectorAll('*').forEach(el => { if (el.shadowRoot) scan(el.shadowRoot); });
-  })(document);
-  inputs.forEach((el, i) => {
-    const r = el.closest('[class],[id],[aria-label]');
-    console.log('INPUT', i, el.accept, r ? (r.className||r.id||r.getAttribute('aria-label')||'').slice(0,60) : 'no parent');
-  });
-  inputs.length;
-
-STEP B — use find tool with query "input[type=file]" to get the ref IDs.
-  Photo 1 is ref index 0 (first input), Photo 2 is ref index 1 (second input).
-
-STEP C — call file_upload with:
-  paths: ["{dl}\\{filename}"]   ← full absolute path
-  ref:   {ref from find for this slot}
-  tabId: {Flow tab ID from tabs_context_mcp}
-
-STEP D — take a screenshot to confirm the thumbnail appeared in the slot.
-  If the thumbnail is missing, use javascript_tool to simulate file selection:
-    const input = inputs[SLOT_INDEX];
-    const dt = new DataTransfer();
-    // fetch the file as blob via URL.createObjectURL — not possible from disk.
-    // Instead: click the input to trigger the native picker, then try file_upload again.
-    input.click();
-  Then retry file_upload with the same ref.
+Use this exact method every time:
+  1. Use find tool with query "input[type=file]" to locate the hidden file input refs
+     — Photo 1 is the FIRST ref returned, Photo 2 is the SECOND ref returned
+  2. Call file_upload with:
+       paths: ["{dl}\\{filename}"]   ← full absolute Windows path
+       ref:   {ref from find}
+       tabId: {Flow tab ID from tabs_context_mcp}
+  3. Take a screenshot to confirm the thumbnail appeared in the slot
+  4. If file_upload returns an error, try once more with the same ref — do NOT click anything
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO SAVE A VIDEO (download button — NOT right-click)
@@ -4675,28 +4657,16 @@ ${hasAvatar     ? `• ${avatarFile}  ← Photo 1 (avatar)` : ''}
 ${hasStartFrame ? `• ${startFrameFile}  ← Photo 2 (start frame)` : ''}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO UPLOAD AN IMAGE (use this EXACT sequence)
+HOW TO UPLOAD AN IMAGE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-Flow hides file inputs in shadow DOM. Every time you upload:
+⚠️ CRITICAL: NEVER click any upload button or image slot — this opens a native file
+picker you cannot interact with. NEVER use input.click() in javascript_tool either.
 
-A) Run javascript_tool on the Flow tab:
-  const inputs = [];
-  (function scan(root) {
-    root.querySelectorAll('input[type="file"]').forEach(el => inputs.push(el));
-    root.querySelectorAll('*').forEach(el => { if (el.shadowRoot) scan(el.shadowRoot); });
-  })(document);
-  inputs.forEach((el,i) => console.log('INPUT',i,el.outerHTML.slice(0,80)));
-  inputs.length;
-
-B) Use find with query "input[type=file]" to get the ref.
-   Photo 1 = ref index 0 (first input), Photo 2 = ref index 1 (second input).
-
-C) Call file_upload:
-   paths: ["{dl}\\{filename}"]
-   ref:   {ref from find}
-   tabId: {Flow tab ID}
-
-D) Screenshot to confirm thumbnail appeared. If missing, re-run file_upload once more.
+The ONLY allowed upload method:
+  1. Use find tool with query "input[type=file]" to get ref IDs (no clicking)
+  2. Call file_upload: paths:["{dl}\\{filename}"], ref:{ref}, tabId:{tab id}
+  3. Screenshot to confirm thumbnail appeared
+  4. If no thumbnail after one attempt → try once more with same ref — do NOT click anything
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
