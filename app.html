@@ -3159,6 +3159,9 @@
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl);
     DB.set('sm_bg_from_avatar', '1');
+    // Sync the NB bg source dropdown to photo1 so prompts match
+    const nbBgEl = document.getElementById('nbBgSource');
+    if (nbBgEl) nbBgEl.value = 'photo1';
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'block';
     const note = document.getElementById('bgSavedNote');
@@ -3912,30 +3915,37 @@
 
   // --- Build Nano Banana prompt for the START frame of a segment ---
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
-    const useAvatarBg = getNbBgSource() === 'photo1';
-    const instruction = useAvatarBg
-      ? 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.'
-      : 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
-    const obj = {
-      instruction,
-      no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, ' + (useAvatarBg ? 'changed background, changed environment, changed clothing, changed props' : 'changed background, changed props, changed clothing')
-    };
-    return JSON.stringify(obj, null, 2);
+    let instruction, negPrompt;
+    if (bgFromAvatar) {
+      // Avatar BG mode: only Photo 1 uploaded — keep person AND background from it
+      instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+    } else if (getNbBgSource() === 'photo1') {
+      // Photo 1 bg mode: use pose from Photo 2 but keep background from Photo 1
+      instruction = 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+    } else {
+      // Default: place person from Photo 1 into scene from Photo 2
+      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
+    }
+    return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
   // --- Build Nano Banana prompt for the END frame of a segment ---
   function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
-    const useAvatarBg = getNbBgSource() === 'photo1';
-    const instruction = useAvatarBg
-      ? 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.'
-      : 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
-    const obj = {
-      instruction,
-      no_text: true,
-      negative_prompt: 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, ' + (useAvatarBg ? 'changed background, changed environment, changed clothing, changed props' : 'changed background, changed props, changed clothing')
-    };
-    return JSON.stringify(obj, null, 2);
+    let instruction, negPrompt;
+    if (bgFromAvatar) {
+      instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+    } else if (getNbBgSource() === 'photo1') {
+      instruction = 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+    } else {
+      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
+      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
+    }
+    return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
   // --- Build Veo 3 prompt for one segment ---
@@ -4524,7 +4534,7 @@ IMAGE FILES DOWNLOADED TO DOWNLOADS:
       const nbPrompt   = seg.nbPrompt  || '(no NB Pro prompt)';
       const veoPrompt  = seg.veoPrompt || '(no Veo 3 prompt)';
       const frameFile  = `scene${i+1}_photo2_startframe.jpg`;
-      const hasFrame   = !!seg.frameDataUrl;
+      const hasFrame   = !!seg.frameDataUrl && !bgFromAvatar;
 
       instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -4618,7 +4628,7 @@ Report back: how many scenes completed, any errors, and list the saved video fil
     }
 
     const hasAvatar     = !!avatarImageDataUrl;
-    const hasStartFrame = !!seg.frameDataUrl;
+    const hasStartFrame = !!seg.frameDataUrl && !bgFromAvatar;
     const hasEndFrame   = !!seg.endFrameDataUrl;
     const duration      = getVeoDuration(seg.script);
     const wordCount     = (seg.script || '').trim().split(/\s+/).filter(Boolean).length;
