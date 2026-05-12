@@ -1691,6 +1691,7 @@
                 </select>
               </div>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
+              <button class="btn" onclick="runAllScenes()" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Download all images and copy a single instruction that runs every scene automatically">▶ Run All Scenes</button>
               <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe Scenes</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
@@ -3753,7 +3754,8 @@
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     container.innerHTML = segments.map((seg, i) => `
-      <div style="display:grid;grid-template-columns:182px 1fr;gap:10px;border-bottom:1px solid var(--border);padding:10px 0;${i===0?'padding-top:4px':''}" id="seg-card-${i}">
+      <div style="display:grid;grid-template-columns:182px 1fr;gap:10px;border-bottom:1px solid var(--border);padding:10px 0;${i===0?'padding-top:4px':''};position:relative;" id="seg-card-${i}">
+        ${seg.done ? `<div class="scene-done-badge" style="position:absolute;top:8px;right:0;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:2px 8px;font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.5px;">✅ DONE</div>` : `<div class="scene-done-badge" style="display:none;position:absolute;top:8px;right:0;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:2px 8px;font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.5px;">✅ DONE</div>`}
 
         <!-- Left: scene description (Producer) OR frame thumbnails (Replicator) -->
         ${seg._scriptOnly ? `
@@ -4378,6 +4380,22 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
   }
 
   // --- Claude in Chrome instruction builder ---
+
+  // Opens an image in a new browser tab so Claude can right-click → Copy Image → paste
+  function openImageInTab(dataUrl, tabTitle) {
+    const html = `<!DOCTYPE html><html><head><title>${tabTitle}</title>
+    <style>body{margin:0;background:#111;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;}
+    img{max-width:100%;max-height:90vh;object-fit:contain;border:2px solid #444;border-radius:4px;}
+    p{color:#aaa;font-size:13px;margin-top:12px;text-align:center;}
+    strong{color:#fff;}</style></head>
+    <body><img src="${dataUrl}" /><p><strong>${tabTitle}</strong><br>Right-click the image → <strong>Copy Image</strong> — then paste it into the upload area</p></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const tab  = window.open(url, '_blank');
+    // Keep focus on the current tab — images open silently in the background
+    if (tab) { tab.blur(); window.focus(); }
+  }
+
   function downloadFrameAsFile(dataUrl, filename) {
     const a = document.createElement('a');
     a.href = dataUrl;
@@ -4394,6 +4412,165 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     return secs <= 6.5 ? 6 : 8;
   }
 
+  // ── Mark a scene done (called by Claude via javascript_tool) ──────────────
+  window.markSceneDone = function(i) {
+    if (!segments[i]) return;
+    segments[i].done = true;
+    debounceSave();
+    const card = document.getElementById('seg-card-' + i);
+    if (card) {
+      const badge = card.querySelector('.scene-done-badge');
+      if (badge) { badge.style.display = 'block'; }
+    }
+    console.log('[markSceneDone] Scene', i + 1, 'marked complete');
+  };
+
+  // ── Run All Scenes — download all images + copy one combined instruction ──
+  function runAllScenes() {
+    const ready = segments.filter(s => s.veoPrompt?.trim());
+    if (!ready.length) { alert('Generate prompts first.'); return; }
+
+    const unready = segments.filter((s,i) => !s.veoPrompt?.trim());
+    if (unready.length) {
+      if (!confirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`)) return;
+    }
+
+    const appUrl = window.location.href;
+    let instruction = `You are fully automating video generation for ALL scenes on Google Flow using Claude in Chrome tools. Complete every scene sequentially without stopping. After each scene's video is saved, mark it done in the app.
+
+APP URL (for marking scenes done): ${appUrl}
+
+HOW TO MARK A SCENE DONE after saving its video:
+  1. Use tabs_context_mcp to find the tab with URL: ${appUrl}
+  2. Run in javascript_tool on that tab: window.markSceneDone(SCENE_INDEX)
+     (SCENE_INDEX is 0-based: Scene 1 = 0, Scene 2 = 1, etc.)
+
+HOW TO SAVE A VIDEO:
+  After Veo 3 generates, right-click the video → "Save video as" → save to:
+  Downloads\\FlowVideos\\Scene_SCENENUMBER.mp4
+  (Create the FlowVideos folder if it doesn't exist)
+
+HOW TO UPLOAD AN IMAGE (file_upload tool — never click upload buttons):
+  1. Use find or read_page to locate the <input type="file"> near the upload slot
+  2. Call file_upload with the absolute path and its ref + tabId
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+BEFORE YOU START
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Run in Bash to get Downloads path: echo %USERPROFILE%\\Downloads
+2. Navigate to https://labs.google/fx/tools/flow — create one new project for all scenes
+3. Keep that Flow tab open for the entire run — do not close or navigate away between scenes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+IMAGE FILES DOWNLOADED TO DOWNLOADS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    // Download all images upfront
+    const avatarFile = `all_scenes_photo1_avatar.jpg`;
+    if (avatarImageDataUrl) {
+      downloadFrameAsFile(avatarImageDataUrl, avatarFile);
+      instruction += `• ${avatarFile}  ← Avatar (Photo 1, reuse for every scene)\n`;
+    }
+
+    segments.forEach((seg, i) => {
+      if (!seg.veoPrompt?.trim()) return;
+      if (seg.frameDataUrl) {
+        const fname = `scene${i+1}_photo2_startframe.jpg`;
+        downloadFrameAsFile(seg.frameDataUrl, fname);
+        instruction += `• ${fname}  ← Scene ${i+1} start frame (Photo 2)\n`;
+      }
+    });
+
+    // Build per-scene instructions
+    segments.forEach((seg, i) => {
+      if (!seg.veoPrompt?.trim()) return;
+      const duration   = getVeoDuration(seg.script);
+      const wordCount  = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
+      const nbPrompt   = seg.nbPrompt  || '(no NB Pro prompt)';
+      const veoPrompt  = seg.veoPrompt || '(no Veo 3 prompt)';
+      const frameFile  = `scene${i+1}_photo2_startframe.jpg`;
+      const hasFrame   = !!seg.frameDataUrl;
+
+      instruction += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SCENE ${i+1} of ${segments.filter(s=>s.veoPrompt?.trim()).length}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+${i === 0
+  ? `You already have the Flow project open. Open Nano Banana Pro.`
+  : `Stay in the same Flow project. Look for a "New prompt", "+", or "Add" button to start a fresh generation — click it. Then open Nano Banana Pro.`
+}
+
+NB PRO STEP:
+${avatarImageDataUrl ? `• Upload Photo 1: file_upload with path to ${avatarFile}` : '• No avatar — skip Photo 1'}
+${hasFrame ? `• Upload Photo 2: file_upload with path to ${frameFile}` : '• No start frame — skip Photo 2'}
+• Set 9:16 vertical
+• Paste this NB Pro prompt:
+
+${nbPrompt}
+
+• Click Generate → verify result → click "Add to prompt"
+
+VEO 3 STEP:
+• Select Veo 3 Fast
+• Set duration: ${duration} seconds (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
+• Paste this Veo 3 prompt:
+
+${veoPrompt}
+
+• Click Generate → wait for video to finish
+• Right-click video → Save video as → Downloads\\FlowVideos\\Scene_${i+1}.mp4
+• Mark done: find the app tab (${appUrl}) → javascript_tool → window.markSceneDone(${i})
+`;
+    });
+
+    instruction += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ALL SCENES COMPLETE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Report back: how many scenes completed, any issues, and where the videos are saved.`;
+
+    navigator.clipboard.writeText(instruction).catch(() => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = instruction;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch(e) {}
+    });
+
+    // Show confirmation modal
+    const sceneCount = segments.filter(s => s.veoPrompt?.trim()).length;
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid rgba(34,197,94,0.4);border-radius:12px;padding:24px;width:460px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <div style="font-size:22px;">▶</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-1);">Run All Scenes — ${sceneCount} scene${sceneCount>1?'s':''}</div>
+            <div style="font-size:11px;color:var(--text-3);">Full instruction copied to clipboard</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;font-size:11px;color:var(--text-2);">
+          <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:10px 12px;">
+            ✅ All images downloaded to Downloads folder<br>
+            ✅ One instruction covers all ${sceneCount} scenes sequentially<br>
+            ✅ Videos auto-saved to Downloads/FlowVideos/<br>
+            ✅ Each scene auto-marked done in this app when complete
+          </div>
+          <div style="color:var(--text-3);font-size:10px;">Paste the instruction into Claude desktop → it runs everything hands-free</div>
+        </div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
   function copyClaudeInstruction(i) {
     const seg = segments[i];
     if (!seg || !seg.veoPrompt?.trim()) {
@@ -4404,58 +4581,92 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     const hasAvatar     = !!avatarImageDataUrl;
     const hasStartFrame = !!seg.frameDataUrl;
     const hasEndFrame   = !!seg.endFrameDataUrl;
-    const avatarName    = `avatar-photo-1.png`;
-    const startName     = `scene-${i + 1}-start-frame.png`;
-    const endName       = `scene-${i + 1}-end-frame.png`;
     const duration      = getVeoDuration(seg.script);
     const wordCount     = (seg.script || '').trim().split(/\s+/).filter(Boolean).length;
-
-    // Auto-download all needed files to Downloads
-    if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarName);
-    if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl, startName);
-    if (hasEndFrame)   downloadFrameAsFile(seg.endFrameDataUrl, endName);
 
     const nbPrompt  = seg.nbPrompt  || '(no NB Pro prompt generated yet)';
     const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
 
-    const instruction = `You are going to generate a video clip for Scene ${i + 1}. Follow these two steps exactly in order.
+    // Download images — Claude in Chrome uses file_upload tool with absolute path (no file picker)
+    const avatarFile     = `scene${i + 1}_photo1_avatar.jpg`;
+    const startFrameFile = `scene${i + 1}_photo2_startframe.jpg`;
+    if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarFile);
+    if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl,   startFrameFile);
+
+    const instruction = `You are fully automating a video generation workflow for Scene ${i + 1} on Google Flow using Claude in Chrome tools. Do not click file upload buttons — use the file_upload tool instead.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 1 — Generate the starting frame in Nano Banana Pro
+BEFORE YOU START — get the Downloads folder path
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-I have downloaded the following files to your Downloads folder:
-${hasAvatar     ? `• ${avatarName} — the avatar/character photo (upload as Photo 1)` : '• (no avatar downloaded — skip Photo 1 upload)'}
-${hasStartFrame ? `• ${startName} — the starting frame from the reference video (upload as Photo 2)` : '• (no start frame downloaded)'}
+Run this in Bash to get the exact Downloads path:
+  Windows: echo %USERPROFILE%\\Downloads
+  Mac:     echo ~/Downloads
 
-1. Go to Nano Banana Pro (search for it if needed, it is an AI image generation tool)
-2. Upload "${avatarName}" from Downloads as Photo 1
-${hasStartFrame ? `3. Upload "${startName}" from Downloads as Photo 2` : '3. Skip Photo 2'}
-4. Make sure the output format is set to 9:16 vertical
-5. Paste the following prompt into the prompt field:
+Save the result — you will use it as the base path for all file uploads.
+
+Image files waiting in Downloads:
+${hasAvatar     ? `• ${avatarFile}  ← Photo 1 (avatar character)` : ''}
+${hasStartFrame ? `• ${startFrameFile}  ← Photo 2 (scene start frame)` : ''}
+
+HOW TO UPLOAD AN IMAGE (use this for every upload — never click the upload button):
+  1. Use find or read_page to locate the <input type="file"> element near the upload slot
+  2. Call file_upload with:
+       paths: ["{downloads_path}\\${avatarFile}"]   ← full absolute path
+       ref:   {ref ID from find/read_page}
+       tabId: {current tab ID from tabs_context_mcp}
+  3. Confirm the thumbnail appears before moving on
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+STEP 1 — Nano Banana Pro
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Navigate to https://labs.google/fx/tools/flow — sign in if needed
+2. Open Nano Banana Pro
+
+${hasAvatar ? `3. Upload Photo 1 (avatar):
+   — Use find to locate the Photo 1 file input (input[type="file"]) near the first upload slot
+   — Call file_upload with the full path to ${avatarFile}
+   — Confirm thumbnail appears` : '3. No avatar — skip Photo 1'}
+
+${hasStartFrame ? `4. Upload Photo 2 (start frame):
+   — Use find to locate the Photo 2 file input near the second upload slot
+   — Call file_upload with the full path to ${startFrameFile}
+   — Confirm thumbnail appears` : '4. No start frame — skip Photo 2'}
+
+5. Set output format to 9:16 vertical
+6. Click the prompt field and paste this exactly:
 
 ${nbPrompt}
 
-6. Click Generate
-7. When the image generates, carefully check: does it show the correct person from the avatar photo in the right pose and setting? If it looks wrong, regenerate once.
-8. Once you have a good result, click the "Add to prompt" button on the generated image — this will set it as the starting frame for the video
+7. Click Generate and wait for the image
+8. Check — correct person, right pose and setting. Regenerate once if wrong.
+9. Click "Add to prompt" on the generated image
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-STEP 2 — Generate the video in Veo 3
+STEP 2 — Veo 3 Fast
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-After completing Step 1 and clicking "Add to prompt":
-
-1. Go to https://labs.google/flow and sign in if needed
-2. The starting frame image from Step 1 should already be attached — if not, upload "${startName}" from Downloads manually
-3. Select the model: Veo 3 Fast
-4. Set the duration to ${duration} seconds (the dialogue for this scene is ${wordCount} words, which runs ~${Math.round(wordCount / WORDS_PER_SEC)}s)
-5. Paste the following Veo 3 prompt into the prompt field:
+1. Stay on https://labs.google/fx/tools/flow
+2. Check if the NB image is already attached as a starting frame (thumbnail near the prompt input).
+   IF NOT ATTACHED:
+   — Right-click the generated NB image → Save Image → save to Downloads as nb_result.jpg
+   — Use find to locate the starting frame file input in the Veo 3 section
+   — Call file_upload with the path to nb_result.jpg
+3. Select model: Veo 3 Fast
+4. Set duration: ${duration} seconds (${wordCount} words ≈ ${Math.round(wordCount / 2.3)}s of speech)
+5. Click the prompt field and paste this exactly:
 
 ${veoPrompt}
 
-6. Click Generate
-7. When the video is ready, let me know and show me the result`;
+6. Click Generate — wait for the video to finish rendering
+7. Right-click the video → "Save video as" → save to:
+   Downloads\\FlowVideos\\Scene_${i + 1}.mp4
+   (Create the FlowVideos folder if it doesn't exist)
+8. Mark this scene done in the app:
+   — Use tabs_context_mcp to find the tab at: ${window.location.href}
+   — Run javascript_tool on that tab: window.markSceneDone(${i})
+9. Report back with the result`;
 
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
@@ -4481,10 +4692,10 @@ ${veoPrompt}
 
     const fileNote = hasFiles ? `
       <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
-        <div style="font-size:15px;flex-shrink:0;">📁</div>
+        <div style="font-size:15px;flex-shrink:0;">🖼️</div>
         <div>
-          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Images saved to your Downloads folder</div>
-          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Avatar photo + scene frame downloaded. Claude's instruction tells it exactly which files to upload and where.</div>
+          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Fully automated — images upload via file_upload tool</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Claude in Chrome uses the file_upload tool to inject images directly into Flow's file inputs — no file picker, no manual steps needed.</div>
         </div>
       </div>` : '';
 
@@ -4503,7 +4714,7 @@ ${veoPrompt}
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;">
 
           <div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:10px 12px;">
-            <div style="font-size:10px;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 1 — Nano Banana Pro</div>
+            <div style="font-size:10px;font-weight:700;color:var(--warning);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 1 — Nano Banana Pro on labs.google</div>
             <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
               Upload avatar as Photo 1 · Upload start frame as Photo 2<br>
               Set <strong style="color:var(--text-1);">9:16 vertical</strong> · Paste NB Pro prompt · Generate<br>
@@ -4561,7 +4772,7 @@ ${veoPrompt}
       try { el.select(); document.execCommand('copy'); } catch(e) {}
     };
     navigator.clipboard.writeText(el.value).catch(doCopy);
-    window.open('https://labs.google/flow', '_blank');
+    window.open('https://labs.google/fx/tools/flow', '_blank');
     // Show a persistent toast reminding user to paste
     showVeo3Toast(i + 1);
   }
