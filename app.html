@@ -45,7 +45,7 @@
     --radius: 8px;
     --radius-sm: 5px;
     --radius-xs: 3px;
-    /* aliases used in batch generator + hook/cta sections */
+    /* aliases used in hook/cta sections */
     --surface-1: #1c1c1e;
     --border-1: #2e2e33;
     --accent-light: rgba(124,106,247,0.13);
@@ -75,7 +75,7 @@
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
-    /* aliases used in batch generator + hook/cta sections */
+    /* aliases used in hook/cta sections */
     --surface-1: #ffffff;
     --border-1: #e4e4e8;
     --accent-light: rgba(124,106,247,0.09);
@@ -1284,10 +1284,6 @@
       <span class="nav-icon">✏️</span>
       <span class="nav-label">Video Producer</span>
     </button>
-    <button class="tab" data-tab="batch-generator" onclick="switchTab('batch-generator')" title="Batch Veo 3 Generator">
-      <span class="nav-icon">⚡</span>
-      <span class="nav-label">Batch Gen</span>
-    </button>
     <button class="tab" data-tab="ideas-inbox" onclick="switchTab('ideas-inbox')" title="Ideas Inbox">
       <span class="nav-icon">💡</span>
       <span class="nav-label">Ideas Inbox</span>
@@ -2149,85 +2145,6 @@
 
 </div><!-- end #tab-video-studio -->
 
-<!-- ===== BATCH GENERATOR TAB ===== -->
-<div id="tab-batch-generator" class="tab-content">
-  <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;">
-
-    <!-- CONFIG PANEL -->
-    <div style="background:var(--surface-2);border:1px solid var(--border-1);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;">
-      <div style="font-size:15px;font-weight:700;color:var(--text-1);display:flex;align-items:center;gap:8px;">⚡ Batch Veo 3 Generator</div>
-      <div style="font-size:11px;color:var(--text-3);margin-top:-6px;line-height:1.5;">Fill in the details and generate a full week of ready-to-use Veo 3 prompts in one shot.</div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">PRODUCT NAME</label>
-        <input type="text" id="bgProduct" placeholder="e.g. SlimTea Pro, HydraGlow Serum…" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">CONTENT ANGLE</label>
-        <select id="bgAngle" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
-          <option value="review">Honest Review</option>
-          <option value="before-after">Before / After</option>
-          <option value="tutorial">Quick Tutorial</option>
-          <option value="lifestyle">Lifestyle / Day-in-Life</option>
-          <option value="comparison">Comparison</option>
-          <option value="testimonial">Testimonial</option>
-          <option value="unboxing">Unboxing / First Look</option>
-        </select>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">SETTING / BACKGROUND</label>
-        <input type="text" id="bgSetting" placeholder="e.g. bright kitchen, gym, bedroom…" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">HOOK SOURCE</label>
-        <select id="bgHookSource" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
-          <option value="bank">Use my Hook Bank</option>
-          <option value="auto">Auto-generate by angle</option>
-        </select>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">CTA SOURCE</label>
-        <select id="bgCtaSource" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
-          <option value="library">Use my CTA Library</option>
-          <option value="auto">Auto-generate</option>
-        </select>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:6px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">NUMBER OF VIDEOS — <span id="bgCountDisplay">7</span></label>
-        <input type="range" id="bgCount" min="3" max="14" value="7" oninput="document.getElementById('bgCountDisplay').textContent=this.value" style="width:100%;accent-color:var(--accent);">
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:-2px;"><span>3</span><span>14</span></div>
-      </div>
-
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        <label style="font-size:11px;font-weight:600;color:var(--text-2);">VIDEO DURATION</label>
-        <div style="display:flex;gap:6px;">
-          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--border-2);cursor:pointer;font-size:12px;color:var(--text-2);background:var(--surface-1);" id="bgDurLabel5"><input type="radio" name="bgDur" value="5" style="accent-color:var(--accent);"> 5s</label>
-          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--accent);cursor:pointer;font-size:12px;color:var(--accent-2);background:var(--accent-light);" id="bgDurLabel8"><input type="radio" name="bgDur" value="8" checked style="accent-color:var(--accent);"> 8s</label>
-          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--border-2);cursor:pointer;font-size:12px;color:var(--text-2);background:var(--surface-1);" id="bgDurLabel15"><input type="radio" name="bgDur" value="15" style="accent-color:var(--accent);"> 15s</label>
-        </div>
-      </div>
-
-      <button onclick="runBatchGenerator()" style="width:100%;padding:11px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">⚡ Generate Prompts</button>
-    </div>
-
-    <!-- OUTPUT PANEL -->
-    <div>
-      <div id="bgOutput" style="display:flex;flex-direction:column;gap:16px;">
-        <div style="text-align:center;padding:60px 20px;color:var(--text-3);font-size:13px;line-height:1.7;">
-          ⚡ Fill in the config on the left and hit <strong>Generate Prompts</strong>.<br>
-          Your batch of Veo 3 prompts will appear here, ready to copy into Flow.
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
 <!-- ===== IDEAS INBOX TAB ===== -->
 <div id="tab-ideas-inbox" class="tab-content">
   <div style="display:flex;gap:10px;margin-bottom:20px;padding:16px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border);">
@@ -2826,7 +2743,6 @@
     'calendar': 'Video Calendar',
     'video-replicator': 'Video Replicator',
     'video-producer': 'Video Producer',
-    'batch-generator': 'Batch Veo 3 Generator',
     'ideas-inbox': 'Ideas Inbox',
   };
 
@@ -2855,7 +2771,6 @@
     } else {
       if (tab === 'competitors') renderCompetitors();
       if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); }
-      if (tab === 'batch-generator') { /* renders on demand via Generate button */ }
       if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
       if (tab === 'ideas-inbox') renderIdeasInbox();
     }
@@ -4573,6 +4488,28 @@ RULES — read carefully:
     }
 
     cutTimes.push(dur);
+
+    // Fallback split: if no scene change was detected across a long stretch,
+    // auto-split that gap into ~8s chunks so we don't end up with one massive
+    // segment that has way too many words for Veo 3 (target is 8s ≈ 24 words).
+    const MAX_SEG_LEN = 12;     // anything longer than this gets split
+    const TARGET_SEG_LEN = 8;   // aim for chunks around this length
+    const expandedCuts = [cutTimes[0]];
+    for (let i = 1; i < cutTimes.length; i++) {
+      const prevCut = expandedCuts[expandedCuts.length - 1];
+      const currCut = cutTimes[i];
+      const gap = currCut - prevCut;
+      if (gap > MAX_SEG_LEN) {
+        const chunks = Math.ceil(gap / TARGET_SEG_LEN);
+        const chunkLen = gap / chunks;
+        for (let j = 1; j < chunks; j++) {
+          expandedCuts.push(prevCut + chunkLen * j);
+        }
+      }
+      expandedCuts.push(currCut);
+    }
+    cutTimes.length = 0;
+    cutTimes.push(...expandedCuts);
 
     // Build segments
     segments = [];
@@ -7582,11 +7519,12 @@ TECHNICAL SPECS:
     empty.style.display = 'none';
     list.innerHTML = postPlans.map(plan => {
       const { prod, growth } = _planCounts(plan);
+      const days = Array.isArray(plan.days) ? plan.days : [];
       const n = _planAcctCount(plan);
-      const prodWk   = plan.days.length * prod   * n;
-      const growthWk = plan.days.length * growth * n;
+      const prodWk   = days.length * prod   * n;
+      const growthWk = days.length * growth * n;
       const dayChips = dayNames.map((dn,i) =>
-        `<span class="wct-day-chip ${plan.days.includes(i)?'on':'off'}">${dn}</span>`).join('');
+        `<span class="wct-day-chip ${days.includes(i)?'on':'off'}">${dn}</span>`).join('');
       const typeBadges = [
         prod   > 0 ? `<span style="background:#10b98122;color:#10b981;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;">🛒 ${prod}/day</span>` : '',
         growth > 0 ? `<span style="background:#06b6d422;color:#06b6d4;font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;">📈 ${growth}/day</span>` : '',
@@ -7610,10 +7548,11 @@ TECHNICAL SPECS:
         ${plan.startDate?`<div style="font-size:9px;color:var(--text-3);">Starting ${plan.startDate}</div>`:''}
       </div>`;
     }).join('');
+
     // Totals footer
     if (totals) {
       let totalProd=0, totalGrowth=0;
-      postPlans.forEach(p => { const {prod,growth}=_planCounts(p); const n=_planAcctCount(p); totalProd+=p.days.length*prod*n; totalGrowth+=p.days.length*growth*n; });
+      postPlans.forEach(p => { const {prod,growth}=_planCounts(p); const n=_planAcctCount(p); const pd=Array.isArray(p.days)?p.days:[]; totalProd+=pd.length*prod*n; totalGrowth+=pd.length*growth*n; });
       totals.style.display = 'block';
       totals.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px 0 2px;border-top:1px solid var(--border);margin-top:8px;flex-wrap:wrap;">
         <span style="font-size:10px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:0.4px;">Per week</span>
@@ -7684,6 +7623,7 @@ TECHNICAL SPECS:
     const dow = dt.getDay();
     const slots = [];
     postPlans.forEach(plan => {
+      if (!Array.isArray(plan.days)) return; // guard against corrupt/legacy plan data
       if (!plan.days.includes(dow)) return;
       if (plan.startDate && dateStr < plan.startDate) return;
       const { prod, growth } = _planCounts(plan);
@@ -9224,151 +9164,6 @@ TECHNICAL SPECS:
     saveRecycleItems();
     _showCopied(btn, '✅ Copied!');
     setTimeout(() => renderContentRecycler(), 2100);
-  }
-
-  // ============================================================
-  // BATCH VEO 3 GENERATOR
-  // ============================================================
-
-  const _BG_HOOKS = {
-    'review':      ['I tried [product] so you don\'t have to — here\'s the truth','[product] review: nobody is talking about this','I tested [product] for 30 days. Here\'s what actually happened','Real talk — is [product] actually worth it?','Honest [product] review from someone who was skeptical'],
-    'before-after':['Before [product] vs after — the difference is crazy','I wish someone told me about [product] sooner','My life before [product] vs now — here\'s the change','What happened after I started using [product] every day','The results after using [product] for one month'],
-    'tutorial':    ['The fastest way to get results with [product]','Here\'s exactly how to use [product] the right way','Stop making this mistake with [product]','How to get the most out of [product] in 60 seconds','The [product] trick nobody shows you'],
-    'lifestyle':   ['This is my daily routine with [product]','A day in my life using [product]','How [product] changed my daily routine','Morning routine ft. [product] — game changer','What my routine looks like now that I use [product]'],
-    'comparison':  ['[product] vs everything I tried before','I compared [product] to the leading brand — here\'s the truth','Why I switched to [product] and never looked back','[product] vs alternatives — which one actually works?','I tested 5 options. [product] won by a mile'],
-    'testimonial': ['My honest experience with [product] after 30 days','Nobody prepared me for what [product] would actually do','I\'ve been using [product] for months — here\'s what I think','What they don\'t tell you about [product]','My [product] experience — the good and the bad'],
-    'unboxing':    ['I finally got [product] — first impressions','Unboxing [product] for the first time','Is [product] worth the hype? Let\'s find out','[product] just arrived — here\'s what I think so far','First look at [product] — worth it or not?'],
-  };
-
-  const _BG_BODIES = {
-    'review':      (p) => `I've been using ${p} for the past few weeks and I wanted to share my honest experience. The first thing I noticed was how quickly it started working. No fluff, no gimmicks — just results. Here's what stood out: the quality is genuinely better than what I expected at this price point, and the difference it made was noticeable within days. If you've been on the fence about trying ${p}, I'll just say this — I'm glad I did.`,
-    'before-after':(p) => `Before I found ${p}, I was struggling. I tried everything else on the market and nothing was delivering real results. Then I gave ${p} a shot — and honestly the difference is hard to ignore. My routine is simpler now, my results are better, and I actually look forward to using it. The before and after speaks for itself.`,
-    'tutorial':    (p) => `Here's how to get the best results with ${p}. First — use it consistently, same time every day. Second — don't skip the prep step, it makes a huge difference. Third — give it at least two weeks before judging. I know that sounds basic but most people skip one of those and wonder why it's not working. Follow those three steps and you'll actually see the results ${p} is known for.`,
-    'lifestyle':   (p) => `So this is what my morning looks like now. I wake up, grab my ${p}, and it's become one of those things I genuinely can't imagine skipping. It fits perfectly into my routine — takes almost no time, and I feel the difference on the days I don't use it. It's one of those small upgrades that just makes everything else feel a little easier.`,
-    'comparison':  (p) => `I put ${p} up against three other options I'd used before. Honestly? It wasn't even close. The others either took too long, didn't deliver consistent results, or felt like a hassle to keep up with. ${p} hits different — easier to use, faster to show results, and the quality is just on another level. If you've been using anything else, do yourself a favor and make the switch.`,
-    'testimonial': (p) => `I want to be upfront with you — I was not expecting much when I started using ${p}. I'd been let down by similar products before. But a month in and I genuinely think this is the real deal. It does what it says it will do. That's rare. If you're looking for something that actually works without making your life complicated, ${p} is what I'd tell you to try.`,
-    'unboxing':    (p) => `Okay, ${p} just arrived and my first impressions are actually really good. The packaging is solid, everything looks premium, and you can just tell the quality is there before you even try it. I've heard a lot of good things and based on what I'm seeing right now, I get it. Going to be putting this through its paces over the next few weeks — stay tuned for the full review.`,
-  };
-
-  const _BG_CTAS = [
-    'Follow for the full update',
-    'Link in my bio if you want to try it',
-    'Comment below if this was helpful',
-    'Save this so you don\'t forget',
-    'Follow for part 2',
-    'Drop a comment if you want more like this',
-    'Check my bio for the link',
-    'Share this with someone who needs to see it',
-  ];
-
-  function runBatchGenerator() {
-    const product = (document.getElementById('bgProduct').value || '').trim();
-    if (!product) { alert('Enter a product name first.'); document.getElementById('bgProduct').focus(); return; }
-
-    const angle      = document.getElementById('bgAngle').value;
-    const setting    = (document.getElementById('bgSetting').value || '').trim() || 'clean lifestyle environment';
-    const hookSrc    = document.getElementById('bgHookSource').value;
-    const ctaSrc     = document.getElementById('bgCtaSource').value;
-    const count      = parseInt(document.getElementById('bgCount').value) || 7;
-    const dur        = parseInt(document.querySelector('input[name="bgDur"]:checked')?.value) || 8;
-    const adminS     = getAdminSettings();
-    const model      = adminS.defaultModel || 'Veo 3 Fast';
-
-    // Gather hook pool
-    let hookPool = [];
-    if (hookSrc === 'bank' && hooks.length > 0) {
-      hookPool = hooks.map(h => h.text);
-    }
-    if (hookPool.length === 0) {
-      hookPool = (_BG_HOOKS[angle] || _BG_HOOKS['review']).map(t => t.replace(/\[product\]/gi, product));
-    }
-
-    // Gather CTA pool
-    let ctaPool = [];
-    if (ctaSrc === 'library' && ctas.length > 0) {
-      ctaPool = ctas.map(c => c.text);
-    }
-    if (ctaPool.length === 0) {
-      ctaPool = _BG_CTAS;
-    }
-
-    const bodyFn = _BG_BODIES[angle] || _BG_BODIES['review'];
-
-    // Build N prompts
-    const prompts = [];
-    for (let i = 0; i < count; i++) {
-      const hook  = hookPool[i % hookPool.length].replace(/\[product\]/gi, product);
-      const body  = bodyFn(product);
-      const cta   = ctaPool[i % ctaPool.length];
-      const script = `${hook}. ${body} ${cta}.`;
-
-      const obj = {
-        action:          `Person speaking directly to camera with natural confidence and real eye contact, natural hand gestures. They say: "${script}"`,
-        speech:          script,
-        audio:           'natural ambient sound, clear voice, no background music',
-        negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
-        camera:          'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
-        background:      setting,
-      };
-
-      prompts.push({ index: i + 1, script, json: JSON.stringify(obj, null, 2), model, dur });
-    }
-
-    renderBatchOutput(prompts, product, angle, model);
-  }
-
-  function renderBatchOutput(prompts, product, angle, model) {
-    const out = document.getElementById('bgOutput');
-    const wc = (s) => s.trim().split(/\s+/).filter(Boolean).length;
-    const angleLabels = { review:'Honest Review', 'before-after':'Before / After', tutorial:'Quick Tutorial', lifestyle:'Lifestyle', comparison:'Comparison', testimonial:'Testimonial', unboxing:'Unboxing / First Look' };
-
-    out.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
-        <div>
-          <div style="font-size:15px;font-weight:700;color:var(--text-1);">${prompts.length} Veo 3 Prompts — ${escHtml(product)}</div>
-          <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${angleLabels[angle] || angle} · Model: ${escHtml(model)} · ${prompts[0]?.dur}s each</div>
-        </div>
-        <button onclick="copyAllBatchPrompts()" style="padding:7px 14px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-1);font-family:inherit;">📋 Copy All</button>
-      </div>
-      ${prompts.map((p, i) => `
-        <div class="pv-card" id="bgCard${i}" style="gap:10px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
-            <div style="font-size:12px;font-weight:700;color:var(--accent-2);">Prompt ${p.index} of ${prompts.length}</div>
-            <div style="display:flex;gap:6px;flex-shrink:0;">
-              <button class="btn-sm" onclick="copyBatchPrompt(${i})" id="bgCopyBtn${i}">📋 Copy JSON</button>
-              <button onclick="_pushTextToStudio(${JSON.stringify(p.script)},'producer')" style="padding:2px 9px;font-size:10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);cursor:pointer;font-weight:600;">→ Producer</button>
-              <button onclick="_pushTextToStudio(${JSON.stringify(p.script)},'replicator')" style="padding:2px 9px;font-size:10px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:3px;color:var(--warning);cursor:pointer;font-weight:600;">→ Replicator</button>
-            </div>
-          </div>
-          <div style="font-size:12px;color:var(--text-2);line-height:1.6;padding:10px 12px;background:var(--surface-1);border-radius:7px;border:1px solid var(--border-1);">${escHtml(p.script)}</div>
-          <div style="font-size:10px;color:var(--text-3);">~${wc(p.script)} words · ~${Math.round(wc(p.script)/2.3)}s spoken · ${p.dur}s clip</div>
-          <details style="margin-top:2px;">
-            <summary style="font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;user-select:none;">View Veo 3 JSON prompt</summary>
-            <pre id="bgJson${i}" style="margin-top:8px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:7px;font-size:10.5px;color:var(--text-2);overflow-x:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word;">${escHtml(p.json)}</pre>
-          </details>
-        </div>
-      `).join('')}
-    `;
-    // Store for copy-all
-    window._bgPrompts = prompts;
-  }
-
-  function copyBatchPrompt(i) {
-    if (!window._bgPrompts) return;
-    const p = window._bgPrompts[i];
-    navigator.clipboard.writeText(p.json).then(() => {
-      const btn = document.getElementById('bgCopyBtn' + i);
-      if (btn) { const t = btn.textContent; btn.textContent = '✅ Copied!'; setTimeout(() => btn.textContent = t, 2000); }
-    });
-  }
-
-  function copyAllBatchPrompts() {
-    if (!window._bgPrompts || !window._bgPrompts.length) return;
-    const all = window._bgPrompts.map((p, i) => `// ── PROMPT ${i+1} ──\n${p.json}`).join('\n\n');
-    navigator.clipboard.writeText(all).then(() => {
-      const btns = document.querySelectorAll('[onclick^="copyAllBatch"]');
-      btns.forEach(b => { const t = b.textContent; b.textContent = '✅ All Copied!'; setTimeout(() => b.textContent = t, 2000); });
-    });
   }
 
   // ============================================================
