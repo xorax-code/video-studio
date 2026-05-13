@@ -203,7 +203,11 @@
     gap: 2px;
     flex: 1;
     height: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
   }
+  .tab-bar::-webkit-scrollbar { display: none; }
 
   .tab {
     height: 100%;
@@ -239,6 +243,56 @@
   .nav-icon { font-size: 13px; line-height: 1; flex-shrink: 0; opacity: 0.7; }
   .tab.active .nav-icon { opacity: 1; }
   .nav-label { font-size: 11px; font-weight: 600; letter-spacing: 0.1px; }
+
+  /* ===== VAULT / BANK / LIBRARY PANELS ===== */
+  .pv-card, .hook-card, .cta-card, .pl-card, .rc-card, .idea-card {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .pv-card-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+  .pv-card-sub { font-size: 12px; color: var(--text-3); }
+  .pv-card-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
+  .badge-niche { background: rgba(124,106,247,0.15); color: var(--accent-2); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-type { background: var(--surface-3); color: var(--text-2); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-count { background: var(--surface-3); color: var(--text-3); font-size: 11px; padding: 2px 8px; border-radius: 20px; }
+  .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
+  .status-inbox { background: #e0f0ff; color: #1d4ed8; }
+  .status-in-progress { background: #fff3e0; color: #c2410c; }
+  .status-done { background: #dcfce7; color: #15803d; }
+  [data-theme="dark"] .status-inbox { background: #1e3a5f; color: #60a5fa; }
+  [data-theme="dark"] .status-in-progress { background: #3d1f00; color: #fb923c; }
+  [data-theme="dark"] .status-done { background: #14532d; color: #4ade80; }
+  .stars-display { font-size: 16px; letter-spacing: 1px; }
+  .url-blur { filter: blur(4px); transition: filter 0.2s; cursor: pointer; user-select: none; font-size: 12px; color: var(--text-3); }
+  .url-blur.revealed { filter: none; }
+  .btn-sm { font-size: 12px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-2); background: var(--surface-3); color: var(--text-2); cursor: pointer; }
+  .btn-sm:hover { background: var(--surface-2); color: var(--text-1); }
+  .btn-sm.danger { color: var(--danger, #ef4444); }
+  .btn-secondary { background: var(--surface-3); border: 1px solid var(--border-2); color: var(--text-2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
+  .btn-secondary:hover { background: var(--surface-2); color: var(--text-1); }
+  /* Modal overlay for new feature modals */
+  .feat-modal-overlay { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.65); align-items:center; justify-content:center; }
+  .feat-modal-overlay.open { display:flex; }
+  .feat-modal-box { background:var(--surface); border:1px solid var(--border-2); border-radius:12px; padding:24px; width:480px; max-width:94vw; max-height:88vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+  .feat-modal-header { display:flex; align-items:center; justify-content:space-between; }
+  .feat-modal-title { font-size:14px; font-weight:700; color:var(--text-1); }
+  .feat-modal-close { background:transparent; border:none; color:var(--text-3); cursor:pointer; font-size:18px; line-height:1; padding:0 4px; }
+  .feat-modal-close:hover { color:var(--text-1); }
+  .feat-form-row { display:flex; flex-direction:column; gap:5px; }
+  .feat-form-row label { font-size:11px; font-weight:600; color:var(--text-2); text-transform:uppercase; letter-spacing:0.4px; }
+  .feat-form-row input, .feat-form-row textarea, .feat-form-row select { background:var(--bg); border:1px solid var(--border-2); border-radius:7px; color:var(--text-1); font-size:12px; padding:8px 10px; font-family:inherit; outline:none; width:100%; }
+  .feat-form-row textarea { min-height:80px; resize:vertical; }
+  .feat-form-row input:focus, .feat-form-row textarea:focus, .feat-form-row select:focus { border-color:var(--accent); }
+  .feat-modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+  .feat-platform-checks { display:flex; flex-wrap:wrap; gap:8px; }
+  .feat-platform-checks label { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-2); font-weight:400; text-transform:none; letter-spacing:0; cursor:pointer; }
+  .feat-star-btn { background:transparent; border:none; font-size:22px; cursor:pointer; color:var(--text-3); padding:0 2px; transition:color 0.1s; }
+  .feat-star-btn.active { color:var(--warning); }
 
   /* ===== TOPNAV RIGHT ===== */
   .topnav-right {
@@ -1222,6 +1276,14 @@
       <span class="nav-icon">✏️</span>
       <span class="nav-label">Video Producer</span>
     </button>
+    <button class="tab" data-tab="batch-generator" onclick="switchTab('batch-generator')" title="Batch Veo 3 Generator">
+      <span class="nav-icon">⚡</span>
+      <span class="nav-label">Batch Gen</span>
+    </button>
+    <button class="tab" data-tab="ideas-inbox" onclick="switchTab('ideas-inbox')" title="Ideas Inbox">
+      <span class="nav-icon">💡</span>
+      <span class="nav-label">Ideas Inbox</span>
+    </button>
   </div>
 
   <div class="topnav-right">
@@ -1400,6 +1462,54 @@
       <div class="empty-icon">🔥</div>
       <h3>No viral scripts saved yet</h3>
       <p>Find a viral video from a competitor and save the script here to replicate later.</p>
+    </div>
+
+    <!-- ===== HOOK BANK SECTION ===== -->
+    <div style="margin-top:40px;border-top:1px solid var(--border-1);padding-top:28px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">🎣</span>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text-1);">Hook Bank</div>
+            <div style="font-size:12px;color:var(--text-3);">Opening lines that stop the scroll — push any hook to the studio</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="openHookModal()">+ Add Hook</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <div class="search-box" style="flex:1;min-width:180px;">
+          <span class="icon">🔍</span>
+          <input type="text" id="hbSearch" placeholder="Search hooks..." oninput="renderHookBank()">
+        </div>
+        <select class="filter-select" id="hbFilterCat" onchange="renderHookBank()">
+          <option value="">All Categories</option>
+        </select>
+      </div>
+      <div id="hbList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;"></div>
+    </div>
+
+    <!-- ===== CTA LIBRARY SECTION ===== -->
+    <div style="margin-top:40px;border-top:1px solid var(--border-1);padding-top:28px;margin-bottom:40px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:20px;">📢</span>
+          <div>
+            <div style="font-size:16px;font-weight:700;color:var(--text-1);">CTA Library</div>
+            <div style="font-size:12px;color:var(--text-3);">Calls-to-action ready to push into any video — follow, DM, link in bio and more</div>
+          </div>
+        </div>
+        <button class="btn btn-primary" onclick="openCTAModal()">+ Add CTA</button>
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+        <div class="search-box" style="flex:1;min-width:180px;">
+          <span class="icon">🔍</span>
+          <input type="text" id="ctaSearch" placeholder="Search CTAs..." oninput="renderCTALibrary()">
+        </div>
+        <select class="filter-select" id="ctaFilterType" onchange="renderCTALibrary()">
+          <option value="">All Types</option>
+        </select>
+      </div>
+      <div id="ctaList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;"></div>
     </div>
 
   </div>
@@ -1975,12 +2085,12 @@
           <div style="padding:4px 8px 6px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
             <div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:stretch;flex:1;min-height:0;">
               <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden;">
-                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);flex:1;min-height:120px;overflow:hidden;display:flex;align-items:center;justify-content:center;">
+                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:180px;max-height:180px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                   <div id="videoUploadPlaceholder" style="text-align:center;">
                     <div style="font-size:16px;opacity:0.25;margin-bottom:2px;">🎬</div>
                     <div style="font-size:10px;color:var(--text-3);">Click to upload MP4</div>
                   </div>
-                  <video id="refVideoEl" controls style="display:none;width:100%;height:100%;min-height:120px;max-height:none;object-fit:contain;border-radius:2px;" ontimeupdate="updateTimestamp()"></video>
+                  <video id="refVideoEl" controls style="display:none;width:100%;height:100%;object-fit:contain;border-radius:2px;" ontimeupdate="updateTimestamp()"></video>
                 </div>
                 <input type="file" id="refVideoInput" accept="video/mp4,video/*" style="display:none;" onchange="onVideoFileChange(event)">
               </div>
@@ -2031,6 +2141,110 @@
 
 </div><!-- end #tab-video-studio -->
 
+<!-- ===== BATCH GENERATOR TAB ===== -->
+<div id="tab-batch-generator" class="tab-content">
+  <div style="display:grid;grid-template-columns:300px 1fr;gap:20px;align-items:start;">
+
+    <!-- CONFIG PANEL -->
+    <div style="background:var(--surface-2);border:1px solid var(--border-1);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:14px;position:sticky;top:0;">
+      <div style="font-size:15px;font-weight:700;color:var(--text-1);display:flex;align-items:center;gap:8px;">⚡ Batch Veo 3 Generator</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:-6px;line-height:1.5;">Fill in the details and generate a full week of ready-to-use Veo 3 prompts in one shot.</div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">PRODUCT NAME</label>
+        <input type="text" id="bgProduct" placeholder="e.g. SlimTea Pro, HydraGlow Serum…" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">CONTENT ANGLE</label>
+        <select id="bgAngle" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
+          <option value="review">Honest Review</option>
+          <option value="before-after">Before / After</option>
+          <option value="tutorial">Quick Tutorial</option>
+          <option value="lifestyle">Lifestyle / Day-in-Life</option>
+          <option value="comparison">Comparison</option>
+          <option value="testimonial">Testimonial</option>
+          <option value="unboxing">Unboxing / First Look</option>
+        </select>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">SETTING / BACKGROUND</label>
+        <input type="text" id="bgSetting" placeholder="e.g. bright kitchen, gym, bedroom…" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">HOOK SOURCE</label>
+        <select id="bgHookSource" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
+          <option value="bank">Use my Hook Bank</option>
+          <option value="auto">Auto-generate by angle</option>
+        </select>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">CTA SOURCE</label>
+        <select id="bgCtaSource" style="padding:8px 10px;border-radius:7px;border:1px solid var(--border-2);background:var(--surface-1);color:var(--text-1);font-size:13px;outline:none;font-family:inherit;">
+          <option value="library">Use my CTA Library</option>
+          <option value="auto">Auto-generate</option>
+        </select>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:6px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">NUMBER OF VIDEOS — <span id="bgCountDisplay">7</span></label>
+        <input type="range" id="bgCount" min="3" max="14" value="7" oninput="document.getElementById('bgCountDisplay').textContent=this.value" style="width:100%;accent-color:var(--accent);">
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-top:-2px;"><span>3</span><span>14</span></div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <label style="font-size:11px;font-weight:600;color:var(--text-2);">VIDEO DURATION</label>
+        <div style="display:flex;gap:6px;">
+          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--border-2);cursor:pointer;font-size:12px;color:var(--text-2);background:var(--surface-1);" id="bgDurLabel5"><input type="radio" name="bgDur" value="5" style="accent-color:var(--accent);"> 5s</label>
+          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--accent);cursor:pointer;font-size:12px;color:var(--accent-2);background:var(--accent-light);" id="bgDurLabel8"><input type="radio" name="bgDur" value="8" checked style="accent-color:var(--accent);"> 8s</label>
+          <label style="flex:1;display:flex;align-items:center;justify-content:center;gap:5px;padding:7px;border-radius:7px;border:1px solid var(--border-2);cursor:pointer;font-size:12px;color:var(--text-2);background:var(--surface-1);" id="bgDurLabel15"><input type="radio" name="bgDur" value="15" style="accent-color:var(--accent);"> 15s</label>
+        </div>
+      </div>
+
+      <button onclick="runBatchGenerator()" style="width:100%;padding:11px;background:var(--accent);border:none;border-radius:8px;color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;margin-top:4px;transition:opacity 0.15s;" onmouseover="this.style.opacity='.88'" onmouseout="this.style.opacity='1'">⚡ Generate Prompts</button>
+    </div>
+
+    <!-- OUTPUT PANEL -->
+    <div>
+      <div id="bgOutput" style="display:flex;flex-direction:column;gap:16px;">
+        <div style="text-align:center;padding:60px 20px;color:var(--text-3);font-size:13px;line-height:1.7;">
+          ⚡ Fill in the config on the left and hit <strong>Generate Prompts</strong>.<br>
+          Your batch of Veo 3 prompts will appear here, ready to copy into Flow.
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ===== IDEAS INBOX TAB ===== -->
+<div id="tab-ideas-inbox" class="tab-content">
+  <div style="display:flex;gap:10px;margin-bottom:20px;padding:16px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border);">
+    <input type="text" id="ideaQuickInput" placeholder="Quick idea capture — type and press Enter or click Add..." style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface);color:var(--text-1);font-size:14px;" onkeydown="if(event.key==='Enter')quickAddIdea()">
+    <button class="btn btn-primary" onclick="quickAddIdea()">Add Idea</button>
+  </div>
+  <div class="toolbar">
+    <select class="filter-select" id="iiFilterStatus" onchange="renderIdeasInbox()">
+      <option value="">All Status</option>
+      <option value="inbox">Inbox</option>
+      <option value="in-progress">In Progress</option>
+      <option value="done">Done</option>
+    </select>
+    <select class="filter-select" id="iiFilterPlatform" onchange="renderIdeasInbox()">
+      <option value="">All Platforms</option>
+      <option value="TikTok">TikTok</option>
+      <option value="Instagram">Instagram</option>
+      <option value="Facebook">Facebook</option>
+      <option value="YouTube">YouTube</option>
+    </select>
+    <button class="btn-secondary" onclick="openIdeaModal()" style="margin-left:auto;">+ Full Form</button>
+  </div>
+  <div id="iiList" style="display:flex;flex-direction:column;gap:10px;margin-top:16px;"></div>
+</div>
+
   </div><!-- end .page-body -->
 </div><!-- end .main-area -->
 
@@ -2076,6 +2290,196 @@
       </div>
     </div>
 
+  </div>
+</div>
+
+<!-- ===== PRODUCT VAULT MODAL ===== -->
+<div id="productModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="productModalTitle">Add Product</span>
+      <button class="feat-modal-close" onclick="closeProductModal()">✕</button>
+    </div>
+    <input type="hidden" id="pmEditId">
+    <div class="feat-form-row"><label>Product Name *</label><input type="text" id="pmName" placeholder="e.g. SlimFast Protein Shake"></div>
+    <div class="feat-form-row"><label>Brand</label><input type="text" id="pmBrand" placeholder="e.g. SlimFast"></div>
+    <div class="feat-form-row"><label>Affiliate URL *</label><input type="url" id="pmUrl" placeholder="https://..."></div>
+    <div class="feat-form-row"><label>Niche</label><input type="text" id="pmNiche" placeholder="e.g. Weight Loss, Beauty, Finance"></div>
+    <div class="feat-form-row">
+      <label>Platforms</label>
+      <div class="feat-platform-checks">
+        <label><input type="checkbox" name="pmPlat" value="TikTok"> TikTok</label>
+        <label><input type="checkbox" name="pmPlat" value="Instagram"> Instagram</label>
+        <label><input type="checkbox" name="pmPlat" value="Facebook"> Facebook</label>
+        <label><input type="checkbox" name="pmPlat" value="YouTube"> YouTube</label>
+        <label><input type="checkbox" name="pmPlat" value="Other"> Other</label>
+      </div>
+    </div>
+    <div class="feat-form-row"><label>Notes</label><textarea id="pmNotes" placeholder="Commission rate, promo codes, tips..."></textarea></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closeProductModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveProductModal()">Save Product</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== HOOK BANK MODAL ===== -->
+<div id="hookModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="hookModalTitle">Add Hook</span>
+      <button class="feat-modal-close" onclick="closeHookModal()">✕</button>
+    </div>
+    <input type="hidden" id="hmEditId">
+    <div class="feat-form-row"><label>Hook Text *</label><textarea id="hmText" placeholder="Enter your hook..."></textarea></div>
+    <div class="feat-form-row">
+      <label>Category</label>
+      <select id="hmCategory">
+        <option value="">Select category...</option>
+        <option>Curiosity</option><option>Transformation</option><option>Fear</option>
+        <option>Controversy</option><option>Social Proof</option><option>Question</option>
+        <option>Stat/Fact</option><option>Challenge</option>
+      </select>
+    </div>
+    <div class="feat-form-row"><label>Source</label><input type="text" id="hmSource" placeholder="e.g. Competitor, Original, Sample"></div>
+    <div class="feat-form-row"><label>Notes</label><textarea id="hmNotes" placeholder="When to use this hook..."></textarea></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closeHookModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveHookModal()">Save Hook</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CTA LIBRARY MODAL ===== -->
+<div id="ctaModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="ctaModalTitle">Add CTA</span>
+      <button class="feat-modal-close" onclick="closeCTAModal()">✕</button>
+    </div>
+    <input type="hidden" id="ctamEditId">
+    <div class="feat-form-row"><label>CTA Text *</label><textarea id="ctamText" placeholder="Enter your call to action..."></textarea></div>
+    <div class="feat-form-row">
+      <label>Type</label>
+      <select id="ctamType">
+        <option value="">Select type...</option>
+        <option>Follow</option><option>Link In Bio</option><option>Comment</option>
+        <option>Share</option><option>DM</option><option>Save</option>
+        <option>Subscribe</option><option>Other</option>
+      </select>
+    </div>
+    <div class="feat-form-row">
+      <label>Platforms</label>
+      <div class="feat-platform-checks">
+        <label><input type="checkbox" name="ctamPlat" value="TikTok"> TikTok</label>
+        <label><input type="checkbox" name="ctamPlat" value="Instagram"> Instagram</label>
+        <label><input type="checkbox" name="ctamPlat" value="Facebook"> Facebook</label>
+        <label><input type="checkbox" name="ctamPlat" value="YouTube"> YouTube</label>
+        <label><input type="checkbox" name="ctamPlat" value="Other"> Other</label>
+      </div>
+    </div>
+    <div class="feat-form-row"><label>Notes</label><textarea id="ctamNotes" placeholder="When to use this CTA..."></textarea></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closeCTAModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCTAModal()">Save CTA</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== PERFORMANCE LOG MODAL ===== -->
+<div id="performanceModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="perfModalTitle">Log Performance</span>
+      <button class="feat-modal-close" onclick="closePerformanceModal()">✕</button>
+    </div>
+    <input type="hidden" id="perfEditId">
+    <div class="feat-form-row">
+      <label>Account</label>
+      <select id="perfAccount"><option value="">Select account...</option></select>
+    </div>
+    <div class="feat-form-row"><label>Date</label><input type="date" id="perfDate"></div>
+    <div class="feat-form-row"><label>Post / Script Title</label><input type="text" id="perfTitle" placeholder="e.g. Weight loss hook #3"></div>
+    <div class="feat-form-row">
+      <label>Star Rating</label>
+      <div style="display:flex;gap:4px;align-items:center;margin-top:4px;">
+        <button class="feat-star-btn" id="star1" onclick="setPerfStar(1)">★</button>
+        <button class="feat-star-btn" id="star2" onclick="setPerfStar(2)">★</button>
+        <button class="feat-star-btn" id="star3" onclick="setPerfStar(3)">★</button>
+        <button class="feat-star-btn" id="star4" onclick="setPerfStar(4)">★</button>
+        <button class="feat-star-btn" id="star5" onclick="setPerfStar(5)">★</button>
+        <input type="hidden" id="perfStars" value="0">
+        <span id="perfStarLabel" style="font-size:11px;color:var(--text-3);margin-left:6px;">No rating</span>
+      </div>
+    </div>
+    <div class="feat-form-row"><label>Notes</label><textarea id="perfNotes" placeholder="What worked, what didn't..."></textarea></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closePerformanceModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="savePerformanceModal()">Save Log</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CONTENT RECYCLER MODAL ===== -->
+<div id="recycleModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="recycleModalTitle">Add to Recycler</span>
+      <button class="feat-modal-close" onclick="closeRecycleModal()">✕</button>
+    </div>
+    <input type="hidden" id="rcmEditId">
+    <div class="feat-form-row"><label>Title *</label><input type="text" id="rcmTitle" placeholder="Descriptive title for this content"></div>
+    <div class="feat-form-row">
+      <label>Type</label>
+      <select id="rcmType">
+        <option value="custom">Custom</option>
+        <option value="script">Script</option>
+        <option value="hook">Hook</option>
+      </select>
+    </div>
+    <div class="feat-form-row"><label>Content *</label><textarea id="rcmContent" placeholder="Paste the content here..."></textarea></div>
+    <div class="feat-form-row"><label>Tags (comma-separated)</label><input type="text" id="rcmTags" placeholder="e.g. weight-loss, hooks, facebook"></div>
+    <div class="feat-form-row"><label>Notes</label><textarea id="rcmNotes" placeholder="When/how to reuse this..."></textarea></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closeRecycleModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveRecycleModal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== IDEAS INBOX MODAL ===== -->
+<div id="ideaModal" class="feat-modal-overlay">
+  <div class="feat-modal-box">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title" id="ideaModalTitle">Add Idea</span>
+      <button class="feat-modal-close" onclick="closeIdeaModal()">✕</button>
+    </div>
+    <input type="hidden" id="iimEditId">
+    <div class="feat-form-row"><label>Title *</label><input type="text" id="iimTitle" placeholder="Idea title..."></div>
+    <div class="feat-form-row"><label>Details</label><textarea id="iimBody" placeholder="Describe the idea..."></textarea></div>
+    <div class="feat-form-row">
+      <label>Status</label>
+      <select id="iimStatus">
+        <option value="inbox">Inbox</option>
+        <option value="in-progress">In Progress</option>
+        <option value="done">Done</option>
+      </select>
+    </div>
+    <div class="feat-form-row">
+      <label>Platform</label>
+      <select id="iimPlatform">
+        <option value="">Any Platform</option>
+        <option value="TikTok">TikTok</option>
+        <option value="Instagram">Instagram</option>
+        <option value="Facebook">Facebook</option>
+        <option value="YouTube">YouTube</option>
+      </select>
+    </div>
+    <div class="feat-form-row"><label>Tags (comma-separated)</label><input type="text" id="iimTags" placeholder="e.g. hooks, trending, viral"></div>
+    <div class="feat-modal-footer">
+      <button class="btn" onclick="closeIdeaModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Cancel</button>
+      <button class="btn btn-primary" onclick="saveIdeaModal()">Save Idea</button>
+    </div>
   </div>
 </div>
 
@@ -2410,10 +2814,12 @@
   const _tabTitles = {
     'my-accounts': 'My Accounts',
     'competitors': 'Competitors',
-    'viral-scripts': 'Viral Scripts',
+    'viral-scripts': 'Viral Scripts + Hooks + CTAs',
     'calendar': 'Video Calendar',
     'video-replicator': 'Video Replicator',
     'video-producer': 'Video Producer',
+    'batch-generator': 'Batch Veo 3 Generator',
+    'ideas-inbox': 'Ideas Inbox',
   };
 
   function switchTab(tab) {
@@ -2440,8 +2846,10 @@
       initVideoStudio(requestedMode);
     } else {
       if (tab === 'competitors') renderCompetitors();
-      if (tab === 'viral-scripts') renderScripts();
+      if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); }
+      if (tab === 'batch-generator') { /* renders on demand via Generate button */ }
       if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
+      if (tab === 'ideas-inbox') renderIdeasInbox();
     }
   }
 
@@ -3129,6 +3537,24 @@
   }
   function sendScriptToProducer(id)   { _loadScriptIntoStudio(id, 'producer');   }
   function sendScriptToReplicator(id) { _loadScriptIntoStudio(id, 'replicator'); }
+
+  // Push any raw text (hook, CTA, etc.) into the studio script box
+  function _pushTextToStudio(text, mode) {
+    switchTab(mode === 'producer' ? 'video-producer' : 'video-replicator');
+    setTimeout(() => {
+      const ta = document.getElementById('originalScript');
+      if (ta) {
+        // Append to existing script if non-empty, otherwise replace
+        const existing = ta.value.trim();
+        ta.value = existing ? existing + '\n\n' + text : text;
+        ta.dispatchEvent(new Event('input'));
+        saveSegments();
+        ta.style.borderColor = 'var(--accent)';
+        ta.scrollTop = ta.scrollHeight;
+        setTimeout(() => ta.style.borderColor = '', 1400);
+      }
+    }, 300);
+  }
 
   function toggleScriptExpand(id) {
     const body = document.getElementById('sb-' + id);
@@ -7552,6 +7978,11 @@ TECHNICAL SPECS:
     renderTable();
     await loadSegments();
 
+    // Load feature panel data
+    loadHooks();
+    loadCTALibrary();
+    loadIdeas();
+
     // Restore the last active tab so a page refresh keeps you where you were
     const savedTab = localStorage.getItem('sm_active_tab');
     if (savedTab && savedTab !== 'my-accounts') {
@@ -7816,7 +8247,45 @@ TECHNICAL SPECS:
 
   function previewUsetScale(val) {
     document.getElementById('uset-scale-display').textContent = val + '%';
-    document.body.style.zoom = val / 100;
+    applyUiZoom(val);
+  }
+
+  function applyUiZoom(scale) {
+    const zoom = scale / 100;
+    document.body.style.zoom = zoom;
+    const topnav   = document.querySelector('.topnav');
+    const mainArea = document.querySelector('.main-area');
+    if (zoom > 1) {
+      // Body must scroll so zoomed content isn't clipped
+      document.body.style.height    = 'auto';
+      document.body.style.overflowY = 'auto';
+      document.body.style.overflowX = 'hidden';
+      // Topnav sticks to top so it doesn't scroll away
+      if (topnav) {
+        topnav.style.position = 'sticky';
+        topnav.style.top      = '0';
+        topnav.style.zIndex   = '9999';
+      }
+      // Main area flows naturally — body provides the outer scroll
+      if (mainArea) {
+        mainArea.style.height    = 'auto';
+        mainArea.style.overflowY = 'visible';
+      }
+    } else {
+      // Restore default fixed-viewport layout
+      document.body.style.height    = '';
+      document.body.style.overflowY = '';
+      document.body.style.overflowX = '';
+      if (topnav) {
+        topnav.style.position = '';
+        topnav.style.top      = '';
+        topnav.style.zIndex   = '';
+      }
+      if (mainArea) {
+        mainArea.style.height    = '';
+        mainArea.style.overflowY = '';
+      }
+    }
   }
 
   function saveAccessibilitySettings() {
@@ -7838,7 +8307,7 @@ TECHNICAL SPECS:
     const s = getUserSettings();
     // Scale
     if (s.uiScale) {
-      document.body.style.zoom = s.uiScale / 100;
+      applyUiZoom(s.uiScale);
     }
     // Theme — 'system' is the default; fall back to stored theme or dark if nothing set
     const mode = s.themeMode || 'system';
@@ -8111,6 +8580,927 @@ TECHNICAL SPECS:
     alert('Data cleared. The page will now reload.');
     location.reload();
   }
+
+  // ========================================================
+  // ===== FEATURE PANELS — Product Vault, Hook Bank, =====
+  // ===== CTA Library, Performance Log, Recycler, Ideas =====
+  // ========================================================
+
+  // ---------- Utility ----------
+  function _uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2); }
+  function _escHtml(s) { if (!s) return ''; return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function _showCopied(btn, text) {
+    const orig = btn.textContent;
+    btn.textContent = text || '✅ Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  }
+
+  // ============================================================
+  // FEATURE 1: PRODUCT VAULT
+  // ============================================================
+  let products = [];
+
+  async function loadProducts() {
+    products = JSON.parse(await DB.get('sm_products') || '[]');
+    renderProductVault();
+  }
+
+  function saveProducts() { DB.set('sm_products', JSON.stringify(products)); }
+
+  function renderProductVault() {
+    const search = (document.getElementById('pvSearch') ? document.getElementById('pvSearch').value : '').toLowerCase();
+    const niche = document.getElementById('pvFilterNiche') ? document.getElementById('pvFilterNiche').value : '';
+
+    // Refresh niche dropdown
+    const nicheEl = document.getElementById('pvFilterNiche');
+    if (nicheEl) {
+      const current = nicheEl.value;
+      const niches = [...new Set(products.map(p => p.niche).filter(Boolean))].sort();
+      nicheEl.innerHTML = '<option value="">All Niches</option>' + niches.map(n => `<option value="${_escHtml(n)}" ${n === current ? 'selected' : ''}>${_escHtml(n)}</option>`).join('');
+    }
+
+    const filtered = products.filter(p => {
+      const matchSearch = !search || (p.name||'').toLowerCase().includes(search) || (p.brand||'').toLowerCase().includes(search) || (p.niche||'').toLowerCase().includes(search);
+      const matchNiche = !niche || p.niche === niche;
+      return matchSearch && matchNiche;
+    });
+
+    const grid = document.getElementById('pvGrid');
+    if (!grid) return;
+
+    if (filtered.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">${products.length === 0 ? 'No products yet. Click <strong>+ Add Product</strong> to get started.' : 'No products match your search.'}</div>`;
+      return;
+    }
+
+    const platEmoji = { TikTok: '🎵', Instagram: '📸', Facebook: '👥', YouTube: '▶️', Other: '🌐' };
+
+    grid.innerHTML = filtered.map(p => {
+      const plats = (p.platforms || []).map(pl => `<span title="${_escHtml(pl)}">${platEmoji[pl] || '🌐'}</span>`).join(' ');
+      return `<div class="pv-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+          <div>
+            <div class="pv-card-title">${_escHtml(p.name)}</div>
+            ${p.brand ? `<div class="pv-card-sub">${_escHtml(p.brand)}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn-sm" onclick="openProductModal('${p.id}')">✏️</button>
+            <button class="btn-sm danger" onclick="deleteProduct('${p.id}')">🗑</button>
+          </div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+          ${p.niche ? `<span class="badge-niche">${_escHtml(p.niche)}</span>` : ''}
+          ${plats ? `<span style="font-size:14px;">${plats}</span>` : ''}
+          <span class="badge-count">${p.clickCount || 0} clicks</span>
+        </div>
+        ${p.notes ? `<div style="font-size:12px;color:var(--text-2);line-height:1.5;">${_escHtml(p.notes.slice(0,100))}${p.notes.length>100?'…':''}</div>` : ''}
+        <div style="margin-top:4px;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:4px;">Affiliate URL:</div>
+          <span class="url-blur" id="pv-url-${p.id}" onclick="this.classList.toggle('revealed')" title="Click to reveal">${_escHtml(p.url)}</span>
+        </div>
+        <div class="pv-card-actions">
+          <button class="btn-sm" onclick="copyProductLink('${p.id}', this)">📋 Copy Link</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openProductModal(id) {
+    const modal = document.getElementById('productModal');
+    const titleEl = document.getElementById('productModalTitle');
+    document.getElementById('pmEditId').value = id || '';
+    titleEl.textContent = id ? 'Edit Product' : 'Add Product';
+    document.querySelectorAll('[name="pmPlat"]').forEach(cb => cb.checked = false);
+
+    if (id) {
+      const p = products.find(x => x.id === id);
+      if (!p) return;
+      document.getElementById('pmName').value = p.name || '';
+      document.getElementById('pmBrand').value = p.brand || '';
+      document.getElementById('pmUrl').value = p.url || '';
+      document.getElementById('pmNiche').value = p.niche || '';
+      document.getElementById('pmNotes').value = p.notes || '';
+      (p.platforms || []).forEach(pl => {
+        const cb = document.querySelector(`[name="pmPlat"][value="${pl}"]`);
+        if (cb) cb.checked = true;
+      });
+    } else {
+      document.getElementById('pmName').value = '';
+      document.getElementById('pmBrand').value = '';
+      document.getElementById('pmUrl').value = '';
+      document.getElementById('pmNiche').value = '';
+      document.getElementById('pmNotes').value = '';
+    }
+    modal.classList.add('open');
+  }
+
+  function closeProductModal() { document.getElementById('productModal').classList.remove('open'); }
+
+  function saveProductModal() {
+    const name = document.getElementById('pmName').value.trim();
+    const url = document.getElementById('pmUrl').value.trim();
+    if (!name) { alert('Product name is required.'); return; }
+    if (!url) { alert('Affiliate URL is required.'); return; }
+    const platforms = [...document.querySelectorAll('[name="pmPlat"]:checked')].map(cb => cb.value);
+    const id = document.getElementById('pmEditId').value;
+    if (id) {
+      const p = products.find(x => x.id === id);
+      if (p) {
+        p.name = name;
+        p.brand = document.getElementById('pmBrand').value.trim();
+        p.url = url;
+        p.niche = document.getElementById('pmNiche').value.trim();
+        p.platforms = platforms;
+        p.notes = document.getElementById('pmNotes').value.trim();
+      }
+    } else {
+      products.push({ id: _uid(), name, brand: document.getElementById('pmBrand').value.trim(), url, niche: document.getElementById('pmNiche').value.trim(), platforms, notes: document.getElementById('pmNotes').value.trim(), clickCount: 0, createdAt: Date.now() });
+    }
+    saveProducts();
+    closeProductModal();
+    renderProductVault();
+  }
+
+  function deleteProduct(id) {
+    if (!confirm('Delete this product?')) return;
+    products = products.filter(p => p.id !== id);
+    saveProducts();
+    renderProductVault();
+  }
+
+  function copyProductLink(id, btn) {
+    const p = products.find(x => x.id === id);
+    if (!p) return;
+    navigator.clipboard.writeText(p.url).then(() => {
+      p.clickCount = (p.clickCount || 0) + 1;
+      saveProducts();
+      renderProductVault();
+    });
+    _showCopied(btn, '✅ Copied!');
+  }
+
+  // ============================================================
+  // FEATURE 2: HOOK BANK
+  // ============================================================
+  let hooks = [];
+
+  async function loadHooks() {
+    hooks = JSON.parse(await DB.get('sm_hooks') || '[]');
+    // Purge any pre-seeded sample entries
+    const before = hooks.length;
+    hooks = hooks.filter(h => h.source !== 'Sample');
+    if (hooks.length !== before) saveHooks();
+    renderHookBank();
+  }
+
+  function saveHooks() { DB.set('sm_hooks', JSON.stringify(hooks)); }
+
+  function renderHookBank() {
+    const search = (document.getElementById('hbSearch') ? document.getElementById('hbSearch').value : '').toLowerCase();
+    const cat = document.getElementById('hbFilterCat') ? document.getElementById('hbFilterCat').value : '';
+
+    // Refresh category dropdown
+    const catEl = document.getElementById('hbFilterCat');
+    if (catEl) {
+      const cur = catEl.value;
+      const cats = [...new Set(hooks.map(h => h.category).filter(Boolean))].sort();
+      catEl.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${_escHtml(c)}" ${c === cur ? 'selected' : ''}>${_escHtml(c)}</option>`).join('');
+    }
+
+    const filtered = hooks.filter(h => {
+      const matchS = !search || (h.text||'').toLowerCase().includes(search) || (h.category||'').toLowerCase().includes(search);
+      const matchC = !cat || h.category === cat;
+      return matchS && matchC;
+    });
+
+    const list = document.getElementById('hbList');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px 20px;font-size:13px;line-height:1.6;">${hooks.length === 0 ? '🎣 Your Hook Bank is empty.<br>Click <strong>+ Add Hook</strong> to save your first opening line.' : 'No hooks match your search.'}</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(h => `<div class="hook-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div style="flex:1;">
+          ${h.category ? `<span class="badge-type" style="margin-bottom:6px;display:inline-block;">${_escHtml(h.category)}</span>` : ''}
+          <div style="font-size:13px;color:var(--text-1);line-height:1.55;">${_escHtml(h.text)}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn-sm" onclick="openHookModal('${h.id}')">✏️</button>
+          <button class="btn-sm danger" onclick="deleteHook('${h.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="pv-card-actions">
+        <button class="btn-sm" onclick="copyHook('${h.id}',this)">📋 Copy</button>
+        <span class="badge-count">${h.copyCount || 0} copies</span>
+        ${h.source ? `<span style="font-size:11px;color:var(--text-3);">📌 ${_escHtml(h.source)}</span>` : ''}
+        <button onclick="_pushTextToStudio(${JSON.stringify(h.text)},'producer')" title="Send hook to Video Producer" style="padding:2px 9px;font-size:10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);cursor:pointer;font-weight:600;margin-left:auto;">→ Producer</button>
+        <button onclick="_pushTextToStudio(${JSON.stringify(h.text)},'replicator')" title="Send hook to Video Replicator" style="padding:2px 9px;font-size:10px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:3px;color:var(--warning);cursor:pointer;font-weight:600;">→ Replicator</button>
+      </div>
+    </div>`).join('');
+  }
+
+  function openHookModal(id) {
+    const modal = document.getElementById('hookModal');
+    document.getElementById('hmEditId').value = id || '';
+    document.getElementById('hookModalTitle').textContent = id ? 'Edit Hook' : 'Add Hook';
+    if (id) {
+      const h = hooks.find(x => x.id === id);
+      if (!h) return;
+      document.getElementById('hmText').value = h.text || '';
+      document.getElementById('hmCategory').value = h.category || '';
+      document.getElementById('hmSource').value = h.source || '';
+      document.getElementById('hmNotes').value = h.notes || '';
+    } else {
+      document.getElementById('hmText').value = '';
+      document.getElementById('hmCategory').value = '';
+      document.getElementById('hmSource').value = '';
+      document.getElementById('hmNotes').value = '';
+    }
+    modal.classList.add('open');
+  }
+
+  function closeHookModal() { document.getElementById('hookModal').classList.remove('open'); }
+
+  function saveHookModal() {
+    const text = document.getElementById('hmText').value.trim();
+    if (!text) { alert('Hook text is required.'); return; }
+    const id = document.getElementById('hmEditId').value;
+    if (id) {
+      const h = hooks.find(x => x.id === id);
+      if (h) { h.text = text; h.category = document.getElementById('hmCategory').value; h.source = document.getElementById('hmSource').value.trim(); h.notes = document.getElementById('hmNotes').value.trim(); }
+    } else {
+      hooks.push({ id: _uid(), text, category: document.getElementById('hmCategory').value, platforms: [], source: document.getElementById('hmSource').value.trim(), notes: document.getElementById('hmNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
+    }
+    saveHooks();
+    closeHookModal();
+    renderHookBank();
+  }
+
+  function deleteHook(id) {
+    if (!confirm('Delete this hook?')) return;
+    hooks = hooks.filter(h => h.id !== id);
+    saveHooks();
+    renderHookBank();
+  }
+
+  function copyHook(id, btn) {
+    const h = hooks.find(x => x.id === id);
+    if (!h) return;
+    navigator.clipboard.writeText(h.text);
+    h.copyCount = (h.copyCount || 0) + 1;
+    saveHooks();
+    _showCopied(btn, '✅ Copied!');
+    setTimeout(() => renderHookBank(), 2100);
+  }
+
+  // ============================================================
+  // FEATURE 3: CTA LIBRARY
+  // ============================================================
+  let ctas = [];
+
+  async function loadCTALibrary() {
+    // One-time wipe of seeded sample data (samples had no source field)
+    if (!localStorage.getItem('aos_ctas_cleared_v1')) {
+      await DB.set('sm_ctas', '[]');
+      localStorage.setItem('aos_ctas_cleared_v1', '1');
+      ctas = [];
+      renderCTALibrary();
+      return;
+    }
+    ctas = JSON.parse(await DB.get('sm_ctas') || '[]');
+    ctas = ctas.filter(c => c.source !== 'Sample');
+    renderCTALibrary();
+  }
+
+  function saveCTALibrary() { DB.set('sm_ctas', JSON.stringify(ctas)); }
+
+  function renderCTALibrary() {
+    const search = (document.getElementById('ctaSearch') ? document.getElementById('ctaSearch').value : '').toLowerCase();
+    const type = document.getElementById('ctaFilterType') ? document.getElementById('ctaFilterType').value : '';
+
+    // Refresh type dropdown
+    const typeEl = document.getElementById('ctaFilterType');
+    if (typeEl) {
+      const cur = typeEl.value;
+      const types = [...new Set(ctas.map(c => c.type).filter(Boolean))].sort();
+      typeEl.innerHTML = '<option value="">All Types</option>' + types.map(t => `<option value="${_escHtml(t)}" ${t === cur ? 'selected' : ''}>${_escHtml(t)}</option>`).join('');
+    }
+
+    const filtered = ctas.filter(c => {
+      const matchS = !search || (c.text||'').toLowerCase().includes(search) || (c.type||'').toLowerCase().includes(search);
+      const matchT = !type || c.type === type;
+      return matchS && matchT;
+    });
+
+    const list = document.getElementById('ctaList');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px 20px;font-size:13px;line-height:1.6;">${ctas.length === 0 ? '📢 Your CTA Library is empty.<br>Click <strong>+ Add CTA</strong> to save your first call-to-action.' : 'No CTAs match your search.'}</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.map(c => `<div class="cta-card">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+        <div style="flex:1;">
+          ${c.type ? `<span class="badge-type" style="margin-bottom:6px;display:inline-block;">${_escHtml(c.type)}</span>` : ''}
+          <div style="font-size:13px;color:var(--text-1);line-height:1.55;">${_escHtml(c.text)}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button class="btn-sm" onclick="openCTAModal('${c.id}')">✏️</button>
+          <button class="btn-sm danger" onclick="deleteCTA('${c.id}')">🗑</button>
+        </div>
+      </div>
+      <div class="pv-card-actions">
+        <button class="btn-sm" onclick="copyCTA('${c.id}',this)">📋 Copy</button>
+        <span class="badge-count">${c.copyCount || 0} copies</span>
+        <button onclick="_pushTextToStudio(${JSON.stringify(c.text)},'producer')" title="Send CTA to Video Producer" style="padding:2px 9px;font-size:10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);cursor:pointer;font-weight:600;margin-left:auto;">→ Producer</button>
+        <button onclick="_pushTextToStudio(${JSON.stringify(c.text)},'replicator')" title="Send CTA to Video Replicator" style="padding:2px 9px;font-size:10px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:3px;color:var(--warning);cursor:pointer;font-weight:600;">→ Replicator</button>
+      </div>
+    </div>`).join('');
+  }
+
+  function openCTAModal(id) {
+    const modal = document.getElementById('ctaModal');
+    document.getElementById('ctamEditId').value = id || '';
+    document.getElementById('ctaModalTitle').textContent = id ? 'Edit CTA' : 'Add CTA';
+    document.querySelectorAll('[name="ctamPlat"]').forEach(cb => cb.checked = false);
+    if (id) {
+      const c = ctas.find(x => x.id === id);
+      if (!c) return;
+      document.getElementById('ctamText').value = c.text || '';
+      document.getElementById('ctamType').value = c.type || '';
+      document.getElementById('ctamNotes').value = c.notes || '';
+      (c.platforms || []).forEach(pl => {
+        const cb = document.querySelector(`[name="ctamPlat"][value="${pl}"]`);
+        if (cb) cb.checked = true;
+      });
+    } else {
+      document.getElementById('ctamText').value = '';
+      document.getElementById('ctamType').value = '';
+      document.getElementById('ctamNotes').value = '';
+    }
+    modal.classList.add('open');
+  }
+
+  function closeCTAModal() { document.getElementById('ctaModal').classList.remove('open'); }
+
+  function saveCTAModal() {
+    const text = document.getElementById('ctamText').value.trim();
+    if (!text) { alert('CTA text is required.'); return; }
+    const platforms = [...document.querySelectorAll('[name="ctamPlat"]:checked')].map(cb => cb.value);
+    const id = document.getElementById('ctamEditId').value;
+    if (id) {
+      const c = ctas.find(x => x.id === id);
+      if (c) { c.text = text; c.type = document.getElementById('ctamType').value; c.platforms = platforms; c.notes = document.getElementById('ctamNotes').value.trim(); }
+    } else {
+      ctas.push({ id: _uid(), text, type: document.getElementById('ctamType').value, platforms, notes: document.getElementById('ctamNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
+    }
+    saveCTALibrary();
+    closeCTAModal();
+    renderCTALibrary();
+  }
+
+  function deleteCTA(id) {
+    if (!confirm('Delete this CTA?')) return;
+    ctas = ctas.filter(c => c.id !== id);
+    saveCTALibrary();
+    renderCTALibrary();
+  }
+
+  function copyCTA(id, btn) {
+    const c = ctas.find(x => x.id === id);
+    if (!c) return;
+    navigator.clipboard.writeText(c.text);
+    c.copyCount = (c.copyCount || 0) + 1;
+    saveCTALibrary();
+    _showCopied(btn, '✅ Copied!');
+    setTimeout(() => renderCTALibrary(), 2100);
+  }
+
+  // ============================================================
+  // FEATURE 4: POST PERFORMANCE LOG
+  // ============================================================
+  let performanceLogs = [];
+
+  async function loadPerformanceLogs() {
+    performanceLogs = JSON.parse(await DB.get('sm_performance') || '[]');
+    renderPerformanceLog();
+  }
+
+  function savePerformanceLogs() { DB.set('sm_performance', JSON.stringify(performanceLogs)); }
+
+  function renderPerformanceLog() {
+    const accFilter = document.getElementById('plFilterAccount') ? document.getElementById('plFilterAccount').value : '';
+    const starsFilter = document.getElementById('plFilterStars') ? parseInt(document.getElementById('plFilterStars').value) || 0 : 0;
+
+    // Refresh account dropdown
+    const accEl = document.getElementById('plFilterAccount');
+    if (accEl) {
+      const cur = accEl.value;
+      accEl.innerHTML = '<option value="">All Accounts</option>' + accounts.map(a => `<option value="${_escHtml(a.id)}" ${a.id === cur ? 'selected':''}>${_escHtml(a.username || a.platform)}</option>`).join('');
+    }
+
+    const filtered = performanceLogs.filter(l => {
+      const matchAcc = !accFilter || l.accountId === accFilter;
+      const matchStar = !starsFilter || (l.stars || 0) >= starsFilter;
+      return matchAcc && matchStar;
+    });
+
+    const list = document.getElementById('plList');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">${performanceLogs.length === 0 ? 'No performance logs yet. Click <strong>+ Log Performance</strong> to start tracking.' : 'No logs match your filter.'}</div>`;
+      return;
+    }
+
+    const starsHtml = n => '★'.repeat(n) + '☆'.repeat(5 - n);
+    const platEmoji = { TikTok:'🎵', Instagram:'📸', Facebook:'👥', YouTube:'▶️' };
+
+    list.innerHTML = filtered.slice().sort((a,b) => (b.createdAt||0)-(a.createdAt||0)).map(l => {
+      const acc = accounts.find(a => a.id === l.accountId);
+      const accLabel = acc ? `${platEmoji[acc.platform]||'📱'} ${_escHtml(acc.username || acc.platform)}` : l.accountId ? `Account #${l.accountId.slice(-4)}` : '—';
+      return `<div class="pl-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div class="pv-card-title">${_escHtml(l.scriptTitle || 'Untitled Post')}</div>
+            <div class="pv-card-sub">${accLabel} · ${l.date || '—'}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn-sm" onclick="openPerformanceModal('${l.id}')">✏️</button>
+            <button class="btn-sm danger" onclick="deletePerformanceLog('${l.id}')">🗑</button>
+          </div>
+        </div>
+        <div class="stars-display" style="color:var(--warning);">${starsHtml(l.stars||0)}</div>
+        ${l.notes ? `<div style="font-size:12px;color:var(--text-2);">${_escHtml(l.notes)}</div>` : ''}
+      </div>`;
+    }).join('');
+  }
+
+  let _perfStarValue = 0;
+  function setPerfStar(n) {
+    _perfStarValue = n;
+    document.getElementById('perfStars').value = n;
+    const labels = ['','Poor','Okay','Good','Great','Amazing'];
+    document.getElementById('perfStarLabel').textContent = labels[n] || '';
+    for (let i = 1; i <= 5; i++) {
+      const btn = document.getElementById('star' + i);
+      if (btn) btn.classList.toggle('active', i <= n);
+    }
+  }
+
+  function openPerformanceModal(id) {
+    const modal = document.getElementById('performanceModal');
+    document.getElementById('perfEditId').value = id || '';
+    document.getElementById('perfModalTitle').textContent = id ? 'Edit Log' : 'Log Performance';
+
+    // Populate account select
+    const accSel = document.getElementById('perfAccount');
+    accSel.innerHTML = '<option value="">Select account...</option>' + accounts.map(a => `<option value="${_escHtml(a.id)}">${_escHtml(a.username || a.platform)}</option>`).join('');
+
+    if (id) {
+      const l = performanceLogs.find(x => x.id === id);
+      if (!l) return;
+      accSel.value = l.accountId || '';
+      document.getElementById('perfDate').value = l.date || '';
+      document.getElementById('perfTitle').value = l.scriptTitle || '';
+      document.getElementById('perfNotes').value = l.notes || '';
+      setPerfStar(l.stars || 0);
+    } else {
+      accSel.value = '';
+      document.getElementById('perfDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('perfTitle').value = '';
+      document.getElementById('perfNotes').value = '';
+      setPerfStar(0);
+    }
+    modal.classList.add('open');
+  }
+
+  function closePerformanceModal() { document.getElementById('performanceModal').classList.remove('open'); }
+
+  function savePerformanceModal() {
+    const title = document.getElementById('perfTitle').value.trim();
+    const stars = parseInt(document.getElementById('perfStars').value) || 0;
+    const id = document.getElementById('perfEditId').value;
+    if (id) {
+      const l = performanceLogs.find(x => x.id === id);
+      if (l) { l.accountId = document.getElementById('perfAccount').value; l.date = document.getElementById('perfDate').value; l.scriptTitle = title; l.stars = stars; l.notes = document.getElementById('perfNotes').value.trim(); }
+    } else {
+      performanceLogs.push({ id: _uid(), accountId: document.getElementById('perfAccount').value, date: document.getElementById('perfDate').value, scriptTitle: title, stars, notes: document.getElementById('perfNotes').value.trim(), createdAt: Date.now() });
+    }
+    savePerformanceLogs();
+    closePerformanceModal();
+    renderPerformanceLog();
+  }
+
+  function deletePerformanceLog(id) {
+    if (!confirm('Delete this log entry?')) return;
+    performanceLogs = performanceLogs.filter(l => l.id !== id);
+    savePerformanceLogs();
+    renderPerformanceLog();
+  }
+
+  // ============================================================
+  // FEATURE 5: CONTENT RECYCLER
+  // ============================================================
+  let recycleItems = [];
+
+  async function loadRecycleItems() {
+    recycleItems = JSON.parse(await DB.get('sm_recycle') || '[]');
+    renderContentRecycler();
+  }
+
+  function saveRecycleItems() { DB.set('sm_recycle', JSON.stringify(recycleItems)); }
+
+  function renderContentRecycler() {
+    const search = (document.getElementById('rcSearch') ? document.getElementById('rcSearch').value : '').toLowerCase();
+    const type = document.getElementById('rcFilterType') ? document.getElementById('rcFilterType').value : '';
+
+    const filtered = recycleItems.filter(r => {
+      const matchS = !search || (r.title||'').toLowerCase().includes(search) || (r.content||'').toLowerCase().includes(search) || (r.tags||[]).join(' ').toLowerCase().includes(search);
+      const matchT = !type || r.type === type;
+      return matchS && matchT;
+    });
+
+    const list = document.getElementById('rcList');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">${recycleItems.length === 0 ? 'No recycled content yet. Click <strong>+ Add to Recycler</strong> to start saving reusable content.' : 'No items match your search.'}</div>`;
+      return;
+    }
+
+    list.innerHTML = filtered.slice().sort((a,b)=>(b.createdAt||0)-(a.createdAt||0)).map(r => {
+      const tagsHtml = (r.tags||[]).map(t => `<span class="badge-type">${_escHtml(t)}</span>`).join('');
+      return `<div class="rc-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-bottom:4px;">
+              <span class="pv-card-title">${_escHtml(r.title)}</span>
+              <span class="badge-type">${_escHtml(r.type || 'custom')}</span>
+              <span class="badge-count">♻️ ${r.timesUsed || 0} uses</span>
+            </div>
+            <div style="font-size:12px;color:var(--text-2);line-height:1.5;">${_escHtml((r.content||'').slice(0,120))}${(r.content||'').length>120?'…':''}</div>
+            ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;">${tagsHtml}</div>` : ''}
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn-sm" onclick="openRecycleModal('${r.id}')">✏️</button>
+            <button class="btn-sm danger" onclick="deleteRecycleItem('${r.id}')">🗑</button>
+          </div>
+        </div>
+        <div class="pv-card-actions">
+          <button class="btn-sm" onclick="useRecycleItem('${r.id}',this)">♻️ Use Again</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openRecycleModal(id) {
+    const modal = document.getElementById('recycleModal');
+    document.getElementById('rcmEditId').value = id || '';
+    document.getElementById('recycleModalTitle').textContent = id ? 'Edit Recycled Content' : 'Add to Recycler';
+    if (id) {
+      const r = recycleItems.find(x => x.id === id);
+      if (!r) return;
+      document.getElementById('rcmTitle').value = r.title || '';
+      document.getElementById('rcmType').value = r.type || 'custom';
+      document.getElementById('rcmContent').value = r.content || '';
+      document.getElementById('rcmTags').value = (r.tags || []).join(', ');
+      document.getElementById('rcmNotes').value = r.notes || '';
+    } else {
+      document.getElementById('rcmTitle').value = '';
+      document.getElementById('rcmType').value = 'custom';
+      document.getElementById('rcmContent').value = '';
+      document.getElementById('rcmTags').value = '';
+      document.getElementById('rcmNotes').value = '';
+    }
+    modal.classList.add('open');
+  }
+
+  function closeRecycleModal() { document.getElementById('recycleModal').classList.remove('open'); }
+
+  function saveRecycleModal() {
+    const title = document.getElementById('rcmTitle').value.trim();
+    const content = document.getElementById('rcmContent').value.trim();
+    if (!title) { alert('Title is required.'); return; }
+    if (!content) { alert('Content is required.'); return; }
+    const tags = document.getElementById('rcmTags').value.split(',').map(t => t.trim()).filter(Boolean);
+    const id = document.getElementById('rcmEditId').value;
+    if (id) {
+      const r = recycleItems.find(x => x.id === id);
+      if (r) { r.title = title; r.type = document.getElementById('rcmType').value; r.content = content; r.tags = tags; r.notes = document.getElementById('rcmNotes').value.trim(); }
+    } else {
+      recycleItems.push({ id: _uid(), type: document.getElementById('rcmType').value, sourceId: '', title, content, tags, timesUsed: 0, notes: document.getElementById('rcmNotes').value.trim(), createdAt: Date.now() });
+    }
+    saveRecycleItems();
+    closeRecycleModal();
+    renderContentRecycler();
+  }
+
+  function deleteRecycleItem(id) {
+    if (!confirm('Delete this recycled item?')) return;
+    recycleItems = recycleItems.filter(r => r.id !== id);
+    saveRecycleItems();
+    renderContentRecycler();
+  }
+
+  function useRecycleItem(id, btn) {
+    const r = recycleItems.find(x => x.id === id);
+    if (!r) return;
+    navigator.clipboard.writeText(r.content);
+    r.timesUsed = (r.timesUsed || 0) + 1;
+    saveRecycleItems();
+    _showCopied(btn, '✅ Copied!');
+    setTimeout(() => renderContentRecycler(), 2100);
+  }
+
+  // ============================================================
+  // BATCH VEO 3 GENERATOR
+  // ============================================================
+
+  const _BG_HOOKS = {
+    'review':      ['I tried [product] so you don\'t have to — here\'s the truth','[product] review: nobody is talking about this','I tested [product] for 30 days. Here\'s what actually happened','Real talk — is [product] actually worth it?','Honest [product] review from someone who was skeptical'],
+    'before-after':['Before [product] vs after — the difference is crazy','I wish someone told me about [product] sooner','My life before [product] vs now — here\'s the change','What happened after I started using [product] every day','The results after using [product] for one month'],
+    'tutorial':    ['The fastest way to get results with [product]','Here\'s exactly how to use [product] the right way','Stop making this mistake with [product]','How to get the most out of [product] in 60 seconds','The [product] trick nobody shows you'],
+    'lifestyle':   ['This is my daily routine with [product]','A day in my life using [product]','How [product] changed my daily routine','Morning routine ft. [product] — game changer','What my routine looks like now that I use [product]'],
+    'comparison':  ['[product] vs everything I tried before','I compared [product] to the leading brand — here\'s the truth','Why I switched to [product] and never looked back','[product] vs alternatives — which one actually works?','I tested 5 options. [product] won by a mile'],
+    'testimonial': ['My honest experience with [product] after 30 days','Nobody prepared me for what [product] would actually do','I\'ve been using [product] for months — here\'s what I think','What they don\'t tell you about [product]','My [product] experience — the good and the bad'],
+    'unboxing':    ['I finally got [product] — first impressions','Unboxing [product] for the first time','Is [product] worth the hype? Let\'s find out','[product] just arrived — here\'s what I think so far','First look at [product] — worth it or not?'],
+  };
+
+  const _BG_BODIES = {
+    'review':      (p) => `I've been using ${p} for the past few weeks and I wanted to share my honest experience. The first thing I noticed was how quickly it started working. No fluff, no gimmicks — just results. Here's what stood out: the quality is genuinely better than what I expected at this price point, and the difference it made was noticeable within days. If you've been on the fence about trying ${p}, I'll just say this — I'm glad I did.`,
+    'before-after':(p) => `Before I found ${p}, I was struggling. I tried everything else on the market and nothing was delivering real results. Then I gave ${p} a shot — and honestly the difference is hard to ignore. My routine is simpler now, my results are better, and I actually look forward to using it. The before and after speaks for itself.`,
+    'tutorial':    (p) => `Here's how to get the best results with ${p}. First — use it consistently, same time every day. Second — don't skip the prep step, it makes a huge difference. Third — give it at least two weeks before judging. I know that sounds basic but most people skip one of those and wonder why it's not working. Follow those three steps and you'll actually see the results ${p} is known for.`,
+    'lifestyle':   (p) => `So this is what my morning looks like now. I wake up, grab my ${p}, and it's become one of those things I genuinely can't imagine skipping. It fits perfectly into my routine — takes almost no time, and I feel the difference on the days I don't use it. It's one of those small upgrades that just makes everything else feel a little easier.`,
+    'comparison':  (p) => `I put ${p} up against three other options I'd used before. Honestly? It wasn't even close. The others either took too long, didn't deliver consistent results, or felt like a hassle to keep up with. ${p} hits different — easier to use, faster to show results, and the quality is just on another level. If you've been using anything else, do yourself a favor and make the switch.`,
+    'testimonial': (p) => `I want to be upfront with you — I was not expecting much when I started using ${p}. I'd been let down by similar products before. But a month in and I genuinely think this is the real deal. It does what it says it will do. That's rare. If you're looking for something that actually works without making your life complicated, ${p} is what I'd tell you to try.`,
+    'unboxing':    (p) => `Okay, ${p} just arrived and my first impressions are actually really good. The packaging is solid, everything looks premium, and you can just tell the quality is there before you even try it. I've heard a lot of good things and based on what I'm seeing right now, I get it. Going to be putting this through its paces over the next few weeks — stay tuned for the full review.`,
+  };
+
+  const _BG_CTAS = [
+    'Follow for the full update',
+    'Link in my bio if you want to try it',
+    'Comment below if this was helpful',
+    'Save this so you don\'t forget',
+    'Follow for part 2',
+    'Drop a comment if you want more like this',
+    'Check my bio for the link',
+    'Share this with someone who needs to see it',
+  ];
+
+  function runBatchGenerator() {
+    const product = (document.getElementById('bgProduct').value || '').trim();
+    if (!product) { alert('Enter a product name first.'); document.getElementById('bgProduct').focus(); return; }
+
+    const angle      = document.getElementById('bgAngle').value;
+    const setting    = (document.getElementById('bgSetting').value || '').trim() || 'clean lifestyle environment';
+    const hookSrc    = document.getElementById('bgHookSource').value;
+    const ctaSrc     = document.getElementById('bgCtaSource').value;
+    const count      = parseInt(document.getElementById('bgCount').value) || 7;
+    const dur        = parseInt(document.querySelector('input[name="bgDur"]:checked')?.value) || 8;
+    const adminS     = getAdminSettings();
+    const model      = adminS.defaultModel || 'Veo 3 Fast';
+
+    // Gather hook pool
+    let hookPool = [];
+    if (hookSrc === 'bank' && hooks.length > 0) {
+      hookPool = hooks.map(h => h.text);
+    }
+    if (hookPool.length === 0) {
+      hookPool = (_BG_HOOKS[angle] || _BG_HOOKS['review']).map(t => t.replace(/\[product\]/gi, product));
+    }
+
+    // Gather CTA pool
+    let ctaPool = [];
+    if (ctaSrc === 'library' && ctas.length > 0) {
+      ctaPool = ctas.map(c => c.text);
+    }
+    if (ctaPool.length === 0) {
+      ctaPool = _BG_CTAS;
+    }
+
+    const bodyFn = _BG_BODIES[angle] || _BG_BODIES['review'];
+
+    // Build N prompts
+    const prompts = [];
+    for (let i = 0; i < count; i++) {
+      const hook  = hookPool[i % hookPool.length].replace(/\[product\]/gi, product);
+      const body  = bodyFn(product);
+      const cta   = ctaPool[i % ctaPool.length];
+      const script = `${hook}. ${body} ${cta}.`;
+
+      const obj = {
+        action:          `Person speaking directly to camera with natural confidence and real eye contact, natural hand gestures. They say: "${script}"`,
+        speech:          script,
+        audio:           'natural ambient sound, clear voice, no background music',
+        negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
+        camera:          'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
+        background:      setting,
+      };
+
+      prompts.push({ index: i + 1, script, json: JSON.stringify(obj, null, 2), model, dur });
+    }
+
+    renderBatchOutput(prompts, product, angle, model);
+  }
+
+  function renderBatchOutput(prompts, product, angle, model) {
+    const out = document.getElementById('bgOutput');
+    const wc = (s) => s.trim().split(/\s+/).filter(Boolean).length;
+    const angleLabels = { review:'Honest Review', 'before-after':'Before / After', tutorial:'Quick Tutorial', lifestyle:'Lifestyle', comparison:'Comparison', testimonial:'Testimonial', unboxing:'Unboxing / First Look' };
+
+    out.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+        <div>
+          <div style="font-size:15px;font-weight:700;color:var(--text-1);">${prompts.length} Veo 3 Prompts — ${escHtml(product)}</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px;">${angleLabels[angle] || angle} · Model: ${escHtml(model)} · ${prompts[0]?.dur}s each</div>
+        </div>
+        <button onclick="copyAllBatchPrompts()" style="padding:7px 14px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text-1);font-family:inherit;">📋 Copy All</button>
+      </div>
+      ${prompts.map((p, i) => `
+        <div class="pv-card" id="bgCard${i}" style="gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+            <div style="font-size:12px;font-weight:700;color:var(--accent-2);">Prompt ${p.index} of ${prompts.length}</div>
+            <div style="display:flex;gap:6px;flex-shrink:0;">
+              <button class="btn-sm" onclick="copyBatchPrompt(${i})" id="bgCopyBtn${i}">📋 Copy JSON</button>
+              <button onclick="_pushTextToStudio(${JSON.stringify(p.script)},'producer')" style="padding:2px 9px;font-size:10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent-2);cursor:pointer;font-weight:600;">→ Producer</button>
+              <button onclick="_pushTextToStudio(${JSON.stringify(p.script)},'replicator')" style="padding:2px 9px;font-size:10px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:3px;color:var(--warning);cursor:pointer;font-weight:600;">→ Replicator</button>
+            </div>
+          </div>
+          <div style="font-size:12px;color:var(--text-2);line-height:1.6;padding:10px 12px;background:var(--surface-1);border-radius:7px;border:1px solid var(--border-1);">${escHtml(p.script)}</div>
+          <div style="font-size:10px;color:var(--text-3);">~${wc(p.script)} words · ~${Math.round(wc(p.script)/2.3)}s spoken · ${p.dur}s clip</div>
+          <details style="margin-top:2px;">
+            <summary style="font-size:11px;font-weight:600;color:var(--text-3);cursor:pointer;user-select:none;">View Veo 3 JSON prompt</summary>
+            <pre id="bgJson${i}" style="margin-top:8px;padding:10px 12px;background:var(--surface-1);border:1px solid var(--border-1);border-radius:7px;font-size:10.5px;color:var(--text-2);overflow-x:auto;line-height:1.6;white-space:pre-wrap;word-break:break-word;">${escHtml(p.json)}</pre>
+          </details>
+        </div>
+      `).join('')}
+    `;
+    // Store for copy-all
+    window._bgPrompts = prompts;
+  }
+
+  function copyBatchPrompt(i) {
+    if (!window._bgPrompts) return;
+    const p = window._bgPrompts[i];
+    navigator.clipboard.writeText(p.json).then(() => {
+      const btn = document.getElementById('bgCopyBtn' + i);
+      if (btn) { const t = btn.textContent; btn.textContent = '✅ Copied!'; setTimeout(() => btn.textContent = t, 2000); }
+    });
+  }
+
+  function copyAllBatchPrompts() {
+    if (!window._bgPrompts || !window._bgPrompts.length) return;
+    const all = window._bgPrompts.map((p, i) => `// ── PROMPT ${i+1} ──\n${p.json}`).join('\n\n');
+    navigator.clipboard.writeText(all).then(() => {
+      const btns = document.querySelectorAll('[onclick^="copyAllBatch"]');
+      btns.forEach(b => { const t = b.textContent; b.textContent = '✅ All Copied!'; setTimeout(() => b.textContent = t, 2000); });
+    });
+  }
+
+  // ============================================================
+  // FEATURE 6: IDEAS INBOX
+  // ============================================================
+  let ideas = [];
+
+  async function loadIdeas() {
+    ideas = JSON.parse(await DB.get('sm_ideas') || '[]');
+    renderIdeasInbox();
+  }
+
+  function saveIdeas() { DB.set('sm_ideas', JSON.stringify(ideas)); }
+
+  function quickAddIdea() {
+    const input = document.getElementById('ideaQuickInput');
+    const val = input ? input.value.trim() : '';
+    if (!val) return;
+    ideas.unshift({ id: _uid(), title: val, body: '', status: 'inbox', platform: '', tags: [], createdAt: Date.now() });
+    saveIdeas();
+    if (input) input.value = '';
+    renderIdeasInbox();
+  }
+
+  function renderIdeasInbox() {
+    const statusFilter = document.getElementById('iiFilterStatus') ? document.getElementById('iiFilterStatus').value : '';
+    const platFilter = document.getElementById('iiFilterPlatform') ? document.getElementById('iiFilterPlatform').value : '';
+
+    const filtered = ideas.filter(i => {
+      const matchS = !statusFilter || i.status === statusFilter;
+      const matchP = !platFilter || i.platform === platFilter;
+      return matchS && matchP;
+    });
+
+    const list = document.getElementById('iiList');
+    if (!list) return;
+
+    if (filtered.length === 0) {
+      list.innerHTML = `<div style="text-align:center;color:var(--text-3);padding:40px 0;font-size:13px;">${ideas.length === 0 ? 'No ideas yet. Use the quick capture bar above to add your first idea!' : 'No ideas match your filter.'}</div>`;
+      return;
+    }
+
+    const statusBadge = s => {
+      if (s === 'inbox') return '<span class="status-badge status-inbox">Inbox</span>';
+      if (s === 'in-progress') return '<span class="status-badge status-in-progress">In Progress</span>';
+      if (s === 'done') return '<span class="status-badge status-done">Done</span>';
+      return '';
+    };
+    const nextStatus = s => s === 'inbox' ? 'in-progress' : s === 'in-progress' ? 'done' : 'inbox';
+    const nextLabel = s => s === 'inbox' ? 'Mark In Progress' : s === 'in-progress' ? 'Mark Done' : 'Move to Inbox';
+
+    list.innerHTML = filtered.map(i => {
+      const tagsHtml = (i.tags||[]).map(t => `<span class="badge-type">${_escHtml(t)}</span>`).join('');
+      const d = i.createdAt ? new Date(i.createdAt).toLocaleDateString() : '';
+      return `<div class="idea-card">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
+          <div style="flex:1;">
+            <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px;">
+              <span class="pv-card-title">${_escHtml(i.title)}</span>
+              ${statusBadge(i.status)}
+              ${i.platform ? `<span class="badge-type">${_escHtml(i.platform)}</span>` : ''}
+            </div>
+            ${i.body ? `<div style="font-size:12px;color:var(--text-2);line-height:1.5;">${_escHtml(i.body.slice(0,120))}${i.body.length>120?'…':''}</div>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px;align-items:center;">
+              ${tagsHtml}
+              ${d ? `<span style="font-size:11px;color:var(--text-3);">📅 ${d}</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0;">
+            <button class="btn-sm" onclick="openIdeaModal('${i.id}')">✏️</button>
+            <button class="btn-sm danger" onclick="deleteIdea('${i.id}')">🗑</button>
+          </div>
+        </div>
+        <div class="pv-card-actions">
+          <button class="btn-sm" onclick="cycleIdeaStatus('${i.id}')">${nextLabel(i.status)}</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openIdeaModal(id) {
+    const modal = document.getElementById('ideaModal');
+    document.getElementById('iimEditId').value = id || '';
+    document.getElementById('ideaModalTitle').textContent = id ? 'Edit Idea' : 'Add Idea';
+    if (id) {
+      const i = ideas.find(x => x.id === id);
+      if (!i) return;
+      document.getElementById('iimTitle').value = i.title || '';
+      document.getElementById('iimBody').value = i.body || '';
+      document.getElementById('iimStatus').value = i.status || 'inbox';
+      document.getElementById('iimPlatform').value = i.platform || '';
+      document.getElementById('iimTags').value = (i.tags || []).join(', ');
+    } else {
+      document.getElementById('iimTitle').value = '';
+      document.getElementById('iimBody').value = '';
+      document.getElementById('iimStatus').value = 'inbox';
+      document.getElementById('iimPlatform').value = '';
+      document.getElementById('iimTags').value = '';
+    }
+    modal.classList.add('open');
+  }
+
+  function closeIdeaModal() { document.getElementById('ideaModal').classList.remove('open'); }
+
+  function saveIdeaModal() {
+    const title = document.getElementById('iimTitle').value.trim();
+    if (!title) { alert('Title is required.'); return; }
+    const tags = document.getElementById('iimTags').value.split(',').map(t => t.trim()).filter(Boolean);
+    const id = document.getElementById('iimEditId').value;
+    if (id) {
+      const i = ideas.find(x => x.id === id);
+      if (i) { i.title = title; i.body = document.getElementById('iimBody').value.trim(); i.status = document.getElementById('iimStatus').value; i.platform = document.getElementById('iimPlatform').value; i.tags = tags; }
+    } else {
+      ideas.unshift({ id: _uid(), title, body: document.getElementById('iimBody').value.trim(), status: document.getElementById('iimStatus').value, platform: document.getElementById('iimPlatform').value, tags, createdAt: Date.now() });
+    }
+    saveIdeas();
+    closeIdeaModal();
+    renderIdeasInbox();
+  }
+
+  function deleteIdea(id) {
+    if (!confirm('Delete this idea?')) return;
+    ideas = ideas.filter(i => i.id !== id);
+    saveIdeas();
+    renderIdeasInbox();
+  }
+
+  function cycleIdeaStatus(id) {
+    const i = ideas.find(x => x.id === id);
+    if (!i) return;
+    const order = ['inbox', 'in-progress', 'done'];
+    const cur = order.indexOf(i.status);
+    i.status = order[(cur + 1) % order.length];
+    saveIdeas();
+    renderIdeasInbox();
+  }
+
+  // ============================================================
+  // END FEATURE PANELS
+  // ============================================================
 
 </script>
 
