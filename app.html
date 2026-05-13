@@ -1177,7 +1177,7 @@
 
 <!-- ===== TOP NAVBAR ===== -->
 <div class="topnav">
-  <a class="topnav-brand" href="index.html" onclick="onLogoClick(); return false;">
+  <a class="topnav-brand" href="index.html" onclick="return onLogoClick();">
     <svg class="topnav-brand-icon" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg">
       <rect width="26" height="26" rx="6" fill="var(--aos-icon-bg)"/>
       <circle cx="13" cy="13" r="3.2" fill="var(--aos-icon-dot)"/>
@@ -7721,7 +7721,9 @@ TECHNICAL SPECS:
     if (_logoClickCount >= 5) {
       _logoClickCount = 0;
       openAdminKeyModal();
+      return false; // Block navigation — open Easter egg instead
     }
+    return true; // Allow normal navigation to landing page
   }
   function openAdminKeyModal() {
     const modal = document.getElementById('adminKeyModal');

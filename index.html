@@ -1,9 +1,10 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
+<script>(function(){var t=localStorage.getItem('affiliateos_landing_theme');if(t)document.documentElement.setAttribute('data-theme',t);})()</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SocialOS — Manage. Plan. Post.</title>
+<title>AffiliateOS 2 — Manage. Plan. Post.</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -679,8 +680,23 @@
 <!-- NAV -->
 <nav>
   <a href="#" class="nav-logo">
-    <span class="nav-logo-dot"></span>
-    SocialOS
+    <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px;flex-shrink:0;">
+      <rect width="22" height="22" rx="5" fill="var(--accent)"/>
+      <circle cx="11" cy="11" r="2.7" fill="#fff"/>
+      <circle cx="11" cy="4.6" r="1.7" fill="#fff"/>
+      <line x1="11" y1="6.3" x2="11" y2="8.3" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+      <circle cx="17.2" cy="7.8" r="1.7" fill="#fff"/>
+      <line x1="15.7" y1="8.8" x2="13.5" y2="10.2" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+      <circle cx="17.2" cy="14.2" r="1.7" fill="#fff"/>
+      <line x1="15.7" y1="13.2" x2="13.5" y2="11.8" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+      <circle cx="11" cy="17.4" r="1.7" fill="#fff"/>
+      <line x1="11" y1="15.7" x2="11" y2="13.7" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+      <circle cx="4.8" cy="14.2" r="1.7" fill="#fff"/>
+      <line x1="6.3" y1="13.2" x2="8.5" y2="11.8" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+      <circle cx="4.8" cy="7.8" r="1.7" fill="#fff"/>
+      <line x1="6.3" y1="8.8" x2="8.5" y2="10.2" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+    </svg>
+    AffiliateOS 2
   </a>
   <div class="nav-right">
     <a href="#features" class="nav-link">Features</a>
@@ -749,7 +765,7 @@
 <section id="features">
   <div class="section-label">Features</div>
   <h2 class="section-title">Everything your content operation needs</h2>
-  <p class="section-sub">From tracking logins to generating AI video prompts — SocialOS handles the full stack so you can focus on posting.</p>
+  <p class="section-sub">From tracking logins to generating AI video prompts — AffiliateOS 2 handles the full stack so you can focus on posting.</p>
 
   <div class="features-grid">
 
@@ -947,8 +963,23 @@
 <!-- FOOTER -->
 <footer>
   <a href="#" class="footer-logo">
-    <span class="nav-logo-dot"></span>
-    SocialOS
+    <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="width:18px;height:18px;flex-shrink:0;">
+      <rect width="18" height="18" rx="4" fill="var(--accent)"/>
+      <circle cx="9" cy="9" r="2.2" fill="#fff"/>
+      <circle cx="9" cy="3.7" r="1.4" fill="#fff"/>
+      <line x1="9" y1="5.1" x2="9" y2="6.8" stroke="#fff" stroke-width="1" opacity="0.6"/>
+      <circle cx="14.1" cy="6.4" r="1.4" fill="#fff"/>
+      <line x1="12.9" y1="7.2" x2="11.1" y2="8.3" stroke="#fff" stroke-width="1" opacity="0.6"/>
+      <circle cx="14.1" cy="11.6" r="1.4" fill="#fff"/>
+      <line x1="12.9" y1="10.8" x2="11.1" y2="9.7" stroke="#fff" stroke-width="1" opacity="0.6"/>
+      <circle cx="9" cy="14.3" r="1.4" fill="#fff"/>
+      <line x1="9" y1="12.9" x2="9" y2="11.2" stroke="#fff" stroke-width="1" opacity="0.6"/>
+      <circle cx="3.9" cy="11.6" r="1.4" fill="#fff"/>
+      <line x1="5.1" y1="10.8" x2="6.9" y2="9.7" stroke="#fff" stroke-width="1" opacity="0.6"/>
+      <circle cx="3.9" cy="6.4" r="1.4" fill="#fff"/>
+      <line x1="5.1" y1="7.2" x2="6.9" y2="8.3" stroke="#fff" stroke-width="1" opacity="0.6"/>
+    </svg>
+    AffiliateOS 2
   </a>
   <span class="footer-copy">Runs 100% in your browser. No account needed.</span>
   <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" style="opacity:0.5;"></button>
@@ -997,7 +1028,9 @@
   function toggleTheme() {
     const html = document.documentElement;
     const isDark = html.getAttribute('data-theme') === 'dark';
-    html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    const next = isDark ? 'light' : 'dark';
+    html.setAttribute('data-theme', next);
+    localStorage.setItem('affiliateos_landing_theme', next);
     buildMock();
   }
 
@@ -1007,7 +1040,7 @@
   // Check if user already has a valid session — swap nav to "Open App"
   (function checkLandingSession() {
     try {
-      const raw = localStorage.getItem('socialos_session');
+      const raw = localStorage.getItem('affiliateos_session') || localStorage.getItem('socialos_session');
       if (!raw) return;
       const s = JSON.parse(raw);
       if (!s || !s.userId || !s.expires || Date.now() > s.expires) return;
@@ -1022,8 +1055,12 @@
   // Smooth scroll for anchor links
   document.querySelectorAll('a[href^="#"]').forEach(a => {
     a.addEventListener('click', e => {
-      const target = document.querySelector(a.getAttribute('href'));
-      if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+      const href = a.getAttribute('href');
+      if (!href || href === '#') return;
+      try {
+        const target = document.querySelector(href);
+        if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
+      } catch(err) {}
     });
   });
 </script>
