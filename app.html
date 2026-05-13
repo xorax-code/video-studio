@@ -1680,7 +1680,7 @@
             Specific accounts
           </label>
         </div>
-        <div id="wctAccountPicker" style="flex-wrap:wrap;gap:5px;max-height:100px;overflow-y:auto;"></div>
+        <div id="wctAccountPicker" style="display:none;flex-wrap:wrap;gap:5px;max-height:100px;overflow-y:auto;"></div>
       </div>
 
       <!-- Active days -->
@@ -5941,7 +5941,7 @@ ${veoPrompt}
     const actionEl = document.getElementById('action-seg-' + i);
     if (actionEl) seg.action = actionEl.value;
     const productSel = document.getElementById('studioProduct');
-    const productName = productSel ? (productSel.options[productSel.selectedIndex].text || 'the product') : 'the product';
+    const productName = productSel && productSel.selectedIndex >= 0 ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
     seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
     saveSegments();
@@ -6040,6 +6040,7 @@ ${veoPrompt}
     });
   }
 
+  let studioSceneCount = 0;
   function addStudioScene(description) {
     studioSceneCount++;
     const n = studioSceneCount;
@@ -6245,7 +6246,7 @@ TECHNICAL SPECS:
   function saveGeneratedToLibrary() {
     if (segments.length === 0) { alert('Generate prompts first.'); return; }
     const productSel = document.getElementById('studioProduct');
-    const productName = productSel ? productSel.options[productSel.selectedIndex].text : 'Untitled';
+    const productName = productSel && productSel.selectedIndex >= 0 ? (productSel.options[productSel.selectedIndex]?.text || 'Untitled') : 'Untitled';
     const settingVal = document.getElementById('studioSetting')?.value.trim() || '';
     const avatarDescVal = document.getElementById('avatarDesc')?.value.trim() || '';
     const item = {
@@ -6558,7 +6559,7 @@ TECHNICAL SPECS:
     const a    = document.createElement('a');
     const safeName = (p.name || 'project').replace(/[^a-z0-9_-]/gi, '_').toLowerCase();
     a.href     = url;
-    a.download = `socialos_${safeName}_${Date.now()}.json`;
+    a.download = `affiliateos_${safeName}_${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -6706,6 +6707,7 @@ TECHNICAL SPECS:
       const isViewing = key === dailyDate;
       const cell = document.createElement('div');
       cell.className = 'cal-day' + (isToday ? ' today' : '') + (isViewing ? ' cal-viewing' : '');
+      cell.dataset.date = key;
       cell.onclick = () => openCalModal(key);
 
       // --- One dot per account that has posts scheduled on this day ---
@@ -6716,6 +6718,7 @@ TECHNICAL SPECS:
 
       const dots = acctIds.map(acctId => {
         const acct      = accounts.find(a => a.id === acctId);
+        if (!acct) return ''; // skip dots for deleted/stale accounts
         const color     = acctColor(acct);
         const name      = acct?.username || 'Unknown';
         const total     = slots.filter(s => s.accountId === acctId).length;
@@ -6849,7 +6852,7 @@ TECHNICAL SPECS:
         ${item.inspoUrl ? (item.done
           ? `<div style="margin-bottom:6px;display:flex;align-items:center;gap:6px;">
                <a href="${escHtml(item.inspoUrl)}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;" title="${escHtml(item.inspoUrl)}">🔗 ${escHtml(item.inspoUrl)}</a>
-               <button onclick="copyItemUrl('${item.id}')" style="padding:1px 7px;font-size:9px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0;">Copy</button>
+               <button onclick="copyItemUrl('${item.id}',this)" style="padding:1px 7px;font-size:9px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent);cursor:pointer;white-space:nowrap;flex-shrink:0;">Copy</button>
              </div>`
           : `<div style="margin-bottom:6px;font-size:10px;color:var(--text-3);opacity:0.6;">🔒 Mark done to copy post link.</div>`
         ) : ''}
@@ -7193,12 +7196,10 @@ TECHNICAL SPECS:
 
   function saveDailyItems() { DB.set('sm_daily_items', JSON.stringify(dailyItems)); }
 
-  function copyItemUrl(id) {
+  function copyItemUrl(id, btn) {
     const item = dailyItems.find(i => i.id === id);
     if (!item?.inspoUrl) return;
     navigator.clipboard.writeText(item.inspoUrl).then(() => {
-      // brief visual feedback — swap button text for 1.5s
-      const btn = event?.target;
       if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; setTimeout(() => { btn.textContent = orig; }, 1500); }
     }).catch(() => {
       prompt('Copy this link:', item.inspoUrl);
@@ -7233,11 +7234,9 @@ TECHNICAL SPECS:
     document.querySelectorAll('#calGrid .cal-day').forEach(cell => {
       cell.classList.remove('cal-viewing');
     });
-    // Find the cell whose onclick matches dailyDate
-    document.querySelectorAll('#calGrid .cal-day:not(.other-month)').forEach(cell => {
-      const fn = cell.getAttribute('onclick') || '';
-      if (fn.includes(dailyDate)) cell.classList.add('cal-viewing');
-    });
+    // Match by data-date attribute (onclick is a JS property, not an HTML attribute)
+    const target = document.querySelector(`#calGrid .cal-day[data-date="${dailyDate}"]`);
+    if (target) target.classList.add('cal-viewing');
     // If the viewed month doesn't match, do a full calendar re-render to jump months
     const [vy, vm] = dailyDate.split('-').map(Number);
     if (vy !== calYear || vm !== calMonth + 1) {
@@ -7397,7 +7396,7 @@ TECHNICAL SPECS:
           ? `<div style="margin-bottom:6px;padding:5px 10px;background:var(--surface-2);border-radius:var(--radius-xs);display:flex;align-items:center;gap:6px;">
               <span style="font-size:10px;color:var(--text-3);">🔗 Post link:</span>
               <a href="${escHtml(item.inspoUrl)}" target="_blank" class="plan-inspo-link">${escHtml(item.inspoUrl)}</a>
-              <button onclick="copyItemUrl('${item.id}')" style="margin-left:auto;padding:1px 7px;font-size:9px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent);cursor:pointer;white-space:nowrap;">Copy</button>
+              <button onclick="copyItemUrl('${item.id}',this)" style="margin-left:auto;padding:1px 7px;font-size:9px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:3px;color:var(--accent);cursor:pointer;white-space:nowrap;">Copy</button>
             </div>`
           : `<div style="margin-bottom:6px;padding:5px 10px;background:var(--surface-2);border-radius:var(--radius-xs);display:flex;align-items:center;gap:6px;opacity:0.55;">
               <span style="font-size:10px;">🔒</span>
@@ -7573,7 +7572,11 @@ TECHNICAL SPECS:
 
   function toggleAppTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    applyTheme(current === 'dark' ? 'light' : 'dark');
+    const next = current === 'dark' ? 'light' : 'dark';
+    applyTheme(next);
+    // Keep Settings panel in sync so dropdown matches the active theme
+    const s = getUserSettings();
+    if (s) { s.themeMode = next; saveUserSettings(s); }
   }
 
   // Load theme + UI scale from accessibility settings; falls back to stored theme or dark
