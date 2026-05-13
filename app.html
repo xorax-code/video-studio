@@ -45,6 +45,10 @@
     --radius: 8px;
     --radius-sm: 5px;
     --radius-xs: 3px;
+    /* aliases used in batch generator + hook/cta sections */
+    --surface-1: #1c1c1e;
+    --border-1: #2e2e33;
+    --accent-light: rgba(124,106,247,0.13);
   }
 
   /* ===== LIGHT MODE ===== */
@@ -71,6 +75,10 @@
     --success: #059669;
     --warning: #d97706;
     --danger: #dc2626;
+    /* aliases used in batch generator + hook/cta sections */
+    --surface-1: #ffffff;
+    --border-1: #e4e4e8;
+    --accent-light: rgba(124,106,247,0.09);
   }
 
   /* Smooth transitions for theme switching */
@@ -8849,7 +8857,7 @@ TECHNICAL SPECS:
   function copyHook(id, btn) {
     const h = hooks.find(x => x.id === id);
     if (!h) return;
-    navigator.clipboard.writeText(h.text);
+    navigator.clipboard.writeText(h.text).catch(() => {});
     h.copyCount = (h.copyCount || 0) + 1;
     saveHooks();
     _showCopied(btn, '✅ Copied!');
@@ -8974,7 +8982,7 @@ TECHNICAL SPECS:
   function copyCTA(id, btn) {
     const c = ctas.find(x => x.id === id);
     if (!c) return;
-    navigator.clipboard.writeText(c.text);
+    navigator.clipboard.writeText(c.text).catch(() => {});
     c.copyCount = (c.copyCount || 0) + 1;
     saveCTALibrary();
     _showCopied(btn, '✅ Copied!');
@@ -9211,7 +9219,7 @@ TECHNICAL SPECS:
   function useRecycleItem(id, btn) {
     const r = recycleItems.find(x => x.id === id);
     if (!r) return;
-    navigator.clipboard.writeText(r.content);
+    navigator.clipboard.writeText(r.content).catch(() => {});
     r.timesUsed = (r.timesUsed || 0) + 1;
     saveRecycleItems();
     _showCopied(btn, '✅ Copied!');

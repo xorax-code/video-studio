@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
-<script>(function(){var t=localStorage.getItem('affiliateos_landing_theme');if(t)document.documentElement.setAttribute('data-theme',t);})()</script>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,6 +8,10 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
+  /* AffiliateOS icon theme vars */
+  :root { --aos-icon-bg: #e6f5ef; --aos-icon-dot: #0d9468; }
+  [data-theme="dark"] { --aos-icon-bg: #0f172a; --aos-icon-dot: #10b981; }
+
   :root {
     --bg: #ffffff;
     --bg2: #f7f7f5;
@@ -62,8 +65,6 @@
     font-size: 16px;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    font-feature-settings: 'cv11', 'cv01';
     transition: background 0.25s, color 0.25s;
     overflow-x: hidden;
   }
@@ -88,15 +89,14 @@
   }
 
   .nav-logo {
-    font-size: 15px;
-    font-weight: 900;
+    font-size: 16px;
+    font-weight: 800;
     color: var(--text1);
-    letter-spacing: -0.3px;
+    letter-spacing: -0.5px;
     text-decoration: none;
     display: flex;
     align-items: center;
     gap: 8px;
-    text-transform: uppercase;
   }
 
   .nav-logo-dot {
@@ -190,11 +190,11 @@
     align-items: center;
     gap: 18px;
     padding: 0 28px;
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 12px;
+    font-weight: 600;
     color: var(--ticker-text);
     text-transform: uppercase;
-    letter-spacing: 1.4px;
+    letter-spacing: 0.6px;
     transition: color 0.25s;
   }
 
@@ -295,10 +295,10 @@
   }
 
   .section-label {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     color: var(--accent);
     margin-bottom: 14px;
   }
@@ -680,21 +680,21 @@
 <!-- NAV -->
 <nav>
   <a href="#" class="nav-logo">
-    <svg viewBox="0 0 22 22" xmlns="http://www.w3.org/2000/svg" style="width:22px;height:22px;flex-shrink:0;">
-      <rect width="22" height="22" rx="5" fill="var(--accent)"/>
-      <circle cx="11" cy="11" r="2.7" fill="#fff"/>
-      <circle cx="11" cy="4.6" r="1.7" fill="#fff"/>
-      <line x1="11" y1="6.3" x2="11" y2="8.3" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
-      <circle cx="17.2" cy="7.8" r="1.7" fill="#fff"/>
-      <line x1="15.7" y1="8.8" x2="13.5" y2="10.2" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
-      <circle cx="17.2" cy="14.2" r="1.7" fill="#fff"/>
-      <line x1="15.7" y1="13.2" x2="13.5" y2="11.8" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
-      <circle cx="11" cy="17.4" r="1.7" fill="#fff"/>
-      <line x1="11" y1="15.7" x2="11" y2="13.7" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
-      <circle cx="4.8" cy="14.2" r="1.7" fill="#fff"/>
-      <line x1="6.3" y1="13.2" x2="8.5" y2="11.8" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
-      <circle cx="4.8" cy="7.8" r="1.7" fill="#fff"/>
-      <line x1="6.3" y1="8.8" x2="8.5" y2="10.2" stroke="#fff" stroke-width="1.1" opacity="0.6"/>
+    <svg width="26" height="26" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:6px;">
+      <rect width="26" height="26" rx="6" fill="var(--aos-icon-bg)"/>
+      <circle cx="13" cy="13" r="3.2" fill="var(--aos-icon-dot)"/>
+      <circle cx="13" cy="5.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="7.5" x2="13" y2="9.8" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="9" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="9.9" x2="16.2" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="16.1" x2="16.2" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="13" cy="20.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="18.5" x2="13" y2="16.2" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="7.4" y1="16.1" x2="9.8" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="9" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="7.4" y1="9.9" x2="9.8" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
     </svg>
     AffiliateOS 2
   </a>
@@ -702,8 +702,7 @@
     <a href="#features" class="nav-link">Features</a>
     <a href="#workflow" class="nav-link">How it works</a>
     <button class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark mode" title="Toggle dark mode"></button>
-    <a href="app.html#login" class="nav-link" style="font-weight:600;" id="navSignIn">Sign In</a>
-    <a href="app.html#signup" class="nav-cta" id="navCta">Get Started →</a>
+    <a href="index.html" class="nav-cta">Open App →</a>
   </div>
 </nav>
 
@@ -718,12 +717,12 @@
 <div class="hero">
   <div class="hero-badge">
     <span class="nav-logo-dot" style="width:7px;height:7px;"></span>
-    Built for affiliate marketers
+    AffiliateOS 2 — Now Live
   </div>
   <h1>Manage. Plan.<br><span class="accent">Post.</span></h1>
   <p>The all-in-one command center for your social media accounts. Track every account, plan every post, and recreate viral videos with AI — in one place.</p>
   <div class="hero-actions">
-    <a href="app.html" class="btn-primary">Open the App</a>
+    <a href="index.html" class="btn-primary">Open the App</a>
     <a href="#features" class="btn-ghost">See all features</a>
   </div>
 
@@ -956,28 +955,28 @@
   <h2>Your accounts.<br>Your calendar.<br>Your content.</h2>
   <p>Everything runs in your browser — no server, no subscription, no data sent anywhere. Just open and go.</p>
   <div class="hero-actions">
-    <a href="app.html#signup" class="btn-primary">Get Started Free →</a>
+    <a href="index.html" class="btn-primary">Open AffiliateOS 2 →</a>
   </div>
 </div>
 
 <!-- FOOTER -->
 <footer>
   <a href="#" class="footer-logo">
-    <svg viewBox="0 0 18 18" xmlns="http://www.w3.org/2000/svg" style="width:18px;height:18px;flex-shrink:0;">
-      <rect width="18" height="18" rx="4" fill="var(--accent)"/>
-      <circle cx="9" cy="9" r="2.2" fill="#fff"/>
-      <circle cx="9" cy="3.7" r="1.4" fill="#fff"/>
-      <line x1="9" y1="5.1" x2="9" y2="6.8" stroke="#fff" stroke-width="1" opacity="0.6"/>
-      <circle cx="14.1" cy="6.4" r="1.4" fill="#fff"/>
-      <line x1="12.9" y1="7.2" x2="11.1" y2="8.3" stroke="#fff" stroke-width="1" opacity="0.6"/>
-      <circle cx="14.1" cy="11.6" r="1.4" fill="#fff"/>
-      <line x1="12.9" y1="10.8" x2="11.1" y2="9.7" stroke="#fff" stroke-width="1" opacity="0.6"/>
-      <circle cx="9" cy="14.3" r="1.4" fill="#fff"/>
-      <line x1="9" y1="12.9" x2="9" y2="11.2" stroke="#fff" stroke-width="1" opacity="0.6"/>
-      <circle cx="3.9" cy="11.6" r="1.4" fill="#fff"/>
-      <line x1="5.1" y1="10.8" x2="6.9" y2="9.7" stroke="#fff" stroke-width="1" opacity="0.6"/>
-      <circle cx="3.9" cy="6.4" r="1.4" fill="#fff"/>
-      <line x1="5.1" y1="7.2" x2="6.9" y2="8.3" stroke="#fff" stroke-width="1" opacity="0.6"/>
+    <svg width="22" height="22" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;border-radius:5px;">
+      <rect width="26" height="26" rx="6" fill="var(--aos-icon-bg)"/>
+      <circle cx="13" cy="13" r="3.2" fill="var(--aos-icon-dot)"/>
+      <circle cx="13" cy="5.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="7.5" x2="13" y2="9.8" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="9" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="9.9" x2="16.2" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="16.1" x2="16.2" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="13" cy="20.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="18.5" x2="13" y2="16.2" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="7.4" y1="16.1" x2="9.8" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="9" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="7.4" y1="9.9" x2="9.8" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
     </svg>
     AffiliateOS 2
   </a>
@@ -986,6 +985,12 @@
 </footer>
 
 <script>
+  // ── Theme persistence ──────────────────────────────────────────────────────
+  (function() {
+    const saved = localStorage.getItem('affiliateos_landing_theme');
+    if (saved) document.documentElement.setAttribute('data-theme', saved);
+  })();
+
   const tickerItems = [
     'Multi-Account Manager','Veo 3 Prompt Generator','AI Video Studio',
     'Viral Scripts Library','Post Schedules','Daily Plan',
@@ -998,29 +1003,34 @@
   function buildTicker() {
     const track = document.getElementById('ticker');
     const doubled = [...tickerItems, ...tickerItems];
-    track.innerHTML = doubled.map((t, i) =>
+    track.innerHTML = doubled.map(t =>
       `<span class="ticker-item">${t}<span class="ticker-sep"></span></span>`
     ).join('');
   }
 
   const mockAccounts = [
-    { name: '@brandtok_1', platform: 'TikTok', color: '#ff2d55', status: 'Active', bg: '#fff0f3' },
-    { name: '@promo.gram', platform: 'Instagram', color: '#e1306c', status: 'Active', bg: '#fff0f6' },
-    { name: '@BrandPage', platform: 'Facebook', color: '#1877f2', status: 'Active', bg: '#eef5ff' },
-    { name: '@BrandYT', platform: 'YouTube', color: '#ff0000', status: 'Active', bg: '#fff0f0' },
-    { name: '@secondary_tok', platform: 'TikTok', color: '#ff2d55', status: 'Inactive', bg: '#fff0f3' },
-    { name: '@deals.insta', platform: 'Instagram', color: '#e1306c', status: 'Active', bg: '#fff0f6' },
+    { name: '@brandtok_1',   platform: 'TikTok',     color: '#ff2d55', status: 'Active'   },
+    { name: '@promo.gram',   platform: 'Instagram',  color: '#e1306c', status: 'Active'   },
+    { name: '@BrandPage',    platform: 'Facebook',   color: '#1877f2', status: 'Active'   },
+    { name: '@BrandYT',      platform: 'YouTube',    color: '#ff0000', status: 'Active'   },
+    { name: '@secondary_tok',platform: 'TikTok',     color: '#ff2d55', status: 'Inactive' },
+    { name: '@deals.insta',  platform: 'Instagram',  color: '#e1306c', status: 'Active'   },
   ];
 
   function buildMock() {
     const el = document.getElementById('mockBody');
     const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    // Theme-aware badge colors
+    const activeBg    = isDark ? '#052e16' : '#d1fae5';
+    const activeText  = isDark ? '#4ade80' : '#065f46';
+    const inactiveBg  = isDark ? '#1c1c20' : '#f3f4f6';
+    const inactiveText= isDark ? '#6b7280' : '#4b5563';
     el.innerHTML = mockAccounts.map(a => `
       <div class="mock-card">
-        <div class="mock-avatar" style="background:${a.color}20;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${a.color};">${a.name[1].toUpperCase()}</div>
+        <div class="mock-avatar" style="background:${a.color}22;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:${a.color};">${a.name[1].toUpperCase()}</div>
         <div class="mock-line" style="width:80%;"></div>
         <div class="mock-line" style="width:55%;"></div>
-        <span class="mock-badge" style="background:${a.status==='Active'?'#d1fae5':'#f3f4f6'};color:${a.status==='Active'?'#065f46':'#6b7280'};">${a.status}</span>
+        <span class="mock-badge" style="background:${a.status==='Active'?activeBg:inactiveBg};color:${a.status==='Active'?activeText:inactiveText};">${a.status}</span>
       </div>
     `).join('');
   }
@@ -1037,30 +1047,15 @@
   buildTicker();
   buildMock();
 
-  // Check if user already has a valid session — swap nav to "Open App"
-  (function checkLandingSession() {
-    try {
-      const raw = localStorage.getItem('affiliateos_session') || localStorage.getItem('socialos_session');
-      if (!raw) return;
-      const s = JSON.parse(raw);
-      if (!s || !s.userId || !s.expires || Date.now() > s.expires) return;
-      // Valid session — update nav
-      const signIn = document.getElementById('navSignIn');
-      const cta    = document.getElementById('navCta');
-      if (signIn) signIn.style.display = 'none';
-      if (cta) { cta.textContent = 'Open App →'; cta.href = 'app.html'; }
-    } catch(e) {}
-  })();
-
-  // Smooth scroll for anchor links
+  // Smooth scroll — skip bare "#" hrefs to avoid querySelector("#") SyntaxError
   document.querySelectorAll('a[href^="#"]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (!href || href === '#') return;
     a.addEventListener('click', e => {
-      const href = a.getAttribute('href');
-      if (!href || href === '#') return;
       try {
         const target = document.querySelector(href);
         if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth' }); }
-      } catch(err) {}
+      } catch (_) {}
     });
   });
 </script>
