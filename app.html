@@ -13,22 +13,23 @@
   ============================================================ */
 
   :root {
-    --bg: #141416;
-    --sidebar-bg: #181819;
-    --topbar-bg: #181819;
-    --surface: #1c1c1e;
-    --surface-2: #222225;
-    --surface-3: #28282c;
-    --border: #2e2e33;
-    --border-2: #38383f;
-    --accent: #7c6af7;
-    --accent-2: #a598ff;
-    --accent-glow: rgba(124,106,247,0.15);
-    --accent-glow-sm: rgba(124,106,247,0.07);
-    --text-1: #ffffff;
-    --text-2: #b2b2c4;
-    --text-3: #72728a;
-    --text-4: #3e3e50;
+    /* ===== Higgsfield-style dark cinematic palette ===== */
+    --bg: #09090d;
+    --sidebar-bg: #0d0d12;
+    --topbar-bg: rgba(13,13,18,0.72);
+    --surface: #131319;
+    --surface-2: #1a1a22;
+    --surface-3: #24242e;
+    --border: #26262f;
+    --border-2: #34343f;
+    --accent: #8b5cf6;
+    --accent-2: #a78bfa;
+    --accent-glow: rgba(139,92,246,0.22);
+    --accent-glow-sm: rgba(139,92,246,0.10);
+    --text-1: #f6f6fb;
+    --text-2: #adadc2;
+    --text-3: #6c6c84;
+    --text-4: #3a3a48;
     --tiktok: #ff2d55;
     --instagram: #e1306c;
     --facebook: #1877f2;
@@ -42,13 +43,24 @@
     --tag-purple: #a855f7;
     --tag-red: #ef4444;
     --tag-teal: #14b8a6;
-    --radius: 8px;
-    --radius-sm: 5px;
-    --radius-xs: 3px;
+    --radius: 10px;
+    --radius-sm: 7px;
+    --radius-xs: 4px;
     /* aliases used in hook/cta sections */
-    --surface-1: #1c1c1e;
-    --border-1: #2e2e33;
-    --accent-light: rgba(124,106,247,0.13);
+    --surface-1: #131319;
+    --border-1: #26262f;
+    --accent-light: rgba(139,92,246,0.13);
+    /* ===== cinematic gradient + glow tokens ===== */
+    --grad-accent: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 45%, #6366f1 100%);
+    --grad-accent-hover: linear-gradient(135deg, #b9a3ff 0%, #9d77f9 45%, #7b7ff5 100%);
+    --grad-accent-soft: linear-gradient(135deg, rgba(139,92,246,0.16), rgba(99,102,241,0.10));
+    --glass: rgba(19,19,25,0.78);
+    --glass-2: rgba(26,26,34,0.72);
+    --glass-border: rgba(255,255,255,0.07);
+    --shadow-glow: 0 0 24px rgba(139,92,246,0.30);
+    --shadow-glow-sm: 0 0 12px rgba(139,92,246,0.22);
+    --shadow-panel: 0 12px 40px rgba(0,0,0,0.50);
+    --shadow-card: 0 4px 18px rgba(0,0,0,0.32);
   }
 
   /* ===== LIGHT MODE ===== */
@@ -58,16 +70,16 @@
   html[data-theme="light"] {
     --bg: #f9f9f7;
     --sidebar-bg: #ffffff;
-    --topbar-bg: #ffffff;
+    --topbar-bg: rgba(255,255,255,0.82);
     --surface: #ffffff;
     --surface-2: #f4f4f1;
     --surface-3: #eeeeeb;
     --border: #e4e4e8;
     --border-2: #d0d0d8;
-    --accent: #7c6af7;
-    --accent-2: #6355e0;
-    --accent-glow: rgba(124,106,247,0.1);
-    --accent-glow-sm: rgba(124,106,247,0.05);
+    --accent: #8b5cf6;
+    --accent-2: #6d54e0;
+    --accent-glow: rgba(139,92,246,0.12);
+    --accent-glow-sm: rgba(139,92,246,0.06);
     --text-1: #0e0e11;
     --text-2: #4a4a5a;
     --text-3: #8a8a9a;
@@ -78,7 +90,18 @@
     /* aliases used in hook/cta sections */
     --surface-1: #ffffff;
     --border-1: #e4e4e8;
-    --accent-light: rgba(124,106,247,0.09);
+    --accent-light: rgba(139,92,246,0.09);
+    /* ===== gradient + glow tokens (light) ===== */
+    --grad-accent: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 45%, #6366f1 100%);
+    --grad-accent-hover: linear-gradient(135deg, #9d7bf7 0%, #7c4ef0 45%, #5558e8 100%);
+    --grad-accent-soft: linear-gradient(135deg, rgba(139,92,246,0.10), rgba(99,102,241,0.07));
+    --glass: rgba(255,255,255,0.82);
+    --glass-2: rgba(248,248,250,0.78);
+    --glass-border: rgba(0,0,0,0.06);
+    --shadow-glow: 0 0 24px rgba(139,92,246,0.22);
+    --shadow-glow-sm: 0 0 12px rgba(139,92,246,0.16);
+    --shadow-panel: 0 12px 40px rgba(0,0,0,0.12);
+    --shadow-card: 0 4px 18px rgba(0,0,0,0.07);
   }
 
   /* Smooth transitions for theme switching */
@@ -105,7 +128,27 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv11', 'cv01';
+    position: relative;
   }
+  /* Cinematic ambient glow — soft colored light bleeding from the edges */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(139,92,246,0.16), transparent 60%),
+      radial-gradient(800px 480px at 100% 0%, rgba(59,130,246,0.12), transparent 55%),
+      radial-gradient(700px 600px at 78% 108%, rgba(99,102,241,0.10), transparent 60%);
+  }
+  html[data-theme="light"] body::before {
+    background:
+      radial-gradient(900px 520px at 12% -8%, rgba(139,92,246,0.08), transparent 60%),
+      radial-gradient(800px 480px at 100% 0%, rgba(59,130,246,0.06), transparent 55%);
+  }
+  /* Keep app chrome above the ambient glow layer (modals already use position:fixed + high z-index) */
+  .topnav, .main-area, .auth-wall { position: relative; z-index: 1; }
 
   /* ===== CALENDAR ===== */
   .cal-dow { text-align:center; font-size:9px; font-weight:700; color:var(--text-3); padding:3px 0; text-transform:uppercase; letter-spacing:0.3px; }
@@ -126,7 +169,7 @@
   .cal-acct-row { display:flex; align-items:center; justify-content:space-between; padding:5px 8px; background:var(--surface-2); border-radius:var(--radius-xs); }
   .cal-acct-bar { height:3px; border-radius:2px; margin-top:3px; }
   .plan-day-btn { padding:3px 8px; font-size:10px; font-weight:600; border-radius:var(--radius-xs); border:1px solid var(--border-2); background:var(--surface-3); color:var(--text-3); cursor:pointer; transition:all 0.1s; font-family:inherit; }
-  .plan-day-btn.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+  .plan-day-btn.active { background:var(--grad-accent); border-color:rgba(167,139,250,0.6); color:#fff; box-shadow:var(--shadow-glow-sm); }
   .plan-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
   .plan-card:hover { border-color:var(--border-2); }
   .plan-card-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
@@ -141,7 +184,7 @@
   .wct-icon { width:34px;height:34px;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0; }
   .wct-badge { display:inline-flex;align-items:center;justify-content:center;min-width:28px;height:22px;padding:0 7px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap; }
   .wct-day-chip { display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;font-size:9px;font-weight:700; }
-  .wct-day-chip.on  { background:var(--accent);color:#fff; }
+  .wct-day-chip.on  { background:var(--grad-accent);color:#fff;box-shadow:var(--shadow-glow-sm); }
   .wct-day-chip.off { background:var(--surface-3);color:var(--text-4); }
   .wct-summary-row  { display:flex;align-items:center;gap:10px;padding:8px 0 2px;border-top:1px solid var(--border);margin-top:8px;flex-wrap:wrap; }
   .wct-modal-icon-btn { width:36px;height:36px;border-radius:var(--radius-sm);border:1px solid var(--border-2);background:var(--surface-2);cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;transition:border-color 0.1s; }
@@ -159,16 +202,19 @@
   .daily-script-box { padding:10px 12px;background:var(--surface-2);border-radius:var(--radius-xs);font-size:11px;color:var(--text-2);line-height:1.7;white-space:pre-wrap;border-left:2px solid var(--border-2);margin-top:8px; }
 
   /* ===== SCROLLBAR ===== */
-  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+  ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, var(--accent-2), var(--accent)); border-radius: 6px; opacity: 0.55; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--grad-accent); box-shadow: var(--shadow-glow-sm); }
 
   /* ===== TOP NAVBAR ===== */
   .topnav {
     height: 50px;
     background: var(--topbar-bg);
-    border-bottom: 1px solid var(--border);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    backdrop-filter: blur(18px) saturate(160%);
+    border-bottom: 1px solid var(--glass-border);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.03), 0 8px 28px rgba(0,0,0,0.35);
     display: flex;
     align-items: center;
     padding: 0 20px;
@@ -198,7 +244,11 @@
   .topnav-brand-text {
     font-size: 14px;
     font-weight: 900;
-    color: var(--text-1);
+    background: var(--grad-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--accent-2);
     letter-spacing: -0.7px;
     transition: color 0.22s;
     text-transform: uppercase;
@@ -245,8 +295,9 @@
     left: 8px;
     right: 8px;
     height: 2px;
-    background: var(--accent);
+    background: var(--grad-accent);
     border-radius: 2px 2px 0 0;
+    box-shadow: 0 0 10px rgba(139,92,246,0.7);
   }
   .nav-icon { font-size: 13px; line-height: 1; flex-shrink: 0; opacity: 0.7; }
   .tab.active .nav-icon { opacity: 1; }
@@ -254,18 +305,25 @@
 
   /* ===== VAULT / BANK / LIBRARY PANELS ===== */
   .pv-card, .hook-card, .cta-card, .pl-card, .rc-card, .idea-card {
-    background: var(--surface-2);
-    border: 1px solid var(--border);
-    border-radius: 10px;
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
     gap: 8px;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s;
+  }
+  .pv-card:hover, .hook-card:hover, .cta-card:hover, .pl-card:hover, .rc-card:hover, .idea-card:hover {
+    border-color: rgba(139,92,246,0.32);
+    box-shadow: var(--shadow-card), var(--shadow-glow-sm);
+    transform: translateY(-1px);
   }
   .pv-card-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
   .pv-card-sub { font-size: 12px; color: var(--text-3); }
   .pv-card-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; flex-wrap: wrap; }
-  .badge-niche { background: rgba(124,106,247,0.15); color: var(--accent-2); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
+  .badge-niche { background: var(--grad-accent-soft); border: 1px solid rgba(139,92,246,0.3); color: var(--accent-2); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
   .badge-type { background: var(--surface-3); color: var(--text-2); font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 500; }
   .badge-count { background: var(--surface-3); color: var(--text-3); font-size: 11px; padding: 2px 8px; border-radius: 20px; }
   .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 20px; font-weight: 600; }
@@ -284,9 +342,9 @@
   .btn-secondary { background: var(--surface-3); border: 1px solid var(--border-2); color: var(--text-2); padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; }
   .btn-secondary:hover { background: var(--surface-2); color: var(--text-1); }
   /* Modal overlay for new feature modals */
-  .feat-modal-overlay { display:none; position:fixed; inset:0; z-index:9999; background:rgba(0,0,0,0.65); align-items:center; justify-content:center; }
+  .feat-modal-overlay { display:none; position:fixed; inset:0; z-index:9999; background:rgba(6,6,10,0.74); -webkit-backdrop-filter:blur(10px); backdrop-filter:blur(10px); align-items:center; justify-content:center; }
   .feat-modal-overlay.open { display:flex; }
-  .feat-modal-box { background:var(--surface); border:1px solid var(--border-2); border-radius:12px; padding:24px; width:480px; max-width:94vw; max-height:88vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; }
+  .feat-modal-box { background:var(--glass); -webkit-backdrop-filter:blur(24px) saturate(160%); backdrop-filter:blur(24px) saturate(160%); border:1px solid var(--glass-border); border-radius:14px; padding:24px; width:480px; max-width:94vw; max-height:88vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px; box-shadow:var(--shadow-panel), inset 0 1px 0 rgba(255,255,255,0.05); }
   .feat-modal-header { display:flex; align-items:center; justify-content:space-between; }
   .feat-modal-title { font-size:14px; font-weight:700; color:var(--text-1); }
   .feat-modal-close { background:transparent; border:none; color:var(--text-3); cursor:pointer; font-size:18px; line-height:1; padding:0 4px; }
@@ -295,7 +353,7 @@
   .feat-form-row label { font-size:11px; font-weight:600; color:var(--text-2); text-transform:uppercase; letter-spacing:0.4px; }
   .feat-form-row input, .feat-form-row textarea, .feat-form-row select { background:var(--bg); border:1px solid var(--border-2); border-radius:7px; color:var(--text-1); font-size:12px; padding:8px 10px; font-family:inherit; outline:none; width:100%; }
   .feat-form-row textarea { min-height:80px; resize:vertical; }
-  .feat-form-row input:focus, .feat-form-row textarea:focus, .feat-form-row select:focus { border-color:var(--accent); }
+  .feat-form-row input:focus, .feat-form-row textarea:focus, .feat-form-row select:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-glow-sm); }
   .feat-modal-footer { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
   .feat-platform-checks { display:flex; flex-wrap:wrap; gap:8px; }
   .feat-platform-checks label { display:flex; align-items:center; gap:5px; font-size:12px; color:var(--text-2); font-weight:400; text-transform:none; letter-spacing:0; cursor:pointer; }
@@ -339,7 +397,7 @@
     overflow-y: auto;
     overflow-x: hidden;
     min-height: 0;
-    background: var(--bg);
+    background: transparent;
   }
 
   /* ===== LAYOUT ===== */
@@ -359,31 +417,33 @@
     font-size: 11px;
     font-weight: 600;
     cursor: pointer;
-    border: 1px solid var(--border-2);
-    background: var(--surface-2);
+    border: 1px solid var(--glass-border);
+    background: var(--glass-2);
     color: var(--text-2);
-    transition: all 0.12s ease;
+    transition: all 0.14s ease;
     white-space: nowrap;
     font-family: 'Inter', sans-serif;
     letter-spacing: 0.1px;
   }
-  .btn:hover { background: var(--surface-3); color: var(--text-1); }
+  .btn:hover { background: var(--surface-3); color: var(--text-1); border-color: var(--border-2); }
 
   .btn-primary {
-    background: var(--accent);
-    border-color: var(--accent);
+    background: var(--grad-accent);
+    border: 1px solid rgba(167,139,250,0.6);
     color: #fff;
     font-weight: 600;
+    box-shadow: var(--shadow-glow-sm), inset 0 1px 0 rgba(255,255,255,0.18);
   }
-  .btn-primary:hover { background: var(--accent-2); border-color: var(--accent-2); color: #fff; }
+  .btn-primary:hover { background: var(--grad-accent-hover); border-color: rgba(185,163,255,0.8); color: #fff; box-shadow: var(--shadow-glow), inset 0 1px 0 rgba(255,255,255,0.22); transform: translateY(-1px); }
 
   .btn-green {
-    background: #16a34a;
-    border-color: #16a34a;
+    background: linear-gradient(135deg, #22c55e, #16a34a);
+    border: 1px solid rgba(74,222,128,0.5);
     color: #fff;
     font-weight: 600;
+    box-shadow: 0 0 12px rgba(34,197,94,0.25), inset 0 1px 0 rgba(255,255,255,0.18);
   }
-  .btn-green:hover { background: #15803d; border-color: #15803d; color: #fff; }
+  .btn-green:hover { background: linear-gradient(135deg, #2dd46a, #1a9d4a); border-color: rgba(74,222,128,0.7); color: #fff; transform: translateY(-1px); }
 
   .btn-secondary {
     background: transparent;
@@ -408,7 +468,7 @@
     transition: border-color 0.15s;
   }
   .search-box input::placeholder { color: var(--text-3); }
-  .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow-sm); }
+  .search-box input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow-sm), var(--shadow-glow-sm); }
   .search-box .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: var(--text-3); font-size: 12px; }
   .filter-select {
     padding: 7px 10px;
@@ -422,21 +482,22 @@
     font-family: 'Inter', sans-serif;
     transition: border-color 0.15s;
   }
-  .filter-select:focus { border-color: var(--accent); }
+  .filter-select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow-sm); }
 
   /* ===== STAT CARDS ===== */
   .stats { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
   .stat-card {
     flex: 1; min-width: 70px;
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     padding: 12px 14px;
     position: relative;
     overflow: hidden;
-    transition: border-color 0.15s;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s;
   }
-  .stat-card:hover { border-color: var(--border-2); }
+  .stat-card:hover { border-color: rgba(139,92,246,0.3); box-shadow: var(--shadow-card), var(--shadow-glow-sm); transform: translateY(-1px); }
   .stat-card::before {
     content: '';
     position: absolute;
@@ -452,21 +513,22 @@
   .stat-instagram::before { background: var(--instagram); }
   .stat-facebook::before { background: var(--facebook); }
   .stat-youtube::before { background: var(--youtube); }
-  .stat-total::before { background: var(--accent); }
-  .stat-comp::before { background: var(--accent); }
+  .stat-total::before { background: var(--grad-accent); box-shadow: 0 0 10px rgba(139,92,246,0.55); }
+  .stat-comp::before { background: var(--grad-accent); box-shadow: 0 0 10px rgba(139,92,246,0.55); }
   .stat-script::before { background: var(--tag-orange); }
   .stat-try::before { background: var(--warning); }
   .stat-used-s::before { background: var(--success); }
 
   /* ===== TABLE ===== */
   .table-wrap {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     overflow: hidden;
+    box-shadow: var(--shadow-card);
   }
   table { width: 100%; border-collapse: collapse; }
-  thead { background: var(--bg); }
+  thead { background: rgba(255,255,255,0.02); }
   th {
     padding: 8px 14px;
     text-align: left;
@@ -568,16 +630,17 @@
   /* ===== VIRAL SCRIPTS ===== */
   .scripts-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
   .script-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-sm);
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
     padding: 14px;
     display: flex;
     flex-direction: column;
     gap: 8px;
-    transition: border-color 0.15s;
+    box-shadow: var(--shadow-card);
+    transition: border-color 0.16s, box-shadow 0.16s, transform 0.16s;
   }
-  .script-card:hover { border-color: var(--border-2); }
+  .script-card:hover { border-color: rgba(139,92,246,0.32); box-shadow: var(--shadow-card), var(--shadow-glow-sm); transform: translateY(-1px); }
   .script-card-header { display: flex; justify-content: space-between; align-items: flex-start; }
   .script-title { font-size: 12px; font-weight: 700; color: var(--text-1); flex: 1; padding-right: 8px; line-height: 1.4; letter-spacing: -0.2px; }
   .script-hook {
@@ -718,20 +781,23 @@
   /* ===== MODAL ===== */
   .modal-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7);
-    backdrop-filter: blur(4px);
+    background: rgba(6,6,10,0.74);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
     display: flex; align-items: center; justify-content: center;
     z-index: 100; padding: 20px; overflow-y: auto;
   }
   .modal {
-    background: var(--surface);
-    border: 1px solid var(--border-2);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius);
     width: 100%;
     max-width: 460px;
     padding: 20px;
     margin: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    box-shadow: var(--shadow-panel), inset 0 1px 0 rgba(255,255,255,0.05);
   }
   .modal h2 {
     font-size: 16px;
@@ -771,6 +837,7 @@
   .form-group select:focus,
   .form-group textarea:focus {
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-glow-sm);
   }
   .form-group textarea { resize: vertical; min-height: 65px; }
   .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -820,12 +887,15 @@
 
   /* ===== VIDEO STUDIO PANELS ===== */
   .vs-panel {
-    background: var(--surface);
-    border: 1px solid var(--border);
+    background: var(--glass-2);
+    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
     display: flex;
     flex-direction: column;
     position: relative;
+    box-shadow: var(--shadow-card);
   }
   .vs-panel-resize-handle {
     height: 5px;
@@ -850,7 +920,7 @@
   }
   .vs-panel-header {
     padding: 9px 14px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--glass-border);
     font-size: 9px;
     font-weight: 700;
     color: var(--text-3);
@@ -859,7 +929,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--surface-2);
+    background: linear-gradient(180deg, rgba(255,255,255,0.035), rgba(255,255,255,0));
     border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   }
   .vs-panel-body { padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 8px; }
@@ -867,16 +937,16 @@
   .studio-modebar { display:flex;gap:4px;padding:0 2px;flex-shrink:0; }
   .studio-modetab { font-size:10px;font-weight:700;letter-spacing:0.4px;padding:4px 14px;border-radius:20px;border:1px solid var(--border-2);background:transparent;color:var(--text-3);cursor:pointer;transition:all 0.15s;font-family:inherit; }
   .studio-modetab:hover { border-color:var(--border-2);color:var(--text-2);background:var(--surface-2); }
-  .studio-modetab.active { background:var(--accent);border-color:var(--accent);color:#fff; }
+  .studio-modetab.active { background:var(--grad-accent);border-color:rgba(167,139,250,0.6);color:#fff;box-shadow:var(--shadow-glow-sm); }
   .vs-scene-row { display: flex; gap: 6px; align-items: flex-start; margin-bottom: 6px; }
   .vs-scene-num {
-    background: var(--surface-3);
-    border: 1px solid var(--border-2);
+    background: var(--grad-accent-soft);
+    border: 1px solid rgba(139,92,246,0.28);
     border-radius: var(--radius-xs);
     padding: 4px 8px;
     font-size: 10px;
     font-weight: 700;
-    color: var(--text-3);
+    color: var(--accent-2);
     white-space: nowrap;
     margin-top: 1px;
   }
@@ -958,7 +1028,10 @@
   /* ===== AUTH WALL ===== */
   .auth-wall {
     position: fixed; inset: 0;
-    background: var(--bg);
+    background:
+      radial-gradient(700px 480px at 20% 0%, rgba(139,92,246,0.20), transparent 60%),
+      radial-gradient(700px 520px at 85% 100%, rgba(59,130,246,0.16), transparent 60%),
+      var(--bg);
     z-index: 9999;
     display: none;
     align-items: center;
@@ -969,11 +1042,15 @@
   .auth-card {
     width: 100%;
     max-width: 400px;
-    background: var(--surface);
-    border: 1px solid var(--border-2);
-    border-radius: 12px;
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
     padding: 32px;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.35);
+    box-shadow: var(--shadow-panel), var(--shadow-glow), inset 0 1px 0 rgba(255,255,255,0.06);
+    position: relative;
+    z-index: 1;
   }
   .auth-logo {
     display: flex;
@@ -993,7 +1070,11 @@
     font-weight: 900;
     letter-spacing: -0.7px;
     text-transform: uppercase;
-    color: var(--text-1);
+    background: var(--grad-accent);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: var(--accent-2);
   }
   .auth-tabs {
     display: flex;
@@ -1488,6 +1569,9 @@
         <select class="filter-select" id="hbFilterCat" onchange="renderHookBank()">
           <option value="">All Categories</option>
         </select>
+        <select class="filter-select" id="hbFilterProduct" onchange="renderHookBank()">
+          <option value="">All Products</option>
+        </select>
       </div>
       <div id="hbList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;"></div>
     </div>
@@ -1511,6 +1595,9 @@
         </div>
         <select class="filter-select" id="ctaFilterType" onchange="renderCTALibrary()">
           <option value="">All Types</option>
+        </select>
+        <select class="filter-select" id="ctaFilterProduct" onchange="renderCTALibrary()">
+          <option value="">All Products</option>
         </select>
       </div>
       <div id="ctaList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:10px;"></div>
@@ -1905,6 +1992,14 @@
               </div>
               <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
             </div>
+            <!-- Appearance Inventory — auto-extracted from the avatar photo, used to verify every generation -->
+            <div style="display:flex;flex-direction:column;gap:3px;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent-2);">🔍 Appearance Inventory</span>
+                <span id="avatarInventoryStatus" style="font-size:9px;color:var(--text-3);"></span>
+              </div>
+              <textarea id="avatarInventory" rows="6" oninput="onAvatarInventoryInput()" placeholder="Auto-fills when you set an avatar — face, hair, clothing, jewelry. Fully editable. Used to verify each generation matches." style="font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:vertical;line-height:1.5;"></textarea>
+            </div>
             <div id="avatarSavedNote" style="display:none;font-size:10px;color:#5a8a5a;">✓ Saved</div>
           </div>
           <div class="vs-panel-resize-handle" onmousedown="vsStartPanelResize(event,'vsPanelAvatar')"></div>
@@ -2083,6 +2178,8 @@
             <span>Reference Video</span>
             <div style="display:flex;gap:6px;align-items:center;">
               <span id="videoTimestamp" style="font-size:10px;color:var(--text-3);font-family:monospace;">0:00 / 0:00</span>
+              <button class="btn" id="saveVideoLibBtn" onclick="saveCurrentVideoToLibrary()" style="padding:2px 8px;font-size:10px;display:none;border-color:var(--accent);color:var(--accent-2);" title="Save this reference video to your library for reuse">＋ Save to Library</button>
+              <button class="btn" id="openVideoLibBtn" onclick="openVideoLibrary()" style="padding:2px 8px;font-size:10px;" title="Browse saved reference videos">📚 Library</button>
               <button class="btn" id="clearVideoBtn" onclick="clearVideo()" style="padding:2px 8px;font-size:10px;display:none;">Clear</button>
             </div>
           </div>
@@ -2123,13 +2220,15 @@
                   <option value="photo1">Photo 1 (Avatar)</option>
                 </select>
               </div>
+              <button class="btn replicator-only" id="processEverythingBtn" onclick="processEverything()" style="padding:3px 12px;font-size:10px;font-weight:700;background:var(--grad-accent);border:1px solid rgba(167,139,250,0.6);color:#fff;box-shadow:var(--shadow-glow-sm);" title="One click: analyze the video, generate all prompts, then open the pre-flight check">⚡ Process Everything</button>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
-              <button class="btn" onclick="runAllScenes(false)" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Download all images and copy a single instruction that runs every scene automatically">▶ Run All Scenes</button>
-              <button class="btn" onclick="runAllScenes(true)" style="padding:3px 9px;font-size:10px;font-weight:600;background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.4);color:var(--warning);" title="Resume — skips scenes already marked ✅ DONE">⚡ Resume</button>
+              <button class="btn" onclick="showPreflightModal(false)" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Pre-flight check, then download all images and copy the run instruction">▶ Run All Scenes</button>
+              <button class="btn" onclick="showPreflightModal(true)" style="padding:3px 9px;font-size:10px;font-weight:600;background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.4);color:var(--warning);" title="Resume — pre-flight then run, skipping scenes already marked ✅ DONE">⚡ Resume</button>
               <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe Scenes</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
             </div>
           </div>
+          <div id="segmentTimeline" style="display:none;padding:6px 10px 5px;border-bottom:1px solid var(--border);flex-shrink:0;" title="Segment timeline — block width = scene length, color = script fit. Click a block to jump to it."></div>
           <div id="segmentsContainer" style="flex:1;overflow-y:auto;padding:10px;">
             <div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
               Upload a video then click <strong style="color:var(--text-2);">Auto 8s</strong> to split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
@@ -2266,6 +2365,7 @@
         <option>Stat/Fact</option><option>Challenge</option>
       </select>
     </div>
+    <div class="feat-form-row"><label>Product</label><select id="hmProduct"><option value="">— Any product —</option></select></div>
     <div class="feat-form-row"><label>Source</label><input type="text" id="hmSource" placeholder="e.g. Competitor, Original, Sample"></div>
     <div class="feat-form-row"><label>Notes</label><textarea id="hmNotes" placeholder="When to use this hook..."></textarea></div>
     <div class="feat-modal-footer">
@@ -2293,6 +2393,7 @@
         <option>Subscribe</option><option>Other</option>
       </select>
     </div>
+    <div class="feat-form-row"><label>Product</label><select id="ctamProduct"><option value="">— Any product —</option></select></div>
     <div class="feat-form-row">
       <label>Platforms</label>
       <div class="feat-platform-checks">
@@ -2655,6 +2756,20 @@
       <button class="btn btn-secondary" onclick="closeScriptModal()">Cancel</button>
       <button class="btn" style="background:linear-gradient(135deg,#ea580c,#dc2626);color:white;" onclick="saveScript()">Save Script</button>
     </div>
+  </div>
+</div>
+
+<!-- ===== REFERENCE VIDEO LIBRARY MODAL ===== -->
+<div id="videoLibraryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;align-items:center;justify-content:center;" onclick="if(event.target===this)closeVideoLibrary()">
+  <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:20px;width:480px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">📚</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text-1);">Reference Video Library</span>
+      </div>
+      <button class="btn" onclick="closeVideoLibrary()" style="padding:2px 8px;font-size:12px;">✕</button>
+    </div>
+    <div id="videoLibraryList" style="flex:1;overflow-y:auto;min-height:80px;"></div>
   </div>
 </div>
 
@@ -3728,6 +3843,7 @@
   let studioLibrary = [];
   let studioMode = 'replicator'; // 'replicator' | 'producer'
   let avatarImageDataUrl = null;
+  let avatarInventory = ''; // auto-extracted appearance catalogue for verifying generations
   let bgImageDataUrl = null;
   let bgFromAvatar = false; // true when background was taken from the avatar photo (Photo 1)
   let refVideoObjectUrl = null;
@@ -3855,6 +3971,8 @@
       placeholder.style.display = 'none';
       document.getElementById('clearAvatarImgBtn').style.display = 'block';
       DB.set('sm_avatar_img', avatarImageDataUrl);
+      // Auto-extract the appearance inventory from the new avatar photo
+      extractAvatarInventory(avatarImageDataUrl);
     };
     reader.readAsDataURL(file);
   }
@@ -3867,6 +3985,13 @@
     document.getElementById('clearAvatarImgBtn').style.display = 'none';
     document.getElementById('avatarImgInput').value = '';
     DB.remove('sm_avatar_img');
+    // The inventory belonged to the cleared avatar — clear it too
+    avatarInventory = '';
+    const invEl = document.getElementById('avatarInventory');
+    if (invEl) invEl.value = '';
+    const invStatus = document.getElementById('avatarInventoryStatus');
+    if (invStatus) invStatus.textContent = '';
+    DB.remove('sm_avatar_inventory');
   }
 
   function loadAvatarImage() {
@@ -3879,6 +4004,97 @@
         document.getElementById('clearAvatarImgBtn').style.display = 'block';
       }
     });
+  }
+
+  // --- Appearance Inventory ---
+  // An auto-extracted catalogue of the avatar's face, hair, clothing, and
+  // jewelry. It's the source of truth for verifying that AI generations still
+  // look like the same person. Stored globally (like the avatar image itself).
+  function onAvatarInventoryInput() {
+    const el = document.getElementById('avatarInventory');
+    if (!el) return;
+    avatarInventory = el.value;
+    DB.set('sm_avatar_inventory', avatarInventory);
+  }
+
+  function loadAvatarInventory() {
+    DB.get('sm_avatar_inventory').then(saved => {
+      if (saved) {
+        avatarInventory = saved;
+        const el = document.getElementById('avatarInventory');
+        if (el) el.value = saved;
+      }
+    });
+  }
+
+  // Extract a structured appearance inventory from the avatar photo via GPT-4o
+  // Vision. Runs automatically whenever a new avatar is set.
+  async function extractAvatarInventory(dataUrl) {
+    if (!dataUrl) return;
+    const field  = document.getElementById('avatarInventory');
+    const status = document.getElementById('avatarInventoryStatus');
+    // A new avatar was just set — clear any previous inventory immediately so a
+    // failed or aborted extraction leaves the field honestly EMPTY rather than
+    // showing the OLD avatar's inventory mismatched against the new photo.
+    // (Only fires on a deliberate avatar upload / account load, never on page
+    // load, so this won't wipe edits unexpectedly.)
+    avatarInventory = '';
+    if (field) field.value = '';
+    DB.remove('sm_avatar_inventory');
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      if (status) status.textContent = 'no API key — fill in manually';
+      return;
+    }
+    if (status) status.textContent = '⏳ analyzing avatar…';
+    const promptText = `You are cataloguing the appearance of a person in a reference photo so it can later be used to verify AI-generated images of the SAME person. List ONLY what is clearly visible — never guess or invent. Be specific and concrete. Use exactly this structure, one short line each:
+
+FACE & HAIR: hair color, length and style; skin tone; any notable facial features.
+CLOTHING: each visible garment with its color and style.
+JEWELRY: every visible piece — earrings, necklaces, rings, bracelets, watches — with type and color. Write "none visible" if there is none.
+OTHER: glasses, visible nail color, hat, or anything else notable. Write "none" if nothing.
+
+Keep it under 120 words total. No intro, no commentary — just the four labelled lines.`;
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          max_tokens: 320,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: promptText },
+            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
+          ]}]
+        })
+      });
+      const data = await res.json();
+      if (data.error) {
+        if (status) status.textContent = '⚠ ' + (data.error.code || data.error.type || 'error') + ' — fill in manually';
+        return;
+      }
+      const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
+      if (!text) {
+        if (status) status.textContent = '⚠ no result — fill in manually';
+        return;
+      }
+      // Guard: if the model refused the image, don't write the refusal text in
+      if (/i('m| am) sorry|can'?t (assist|help)|cannot (assist|help)|i apologi|unable to (help|assist)/i.test(text)) {
+        if (status) status.textContent = '⚠ could not read photo — fill in manually';
+        return;
+      }
+      // Guard: discard if a newer avatar was set while this request was in flight
+      if (avatarImageDataUrl !== dataUrl) return;
+      avatarInventory = text;
+      if (field) field.value = text;
+      DB.set('sm_avatar_inventory', text);
+      if (status) {
+        status.textContent = '✓ auto-filled — edit if needed';
+        setTimeout(() => { if (status) status.textContent = ''; }, 6000);
+      }
+    } catch (e) {
+      if (status) status.textContent = '⚠ failed — fill in manually';
+    }
   }
 
   // --- Background image ---
@@ -3968,6 +4184,8 @@
     videoEl.style.display = 'block';
     placeholder.style.display = 'none';
     document.getElementById('clearVideoBtn').style.display = 'inline-block';
+    const _slb = document.getElementById('saveVideoLibBtn');
+    if (_slb) _slb.style.display = 'inline-block';
     if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
     document.getElementById('videoUploadZone').onclick = null;
   }
@@ -3985,9 +4203,129 @@
     videoEl.style.display = 'none';
     document.getElementById('videoUploadPlaceholder').style.display = 'block';
     document.getElementById('clearVideoBtn').style.display = 'none';
+    const _slb = document.getElementById('saveVideoLibBtn');
+    if (_slb) _slb.style.display = 'none';
     if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = '';
     document.getElementById('refVideoInput').value = '';
     document.getElementById('videoUploadZone').onclick = function() { document.getElementById('refVideoInput').click(); };
+  }
+
+  // ===== REFERENCE VIDEO LIBRARY =====
+  // Saved reference videos persist in IndexedDB: a metadata list under
+  // 'sm_refvideo_lib', each video Blob under 'sm_refvideo_blob_<id>', and the
+  // optional Whisper transcript under 'sm_refvideo_tx_<id>'.
+  async function saveCurrentVideoToLibrary() {
+    if (!refVideoFile) { alert('Upload a video first, then save it to the library.'); return; }
+    const defaultName = (refVideoFile.name || 'Reference video').replace(/\.[^.]+$/, '');
+    const name = prompt('Name this reference video:', defaultName);
+    if (name === null) return;
+    const id = 'rv_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const videoEl = document.getElementById('refVideoEl');
+    const durationSec = (videoEl && !isNaN(videoEl.duration)) ? videoEl.duration : 0;
+    const hasTranscript = !!(whisperSegments && whisperSegments.length);
+    try {
+      await DB.set('sm_refvideo_blob_' + id, refVideoFile);
+      if (hasTranscript) await DB.set('sm_refvideo_tx_' + id, JSON.stringify(whisperSegments));
+      const lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]');
+      lib.unshift({
+        id, name: (name.trim() || 'Untitled'), savedAt: Date.now(),
+        durationSec, sizeBytes: refVideoFile.size || 0, type: refVideoFile.type || 'video/mp4',
+        fileName: refVideoFile.name || '', hasTranscript
+      });
+      await DB.set('sm_refvideo_lib', JSON.stringify(lib));
+      const btn = document.getElementById('saveVideoLibBtn');
+      if (btn) { const o = btn.textContent; btn.textContent = '✓ Saved'; setTimeout(() => { btn.textContent = o; }, 2000); }
+    } catch (e) {
+      alert('Could not save video to library: ' + ((e && e.message) || e));
+    }
+  }
+
+  async function openVideoLibrary() {
+    const modal = document.getElementById('videoLibraryModal');
+    const listEl = document.getElementById('videoLibraryList');
+    if (!modal || !listEl) return;
+    modal.style.display = 'flex';
+    listEl.innerHTML = '<div style="text-align:center;padding:20px;font-size:11px;color:var(--text-3);">Loading…</div>';
+    let lib = [];
+    try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
+    if (!lib.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">No saved reference videos yet.<br>Upload a video and click <strong style="color:var(--text-2);">＋ Save to Library</strong>.</div>';
+      return;
+    }
+    const fmtDur = s => { s = Math.round(s || 0); const m = Math.floor(s / 60); const ss = s % 60; return m + ':' + (ss < 10 ? '0' : '') + ss; };
+    const fmtSize = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+    const fmtDate = ts => { try { return new Date(ts).toLocaleDateString(); } catch (e) { return ''; } };
+    listEl.innerHTML = lib.map(v => `
+      <div style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;background:var(--bg);">
+        <div style="font-size:18px;">🎬</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:600;color:var(--text-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(v.name)}</div>
+          <div style="font-size:10px;color:var(--text-3);">${fmtDur(v.durationSec)} · ${fmtSize(v.sizeBytes)} · ${fmtDate(v.savedAt)}${v.hasTranscript ? ' · 📝 transcript' : ''}</div>
+        </div>
+        <button class="btn" onclick="loadVideoFromLibrary('${v.id}')" style="padding:3px 10px;font-size:10px;border-color:var(--accent);color:var(--accent-2);">Load</button>
+        <button class="btn" onclick="deleteVideoFromLibrary('${v.id}')" style="padding:3px 8px;font-size:10px;color:var(--danger);border-color:rgba(248,113,113,0.3);">✕</button>
+      </div>`).join('');
+  }
+
+  function closeVideoLibrary() {
+    const modal = document.getElementById('videoLibraryModal');
+    if (modal) modal.style.display = 'none';
+  }
+
+  async function loadVideoFromLibrary(id) {
+    // Loading a library video replaces the current video and clears its
+    // segments — warn first so in-progress segment work isn't lost silently.
+    if (segments.length > 0 &&
+        !confirm('Loading this video will replace the current video and clear its ' + segments.length + ' segment(s). Continue?')) {
+      return;
+    }
+    let blob;
+    try { blob = await DB.get('sm_refvideo_blob_' + id); } catch (e) { blob = null; }
+    if (!blob) { alert('Video data not found — it may have been cleared.'); return; }
+    let lib = [];
+    try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
+    const meta = lib.find(v => v.id === id) || {};
+    const file = new File([blob], meta.fileName || (meta.name || 'library-video') + '.mp4', { type: blob.type || meta.type || 'video/mp4' });
+    refVideoFile = file;
+    if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
+    refVideoObjectUrl = URL.createObjectURL(file);
+    const videoEl = document.getElementById('refVideoEl');
+    videoEl.src = refVideoObjectUrl;
+    videoEl.style.display = 'block';
+    document.getElementById('videoUploadPlaceholder').style.display = 'none';
+    document.getElementById('clearVideoBtn').style.display = 'inline-block';
+    const _slb = document.getElementById('saveVideoLibBtn');
+    if (_slb) _slb.style.display = 'inline-block';
+    document.getElementById('videoUploadZone').onclick = null;
+    if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
+    // The old segments belong to the previously loaded video — clear them.
+    segments = [];
+    // Restore the saved transcript if there is one, so Whisper doesn't need rerunning
+    whisperSegments = [];
+    if (meta.hasTranscript) {
+      try {
+        const tx = await DB.get('sm_refvideo_tx_' + id);
+        if (tx) whisperSegments = JSON.parse(tx);
+      } catch (e) { /* transcript optional */ }
+    }
+    saveCurrentProjectData();
+    renderSegments();
+    closeVideoLibrary();
+  }
+
+  async function deleteVideoFromLibrary(id) {
+    if (!confirm('Remove this video from your library? This cannot be undone.')) return;
+    try {
+      await DB.remove('sm_refvideo_blob_' + id);
+      await DB.remove('sm_refvideo_tx_' + id);
+      let lib = [];
+      try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
+      lib = lib.filter(v => v.id !== id);
+      await DB.set('sm_refvideo_lib', JSON.stringify(lib));
+    } catch (e) {
+      alert('Could not delete: ' + ((e && e.message) || e));
+    }
+    openVideoLibrary();
   }
 
   // --- OpenAI API key management ---
@@ -4857,10 +5195,94 @@ RULES — read carefully:
   const ACTION_TA_STYLE = `width:100%;font-size:10px;padding:4px 7px;background:rgba(52,211,153,0.05);border:1px solid rgba(52,211,153,0.2);border-radius:3px;color:#6ee7b7;font-family:inherit;outline:none;resize:none;overflow:hidden;line-height:1.5;min-height:36px;box-sizing:border-box;`;
 
   // --- Render segment cards ---
+  // --- Segment script health badge: word count + estimated speech duration ---
+  // Veo 3 clips max out at 8s, so a script that takes much longer than that
+  // won't fit one clip. Green = fits, yellow = slightly long, red = won't fit
+  // (or too short to be a real scene).
+  function scriptHealth(seg) {
+    const wc = (seg && seg.script || '').trim().split(/\s+/).filter(Boolean).length;
+    const estSec = wc / WORDS_PER_SEC;
+    let color, level, title;
+    if (wc === 0) {
+      color = 'var(--text-3)'; level = 'empty'; title = 'No script yet';
+    } else if (wc < 5) {
+      color = '#f87171'; level = 'short'; title = 'Too short — try 5+ words';
+    } else if (estSec <= 8.5) {
+      color = '#4ade80'; level = 'ok'; title = 'Fits comfortably in one 8s Veo clip';
+    } else if (estSec <= 11) {
+      color = '#fbbf24'; level = 'long'; title = 'Slightly long — may run past 8s, consider trimming';
+    } else {
+      color = '#f87171'; level = 'over'; title = 'Too long for one 8s Veo clip — split this scene';
+    }
+    return { wc, estSec, color, level, title };
+  }
+
+  function scriptBadgeHtml(seg) {
+    const h = scriptHealth(seg);
+    if (h.wc === 0) return '';
+    const warn = (h.level === 'short' || h.level === 'over') ? ' ⚠'
+               : (h.level === 'long' ? ' ⚠' : '');
+    return `<span style="font-weight:400;color:${h.color};" title="${h.title}"> ${h.wc}w · ~${h.estSec.toFixed(1)}s${warn}</span>`;
+  }
+
+  // --- Veo 3 prompt JSON safety lint ---
+  // Confirms the prompt is valid JSON, has a non-empty speech field (standing
+  // rule: every Veo prompt must carry the full segment script in `speech`),
+  // and has a non-empty action field.
+  function lintVeoJSON(str) {
+    if (!str || !str.trim()) return { ok: false, errors: ['no prompt generated yet'] };
+    let obj;
+    try { obj = JSON.parse(str); }
+    catch (e) { return { ok: false, errors: ['invalid JSON — ' + e.message] }; }
+    if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) {
+      return { ok: false, errors: ['not a JSON object'] };
+    }
+    const errors = [];
+    if (!obj.speech || !String(obj.speech).trim()) errors.push('speech field is empty');
+    if (!obj.action || !String(obj.action).trim()) errors.push('action field is empty');
+    return { ok: errors.length === 0, errors };
+  }
+
+  function veoLintBadgeHtml(seg) {
+    if (!seg || !(seg.veoPrompt || '').trim()) return '';
+    const r = lintVeoJSON(seg.veoPrompt);
+    if (r.ok) {
+      return `<span style="font-size:9px;font-weight:700;color:#4ade80;" title="Valid JSON · speech + action present">✓ JSON</span>`;
+    }
+    return `<span style="font-size:9px;font-weight:700;color:#f87171;cursor:help;" title="${escHtml(r.errors.join(' · '))}">⚠ JSON</span>`;
+  }
+
+  // --- Proportional timeline strip above the segment list ---
+  function renderSegmentTimeline() {
+    const strip = document.getElementById('segmentTimeline');
+    if (!strip) return;
+    if (!segments.length) { strip.style.display = 'none'; strip.innerHTML = ''; return; }
+    strip.style.display = 'block';
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    const blocks = segments.map((seg, i) => {
+      const len = Math.max(0.1, (seg.endTime || 0) - (seg.startTime || 0));
+      const h = scriptHealth(seg);
+      const bg = h.level === 'ok' ? 'rgba(74,222,128,0.35)'
+               : h.level === 'long' ? 'rgba(251,191,36,0.4)'
+               : (h.level === 'short' || h.level === 'over') ? 'rgba(248,113,113,0.4)'
+               : 'rgba(255,255,255,0.12)';
+      const bd = h.level === 'ok' ? '#4ade80'
+               : h.level === 'long' ? '#fbbf24'
+               : (h.level === 'short' || h.level === 'over') ? '#f87171'
+               : 'var(--border-2)';
+      const tip = `Seg ${i+1} · ${fmt(seg.startTime||0)}–${fmt(seg.endTime||0)} · ${h.wc}w ~${h.estSec.toFixed(1)}s` + (h.level==='over'?' · too long':h.level==='long'?' · slightly long':h.level==='short'?' · too short':'');
+      return `<div onclick="(function(){var c=document.getElementById('seg-card-${i}');if(c)c.scrollIntoView({behavior:'smooth',block:'center'});})()"
+        title="${escHtml(tip)}"
+        style="flex:${len.toFixed(2)};min-width:14px;height:18px;background:${bg};border:1px solid ${bd};border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--text-1);overflow:hidden;">${i+1}</div>`;
+    }).join('');
+    strip.innerHTML = `<div style="display:flex;gap:2px;align-items:center;">${blocks}</div>`;
+  }
+
   function renderSegments() {
     const container = document.getElementById('segmentsContainer');
     const countEl = document.getElementById('segmentCount');
     if (!container) return;
+    renderSegmentTimeline();
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
     if (segments.length === 0) {
       const emptyMsg = studioMode === 'producer'
@@ -4944,7 +5366,7 @@ RULES — read carefully:
           <!-- Script -->
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script ${(()=>{const wc=(seg.script||'').trim().split(/\s+/).filter(Boolean).length;return wc===0?'':`<span style="font-weight:400;color:${wc<5?'#f87171':wc>35?'#fbbf24':'var(--text-3)'};" title="${wc<5?'Too short — try 5+ words':wc>35?'Long — may exceed scene duration':''}"> ${wc}w${wc<5?' ⚠':wc>35?' ⚠':''}</span>`;})()}</span>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script ${scriptBadgeHtml(seg)}</span>
               <div style="display:flex;gap:5px;align-items:center;">
                 ${seg.done ? `<span class="scene-done-badge" style="background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.5px;">✅ DONE</span>` : `<span class="scene-done-badge" style="display:none;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;font-size:9px;font-weight:700;color:#4ade80;letter-spacing:0.5px;">✅ DONE</span>`}
                 <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);font-size:10px;padding:1px 6px;cursor:pointer;">✕ Remove</button>
@@ -5015,7 +5437,7 @@ RULES — read carefully:
           <!-- Veo 3 prompt -->
           <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt</span>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 Veo 3 Prompt &nbsp;${veoLintBadgeHtml(seg)}</span>
               <div style="display:flex;gap:4px;align-items:center;">
                 ${seg.done ? `<button onclick="redoScene(${i})" title="Redo this scene — copies a fresh instruction for just this scene" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">🔄 Redo</button>` : ''}
                 <button onclick="copyClaudeInstruction(${i})" title="Copy a Claude in Chrome instruction to auto-submit this prompt" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.4);border-radius:2px;color:#a78bfa;font-size:9px;padding:1px 6px;cursor:pointer;">🤖 Claude Browser</button>
@@ -5044,6 +5466,26 @@ RULES — read carefully:
     return el ? el.value : 'photo2';
   }
 
+  // --- Pull jewelry + accessory details from the avatar inventory ---
+  // These small items are the ones most likely to get dropped in NB Pro
+  // compositing, so we reinforce just them in the prompt. Big stuff
+  // (face / hair / clothing) is left to the reference photo. Returns '' when
+  // there's nothing useful in the inventory.
+  function getAvatarAccessoryNote() {
+    const inv = (document.getElementById('avatarInventory')?.value || avatarInventory || '').trim();
+    if (!inv) return '';
+    const wanted = [];
+    inv.split(/\r?\n/).forEach(line => {
+      const m = line.match(/^\s*(JEWELRY|OTHER)\s*:\s*(.+)$/i);
+      if (!m) return;
+      const val = m[2].trim().replace(/\.+$/, '');
+      if (!val || /^(none|none visible|n\/?a)$/i.test(val)) return;
+      wanted.push(val);
+    });
+    if (!wanted.length) return '';
+    return ' Keep these specific details from the person in reference photo 1 clearly visible and unchanged: ' + wanted.join('; ') + '.';
+  }
+
   // --- Build Nano Banana prompt for the START frame of a segment ---
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
     let instruction, negPrompt;
@@ -5060,6 +5502,7 @@ RULES — read carefully:
       instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
     }
+    instruction += getAvatarAccessoryNote();
     return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
@@ -5076,6 +5519,7 @@ RULES — read carefully:
       instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
     }
+    instruction += getAvatarAccessoryNote();
     return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
@@ -5567,7 +6011,7 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     panel.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:11px;font-weight:700;color:var(--text-1);">🎬 Scene Progress</span>
-        <button onclick="document.getElementById('sceneStatusPanel').remove()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
+        <button onclick="dismissStatusPanel()" title="Dismiss — clears the saved run" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;">
         ${segments.filter(s => s.veoPrompt?.trim()).map((seg, idx) => {
@@ -5585,7 +6029,33 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
       <div style="margin-top:6px;background:var(--surface-2);border-radius:3px;height:4px;overflow:hidden;">
         <div style="width:${total>0?Math.round(done/total*100):0}%;height:100%;background:var(--success);border-radius:3px;transition:width 0.4s;"></div>
       </div>`;
+    // Persist that a run is active for this project so the panel survives a
+    // reload / app restart until the user dismisses it.
+    try { DB.set(modeKey('sm_active_run'), JSON.stringify({ projectId: activeProjectId })); } catch (e) {}
     return panel;
+  }
+
+  // Dismiss the status panel AND clear the persisted run marker.
+  function dismissStatusPanel() {
+    const p = document.getElementById('sceneStatusPanel');
+    if (p) p.remove();
+    try { DB.remove(modeKey('sm_active_run')); } catch (e) {}
+  }
+
+  // On load (and after a mode switch), re-show the status panel if the active
+  // project has a run in progress that was never dismissed.
+  async function restoreActiveRun() {
+    const existing = document.getElementById('sceneStatusPanel');
+    if (existing) existing.remove();
+    try {
+      const raw = await DB.get(modeKey('sm_active_run'));
+      if (!raw) return;
+      const run = JSON.parse(raw);
+      if (run && run.projectId === activeProjectId &&
+          segments.some(s => s.veoPrompt && s.veoPrompt.trim())) {
+        showStatusPanel();
+      }
+    } catch (e) { /* ignore */ }
   }
 
   // ── Mark a scene done (called by Claude via javascript_tool) ──────────────
@@ -5644,17 +6114,136 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     return total;
   }
 
+  // ── Pre-flight gate — per-segment readiness + cost before a run ───────────
+  // Aggregates the checks (script length, Veo JSON lint, NB prompt, frame) into
+  // one screen so problems get caught while they are still free to fix —
+  // before any Veo credits are spent inside Flow.
+  function showPreflightModal(skipDone) {
+    if (segments.length === 0) {
+      alert('No segments yet — split a video or script into scenes first.');
+      return;
+    }
+    let readyCount = 0, issueCount = 0, skipCount = 0, totalCredits = 0;
+    const rows = segments.map((seg, i) => {
+      const isSkipped = skipDone && seg.done;
+      const sh    = scriptHealth(seg);
+      const lint  = lintVeoJSON(seg.veoPrompt || '');
+      const hasNb = !!(seg.nbPrompt && seg.nbPrompt.trim());
+      // In avatar-background mode there is no Photo 2 start frame, so its
+      // absence is not a problem.
+      const hasFrame = !!seg.frameDataUrl || !!seg._scriptOnly || bgFromAvatar;
+      const sceneCredits = getVeoDuration(seg.script) * 2 + 1;
+      const blockers = [];
+      if (sh.level === 'empty' || sh.level === 'short' || sh.level === 'over') blockers.push('script ' + sh.level);
+      if (!lint.ok) blockers.push('Veo JSON: ' + lint.errors.join(', '));
+      if (!hasNb) blockers.push('no NB prompt');
+      if (!hasFrame) blockers.push('no start frame');
+      const warns = [];
+      if (sh.level === 'long') warns.push('script long (~' + sh.estSec.toFixed(1) + 's)');
+      let status, color, label;
+      // totalCredits counts only scenes that will actually run cleanly
+      // (ready + warn) — issue scenes are not costed since they need fixing.
+      if (isSkipped) { status = 'skip'; color = 'var(--text-3)'; label = 'skip (done)'; skipCount++; }
+      else if (blockers.length) { status = 'issue'; color = '#f87171'; label = blockers.join(' · '); issueCount++; }
+      else if (warns.length) { status = 'warn'; color = '#fbbf24'; label = warns.join(' · '); readyCount++; totalCredits += sceneCredits; }
+      else { status = 'ready'; color = '#4ade80'; label = 'ready'; readyCount++; totalCredits += sceneCredits; }
+      const icon = status === 'ready' ? '✅' : status === 'warn' ? '⚠️' : status === 'skip' ? '⏭️' : '❌';
+      return `<div style="display:flex;align-items:center;gap:8px;font-size:10px;padding:4px 0;border-bottom:1px solid var(--border);">
+        <span>${icon}</span>
+        <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">Scene ${i + 1}</span>
+        <span style="color:${color};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(label)}</span>
+        <span style="color:var(--text-3);white-space:nowrap;">${isSkipped ? '—' : '~' + sceneCredits + ' cr'}</span>
+      </div>`;
+    }).join('');
+
+    const hasIssues = issueCount > 0;
+    const runnable = readyCount > 0;
+    const modal = document.createElement('div');
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,10,0.74);z-index:9999;display:flex;align-items:center;justify-content:center;';
+    modal.innerHTML = `
+      <div style="background:var(--glass);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);border:1px solid var(--glass-border);border-radius:14px;padding:22px;width:520px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--shadow-panel);font-family:inherit;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+          <div style="font-size:20px;">🛫</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:var(--text-1);">Pre-flight Check${skipDone ? ' (Resume)' : ''}</div>
+            <div style="font-size:11px;color:var(--text-3);">${readyCount} ready${issueCount ? ' · ' + issueCount + ' with issues' : ''}${skipCount ? ' · ' + skipCount + ' skipped' : ''}</div>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;margin-bottom:12px;border:1px solid var(--border);border-radius:8px;padding:4px 10px;background:var(--bg);">${rows}</div>
+        <div style="display:flex;gap:8px;margin-bottom:14px;">
+          <div style="flex:1;background:var(--grad-accent-soft);border:1px solid rgba(139,92,246,0.25);border-radius:8px;padding:8px 12px;">
+            <div style="font-size:15px;font-weight:800;color:var(--accent-2);">~${totalCredits} credits</div>
+            <div style="font-size:9px;color:var(--text-3);">${readyCount} scene${readyCount !== 1 ? 's' : ''} × (Veo 3 + NB Pro)</div>
+          </div>
+          <div style="flex:1;background:${hasIssues ? 'rgba(248,113,113,0.07)' : 'rgba(74,222,128,0.07)'};border:1px solid ${hasIssues ? 'rgba(248,113,113,0.25)' : 'rgba(74,222,128,0.25)'};border-radius:8px;padding:8px 12px;">
+            <div style="font-size:12px;font-weight:700;color:${hasIssues ? '#f87171' : '#4ade80'};">${hasIssues ? issueCount + ' need fixing' : 'All clear'}</div>
+            <div style="font-size:9px;color:var(--text-3);">${hasIssues ? 'fix in the editor, or run anyway' : 'every scene passed its checks'}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px 16px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;color:var(--text-2);font-weight:600;cursor:pointer;font-size:12px;font-family:inherit;">Cancel</button>
+          ${runnable ? `<button onclick="this.closest('div[style*=fixed]').remove();runAllScenes(${skipDone ? 'true' : 'false'}, true)" style="padding:8px 18px;background:${hasIssues ? 'rgba(251,191,36,0.15)' : 'var(--grad-accent)'};border:1px solid ${hasIssues ? 'rgba(251,191,36,0.5)' : 'rgba(167,139,250,0.6)'};border-radius:7px;color:${hasIssues ? 'var(--warning)' : '#fff'};font-weight:700;cursor:pointer;font-size:12px;font-family:inherit;">${hasIssues ? '▶ Run Anyway' : '▶ Run All Scenes'}</button>` : ''}
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  }
+
+  // ── One-button happy path: Analyze video → Generate prompts → Pre-flight ──
+  async function processEverything() {
+    if (segments.length === 0) {
+      alert('No segments yet — upload a video and run Detect Cuts (or Auto 8s) first.');
+      return;
+    }
+    if (!confirm('Process Everything will:\n\n  1. Analyze the video frames (AI)\n  2. Generate all NB Pro + Veo 3 prompts\n  3. Open the pre-flight check\n\nThis uses AI calls and may take a minute. Continue?')) return;
+    const btn = document.getElementById('processEverythingBtn');
+    const origText = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
+    // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
+    try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
+    // Step 2 — generate all prompts
+    if (btn) btn.textContent = '⏳ Generating prompts…';
+    try {
+      generateAllSegmentPrompts();
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = origText; }
+      alert('Could not generate prompts: ' + ((e && e.message) || e));
+      return;
+    }
+    if (btn) { btn.disabled = false; btn.textContent = origText; }
+    // Step 3 — pre-flight gate
+    showPreflightModal(false);
+  }
+
   // ── Run All Scenes — download all images + copy one combined instruction ──
-  function runAllScenes(skipDone) {
+  // preflightDone = true when called from the pre-flight modal, which already
+  // showed the user every issue — so the inline confirm() gates are skipped.
+  function runAllScenes(skipDone, preflightDone) {
     const allReady = segments.filter(s => s.veoPrompt?.trim());
     if (!allReady.length) { alert('Generate prompts first.'); return; }
 
     const ready = skipDone ? allReady.filter(s => !s.done) : allReady;
     if (!ready.length) { alert('All scenes are already done! Use "Run All Scenes" to re-run them, or click "Redo" on individual scenes.'); return; }
 
-    const unready = segments.filter(s => !s.veoPrompt?.trim());
-    if (unready.length && !skipDone) {
-      if (!confirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`)) return;
+    if (!preflightDone) {
+      const unready = segments.filter(s => !s.veoPrompt?.trim());
+      if (unready.length && !skipDone) {
+        if (!confirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`)) return;
+      }
+
+      // ── Veo 3 JSON safety pre-flight ───────────────────────────────────────
+      // Catch broken/invalid prompts before burning Veo generations on them.
+      const lintIssues = [];
+      ready.forEach((s) => {
+        const idx = segments.indexOf(s);
+        const r = lintVeoJSON(s.veoPrompt);
+        if (!r.ok) lintIssues.push(`Scene ${idx + 1}: ${r.errors.join(', ')}`);
+      });
+      if (lintIssues.length) {
+        const preview = lintIssues.slice(0, 8).join('\n');
+        const more = lintIssues.length > 8 ? `\n…and ${lintIssues.length - 8} more` : '';
+        if (!confirm(`⚠ ${lintIssues.length} scene(s) have Veo 3 prompt problems:\n\n${preview}${more}\n\nRun anyway?`)) return;
+      }
     }
 
     const appUrl = window.location.href;
@@ -5666,6 +6255,16 @@ Return a JSON array of ${segments.length} objects, each with "action" and "visua
     const veoWaitMin = _adm.veoWaitMin || 6;
     const cooldownSec = _adm.cooldownSec || 120;
     const defaultModel = _adm.defaultModel || 'Veo 3 Fast';
+
+    // Avatar appearance inventory — embedded into CHECK 1 so the verification is
+    // specific to this avatar. Falls back to the generic check when empty.
+    const _avInv = (document.getElementById('avatarInventory')?.value || avatarInventory || '').trim();
+    const inventoryBlock = _avInv ? `
+
+      ── MATCH AGAINST THE AVATAR INVENTORY ──
+      The avatar has these specific details. Check EACH line against the generated
+      image and mark PASS / FAIL / UNSURE. Treat any UNSURE as a FAIL.
+${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).join('\n')}` : '';
 
     // ── MANUAL MODE: build a simple copy-paste prompt sheet ──────────────────
     if (!claudeBrowserMode) {
@@ -5756,17 +6355,45 @@ Use tabs_context_mcp to list ALL open tabs. Find a tab whose URL contains "labs.
 • For each new scene: click the "+ New prompt" button in the LEFT sidebar to reset — do NOT open a new tab or navigate away
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO OPEN NB PRO (Nano Banana Pro)
+THE BOTTOM BAR HAS TWO MODES — IMAGE (NB Pro) AND VIDEO (Veo 3)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-NB Pro is NOT a separate panel — you open it through the bottom prompt bar:
-  1. Look at the BOTTOM of the Flow page — there is a prompt bar with a submit arrow button
-  2. To the LEFT of the submit arrow, click the small icon (looks like a + or media icon)
-  3. A menu appears — click "Image"
-  4. Then select "Nano Banana Pro" from the options
-  5. The NB Pro panel will appear with Photo 1 and Photo 2 upload slots
-  6. Upload photos, fill in the prompt, click Generate
-  7. Once the composed image appears, click "Add to prompt" — it becomes the start frame for Veo 3
-Do this for EVERY scene before running Veo 3.
+At the BOTTOM of the Flow page is a prompt bar with a submit arrow. To the LEFT of that
+arrow is a small media icon (looks like a + or an image/video icon). Clicking it opens a
+menu where you pick the mode:
+  • IMAGE → "Nano Banana Pro"  = the NB Pro composite step
+  • VIDEO                       = the Veo 3 generation step
+Every scene uses BOTH modes, in this order: Image / NB Pro first, then Video for Veo 3.
+You must switch the bar between these modes yourself — it does not switch automatically.
+
+HOW TO OPEN NB PRO (Image mode):
+  1. Click the media icon to the LEFT of the submit arrow
+  2. Click "Image"
+  3. Select "Nano Banana Pro"
+  4. The NB Pro panel appears with Photo 1 and Photo 2 upload slots
+  5. Upload photos, paste the prompt, click Generate
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HOW THIS RUN WORKS — TWO PHASES (do them in order)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+This run is split into two phases. Finish Phase 1 ENTIRELY before starting Phase 2.
+
+  PHASE 1 — generate, verify, and DOWNLOAD every Nano Banana composite.
+  PHASE 2 — for each scene, upload its downloaded composite as the Veo 3 start
+            frame and generate the video.
+
+Why: NB Pro composites are cheap and fast; Veo 3 videos are slow and cost credits.
+Doing all composites first means a bad composite is caught BEFORE a Veo generation
+is spent on it.
+
+COMPOSITE HANDLING:
+  • In Phase 1, after a composite passes its checks, download it (hover → ⬇).
+    It saves to ${dlPath}\\ with whatever filename Flow gives it.
+  • Track which downloaded file belongs to which scene — remember each as
+    "SCENE N COMPOSITE".
+  • In Phase 2, upload that file as the Veo 3 START FRAME using the HOW TO UPLOAD
+    sequence (file_upload tool — never the file picker).
+  • Do NOT rely on "Add to prompt" — with many scenes you cannot hold them all in
+    the prompt at once; always download in Phase 1 and re-upload in Phase 2.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO UPLOAD AN IMAGE (file_upload tool only — never click upload buttons)
@@ -5848,28 +6475,36 @@ IMAGE FILES IN DOWNLOADS:
 
 
 
-    // Build per-scene instructions
-    let runSceneNum = 0;
-    const totalRunScenes = segments.filter(s => s.veoPrompt?.trim() && !(skipDone && s.done)).length;
+    // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
+    const runScenes = [];
     segments.forEach((seg, i) => {
       if (!seg.veoPrompt?.trim()) return;
       if (skipDone && seg.done) return;
-      runSceneNum++;
-      const duration   = getVeoDuration(seg.script);
-      const wordCount  = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
-      const nbPrompt   = seg.nbPrompt  || '(no NB Pro prompt)';
-      const veoPrompt  = seg.veoPrompt || '(no Veo 3 prompt)';
-      const frameFile  = `scene${i+1}_photo2_startframe.jpg`;
-      const hasFrame   = !!seg.frameDataUrl && !bgFromAvatar;
+      runScenes.push({ seg, i });
+    });
+    const totalRunScenes = runScenes.length;
 
+    // ── PHASE 1 — every Nano Banana composite ──
+    instruction += `
+
+╔══════════════════════════════════════════════╗
+║   PHASE 1 — ALL NANO BANANA COMPOSITES         ║
+╚══════════════════════════════════════════════╝
+Generate, verify, and DOWNLOAD the NB Pro composite for EVERY scene below BEFORE you
+touch Veo 3 at all. Track which downloaded file belongs to which scene.
+`;
+    runScenes.forEach(({ seg, i }, idx) => {
+      const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
+      const frameFile = `scene${i+1}_photo2_startframe.jpg`;
+      const hasFrame  = !!seg.frameDataUrl && !bgFromAvatar;
       instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-SCENE ${runSceneNum} of ${totalRunScenes} (App Scene ${i+1})
+PHASE 1 · SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) — NB PRO
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-${runSceneNum === 1
-  ? `Flow project is already open. Locate the Nano Banana Pro panel at the top of the main area.`
-  : `Stay in the same Flow tab. Click the "+ New prompt" button at the TOP of the LEFT sidebar to start a fresh generation. The NB Pro panel will reset — do not navigate away.`
+${idx === 0
+  ? `The Flow project is already open. Open NB Pro using "HOW TO OPEN NB PRO" above (bottom bar → media icon → Image → Nano Banana Pro).`
+  : `Click the "+ New prompt" button at the TOP of the LEFT sidebar to start a fresh generation, then open NB Pro again via the bottom bar (media icon → Image → Nano Banana Pro). IMPORTANT: "+ New prompt" may NOT reset the bar's mode — always verify the bar is in Image / Nano Banana Pro mode before uploading photos; if it is still in Video mode, switch it back manually.`
 }
 
 ━ NB PRO STEP:
@@ -5886,12 +6521,12 @@ ${nbPrompt}
 
 5. Click Generate — wait until the image appears (up to ${nbWaitSec} seconds)
 6. Take a screenshot of the generated NB Pro image
-7. VERIFY the image passes ALL of the following checks before clicking "Add to prompt":
+7. VERIFY the image passes ALL of the following checks:
 
-   ✅ CHECK 1 — Avatar present
+   ✅ CHECK 1 — Avatar present & matches inventory
       The person from Photo 1 (the avatar) must be clearly visible in the image.
       Their face, body, and clothing should be recognisable and unchanged from Photo 1.
-      FAIL if: the person looks like a completely different person, or there is no person at all.
+      FAIL if: the person looks like a completely different person, or there is no person at all.${inventoryBlock}
 
    ✅ CHECK 2 — Background is correct
 ${bgFromAvatar ? `      ⚠ AVATAR BG MODE IS ON — Photo 1 is being used as BOTH the person AND the background source.
@@ -5923,18 +6558,42 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — props check is against Photo 1 (t
    • Keep retrying (tab refresh each time) until NB Pro passes checks 1 and 4 — never skip a scene
    • If only checks 2 or 3 fail (background or prop mismatch) after multiple attempts: proceed anyway, note "Scene ${i+1} NB Pro — background/prop mismatch" in final report
 
-8. Once ALL checks pass (or after retry): click "Add to prompt"
+8. Once ALL checks pass: DOWNLOAD the composite (hover over it → ⬇ download button). It saves
+   to ${dlPath}\\ — remember its exact filename as "SCENE ${i+1} COMPOSITE". You upload it
+   in Phase 2. Do NOT start Veo 3 yet.
+`;
+    });
 
-━ VEO 3 STEP:
-1. Select model: ${defaultModel}
-2. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
-3. Click the Veo 3 prompt field and paste this exactly:
+    // ── PHASE 2 — every Veo 3 video ──
+    instruction += `
+
+╔══════════════════════════════════════════════╗
+║      PHASE 2 — ALL VEO 3 VIDEOS                ║
+╚══════════════════════════════════════════════╝
+Now generate the Veo 3 video for every scene, using the composites you downloaded and
+tracked in Phase 1. For each scene: switch the bar to VIDEO mode, upload that scene's
+composite as the start frame, paste the Veo 3 prompt, generate, download.
+`;
+    runScenes.forEach(({ seg, i }, idx) => {
+      const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt)';
+      const duration  = getVeoDuration(seg.script);
+      const wordCount = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
+      instruction += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2 · SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) — VEO 3
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Click "+ New prompt" at the TOP of the LEFT sidebar, then switch the bottom bar to VIDEO mode (media icon left of the submit arrow → Video)
+2. Upload "SCENE ${i+1} COMPOSITE" (the file you downloaded in Phase 1) as the Veo 3 START FRAME, using the HOW TO UPLOAD sequence above
+3. Select model: ${defaultModel}
+4. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
+5. Click the Veo 3 prompt field and paste this exactly:
 
 ${veoPrompt}
 
-4. Click Generate — wait for video to fully render (up to ${veoWaitMin} minutes — do not interrupt)
-5. Download video using HOW TO DOWNLOAD A VIDEO above (no renaming needed)
-6. Mark done: find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
+6. Click Generate — wait for video to fully render (up to ${veoWaitMin} minutes — do not interrupt)
+7. Download video using HOW TO DOWNLOAD A VIDEO above (no renaming needed)
+8. Mark done: find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
 `;
     });
 
@@ -6013,6 +6672,16 @@ Report back: how many scenes completed successfully, and note any that had issue
     const _sModel = _sadm.defaultModel || 'Veo 3 Fast';
     const _sClaudeBrowser = _susr.claudeBrowserMode !== false;
 
+    // Avatar appearance inventory — embedded into CHECK 1 below so verification
+    // is specific to this avatar. Falls back to the generic check when empty.
+    const _sAvInv = (document.getElementById('avatarInventory')?.value || avatarInventory || '').trim();
+    const inventoryBlock = _sAvInv ? `
+
+      ── MATCH AGAINST THE AVATAR INVENTORY ──
+      The avatar has these specific details. Check EACH line against the generated
+      image and mark PASS / FAIL / UNSURE. Treat any UNSURE as a FAIL.
+${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).join('\n')}` : '';
+
     const hasAvatar     = !!avatarImageDataUrl;
     const hasStartFrame = !!seg.frameDataUrl && !bgFromAvatar;
     const hasEndFrame   = !!seg.endFrameDataUrl;
@@ -6050,9 +6719,12 @@ Report back: how many scenes completed successfully, and note any that had issue
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 GOOGLE FLOW UI MAP (memorize — do not explore)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-• NB Pro panel (top): TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
+• Bottom prompt bar has a submit arrow. LEFT of it is a media icon (+ / image-video icon)
+  — click it to choose the mode: IMAGE → "Nano Banana Pro", or VIDEO (= Veo 3).
+  You switch this yourself for every scene: Image/NB Pro first, then Video for Veo 3.
+• NB Pro panel: TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
 • File inputs are hidden in shadow DOM — use the upload sequence below
-• Veo 3 panel (below NB Pro): model dropdown, duration, prompt, Generate button
+• Veo 3 (Video mode): model dropdown, duration, prompt field, Generate button
 • After video renders: hover to reveal ⬇ download button
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6084,7 +6756,7 @@ The ONLY allowed upload method:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Open Nano Banana Pro on the Flow project
+1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
 ${hasAvatar ? `2. Upload Photo 1 (avatar) — slot index 0, file: {dl}\\${avatarFile}` : '2. No avatar — skip Photo 1'}
 ${hasStartFrame ? `3. Upload Photo 2 (start frame) — slot index 1, file: {dl}\\${startFrameFile}` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
@@ -6096,10 +6768,10 @@ ${nbPrompt}
 7. Take a screenshot of the generated NB Pro image
 8. VERIFY the image passes ALL of the following checks before clicking "Add to prompt":
 
-   ✅ CHECK 1 — Avatar present
+   ✅ CHECK 1 — Avatar present & matches inventory
       The person from Photo 1 (the avatar) must be clearly visible.
       Their face, body, and clothing must be recognisable and unchanged from Photo 1.
-      FAIL if: completely different person, or no person at all.
+      FAIL if: completely different person, or no person at all.${inventoryBlock}
 
    ✅ CHECK 2 — Background is correct
 ${bgFromAvatar ? `      ⚠ AVATAR BG MODE IS ON — Photo 1 is the source for BOTH the person AND the background.
@@ -6129,25 +6801,32 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — the props reference is Photo 1 (t
    • If only checks 2 or 3 fail (background/prop mismatch) after multiple attempts: proceed to Step 2 anyway, note the mismatch in your report
    • "Unusual activity" flag: do NOT modify the prompts — wait 2 minutes after tab refresh, then retry identically
 
-9. Once all checks pass (or after retry): click "Add to prompt"
+9. Once all checks pass (or after retry): move the composite into Veo 3 —
+   METHOD A: if an "Add to prompt" button is on the NB composite, click it, then switch
+     the bar to VIDEO mode (media icon → Video) and confirm the composite landed in the
+     start-frame slot.
+   METHOD B (reliable fallback): download the NB composite (hover → ⬇), switch the bar to
+     VIDEO mode, then upload that downloaded file as the Veo 3 start frame using the
+     upload sequence above. Use Method B whenever Method A doesn't carry the composite over.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — ${_sModel}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Select model: ${_sModel}
-2. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount / 2.3)}s speech)
-3. Paste this Veo 3 prompt:
+1. Make sure the bottom bar is in VIDEO mode and the NB composite is sitting in the start-frame slot (from Step 1.9)
+2. Select model: ${_sModel}
+3. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount / 2.3)}s speech)
+4. Paste this Veo 3 prompt:
 
 ${veoPrompt}
 
-4. Click Generate — wait up to ${_sveoWait} minutes — do NOT interrupt
-5. Hover over video → click ⬇ download button → select any quality
-6. Wait for download, then run Bash to rename:
+5. Click Generate — wait up to ${_sveoWait} minutes — do NOT interrupt
+6. Hover over video → click ⬇ download button → select any quality
+7. Wait for download, then run Bash to rename:
    FOR /F "delims=" %%F IN ('dir /b /o-d "{dl}\\*.mp4"') DO (set n=%%F & goto done)
    :done
    move "{dl}\\%n%" "{dl}\\FlowVideos\\Scene_${i + 1}.mp4"
-7. Mark done: tabs_context_mcp → find tab ${window.location.href} → javascript_tool → window.markSceneDone(${i})
-8. Report back with the result`;
+8. Mark done: tabs_context_mcp → find tab ${window.location.href} → javascript_tool → window.markSceneDone(${i})
+9. Report back with the result`;
 
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
@@ -6753,8 +7432,12 @@ TECHNICAL SPECS:
     img.style.display = 'block';
     placeholder.style.display = 'none';
     clearBtn.style.display = 'block';
+    // Keep the in-memory avatar in sync so generation steps pick it up immediately
+    avatarImageDataUrl = acct.avatar;
     // Persist it so it survives save (must match the key loadAvatarImage() reads: sm_avatar_img)
     DB.set('sm_avatar_img', acct.avatar);
+    // Auto-extract the appearance inventory from this avatar photo
+    extractAvatarInventory(acct.avatar);
     // Pre-fill notes with the account username if desc is empty
     const desc = document.getElementById('avatarDesc');
     if (!desc.value.trim()) desc.value = acct.username;
@@ -7017,13 +7700,17 @@ TECHNICAL SPECS:
     // ── 4. Load new mode's projects + segments ────────────────────────────────
     await loadProjects();
 
-    // ── 5. Apply visual changes ───────────────────────────────────────────────
+    // ── 5. Restore an in-progress run's status panel, if any ──────────────────
+    await restoreActiveRun();
+
+    // ── 6. Apply visual changes ───────────────────────────────────────────────
     _applyModeVisuals(mode);
   }
 
   function initVideoStudio(forcedMode) {
     loadAvatarProfile();
     loadAvatarImage();
+    loadAvatarInventory();
     loadBgImage();
     populateAvatarAccountPicker();
     renderApiKeyStatus();
@@ -8551,6 +9238,10 @@ TECHNICAL SPECS:
   async function loadProducts() {
     products = JSON.parse(await DB.get('sm_products') || '[]');
     renderProductVault();
+    // Hook/CTA product dropdowns are built from the products list — refresh them
+    // in case products finished loading after those sections first rendered.
+    if (typeof renderHookBank === 'function') renderHookBank();
+    if (typeof renderCTALibrary === 'function') renderCTALibrary();
   }
 
   function saveProducts() { DB.set('sm_products', JSON.stringify(products)); }
@@ -8703,9 +9394,24 @@ TECHNICAL SPECS:
 
   function saveHooks() { DB.set('sm_hooks', JSON.stringify(hooks)); }
 
+  // --- Shared: build <option> list of product names for hook/CTA dropdowns ---
+  // Hooks and CTAs store the product as a plain name label, so a deleted
+  // product still keeps its label on existing items.
+  function _productLabelOptions(selected, allLabel) {
+    const names = [...new Set((products || []).map(p => p.name).filter(Boolean))].sort();
+    let opts = `<option value="">${allLabel || '— Any product —'}</option>`;
+    opts += names.map(n => `<option value="${_escHtml(n)}" ${n === selected ? 'selected' : ''}>${_escHtml(n)}</option>`).join('');
+    // Keep a selected-but-removed product still visible/selectable
+    if (selected && !names.includes(selected)) {
+      opts += `<option value="${_escHtml(selected)}" selected>${_escHtml(selected)} (removed)</option>`;
+    }
+    return opts;
+  }
+
   function renderHookBank() {
     const search = (document.getElementById('hbSearch') ? document.getElementById('hbSearch').value : '').toLowerCase();
     const cat = document.getElementById('hbFilterCat') ? document.getElementById('hbFilterCat').value : '';
+    const prodFilter = document.getElementById('hbFilterProduct') ? document.getElementById('hbFilterProduct').value : '';
 
     // Refresh category dropdown
     const catEl = document.getElementById('hbFilterCat');
@@ -8715,10 +9421,18 @@ TECHNICAL SPECS:
       catEl.innerHTML = '<option value="">All Categories</option>' + cats.map(c => `<option value="${_escHtml(c)}" ${c === cur ? 'selected' : ''}>${_escHtml(c)}</option>`).join('');
     }
 
+    // Refresh product dropdown
+    const prodEl = document.getElementById('hbFilterProduct');
+    if (prodEl) {
+      const cur = prodEl.value;
+      prodEl.innerHTML = _productLabelOptions(cur, 'All Products');
+    }
+
     const filtered = hooks.filter(h => {
       const matchS = !search || (h.text||'').toLowerCase().includes(search) || (h.category||'').toLowerCase().includes(search);
       const matchC = !cat || h.category === cat;
-      return matchS && matchC;
+      const matchP = !prodFilter || h.product === prodFilter;
+      return matchS && matchC && matchP;
     });
 
     const list = document.getElementById('hbList');
@@ -8732,7 +9446,10 @@ TECHNICAL SPECS:
     list.innerHTML = filtered.map(h => `<div class="hook-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div style="flex:1;">
-          ${h.category ? `<span class="badge-type" style="margin-bottom:6px;display:inline-block;">${_escHtml(h.category)}</span>` : ''}
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">
+            ${h.category ? `<span class="badge-type" style="display:inline-block;">${_escHtml(h.category)}</span>` : ''}
+            ${h.product ? `<span class="badge-niche" style="display:inline-block;" title="Product">🏷 ${_escHtml(h.product)}</span>` : ''}
+          </div>
           <div style="font-size:13px;color:var(--text-1);line-height:1.55;">${_escHtml(h.text)}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
@@ -8759,11 +9476,13 @@ TECHNICAL SPECS:
       if (!h) return;
       document.getElementById('hmText').value = h.text || '';
       document.getElementById('hmCategory').value = h.category || '';
+      document.getElementById('hmProduct').innerHTML = _productLabelOptions(h.product || '');
       document.getElementById('hmSource').value = h.source || '';
       document.getElementById('hmNotes').value = h.notes || '';
     } else {
       document.getElementById('hmText').value = '';
       document.getElementById('hmCategory').value = '';
+      document.getElementById('hmProduct').innerHTML = _productLabelOptions('');
       document.getElementById('hmSource').value = '';
       document.getElementById('hmNotes').value = '';
     }
@@ -8778,9 +9497,9 @@ TECHNICAL SPECS:
     const id = document.getElementById('hmEditId').value;
     if (id) {
       const h = hooks.find(x => x.id === id);
-      if (h) { h.text = text; h.category = document.getElementById('hmCategory').value; h.source = document.getElementById('hmSource').value.trim(); h.notes = document.getElementById('hmNotes').value.trim(); }
+      if (h) { h.text = text; h.category = document.getElementById('hmCategory').value; h.product = document.getElementById('hmProduct').value; h.source = document.getElementById('hmSource').value.trim(); h.notes = document.getElementById('hmNotes').value.trim(); }
     } else {
-      hooks.push({ id: _uid(), text, category: document.getElementById('hmCategory').value, platforms: [], source: document.getElementById('hmSource').value.trim(), notes: document.getElementById('hmNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
+      hooks.push({ id: _uid(), text, category: document.getElementById('hmCategory').value, product: document.getElementById('hmProduct').value, platforms: [], source: document.getElementById('hmSource').value.trim(), notes: document.getElementById('hmNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
     }
     saveHooks();
     closeHookModal();
@@ -8828,6 +9547,7 @@ TECHNICAL SPECS:
   function renderCTALibrary() {
     const search = (document.getElementById('ctaSearch') ? document.getElementById('ctaSearch').value : '').toLowerCase();
     const type = document.getElementById('ctaFilterType') ? document.getElementById('ctaFilterType').value : '';
+    const prodFilter = document.getElementById('ctaFilterProduct') ? document.getElementById('ctaFilterProduct').value : '';
 
     // Refresh type dropdown
     const typeEl = document.getElementById('ctaFilterType');
@@ -8837,10 +9557,18 @@ TECHNICAL SPECS:
       typeEl.innerHTML = '<option value="">All Types</option>' + types.map(t => `<option value="${_escHtml(t)}" ${t === cur ? 'selected' : ''}>${_escHtml(t)}</option>`).join('');
     }
 
+    // Refresh product dropdown
+    const prodEl = document.getElementById('ctaFilterProduct');
+    if (prodEl) {
+      const cur = prodEl.value;
+      prodEl.innerHTML = _productLabelOptions(cur, 'All Products');
+    }
+
     const filtered = ctas.filter(c => {
       const matchS = !search || (c.text||'').toLowerCase().includes(search) || (c.type||'').toLowerCase().includes(search);
       const matchT = !type || c.type === type;
-      return matchS && matchT;
+      const matchP = !prodFilter || c.product === prodFilter;
+      return matchS && matchT && matchP;
     });
 
     const list = document.getElementById('ctaList');
@@ -8854,7 +9582,10 @@ TECHNICAL SPECS:
     list.innerHTML = filtered.map(c => `<div class="cta-card">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">
         <div style="flex:1;">
-          ${c.type ? `<span class="badge-type" style="margin-bottom:6px;display:inline-block;">${_escHtml(c.type)}</span>` : ''}
+          <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px;">
+            ${c.type ? `<span class="badge-type" style="display:inline-block;">${_escHtml(c.type)}</span>` : ''}
+            ${c.product ? `<span class="badge-niche" style="display:inline-block;" title="Product">🏷 ${_escHtml(c.product)}</span>` : ''}
+          </div>
           <div style="font-size:13px;color:var(--text-1);line-height:1.55;">${_escHtml(c.text)}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
@@ -8881,6 +9612,7 @@ TECHNICAL SPECS:
       if (!c) return;
       document.getElementById('ctamText').value = c.text || '';
       document.getElementById('ctamType').value = c.type || '';
+      document.getElementById('ctamProduct').innerHTML = _productLabelOptions(c.product || '');
       document.getElementById('ctamNotes').value = c.notes || '';
       (c.platforms || []).forEach(pl => {
         const cb = document.querySelector(`[name="ctamPlat"][value="${pl}"]`);
@@ -8889,6 +9621,7 @@ TECHNICAL SPECS:
     } else {
       document.getElementById('ctamText').value = '';
       document.getElementById('ctamType').value = '';
+      document.getElementById('ctamProduct').innerHTML = _productLabelOptions('');
       document.getElementById('ctamNotes').value = '';
     }
     modal.classList.add('open');
@@ -8903,9 +9636,9 @@ TECHNICAL SPECS:
     const id = document.getElementById('ctamEditId').value;
     if (id) {
       const c = ctas.find(x => x.id === id);
-      if (c) { c.text = text; c.type = document.getElementById('ctamType').value; c.platforms = platforms; c.notes = document.getElementById('ctamNotes').value.trim(); }
+      if (c) { c.text = text; c.type = document.getElementById('ctamType').value; c.product = document.getElementById('ctamProduct').value; c.platforms = platforms; c.notes = document.getElementById('ctamNotes').value.trim(); }
     } else {
-      ctas.push({ id: _uid(), text, type: document.getElementById('ctamType').value, platforms, notes: document.getElementById('ctamNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
+      ctas.push({ id: _uid(), text, type: document.getElementById('ctamType').value, product: document.getElementById('ctamProduct').value, platforms, notes: document.getElementById('ctamNotes').value.trim(), copyCount: 0, createdAt: Date.now() });
     }
     saveCTALibrary();
     closeCTAModal();
