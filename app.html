@@ -6054,32 +6054,102 @@ RULES — read carefully:
     if (status) { status.textContent = ''; status.style.display = 'none'; }
   }
 
+  // --- Audio extraction helpers ---
+  // Extracts the audio track from any video/audio file and encodes it as a
+  // 16 kHz mono WAV blob. This shrinks a typical 15–30 MB TikTok video down
+  // to ~500 KB–2 MB — well under Netlify's 6 MB Lambda payload limit.
+  async function extractAudioAsWav(file, onProgress) {
+    // Decode audio from the video file
+    const arrayBuffer = await file.arrayBuffer();
+    if (onProgress) onProgress('Decoding audio…');
+
+    const tempCtx = new AudioContext();
+    let audioBuffer;
+    try {
+      audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+    } finally {
+      await tempCtx.close();
+    }
+
+    // Resample to 16 kHz mono using OfflineAudioContext (ideal for speech)
+    const targetRate = 16000;
+    const numFrames = Math.ceil(audioBuffer.duration * targetRate);
+    const offCtx = new OfflineAudioContext(1, numFrames, targetRate);
+    const src = offCtx.createBufferSource();
+    src.buffer = audioBuffer;
+    src.connect(offCtx.destination);
+    src.start(0);
+    if (onProgress) onProgress('Resampling…');
+    const rendered = await offCtx.startRendering();
+
+    // Encode as 16-bit PCM WAV
+    const samples = rendered.getChannelData(0);
+    const wavBuf = new ArrayBuffer(44 + samples.length * 2);
+    const v = new DataView(wavBuf);
+    const str = (off, s) => { for (let i = 0; i < s.length; i++) v.setUint8(off + i, s.charCodeAt(i)); };
+    str(0, 'RIFF');
+    v.setUint32(4,  36 + samples.length * 2, true);
+    str(8, 'WAVE');
+    str(12, 'fmt ');
+    v.setUint32(16, 16, true);          // PCM sub-chunk size
+    v.setUint16(20, 1,  true);          // PCM format
+    v.setUint16(22, 1,  true);          // mono
+    v.setUint32(24, targetRate, true);  // sample rate
+    v.setUint32(28, targetRate * 2, true); // byte rate
+    v.setUint16(32, 2,  true);          // block align
+    v.setUint16(34, 16, true);          // bits per sample
+    str(36, 'data');
+    v.setUint32(40, samples.length * 2, true);
+    let off = 44;
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]));
+      v.setInt16(off, s < 0 ? s * 32768 : s * 32767, true);
+      off += 2;
+    }
+    return new Blob([wavBuf], { type: 'audio/wav' });
+  }
+
   // --- Whisper transcription ---
   async function transcribeVideo() {
     if (!refVideoFile) {
       alert('Upload a video first, then click Transcribe.');
       return;
     }
-    // Check file size — server payload cap is ~4 MB (base64 adds 33% overhead, Lambda limit is 6 MB)
-    if (refVideoFile.size > 4 * 1024 * 1024) {
-      alert('Video file is larger than 4 MB.\n\nThe transcription server has a 4 MB limit. Please trim the clip to under 30 seconds or compress it before uploading.\n\nTip: Most screen-recorders and video editors have an "export compressed" option.');
-      return;
-    }
     const btn = document.getElementById('transcribeBtn');
     const status = document.getElementById('transcribeStatus');
     btn.disabled = true;
-    btn.textContent = '⏳';
-    status.textContent = 'Transcribing…';
-    status.style.color = '#888';
+    btn.innerHTML = '<i class="ti ti-loader-2"></i>';
     status.style.display = 'inline';
+
+    let fileToSend = refVideoFile;
+
     try {
-      const response = await _proxyTranscribe(refVideoFile);
+      // If the file is larger than ~4 MB, extract audio-only before sending.
+      // 16 kHz mono WAV for a 60s clip ≈ 1.9 MB — well within the 6 MB Lambda cap.
+      if (refVideoFile.size > 3.5 * 1024 * 1024) {
+        status.textContent = 'Extracting audio…';
+        status.style.color = '#888';
+        try {
+          fileToSend = await extractAudioAsWav(refVideoFile, (msg) => {
+            status.textContent = msg;
+          });
+          // Rename so the function picks the right MIME type
+          fileToSend = new File([fileToSend], 'audio.wav', { type: 'audio/wav' });
+        } catch (extractErr) {
+          console.warn('Audio extraction failed, falling back to raw file:', extractErr);
+          fileToSend = refVideoFile; // fall back — may fail if too large, but worth trying
+        }
+      }
+
+      status.textContent = 'Transcribing…';
+      status.style.color = '#888';
+
+      const response = await _proxyTranscribe(fileToSend);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 401) {
           status.textContent = '✗ Invalid API key';
           status.style.color = '#cc6060';
-          showApiKeyInput();
         } else {
           status.textContent = '✗ ' + (err.error?.message || 'API error ' + response.status);
           status.style.color = '#cc6060';
@@ -6103,16 +6173,15 @@ RULES — read carefully:
       console.error('Whisper error:', err);
       const msg = err.message || err.toString();
       if (msg.toLowerCase().includes('cors') || msg.toLowerCase().includes('failed to fetch')) {
-        status.textContent = '✗ CORS blocked — see fix below';
+        status.textContent = '✗ Network error';
         status.style.color = '#cc6060';
-        alert('Chrome is blocking the request from a local file.\n\nFix: In Chrome, go to:\nchrome://flags/#block-insecure-private-network-requests\nand set it to Disabled, then relaunch Chrome.\n\nOr right-click the HTML file → Open with → choose a browser that allows local file requests.');
       } else {
         status.textContent = '✗ ' + msg.substring(0, 60);
         status.style.color = '#cc6060';
       }
     } finally {
       btn.disabled = false;
-      btn.textContent = '🎙 Transcribe';
+      btn.innerHTML = '<i class="ti ti-microphone"></i>';
     }
   }
 
