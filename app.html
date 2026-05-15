@@ -6060,9 +6060,9 @@ RULES — read carefully:
       alert('Upload a video first, then click Transcribe.');
       return;
     }
-    // Check file size (Whisper limit is 25MB)
-    if (refVideoFile.size > 25 * 1024 * 1024) {
-      alert('Video file is larger than 25MB (OpenAI Whisper limit). Try a shorter clip or compress the video first.');
+    // Check file size — server payload cap is ~4 MB (base64 adds 33% overhead, Lambda limit is 6 MB)
+    if (refVideoFile.size > 4 * 1024 * 1024) {
+      alert('Video file is larger than 4 MB.\n\nThe transcription server has a 4 MB limit. Please trim the clip to under 30 seconds or compress it before uploading.\n\nTip: Most screen-recorders and video editors have an "export compressed" option.');
       return;
     }
     const btn = document.getElementById('transcribeBtn');
@@ -10261,6 +10261,17 @@ TECHNICAL SPECS:
     // Keep Settings panel in sync so dropdown matches the active theme
     const s = getUserSettings();
     if (s) { s.themeMode = next; saveUserSettings(s); }
+    // Background themes are dark-only — reset to default when switching to light mode
+    if (next === 'light') {
+      const hadTheme = document.documentElement.hasAttribute('data-bg-theme');
+      applyBgTheme('midnight');
+      if (s) { s.bgTheme = 'midnight'; saveUserSettings(s); }
+      // Sync the theme picker buttons in Settings if the panel is open
+      document.querySelectorAll('.bg-theme-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.bg === 'midnight');
+      });
+      if (hadTheme) showToast('Switched to light mode — background theme reset', 'info', 3000);
+    }
   }
 
   // Load theme + UI scale from accessibility settings; falls back to stored theme or dark

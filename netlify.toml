@@ -18,3 +18,10 @@
 
 [functions]
   directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[functions.openai-transcribe]
+  node_version = "18"
+
+[functions.openai-chat]
+  node_version = "18"
