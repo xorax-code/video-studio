@@ -260,14 +260,14 @@
 
   /* Segment card — replicator empty frame */
   .seg-empty-frame {
-    width:100%; height:100px; border-radius:6px;
+    width:100%; height:80px; border-radius:6px;
     background: var(--surface-2);
     border: 1px solid var(--border);
     display:flex; align-items:center; justify-content:center;
   }
   /* Segment card — frame image border */
   .seg-frame-img {
-    width:100%; height:auto; max-height:160px; object-fit:cover;
+    width:100%; height:auto; max-height:130px; object-fit:cover;
     border-radius:6px; border:1px solid var(--border-2); display:block;
   }
   /* Download frame button */
@@ -1416,7 +1416,13 @@
     color: var(--text-2);
     font-weight: 600;
     flex-shrink: 0;
+    cursor: pointer;
     transition: background 0.22s, border-color 0.22s, color 0.22s;
+  }
+  .auth-user-chip:hover {
+    background: var(--surface-3);
+    border-color: var(--accent);
+    color: var(--text-1);
   }
   .auth-user-avatar {
     width: 18px; height: 18px;
@@ -1449,24 +1455,103 @@
   }
   .auth-logout-btn:hover { border-color: var(--danger); color: var(--danger); background: rgba(248,113,113,0.07); }
 
+  /* ===== RESPONSIVE: TABLET (≤900px) ===== */
   @media (max-width: 900px) {
     #tab-video-studio > div { grid-template-columns: 1fr !important; }
     .topnav-brand-text { display: none; }
     .tab { padding: 0 10px; }
     .nav-label { display: none; }
+    .db-stats { grid-template-columns: 1fr 1fr; }
+    .db-two-col { grid-template-columns: 1fr; }
   }
-  @media (max-width: 768px) {
-    .container { padding: 14px 16px; }
-    .form-row { grid-template-columns: 1fr; }
-    .comp-grid { grid-template-columns: 1fr; }
-    th:nth-child(5), td:nth-child(5),
-    th:nth-child(4), td:nth-child(4) { display: none; }
+
+  /* ===== RESPONSIVE: MOBILE (≤640px) ===== */
+  @media (max-width: 640px) {
+    /* Topnav — compress right side */
+    .topnav { padding: 0 12px; gap: 0; }
+    .topnav-brand { margin-right: 8px; }
+    .header-count { display: none; }
+    .auth-user-chip span { display: none; } /* hide name, keep avatar */
+    .auth-user-chip { gap: 0; }
+
+    /* Tab bar — smaller touch targets but still scrollable */
+    .tab { padding: 0 8px; min-width: 44px; }
+
+    /* Container padding */
+    .container { padding: 12px 14px; }
+    .page-body { padding-top: 50px; } /* match topnav height */
+
+    /* ── Dashboard ── */
+    .db-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+    .db-two-col { grid-template-columns: 1fr; gap: 12px; }
+
+    /* ── Forms ── */
+    .form-row { grid-template-columns: 1fr !important; gap: 10px; }
+
+    /* ── Tables — hide less-critical columns (scoped to accounts + competitors tabs only) ── */
+    #tab-my-accounts th:nth-child(5), #tab-my-accounts td:nth-child(5),
+    #tab-my-accounts th:nth-child(4), #tab-my-accounts td:nth-child(4),
+    #tab-competitors th:nth-child(5), #tab-competitors td:nth-child(5),
+    #tab-competitors th:nth-child(4), #tab-competitors td:nth-child(4) { display: none; }
+    /* Make tables horizontally scrollable */
+    .table-wrap, table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+    /* ── Competitors grid ── */
+    .comp-grid { grid-template-columns: 1fr !important; }
+
+    /* ── Video Replicator / Video Studio — single column ── */
+    #tab-video-replicator > div,
+    #tab-video-producer > div { grid-template-columns: 1fr !important; }
+
+    /* ── VS panels — full width, readable font sizes ── */
+    .vs-panel { font-size: 13px; }
+    .vs-panel textarea { font-size: 13px; min-height: 100px; }
+
+    /* ── Segments rail — full width scroll ── */
+    #segmentsContainer { gap: 10px; }
+    [id^="seg-card-"] { min-width: 280px; max-width: 85vw; }
+
+    /* ── Cards / vault items ── */
+    .pv-card, .hook-card, .cta-card, .pl-card, .rc-card, .idea-card { padding: 12px 14px; }
+    .pv-card-title { font-size: 14px; }
+
+    /* ── Buttons — easier tap targets ── */
+    .btn-sm { font-size: 12px; padding: 6px 12px; min-height: 34px; }
+    .topnav-icon-btn { width: 34px; height: 34px; }
+
+    /* ── Modals — full screen on mobile ── */
+    #userSettingsPanel { width: 100vw; max-height: 100dvh; border-radius: 0; }
+    .feat-modal-overlay > div { width: 100vw !important; max-height: 100dvh !important; border-radius: 0 !important; margin: 0 !important; }
+
+    /* ── User settings — stack label + input ── */
+    .uset-row { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .uset-label { min-width: unset; }
+    .uset-input { width: 100%; }
+    .uset-goals-grid { grid-template-columns: 1fr; }
+
+    /* ── Weekly blueprint rows ── */
+    .wct-row { grid-template-columns: 28px 1fr auto; }
+    .wct-row > :last-child { display: none; } /* hide extra col */
+
+    /* ── Daily plan items ── */
+    .daily-item { padding: 12px 14px; }
+
+    /* ── Section headings ── */
+    .section-header { flex-wrap: wrap; gap: 8px; }
+    .section-header h2, .section-header .section-title { font-size: 15px; }
+  }
+
+  /* ===== RESPONSIVE: SMALL PHONE (≤390px) ===== */
+  @media (max-width: 390px) {
+    .db-stats { grid-template-columns: 1fr; }
+    .tab { padding: 0 6px; min-width: 40px; }
+    [id^="seg-card-"] { min-width: 260px; max-width: 90vw; }
   }
 
   /* ===== USER SETTINGS PANEL ===== */
   #userSettingsOverlay { display:none; position:fixed; inset:0; z-index:9998; background:rgba(0,0,0,0.7); backdrop-filter:blur(4px); align-items:center; justify-content:center; }
   #userSettingsOverlay.open { display:flex; }
-  #userSettingsPanel { background:var(--surface); border:1px solid var(--border-2); border-radius:14px; width:min(600px,95vw); max-height:86vh; overflow:hidden; display:flex; flex-direction:column; }
+  #userSettingsPanel { background:var(--surface); border:1px solid var(--border-2); border-radius:14px; width:min(820px,95vw); max-height:90vh; overflow:hidden; display:flex; flex-direction:column; }
   .uset-tab { padding:7px 14px; background:none; border:none; border-bottom:2px solid transparent; color:var(--text-2); cursor:pointer; font-size:12px; font-weight:500; font-family:inherit; border-radius:4px 4px 0 0; transition:color .15s; }
   .uset-tab:hover { color:var(--text-1); }
   .uset-tab.active { color:var(--accent-2); border-bottom-color:var(--accent); font-weight:600; }
@@ -1734,7 +1819,7 @@
 
   <div class="topnav-right">
     <span class="header-count" id="headerCount">0 accounts</span>
-    <div class="auth-user-chip" id="authUserChip" style="display:none;">
+    <div class="auth-user-chip" id="authUserChip" style="display:none;" onclick="openUserSettings()" title="Your profile &amp; settings" role="button" tabindex="0" onkeydown="if(event.key==='Enter')openUserSettings()">
       <div class="auth-user-avatar" id="authUserInitial">?</div>
       <span id="authUserName"></span>
     </div>
@@ -2622,32 +2707,32 @@
       </div>
 
       <!-- ===== RIGHT COLUMN ===== -->
-      <div id="vsRightCol" style="display:flex;flex-direction:column;gap:8px;overflow:hidden;min-height:0;flex:1;">
+      <div id="vsRightCol" style="display:flex;flex-direction:column;gap:8px;overflow-x:hidden;overflow-y:hidden;min-height:0;flex:1;min-width:0;">
 
         <!-- Step flow strip — replicator only -->
-        <div class="replicator-only" style="display:flex;align-items:center;gap:0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:11px;color:var(--text-3);">
-          <span style="font-weight:700;color:var(--accent-2);">① Upload Video</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">② Detect Cuts</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">③ Transcribe</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">④ Process Everything</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--text-3);opacity:0.7;">Set avatar first →</span>
+        <div class="replicator-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
+          <span style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Upload Video</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Detect Cuts</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ Transcribe</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Process Everything</span>
+          <span style="margin-left:auto;font-size:9.5px;color:var(--text-3);opacity:0.7;white-space:nowrap;padding-left:8px;">Set avatar first →</span>
         </div>
 
         <!-- Step flow strip — producer only -->
-        <div class="producer-only" style="display:flex;align-items:center;gap:0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:11px;color:var(--text-3);">
-          <span style="font-weight:700;color:var(--accent-2);">① Paste Script</span>
+        <div class="producer-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
+          <span style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Paste Script</span>
           <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">② Split (8s)</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">③ AI Describe</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">④ Gen All NB</span>
-          <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);">⑤ Run All Scenes</span>
-          <span style="margin-left:auto;font-size:10px;color:var(--text-3);opacity:0.7;">Set avatar + bg first →</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Split (8s)</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ AI Describe</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Gen All NB</span>
+          <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
+          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">⑤ Run All Scenes</span>
+          <span style="margin-left:auto;font-size:9.5px;color:var(--text-3);opacity:0.7;white-space:nowrap;padding-left:8px;">Set avatar + bg first →</span>
         </div>
 
         <!-- Video player — replicator only -->
@@ -2664,7 +2749,7 @@
           <div style="padding:4px 8px 6px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
             <div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:stretch;flex:1;min-height:0;">
               <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden;">
-                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:180px;max-height:180px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:160px;max-height:160px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                   <div id="videoUploadPlaceholder" style="text-align:center;">
                     <div style="font-size:16px;opacity:0.25;margin-bottom:2px;">🎬</div>
                     <div style="font-size:10px;color:var(--text-3);">Click to upload MP4</div>
@@ -2695,9 +2780,9 @@
 
         <!-- Segments panel — fills remaining height -->
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
-          <div class="vs-panel-header">
-            <span>Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
-            <div style="display:flex;gap:6px;align-items:center;">
+          <div class="vs-panel-header" style="flex-wrap:wrap;gap:6px;padding:7px 10px;">
+            <span style="flex-shrink:0;">Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
+            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end;">
               <button class="btn replicator-only" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
               <div class="replicator-only" style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
                 <span style="font-size:9px;color:var(--text-3);white-space:nowrap;">NB bg:</span>
@@ -2723,7 +2808,7 @@
             <button onclick="document.getElementById('segmentsContainer').scrollBy({left:350,behavior:'smooth'})" style="padding:2px 10px;font-size:13px;background:var(--surface);border:1px solid var(--border-2);border-radius:5px;color:var(--text-2);cursor:pointer;line-height:1;" title="Scroll right">›</button>
             <span id="segScrollHint" style="font-size:9px;color:var(--text-3);opacity:0.7;">scroll or use arrows to see all segments</span>
           </div>
-          <div id="segmentsContainer" style="flex:1;overflow-x:auto;overflow-y:hidden;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent;">
+          <div id="segmentsContainer" style="flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent;">
             <div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
               Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
             </div>
@@ -4673,7 +4758,10 @@
     _vsColDragging = true;
     if (divider) divider.style.background = 'var(--border-2)';
     _vsColMove = function(ev) {
-      const newW = Math.max(180, Math.min(520, startW + ev.clientX - startX));
+      const container = document.getElementById('vsLayout');
+      const containerW = container ? container.getBoundingClientRect().width : 1200;
+      const maxW = Math.min(420, containerW * 0.40); // cap at 40% of layout width
+      const newW = Math.max(180, Math.min(maxW, startW + ev.clientX - startX));
       leftCol.style.width = newW + 'px';
     };
     _vsColUp = function() {
@@ -5319,7 +5407,79 @@ RULES — read carefully:
   }
 
   function getApiKey() {
+    // In production: all OpenAI calls go through Netlify proxy — no client-side key needed.
+    // Returning a truthy placeholder so existing !apiKey guards don't block anything.
+    if (window.location.protocol !== 'file:') return '__proxy__';
+    // Local file:// testing — use the admin/baked key as before
     return OPENAI_KEY_BAKED || _adminApiKey || _cachedApiKey || '';
+  }
+
+  // ── OpenAI Proxy Interceptor ──
+  // In production, transparently reroutes all OpenAI API calls through
+  // Netlify serverless functions so the API key never reaches the browser.
+  (function() {
+    if (window.location.protocol === 'file:') return; // local — bypass
+    const _realFetch = window.fetch.bind(window);
+    window.fetch = function(url, opts) {
+      if (typeof url === 'string') {
+        // Chat completions → proxy
+        if (url.includes('api.openai.com/v1/chat/completions')) {
+          const safeOpts = Object.assign({}, opts);
+          if (safeOpts.headers) {
+            const h = Object.assign({}, safeOpts.headers);
+            delete h['Authorization'];
+            safeOpts.headers = h;
+          }
+          return _realFetch('/.netlify/functions/openai-chat', safeOpts);
+        }
+        // Audio transcriptions → proxy (handled via _proxyTranscribe helper below)
+        // Direct transcription calls are intercepted here as a fallback
+        if (url.includes('api.openai.com/v1/audio/transcriptions')) {
+          // Can't proxy binary FormData directly — _proxyTranscribe() handles this
+          // If somehow a direct call slips through, let it pass (local key would be needed)
+          return _realFetch(url, opts);
+        }
+      }
+      return _realFetch(url, opts);
+    };
+  })();
+
+  // ── Audio Transcription Proxy Helper ──
+  // Converts audio file to base64 and sends via JSON to the Netlify function.
+  // Falls back to direct OpenAI call in local file:// mode.
+  async function _proxyTranscribe(file) {
+    if (window.location.protocol === 'file:') {
+      // Local: call OpenAI directly with admin key
+      const apiKey = getApiKey();
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      fd.append('model', 'whisper-1');
+      fd.append('response_format', 'verbose_json');
+      fd.append('timestamp_granularities[]', 'segment');
+      return fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey },
+        body: fd
+      });
+    }
+    // Production: convert to base64 and proxy
+    const base64 = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload  = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+    return fetch('/.netlify/functions/openai-transcribe', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audioBase64: base64,
+        fileName: file.name,
+        model: 'whisper-1',
+        response_format: 'verbose_json',
+        timestamp_granularities: 'segment'
+      })
+    });
   }
 
   function renderApiKeyStatus() {
@@ -5383,11 +5543,6 @@ RULES — read carefully:
       alert('Video file is larger than 25MB (OpenAI Whisper limit). Try a shorter clip or compress the video first.');
       return;
     }
-    let apiKey = getApiKey();
-    if (!apiKey) {
-      alert('Transcription is not available right now. Please contact the app owner.');
-      return;
-    }
     const btn = document.getElementById('transcribeBtn');
     const status = document.getElementById('transcribeStatus');
     btn.disabled = true;
@@ -5396,16 +5551,7 @@ RULES — read carefully:
     status.style.color = '#888';
     status.style.display = 'inline';
     try {
-      const formData = new FormData();
-      formData.append('file', refVideoFile, refVideoFile.name);
-      formData.append('model', 'whisper-1');
-      formData.append('response_format', 'verbose_json');
-      formData.append('timestamp_granularities[]', 'segment');
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: { 'Authorization': 'Bearer ' + apiKey },
-        body: formData
-      });
+      const response = await _proxyTranscribe(refVideoFile);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 401) {
@@ -6092,7 +6238,7 @@ RULES — read carefully:
       return;
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
-    container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:hidden;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
+    container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
     container.innerHTML = segments.map((seg, i) => `
       <div id="seg-card-${i}"
         style="display:flex;flex-direction:column;gap:7px;width:330px;flex-shrink:0;border:1px solid ${seg.done ? 'rgba(34,197,94,0.45)' : 'var(--glass-border)'};border-radius:10px;padding:10px;background:${seg.done ? 'rgba(34,197,94,0.06)' : 'var(--glass-2)'};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:relative;box-shadow:var(--shadow-card);transition:border-color 0.16s,box-shadow 0.16s;">
@@ -6635,7 +6781,7 @@ RULES — read carefully:
   async function aiDescribeScenes() {
     if (segments.length === 0) { alert('Split your script into scenes first.'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('No API key set. Click the logo 5× to open the admin panel.'); return; }
+    if (!apiKey) { alert('AI features are not available right now. Please contact support.'); return; }
 
     const btn = document.getElementById('aiDescribeBtn');
     if (btn) { btn.textContent = '⏳ Describing…'; btn.disabled = true; }
@@ -7898,7 +8044,7 @@ ${veoPrompt}
   async function condenseAllScripts() {
     if (segments.length === 0) { alert('No scenes yet. Paste your script and click ✂ Split into 8s Scenes first.'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('No API key set. Click the logo 5× to open the admin panel.'); return; }
+    if (!apiKey) { alert('AI features are not available right now. Please contact support.'); return; }
 
     // Sync all live textarea values first
     segments.forEach((seg, i) => {
@@ -9684,14 +9830,14 @@ TECHNICAL SPECS:
   function updateUserChip(emailOrName) {
     const chip    = document.getElementById('authUserChip');
     const initial = document.getElementById('authUserInitial');
-    const name    = document.getElementById('authUserName');
-    // Show just the part before @ for emails, or the full name
-    const display = emailOrName && emailOrName.includes('@')
-      ? emailOrName.split('@')[0]
-      : (emailOrName || '');
+    const nameEl  = document.getElementById('authUserName');
+    // Show just the part before @ for emails, or the full display name
+    const raw = (emailOrName || '').trim();
+    const display = raw.includes('@') ? raw.split('@')[0] : raw;
+    const safe = display || '?';
     if (chip)    chip.style.display = 'flex';
-    if (initial) initial.textContent = (display || '?')[0].toUpperCase();
-    if (name)    name.textContent = display;
+    if (initial) initial.textContent = safe[0].toUpperCase();
+    if (nameEl)  nameEl.textContent  = safe !== '?' ? safe : '';
   }
 
   // ===== HIDDEN ADMIN KEY PANEL =====
@@ -9762,6 +9908,13 @@ TECHNICAL SPECS:
   }
 
   async function checkAuthAndBoot() {
+    // ── Local file bypass: skip auth when opened via file:// ──
+    if (window.location.protocol === 'file:') {
+      console.info('[AffiliateOS] Local file detected — skipping auth, booting directly.');
+      updateUserChip('Local Preview');
+      initApp();
+      return;
+    }
     if (!_sb) {
       // Supabase not yet configured — show the auth wall so user can still access
       console.warn('Supabase not configured. Running without cloud auth.');
@@ -9772,10 +9925,13 @@ TECHNICAL SPECS:
     const { data: { session } } = await _sb.auth.getSession();
     if (session) {
       DB.setUser(session.user.id);
-      updateUserChip(session.user.email);
+      // Prefer display name from settings, fall back to email
+      const _s = getUserSettings();
+      updateUserChip(_s.displayName || session.user.email);
       // Listen for sign-out events (e.g. token expiry)
       _sb.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT') window.location.href = '/login.html';
+        if (event === 'SIGNED_OUT' && window.location.protocol !== 'file:')
+          window.location.href = '/login.html';
       });
       initApp();
       return;
@@ -9876,8 +10032,37 @@ TECHNICAL SPECS:
     if (_usetAvatarDataUrl !== undefined) s.avatarDataUrl = _usetAvatarDataUrl;
     saveUserSettings(s);
     _showUsetSaved();
+    // Sync topnav chip with new display name (fall back to email)
+    if (_sb) {
+      _sb.auth.getSession().then(({ data: { session } }) => {
+        updateUserChip(s.displayName || (session?.user?.email) || '');
+      });
+    } else {
+      updateUserChip(s.displayName || '');
+    }
     // Re-render dashboard greeting live if open
     if (document.getElementById('tab-dashboard').classList.contains('active')) renderDashboard();
+  }
+
+  async function saveNewPassword() {
+    const pw  = (document.getElementById('uset-newPassword')?.value || '').trim();
+    const pw2 = (document.getElementById('uset-confirmPassword')?.value || '').trim();
+    const errEl = document.getElementById('uset-pwError');
+    const okEl  = document.getElementById('uset-pwSuccess');
+    if (errEl) errEl.style.display = 'none';
+    if (okEl)  okEl.style.display  = 'none';
+    if (!pw) { if (errEl) { errEl.textContent = 'Please enter a new password.'; errEl.style.display = 'block'; } return; }
+    if (pw.length < 8) { if (errEl) { errEl.textContent = 'Password must be at least 8 characters.'; errEl.style.display = 'block'; } return; }
+    if (pw !== pw2) { if (errEl) { errEl.textContent = 'Passwords do not match.'; errEl.style.display = 'block'; } return; }
+    if (!_sb) { if (errEl) { errEl.textContent = 'Not connected to Supabase.'; errEl.style.display = 'block'; } return; }
+    const { error } = await _sb.auth.updateUser({ password: pw });
+    if (error) {
+      if (errEl) { errEl.textContent = error.message; errEl.style.display = 'block'; }
+    } else {
+      if (okEl) okEl.style.display = 'block';
+      document.getElementById('uset-newPassword').value = '';
+      document.getElementById('uset-confirmPassword').value = '';
+    }
   }
 
   function saveGoalsTab() {
@@ -11075,11 +11260,15 @@ TECHNICAL SPECS:
       <button onclick="closeUserSettings()" style="width:26px;height:26px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;"><i class="ti ti-x"></i></button>
     </div>
     <!-- Tab Bar -->
-    <div style="display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;">
+    <div style="display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;">
       <button class="uset-tab active" data-tab="profile"       onclick="switchUserTab('profile')">Profile</button>
       <button class="uset-tab"        data-tab="goals"         onclick="switchUserTab('goals')">Goals</button>
+      <button class="uset-tab"        data-tab="notifications" onclick="switchUserTab('notifications')">Notifications</button>
       <button class="uset-tab"        data-tab="setup"         onclick="switchUserTab('setup')">My Setup</button>
       <button class="uset-tab"        data-tab="appearance"    onclick="switchUserTab('appearance')">Appearance</button>
+      <button class="uset-tab"        data-tab="billing"       onclick="switchUserTab('billing')">Billing</button>
+      <button class="uset-tab"        data-tab="security"      onclick="switchUserTab('security')">Security</button>
+      <button class="uset-tab"        data-tab="help"          onclick="switchUserTab('help')">Help</button>
       <button class="uset-tab"        data-tab="data"          onclick="switchUserTab('data')">Data</button>
       <button class="uset-tab"        data-tab="about"         onclick="switchUserTab('about')">About</button>
     </div>
@@ -11128,8 +11317,13 @@ TECHNICAL SPECS:
           <div class="uset-goal-item"><span style="font-size:16px;">▶️</span><span class="uset-goal-label">YouTube</span><input class="uset-goal-input uset-platform-goal" data-platform="YouTube" type="number" min="0" max="50" placeholder="—"></div>
         </div>
 
-        <div class="uset-section-title" style="margin-top:4px;">Daily Reminder</div>
-        <div class="uset-desc">Get a browser notification at a set time reminding you to post. Works even when the app is open in a tab.</div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveGoalsTab()">Save Goals</button></div>
+      </div>
+
+      <!-- NOTIFICATIONS -->
+      <div id="uset-tab-notifications" class="uset-tab-content">
+        <div class="uset-section-title">Daily Posting Reminder</div>
+        <div class="uset-desc">Get a browser notification at a set time reminding you to post. Works as long as the app is open in a tab.</div>
         <div class="uset-row" style="margin-bottom:8px;">
           <label class="uset-toggle">
             <input type="checkbox" id="uset-reminderEnabled">
@@ -11138,13 +11332,19 @@ TECHNICAL SPECS:
           </label>
           <span style="font-size:12px;font-weight:600;color:var(--text-1);">Enable daily reminder</span>
         </div>
-        <div class="uset-row">
+        <div class="uset-row" style="margin-bottom:4px;">
           <label class="uset-label">Reminder time</label>
           <input id="uset-reminderTime" class="uset-input" type="time" value="09:00" style="max-width:130px;">
           <span class="uset-hint">Your local time</span>
         </div>
-        <div style="font-size:10px;color:var(--text-3);margin-bottom:10px;">Browser will ask for notification permission the first time you enable this.</div>
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveGoalsTab()">Save Goals</button></div>
+        <div style="font-size:10px;color:var(--text-3);margin-bottom:18px;">Browser will ask for notification permission the first time you enable this.</div>
+
+        <div class="uset-section-title">Email Notifications</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Email notifications are coming in a future update. You'll be able to receive weekly performance summaries and goal alerts to your inbox.</div>
+          <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;">COMING SOON</span>
+        </div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveGoalsTab()">Save Notifications</button></div>
       </div>
 
       <!-- MY SETUP -->
@@ -11238,11 +11438,153 @@ TECHNICAL SPECS:
       </div>
 
       <!-- ABOUT -->
+      <!-- BILLING -->
+      <div id="uset-tab-billing" class="uset-tab-content">
+        <div class="uset-section-title">Current Plan</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+          <div>
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+              <span style="font-size:15px;font-weight:800;color:var(--text-1);">Pro Trial</span>
+              <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#4ade80;letter-spacing:.05em;">ACTIVE</span>
+            </div>
+            <div style="font-size:11px;color:var(--text-3);">7-day free trial · No credit card on file</div>
+          </div>
+          <button style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;opacity:0.6;pointer-events:none;" title="Stripe coming soon">Manage Plan</button>
+        </div>
+
+        <div class="uset-section-title">Subscription Plans</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <!-- Free -->
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Free <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $0/mo</span></div>
+              <div style="font-size:11px;color:var(--text-3);">2 accounts · Dashboard + Accounts · Manual scripts only</div>
+            </div>
+          </div>
+          <!-- Starter -->
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Starter <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $19/mo</span></div>
+              <div style="font-size:11px;color:var(--text-3);">5 accounts · Script rewriter · Video Replicator · Competitor tracking (10 accounts) · Daily plan</div>
+            </div>
+          </div>
+          <!-- Pro -->
+          <div style="background:rgba(124,106,247,0.07);border:1px solid var(--border-accent);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Pro <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $49/mo</span> <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--grad-accent);color:#fff;margin-left:4px;">RECOMMENDED</span></div>
+              <div style="font-size:11px;color:var(--text-3);">Unlimited accounts · Full Video Studio + Veo 3 · Unlimited competitor tracking · Cloud browser workflows</div>
+            </div>
+          </div>
+          <!-- Agency -->
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
+                <span style="font-size:13px;font-weight:700;color:var(--text-1);">Agency <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $99/mo</span></span>
+                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;">COMING SOON</span>
+              </div>
+              <div style="font-size:11px;color:var(--text-3);">Everything in Pro · 2 team seats · White-label · API access</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
+          <i class="ti ti-credit-card" style="color:var(--accent-2);font-size:18px;flex-shrink:0;"></i>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Billing is powered by Stripe. Your payment details are never stored on our servers. Invoices and subscription management will be available here once billing is live.</div>
+        </div>
+      </div>
+
+      <!-- SECURITY -->
+      <div id="uset-tab-security" class="uset-tab-content">
+        <div class="uset-section-title">Change Password</div>
+        <div class="uset-desc">Update the password for your Affiliate OS account. You'll need to be signed in.</div>
+        <div class="uset-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:18px;">
+          <label class="uset-label">New Password</label>
+          <input id="uset-newPassword" class="uset-input" type="password" placeholder="••••••••" autocomplete="new-password" style="width:100%;max-width:320px;">
+          <label class="uset-label" style="margin-top:4px;">Confirm Password</label>
+          <input id="uset-confirmPassword" class="uset-input" type="password" placeholder="••••••••" autocomplete="new-password" style="width:100%;max-width:320px;">
+          <div id="uset-pwError" style="display:none;font-size:11px;color:var(--danger);margin-top:2px;"></div>
+          <div id="uset-pwSuccess" style="display:none;font-size:11px;color:var(--success);font-weight:600;margin-top:2px;"><i class="ti ti-check"></i> Password updated successfully</div>
+        </div>
+        <div class="uset-save-row" style="margin-bottom:24px;">
+          <button class="uset-btn-save" onclick="saveNewPassword()">Update Password</button>
+        </div>
+
+        <div class="uset-section-title">Active Session</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:20px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">Current browser session</div>
+              <div style="font-size:11px;color:var(--text-3);" id="uset-sessionInfo">Signed in via Supabase Auth</div>
+            </div>
+            <button onclick="doLogout()" style="padding:6px 14px;border-radius:7px;background:none;border:1px solid var(--danger);color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background='none'">
+              <i class="ti ti-logout"></i> Sign out
+            </button>
+          </div>
+        </div>
+
+        <div class="uset-section-title">Two-Factor Authentication</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
+          <i class="ti ti-shield-lock" style="color:var(--accent-2);font-size:20px;flex-shrink:0;"></i>
+          <div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">2FA via authenticator app</div>
+            <div style="font-size:11px;color:var(--text-3);">Two-factor authentication will be available in a future update.</div>
+          </div>
+          <span style="margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;white-space:nowrap;">COMING SOON</span>
+        </div>
+      </div>
+
+      <!-- HELP / SUPPORT -->
+      <div id="uset-tab-help" class="uset-tab-content">
+        <div class="uset-section-title">FAQ</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:22px;" id="faqList">
+          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
+            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">How do I add a new account? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
+            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Go to the <strong>My Accounts</strong> tab and click <strong>+ Add Account</strong>. Fill in the platform, username, URL, and any tags or notes. Your account will appear in the table and dashboard immediately.</div>
+          </details>
+          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
+            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">How does the script rewriter work? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
+            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Go to <strong>Viral Scripts</strong>, paste in a viral video script you found, and click Rewrite. The AI adjusts the wording, tone, and CTA to fit your product and account voice. It doesn't generate scripts from scratch — it remixes ones that are already proven to work.</div>
+          </details>
+          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
+            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">What is the Video Replicator? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
+            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">The <strong>Video Replicator</strong> downloads a viral video, splits it into segments, and generates Veo 3 prompts for each scene so you can recreate the structure with your own product. Paste a video URL and click Process Everything to start.</div>
+          </details>
+          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
+            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">Do I need my own API keys to use the app? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
+            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">No — API access is included with your subscription. All AI features (script rewriting, video generation, scene analysis) are powered by our shared infrastructure. You don't need to sign up for any third-party services.</div>
+          </details>
+          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
+            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">Is my data backed up? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
+            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Your account data syncs to the cloud via Supabase when you're signed in, so it persists across devices and browsers. Settings and preferences are also saved locally as a backup. You can export everything as a JSON file from the <strong>Data</strong> tab.</div>
+          </details>
+        </div>
+
+        <div class="uset-section-title">Keyboard Shortcuts</div>
+        <div class="uset-shortcuts" style="margin-bottom:22px;">
+          <span class="uset-shortcut-key">Alt + D</span><span class="uset-shortcut-desc">Go to Dashboard</span>
+          <span class="uset-shortcut-key">Alt + A</span><span class="uset-shortcut-desc">Go to My Accounts</span>
+          <span class="uset-shortcut-key">Alt + V</span><span class="uset-shortcut-desc">Go to Video Producer</span>
+          <span class="uset-shortcut-key">Alt + S</span><span class="uset-shortcut-desc">Go to Viral Scripts</span>
+          <span class="uset-shortcut-key">Alt + P</span><span class="uset-shortcut-desc">Go to Post Planner</span>
+          <span class="uset-shortcut-key">Esc</span><span class="uset-shortcut-desc">Close any open modal</span>
+        </div>
+
+        <div class="uset-section-title">Contact Support</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
+          <i class="ti ti-mail" style="color:var(--accent-2);font-size:20px;flex-shrink:0;"></i>
+          <div style="flex:1;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">Email Support</div>
+            <div style="font-size:11px;color:var(--text-3);">Having an issue or want to request a feature? Reach out and we'll get back to you.</div>
+          </div>
+          <a href="mailto:support@affiliateos.app" style="padding:7px 14px;border-radius:7px;background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-1);font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-2)'">Send Email</a>
+        </div>
+      </div>
+
       <div id="uset-tab-about" class="uset-tab-content">
         <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);">
           <div style="width:48px;height:48px;border-radius:12px;background:var(--grad-accent);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🎬</div>
           <div>
-            <div style="font-size:16px;font-weight:800;color:var(--text-1);letter-spacing:-0.5px;">AI Scaling</div>
+            <div style="font-size:16px;font-weight:800;color:var(--text-1);letter-spacing:-0.5px;">AffiliateOS</div>
             <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Version 1.5 · Built for affiliate video scaling</div>
             <div style="font-size:10px;color:var(--text-3);margin-top:1px;">Deployed at <span style="color:var(--accent-2);">aiscaling.netlify.app</span></div>
           </div>
@@ -11282,7 +11624,7 @@ TECHNICAL SPECS:
     </div>
     <!-- Footer -->
     <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 22px;border-top:1px solid var(--border);flex-shrink:0;">
-      <div style="font-size:10px;color:var(--text-3);">All settings saved locally on this device</div>
+      <div style="font-size:10px;color:var(--text-3);">Settings sync to the cloud when signed in &nbsp;·&nbsp; also saved locally as backup</div>
       <div id="usetSaveStatus" style="display:none;font-size:11px;color:var(--success);font-weight:600;"><i class="ti ti-check"></i> Saved</div>
     </div>
   </div>
@@ -11316,7 +11658,7 @@ TECHNICAL SPECS:
     </div>
 
     <!-- Tab Bar -->
-    <div style="display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;">
+    <div style="display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;">
       <button class="adm-tab active" data-tab="general" onclick="switchAdminTab('general')">General</button>
       <button class="adm-tab" data-tab="workflow" onclick="switchAdminTab('workflow')">Workflow</button>
       <button class="adm-tab" data-tab="accounts" onclick="switchAdminTab('accounts')">Accounts</button>

@@ -8,8 +8,12 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/supabase-config.js"></script>
 <style>
   :root {
+    --aos-icon-bg: #0f172a;
+    --aos-icon-dot: #10b981;
     --bg: #0a0a0f;
     --bg2: #0f0f1a;
     --bg3: #13131f;
@@ -55,11 +59,7 @@
     text-decoration: none; color: var(--text);
   }
   .nav-logo .logo-icon {
-    width: 34px; height: 34px; border-radius: 8px;
-    background: var(--grad-accent);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 17px; line-height: 1;
-    box-shadow: 0 0 16px rgba(124,106,247,0.4);
+    box-shadow: 0 0 16px rgba(16,185,129,0.3);
   }
   .nav-links { display: flex; align-items: center; gap: 28px; }
   .nav-links a {
@@ -303,6 +303,90 @@
     border-radius: 6px; font-size: 0.75rem; font-weight: 600; color: var(--accent3);
   }
 
+  /* ── PRICING ── */
+  .pricing-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 18px;
+    margin-top: 56px;
+    align-items: start;
+  }
+  .price-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 24px;
+    position: relative;
+    transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+  }
+  .price-card:hover { border-color: var(--border-accent); transform: translateY(-3px); box-shadow: var(--glow); }
+  .price-card.featured {
+    border-color: var(--border-accent);
+    background: rgba(124,106,247,0.06);
+    box-shadow: var(--glow);
+  }
+  .price-badge {
+    display: inline-flex; align-items: center;
+    font-size: 0.7rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase;
+    padding: 3px 10px; border-radius: 100px;
+    background: var(--grad-accent); color: #fff;
+    margin-bottom: 14px;
+  }
+  .price-badge.coming {
+    background: var(--surface-hover);
+    color: var(--text-muted);
+    border: 1px solid var(--border);
+  }
+  .price-tier {
+    font-size: 0.85rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--accent2); margin-bottom: 10px;
+  }
+  .price-val {
+    font-size: 2.6rem; font-weight: 900; letter-spacing: -0.04em;
+    color: var(--text); line-height: 1; margin-bottom: 10px;
+  }
+  .price-per { font-size: 1rem; font-weight: 500; color: var(--text-muted); }
+  .price-desc { font-size: 0.83rem; color: var(--text-muted); margin-bottom: 20px; line-height: 1.5; min-height: 36px; }
+  .price-features {
+    list-style: none; display: flex; flex-direction: column; gap: 9px;
+    margin-bottom: 24px; padding: 0;
+  }
+  .price-features li {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.83rem; color: var(--text);
+  }
+  .price-features li.muted { color: var(--text-muted); }
+  .price-features li i { font-size: 0.9rem; flex-shrink: 0; color: var(--accent2); }
+  .price-features li.muted i { color: var(--text-muted); opacity: 0.5; }
+  .price-btn {
+    display: block; width: 100%; text-align: center;
+    padding: 11px 0; border-radius: 9px;
+    font-size: 0.875rem; font-weight: 700; text-decoration: none;
+    transition: opacity 0.2s, box-shadow 0.2s, transform 0.15s;
+    border: none; cursor: pointer; font-family: inherit;
+  }
+  .price-btn:hover:not(:disabled) { transform: translateY(-1px); opacity: 0.9; }
+  .price-btn-primary {
+    background: var(--grad-accent); color: #fff;
+    box-shadow: 0 0 24px rgba(124,106,247,0.35);
+  }
+  .price-btn-ghost {
+    background: var(--surface-hover); color: var(--text);
+    border: 1px solid var(--border) !important;
+  }
+  .price-btn-ghost:hover:not(:disabled) { border-color: var(--border-accent) !important; }
+  .price-note {
+    margin-top: 10px; font-size: 0.75rem; color: var(--text-muted);
+    text-align: center; display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .price-note i { color: var(--accent); }
+  @media (max-width: 900px) {
+    .pricing-grid { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    .pricing-grid { grid-template-columns: 1fr; }
+  }
+
   /* ── CTA ── */
   .cta-section {
     text-align: center; padding: 96px 24px;
@@ -349,20 +433,111 @@
     text-decoration: none;
   }
   .footer-brand .logo-icon {
-    width: 28px; height: 28px; border-radius: 7px;
-    background: var(--grad-accent);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 14px;
+    box-shadow: 0 0 10px rgba(16,185,129,0.25);
   }
   .footer-links { display: flex; gap: 24px; flex-wrap: wrap; }
   .footer-links a { color: var(--text-muted); text-decoration: none; font-size: 0.85rem; transition: color 0.2s; }
   .footer-links a:hover { color: var(--text); }
   .footer-copy { color: var(--text-muted); font-size: 0.8rem; }
 
+  /* ── SCROLL OFFSET (fixed nav = 64px) ── */
+  section[id], div[id] { scroll-margin-top: 72px; }
+
+  /* ── MOBILE MENU ── */
+  .nav-burger {
+    display: none; flex-direction: column; justify-content: center; gap: 5px;
+    width: 36px; height: 36px; cursor: pointer; background: none; border: none; padding: 4px;
+  }
+  .nav-burger span {
+    display: block; height: 2px; border-radius: 2px;
+    background: var(--text); transition: transform 0.25s, opacity 0.2s;
+  }
+  .nav-burger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  .nav-burger.open span:nth-child(2) { opacity: 0; }
+  .nav-burger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  .mobile-menu {
+    display: none; position: fixed; top: 64px; left: 0; right: 0;
+    background: rgba(10,10,15,0.97); backdrop-filter: blur(20px);
+    border-bottom: 1px solid var(--border);
+    flex-direction: column; padding: 16px 24px 24px; gap: 4px;
+    z-index: 99;
+  }
+  .mobile-menu.open { display: flex; }
+  .mobile-menu a {
+    color: var(--text-muted); text-decoration: none;
+    font-size: 1rem; font-weight: 500; padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    transition: color 0.2s;
+  }
+  .mobile-menu a:last-child { border-bottom: none; }
+  .mobile-menu a:hover { color: var(--text); }
+  .mobile-menu .mob-cta {
+    margin-top: 8px; text-align: center;
+    padding: 13px; border-radius: 10px;
+    background: var(--grad-accent); color: #fff; font-weight: 700;
+    border-bottom: none;
+  }
+
+  /* ── USER CHIP (logged-in state in nav) ── */
+  .nav-user-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 12px 4px 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 100px;
+    cursor: pointer;
+    position: relative;
+    transition: border-color 0.2s, background 0.2s;
+    text-decoration: none;
+  }
+  .nav-user-chip:hover { border-color: var(--border-accent); background: var(--surface-hover); }
+  .nav-user-avatar {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--grad-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 800; color: #fff;
+    flex-shrink: 0;
+  }
+  .nav-user-name { font-size: 0.82rem; font-weight: 600; color: var(--text); }
+
+  /* ── PROFILE DROPDOWN ── */
+  .nav-user-dropdown {
+    position: absolute; top: calc(100% + 10px); right: 0;
+    min-width: 200px;
+    background: var(--bg2);
+    border: 1px solid var(--border-accent);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--glow), 0 8px 32px rgba(0,0,0,0.5);
+    padding: 8px;
+    display: none; flex-direction: column; gap: 4px;
+    z-index: 200;
+  }
+  .nav-user-chip.open .nav-user-dropdown { display: flex; }
+  .nav-user-dropdown-header {
+    padding: 10px 12px 12px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 4px;
+  }
+  .nav-user-dropdown-name { font-size: 0.9rem; font-weight: 700; color: var(--text); }
+  .nav-user-dropdown-email { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+  .nav-dropdown-btn {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 12px; border-radius: 8px;
+    font-size: 0.85rem; font-weight: 500; color: var(--text-muted);
+    background: none; border: none; cursor: pointer;
+    text-decoration: none; font-family: inherit;
+    transition: background 0.15s, color 0.15s;
+    width: 100%; text-align: left;
+  }
+  .nav-dropdown-btn:hover { background: var(--surface-hover); color: var(--text); }
+  .nav-dropdown-btn.danger:hover { background: rgba(248,113,113,0.08); color: #f87171; }
+  .nav-dropdown-btn i { font-size: 1rem; }
+
   /* ── RESPONSIVE ── */
   @media (max-width: 768px) {
     nav { padding: 0 20px; }
     .nav-links { display: none; }
+    .nav-burger { display: flex; }
     .features-grid { grid-template-columns: 1fr; }
     .feat-card.wide { grid-column: span 1; }
     .stat-item { border-right: none; border-bottom: 1px solid var(--border); padding: 20px 0; }
@@ -377,15 +552,44 @@
 <!-- NAV -->
 <nav>
   <a href="/" class="nav-logo">
-    <div class="logo-icon">🎬</div>
+    <svg class="logo-icon" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="width:34px;height:34px;border-radius:8px;flex-shrink:0;">
+      <rect width="26" height="26" rx="6" fill="var(--aos-icon-bg)"/>
+      <circle cx="13" cy="13" r="3.2" fill="var(--aos-icon-dot)"/>
+      <circle cx="13" cy="5.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="7.5" x2="13" y2="9.8" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="9" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="9.9" x2="16.2" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="16.1" x2="16.2" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="13" cy="20.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="18.5" x2="13" y2="16.2" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="7.4" y1="16.1" x2="9.8" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="9" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="7.4" y1="9.9" x2="9.8" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+    </svg>
     Affiliate OS
   </a>
   <div class="nav-links">
     <a href="#how">How it works</a>
     <a href="#features">Features</a>
-    <a href="/login.html" class="nav-cta">Get Started</a>
+    <a href="#pricing">Pricing</a>
+    <span id="navAuthArea">
+      <a href="/login.html" class="nav-cta">Get Started</a>
+    </span>
   </div>
+  <button class="nav-burger" id="burger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
 </nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#how" onclick="closeMobileMenu()">How it works</a>
+  <a href="#features" onclick="closeMobileMenu()">Features</a>
+  <a href="#pricing" onclick="closeMobileMenu()">Pricing</a>
+  <span id="mobileAuthArea">
+    <a href="/login.html" class="mob-cta">Get Started</a>
+  </span>
+</div>
 
 <!-- HERO -->
 <section class="hero">
@@ -395,7 +599,7 @@
   </div>
   <h1>Clone any viral video.<br><span class="grad">Then scale it yours.</span></h1>
   <p class="hero-sub">
-    AI Scaling reverse-engineers what's working across social media, rewrites it in your voice, and hands you a production-ready script in seconds.
+    Affiliate OS reverse-engineers what's working across social media, rewrites it in your voice, and hands you a production-ready script in seconds.
   </p>
   <div class="hero-actions">
     <a href="/login.html" class="btn-primary">
@@ -537,11 +741,91 @@
   </div>
 </section>
 
+<!-- PRICING -->
+<section id="pricing">
+  <div class="container">
+    <div class="section-label">Pricing</div>
+    <h2 class="section-title">Simple, transparent plans</h2>
+    <p class="section-sub">Start free. Upgrade when you're ready to scale.</p>
+
+    <div class="pricing-grid">
+
+      <!-- Free -->
+      <div class="price-card">
+        <div class="price-tier">Free</div>
+        <div class="price-val">$0<span class="price-per">/mo</span></div>
+        <div class="price-desc">Try the basics with no commitment.</div>
+        <ul class="price-features">
+          <li><i class="ti ti-check"></i> 2 account slots</li>
+          <li><i class="ti ti-check"></i> Dashboard &amp; Accounts</li>
+          <li><i class="ti ti-check"></i> Manual script entry</li>
+          <li class="muted"><i class="ti ti-x"></i> Script rewriter</li>
+          <li class="muted"><i class="ti ti-x"></i> Video Replicator</li>
+          <li class="muted"><i class="ti ti-x"></i> Video Studio</li>
+        </ul>
+        <a href="/login.html" class="price-btn price-btn-ghost">Get started free</a>
+      </div>
+
+      <!-- Starter -->
+      <div class="price-card">
+        <div class="price-tier">Starter</div>
+        <div class="price-val">$19<span class="price-per">/mo</span></div>
+        <div class="price-desc">For creators running a few affiliate accounts.</div>
+        <ul class="price-features">
+          <li><i class="ti ti-check"></i> 5 account slots</li>
+          <li><i class="ti ti-check"></i> Script rewriter</li>
+          <li><i class="ti ti-check"></i> Video Replicator</li>
+          <li><i class="ti ti-check"></i> Competitor tracking (10 accounts)</li>
+          <li><i class="ti ti-check"></i> Daily content plan</li>
+          <li class="muted"><i class="ti ti-x"></i> Video Studio + Veo 3</li>
+        </ul>
+        <a href="/login.html" class="price-btn price-btn-ghost">Start 7-day free trial</a>
+      </div>
+
+      <!-- Pro (featured) -->
+      <div class="price-card featured">
+        <div class="price-badge">Most Popular</div>
+        <div class="price-tier">Pro</div>
+        <div class="price-val">$49<span class="price-per">/mo</span></div>
+        <div class="price-desc">Everything you need to scale without limits.</div>
+        <ul class="price-features">
+          <li><i class="ti ti-check"></i> Unlimited accounts</li>
+          <li><i class="ti ti-check"></i> Script rewriter</li>
+          <li><i class="ti ti-check"></i> Full Video Replicator</li>
+          <li><i class="ti ti-check"></i> Full Video Studio + Veo 3</li>
+          <li><i class="ti ti-check"></i> Unlimited competitor tracking</li>
+          <li><i class="ti ti-check"></i> Cloud browser workflows</li>
+        </ul>
+        <a href="/login.html" class="price-btn price-btn-primary">Start 7-day free trial</a>
+        <div class="price-note"><i class="ti ti-lock"></i> No credit card required</div>
+      </div>
+
+      <!-- Agency -->
+      <div class="price-card">
+        <div class="price-badge coming">Coming Soon</div>
+        <div class="price-tier">Agency</div>
+        <div class="price-val">$99<span class="price-per">/mo</span></div>
+        <div class="price-desc">For teams and power users who need more.</div>
+        <ul class="price-features">
+          <li><i class="ti ti-check"></i> Everything in Pro</li>
+          <li><i class="ti ti-check"></i> 2 team seats</li>
+          <li><i class="ti ti-check"></i> White-label option</li>
+          <li><i class="ti ti-check"></i> API access</li>
+          <li><i class="ti ti-check"></i> Dedicated onboarding</li>
+          <li>&nbsp;</li>
+        </ul>
+        <button class="price-btn price-btn-ghost" disabled style="opacity:0.5;cursor:not-allowed;">Notify me</button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
 <!-- CTA -->
 <section class="cta-section">
   <div class="cta-card">
     <h2>Ready to scale your content?</h2>
-    <p>Join creators using AI Scaling to post more, test faster, and grow every account — all from one place.</p>
+    <p>Join creators using Affiliate OS to post more, test faster, and grow every account — all from one place.</p>
     <a href="/login.html" class="btn-primary" style="font-size:1.05rem; padding: 15px 36px;">
       <i class="ti ti-rocket"></i>
       Get started free
@@ -556,16 +840,106 @@
 <!-- FOOTER -->
 <footer>
   <a href="/" class="footer-brand">
-    <div class="logo-icon">🎬</div>
+    <svg class="logo-icon" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="width:28px;height:28px;border-radius:7px;flex-shrink:0;">
+      <rect width="26" height="26" rx="6" fill="var(--aos-icon-bg)"/>
+      <circle cx="13" cy="13" r="3.2" fill="var(--aos-icon-dot)"/>
+      <circle cx="13" cy="5.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="7.5" x2="13" y2="9.8" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="9" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="9.9" x2="16.2" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="19.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="18.6" y1="16.1" x2="16.2" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="13" cy="20.5" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="13" y1="18.5" x2="13" y2="16.2" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="17" r="2" fill="none" stroke="var(--aos-icon-dot)" stroke-width="1.4"/>
+      <line x1="7.4" y1="16.1" x2="9.8" y2="14.4" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+      <circle cx="6.5" cy="9" r="2" fill="var(--aos-icon-dot)"/>
+      <line x1="7.4" y1="9.9" x2="9.8" y2="11.6" stroke="var(--aos-icon-dot)" stroke-width="1.2" opacity="0.6"/>
+    </svg>
     Affiliate OS
   </a>
   <div class="footer-links">
     <a href="#how">How it works</a>
     <a href="#features">Features</a>
+    <a href="#pricing">Pricing</a>
     <a href="/login.html">Sign up</a>
   </div>
   <div class="footer-copy">© 2025 Affiliate OS. All rights reserved.</div>
 </footer>
 
+<script>
+  // ── Mobile burger ──
+  const burger = document.getElementById('burger');
+  const mobileMenu = document.getElementById('mobileMenu');
+  burger.addEventListener('click', () => {
+    burger.classList.toggle('open');
+    mobileMenu.classList.toggle('open');
+  });
+  function closeMobileMenu() {
+    burger.classList.remove('open');
+    mobileMenu.classList.remove('open');
+  }
+
+  // ── Auth state on landing page ──
+  (async function() {
+    try {
+      if (typeof supabase === 'undefined' || typeof SUPABASE_URL === 'undefined') return;
+      const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+      const { data: { session } } = await _sb.auth.getSession();
+      if (!session) return;
+
+      const email = session.user.email || '';
+      // Read display name from localStorage (same key as app.html)
+      let displayName = '';
+      try {
+        const stored = localStorage.getItem('socialos_user_settings_' + session.user.id);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          displayName = parsed.displayName || '';
+        }
+      } catch(e) {}
+      const name = displayName || email.split('@')[0];
+      const initial = (name[0] || '?').toUpperCase();
+
+      // Build chip HTML
+      const chipHTML = `
+        <div class="nav-user-chip" id="navUserChip">
+          <div class="nav-user-avatar">${initial}</div>
+          <span class="nav-user-name">${name}</span>
+          <i class="ti ti-chevron-down" style="font-size:0.75rem;color:var(--text-muted);margin-left:2px;"></i>
+          <div class="nav-user-dropdown" id="navDropdown">
+            <div class="nav-user-dropdown-header">
+              <div class="nav-user-dropdown-name">${name}</div>
+              <div class="nav-user-dropdown-email">${email}</div>
+            </div>
+            <a href="/app" class="nav-dropdown-btn"><i class="ti ti-layout-dashboard"></i> Open App</a>
+            <button class="nav-dropdown-btn danger" id="landingSignOut"><i class="ti ti-logout"></i> Sign out</button>
+          </div>
+        </div>`;
+
+      document.getElementById('navAuthArea').innerHTML = chipHTML;
+      document.getElementById('mobileAuthArea').innerHTML = `<a href="/app" class="mob-cta">Open App</a>`;
+
+      // Toggle dropdown
+      document.getElementById('navUserChip').addEventListener('click', (e) => {
+        e.stopPropagation();
+        document.getElementById('navUserChip').classList.toggle('open');
+      });
+      document.addEventListener('click', () => {
+        const chip = document.getElementById('navUserChip');
+        if (chip) chip.classList.remove('open');
+      });
+
+      // Sign out
+      document.getElementById('landingSignOut').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await _sb.auth.signOut();
+        window.location.reload();
+      });
+    } catch(e) {
+      // Supabase not available — leave default "Get Started" button
+    }
+  })();
+</script>
 </body>
 </html>
