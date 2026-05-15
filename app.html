@@ -1471,6 +1471,7 @@
     .topnav { padding: 0 12px; gap: 0; }
     .topnav-brand { margin-right: 8px; }
     .header-count { display: none; }
+    .cmd-k-badge { display: none; } /* keyboard shortcut still works */
     .auth-user-chip span { display: none; } /* hide name, keep avatar */
     .auth-user-chip { gap: 0; }
 
@@ -1757,12 +1758,452 @@
   .comp-intel-niche { font-size: 9.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.2px; color: var(--accent); margin-bottom: 5px; }
   .comp-intel-angle { font-size: 12px; color: var(--text-1); font-weight: 600; line-height: 1.4; margin-bottom: 4px; }
   .comp-intel-desc { font-size: 11px; color: var(--text-3); line-height: 1.5; }
+
+  /* ===== SKIP TO CONTENT LINK ===== */
+  .skip-link {
+    position: absolute; top: -9999px; left: 6px;
+    background: var(--accent); color: #fff;
+    padding: 9px 20px; border-radius: 0 0 10px 10px;
+    font-size: 13px; font-weight: 700; z-index: 99999;
+    text-decoration: none; letter-spacing: 0.01em;
+  }
+  .skip-link:focus { top: 0; outline: 3px solid #fff; outline-offset: 2px; }
+
+  /* ===== HIGH CONTRAST MODE ===== */
+  html[data-a11y-hc] {
+    --text-1: #ffffff;
+    --text-2: #eaeaf8;
+    --text-3: #b4b4d4;
+    --text-4: #808098;
+    --border: #3c3c58;
+    --border-2: #505070;
+    --glass-border: rgba(255,255,255,0.16);
+  }
+  html[data-a11y-hc][data-theme="light"] {
+    --text-1: #000000;
+    --text-2: #0e0e24;
+    --text-3: #2e2e50;
+    --text-4: #555578;
+    --border: #9090a8;
+    --border-2: #7070a0;
+  }
+
+  /* ===== REDUCE MOTION MODE ===== */
+  html[data-a11y-rm] *,
+  html[data-a11y-rm] *::before,
+  html[data-a11y-rm] *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* ===== BACKGROUND THEMES ===== */
+  html[data-bg-theme="abyss"] {
+    --bg: #050d1e;
+    --sidebar-bg: #07112a;
+    --topbar-bg: rgba(5,13,30,0.82);
+    --surface: #0c1830;
+    --surface-2: #101e3a;
+    --surface-3: #162640;
+    --border: #1c2e50;
+    --border-2: #263c68;
+    --glass: rgba(7,17,42,0.82);
+    --glass-2: rgba(12,24,48,0.72);
+    --glass-border: rgba(100,140,255,0.1);
+  }
+  html[data-bg-theme="carbon"] {
+    --bg: #000000;
+    --sidebar-bg: #080808;
+    --topbar-bg: rgba(0,0,0,0.88);
+    --surface: #101010;
+    --surface-2: #181818;
+    --surface-3: #202020;
+    --border: #282828;
+    --border-2: #363636;
+    --glass: rgba(10,10,10,0.82);
+    --glass-2: rgba(18,18,18,0.72);
+  }
+  html[data-bg-theme="slate"] {
+    --bg: #090c12;
+    --sidebar-bg: #0c101a;
+    --topbar-bg: rgba(9,12,18,0.82);
+    --surface: #101520;
+    --surface-2: #181e2c;
+    --surface-3: #202838;
+    --border: #202a3c;
+    --border-2: #2c3a52;
+    --glass: rgba(9,12,18,0.82);
+    --glass-2: rgba(16,21,32,0.72);
+    --glass-border: rgba(80,120,200,0.1);
+  }
+
+  /* ===== BG THEME SWITCHER BUTTONS ===== */
+  .bg-theme-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 8px; margin-bottom: 20px;
+  }
+  .bg-theme-btn {
+    padding: 10px 6px;
+    border-radius: 10px;
+    border: 2px solid transparent;
+    background: var(--surface-2);
+    cursor: pointer; font-family: inherit;
+    transition: border-color 0.15s, transform 0.12s;
+    display: flex; flex-direction: column; align-items: center; gap: 7px;
+  }
+  .bg-theme-btn:hover { transform: scale(1.05); border-color: var(--border-2); }
+  .bg-theme-btn.active { border-color: var(--accent); box-shadow: 0 0 12px rgba(139,92,246,0.3); }
+  .bg-theme-preview {
+    width: 100%; height: 28px; border-radius: 5px;
+    border: 1px solid rgba(255,255,255,0.1);
+  }
+  .bg-theme-label { font-size: 10px; font-weight: 600; color: var(--text-2); letter-spacing: 0.02em; }
+
+  /* ===== FLOATING ACCESSIBILITY BAR ===== */
+  #a11yBar {
+    position: fixed; bottom: 80px; right: 20px;
+    z-index: 8000;
+    display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
+  }
+  #a11yBarToggle {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    color: var(--text-3); font-size: 15px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  }
+  #a11yBarToggle:hover { color: var(--accent-2); border-color: var(--accent); }
+  #a11yBarPanel {
+    display: none;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    border-radius: 12px;
+    padding: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    flex-direction: column; gap: 6px;
+    min-width: 140px;
+  }
+  #a11yBarPanel.open { display: flex; }
+  .a11y-bar-label {
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--text-3); padding: 0 2px;
+  }
+  .a11y-bar-row { display: flex; gap: 5px; align-items: center; }
+  .a11y-size-btn {
+    flex: 1; padding: 6px 4px;
+    border-radius: 6px; border: 1px solid var(--border);
+    background: var(--surface-3); color: var(--text-2);
+    font-family: inherit; cursor: pointer; font-weight: 700;
+    transition: all 0.15s;
+  }
+  .a11y-size-btn:hover { border-color: var(--accent); color: var(--accent-2); }
+  .a11y-size-btn.active { background: var(--accent-glow); border-color: var(--accent); color: var(--accent-2); }
+  .a11y-toggle-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 5px 2px;
+    border-top: 1px solid var(--border); margin-top: 2px;
+    font-size: 11px; color: var(--text-2); font-weight: 500;
+  }
+
+  /* ===== FOCUS INDICATORS (WCAG 2.4.7) ===== */
+  *:focus-visible {
+    outline: 2px solid var(--accent-2);
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+
+  /* ===== CONTRAST FIX — bump text-4 ===== */
+  :root { --text-4: #565678; }
+  html[data-theme="light"] { --text-4: #8888a8; }
+
+  /* ===== ILLUSTRATED EMPTY STATES ===== */
+  .empty-state {
+    text-align: center;
+    padding: 56px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px;
+  }
+  .empty-state-icon {
+    width: 64px; height: 64px; border-radius: 16px;
+    background: var(--grad-accent-soft);
+    border: 1px solid rgba(139,92,246,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; flex-shrink: 0;
+    box-shadow: 0 0 20px rgba(139,92,246,0.12);
+  }
+  .empty-state h3 {
+    font-size: 15px; font-weight: 800; letter-spacing: -0.3px;
+    color: var(--text-1); margin: 0;
+  }
+  .empty-state p {
+    font-size: 12.5px; color: var(--text-3); max-width: 320px;
+    line-height: 1.65; margin: 0;
+  }
+  .empty-state-action {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 9px 20px; border-radius: 8px;
+    background: var(--grad-accent); color: #fff;
+    font-size: 13px; font-weight: 700; border: none;
+    cursor: pointer; font-family: inherit;
+    box-shadow: 0 0 16px rgba(139,92,246,0.3);
+    transition: box-shadow 0.2s, transform 0.15s;
+    text-decoration: none;
+  }
+  .empty-state-action:hover { box-shadow: 0 0 28px rgba(139,92,246,0.5); transform: translateY(-1px); }
+  .empty-state-action-ghost {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 18px; border-radius: 8px;
+    background: var(--surface-2); color: var(--text-2);
+    font-size: 12px; font-weight: 600; border: 1px solid var(--border-2);
+    cursor: pointer; font-family: inherit;
+    transition: border-color 0.15s, color 0.15s;
+  }
+  .empty-state-action-ghost:hover { border-color: var(--accent); color: var(--accent-2); }
+  .empty-state-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center; }
+
+  /* ===== SKELETON LOADING ===== */
+  @keyframes shimmer {
+    from { background-position: -400px 0; }
+    to   { background-position: 400px 0; }
+  }
+  .skeleton {
+    border-radius: 4px;
+    background: linear-gradient(90deg,
+      rgba(255,255,255,0.04) 25%,
+      rgba(255,255,255,0.09) 50%,
+      rgba(255,255,255,0.04) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.5s infinite linear;
+  }
+  .seg-card-skeleton {
+    display: flex; flex-direction: column; gap: 10px;
+    width: 330px; flex-shrink: 0;
+    border: 1px solid var(--glass-border); border-radius: 10px;
+    padding: 12px; background: var(--glass-2);
+  }
+  .seg-card-skeleton .skel-header {
+    display: flex; gap: 8px; align-items: center;
+  }
+
+  /* ===== TOAST NOTIFICATION SYSTEM ===== */
+  #toastContainer {
+    position: fixed; bottom: 24px; right: 24px;
+    display: flex; flex-direction: column; gap: 10px;
+    z-index: 9999; pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-radius: 10px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04);
+    font-size: 13px; font-weight: 500; color: var(--text-1);
+    min-width: 240px; max-width: 360px;
+    transform: translateX(120%);
+    transition: transform 0.3s cubic-bezier(.22,.68,0,1.2);
+    cursor: pointer;
+  }
+  .toast.show { transform: translateX(0); }
+  .toast.hiding { transform: translateX(120%); transition: transform 0.25s ease-in; }
+  .toast-icon { font-size: 16px; flex-shrink: 0; }
+  .toast-msg { flex: 1; line-height: 1.45; }
+  .toast.toast-success { border-color: rgba(52,211,153,0.35); }
+  .toast.toast-success .toast-icon { color: var(--success); }
+  .toast.toast-error { border-color: rgba(248,113,113,0.35); }
+  .toast.toast-error .toast-icon { color: var(--danger); }
+  .toast.toast-info { border-color: rgba(139,92,246,0.35); }
+  .toast.toast-info .toast-icon { color: var(--accent-2); }
+  .toast.toast-warning { border-color: rgba(251,191,36,0.35); }
+  .toast.toast-warning .toast-icon { color: var(--warning); }
+  .toast-close { font-size: 14px; color: var(--text-3); flex-shrink: 0; opacity: 0.6; }
+  .toast-close:hover { opacity: 1; }
+
+  /* ── ⌘K badge in topnav ── */
+  .cmd-k-badge {
+    display: flex; align-items: center; gap: 5px;
+    padding: 4px 10px 4px 8px;
+    background: var(--surface-2); border: 1px solid var(--border-2);
+    border-radius: 7px; color: var(--text-3); font-size: 11.5px;
+    cursor: pointer; font-family: inherit; font-weight: 500;
+    transition: color .15s, background .15s, border-color .15s;
+    white-space: nowrap; flex-shrink: 0; letter-spacing: 0.01em;
+  }
+  .cmd-k-badge:hover { color: var(--text-1); background: var(--surface-3); border-color: var(--border-3); }
+  .cmd-k-badge kbd {
+    font-size: 10px; font-family: inherit;
+    background: var(--surface-3); border: 1px solid var(--border-2);
+    border-radius: 4px; padding: 1px 4px; color: var(--text-3);
+    letter-spacing: 0;
+  }
+
+  /* ── Command palette overlay ── */
+  #cmdPalette {
+    display: none;
+    position: fixed; inset: 0; z-index: 10000;
+    background: rgba(0,0,0,0.55);
+    -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+    align-items: flex-start; justify-content: center;
+    padding-top: 12vh;
+  }
+  #cmdPalette.open { display: flex; }
+  .cmd-box {
+    width: 100%; max-width: 560px;
+    background: var(--surface-1);
+    border: 1px solid var(--border-2);
+    border-radius: 14px;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6), 0 0 0 1px rgba(139,92,246,0.12);
+    overflow: hidden;
+    animation: cmdSlideIn 0.18s cubic-bezier(.22,.68,0,1.15) both;
+  }
+  @keyframes cmdSlideIn {
+    from { opacity: 0; transform: translateY(-12px) scale(0.97); }
+    to   { opacity: 1; transform: none; }
+  }
+  .cmd-search-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 14px 16px; border-bottom: 1px solid var(--border);
+  }
+  .cmd-search-row i { font-size: 18px; color: var(--text-3); flex-shrink: 0; }
+  #cmdInput {
+    flex: 1; background: none; border: none; outline: none;
+    font-family: inherit; font-size: 15px; color: var(--text-1);
+    caret-color: var(--accent);
+  }
+  #cmdInput::placeholder { color: var(--text-3); }
+  .cmd-esc-hint {
+    font-size: 10px; color: var(--text-3);
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 6px; flex-shrink: 0;
+    font-family: inherit;
+  }
+  #cmdList {
+    max-height: 360px; overflow-y: auto;
+    padding: 6px;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+  .cmd-group-label {
+    font-size: 10px; font-weight: 600; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 0.08em;
+    padding: 8px 10px 4px; user-select: none;
+  }
+  .cmd-item {
+    display: flex; align-items: center; gap: 11px;
+    padding: 9px 10px; border-radius: 8px; cursor: pointer;
+    color: var(--text-2); font-size: 13.5px; font-weight: 500;
+    transition: background .1s, color .1s;
+  }
+  .cmd-item:hover, .cmd-item.active {
+    background: var(--surface-2); color: var(--text-1);
+  }
+  .cmd-item i { font-size: 16px; color: var(--accent-2); flex-shrink: 0; width: 20px; text-align: center; }
+  .cmd-item-sub { font-size: 11px; color: var(--text-3); margin-left: auto; flex-shrink: 0; }
+  .cmd-empty {
+    text-align: center; padding: 28px 16px;
+    color: var(--text-3); font-size: 13px;
+  }
+
+  /* ── Onboarding checklist card ── */
+  .onboard-card {
+    background: var(--glass-2);
+    border: 1px solid var(--glass-border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius-sm);
+    padding: 16px 18px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-card);
+  }
+  .onboard-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .onboard-title {
+    font-size: 13px; font-weight: 700; color: var(--text-1);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .onboard-progress-text { font-size: 11px; color: var(--text-3); font-weight: 500; }
+  .onboard-collapse-btn {
+    background: none; border: none; color: var(--text-3); cursor: pointer;
+    font-size: 14px; padding: 2px 4px; border-radius: 4px;
+    transition: color .15s; display: flex; align-items: center;
+  }
+  .onboard-collapse-btn:hover { color: var(--text-1); }
+  .onboard-progress-bar {
+    height: 3px; background: var(--border); border-radius: 2px;
+    margin-bottom: 12px; overflow: hidden;
+  }
+  .onboard-progress-fill {
+    height: 100%; background: var(--grad-accent);
+    border-radius: 2px; transition: width 0.4s ease;
+  }
+  .onboard-steps { display: flex; flex-direction: column; gap: 6px; }
+  .onboard-step {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--text-2);
+    padding: 6px 8px; border-radius: 7px;
+    transition: background .15s;
+    cursor: pointer; user-select: none;
+  }
+  .onboard-step:hover { background: var(--surface-2); }
+  .onboard-step.done { color: var(--text-3); text-decoration: line-through; }
+  .onboard-step-check {
+    width: 18px; height: 18px; border-radius: 5px;
+    border: 1.5px solid var(--border-2);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: background .2s, border-color .2s;
+    font-size: 10px; color: #fff;
+  }
+  .onboard-step.done .onboard-step-check {
+    background: var(--success); border-color: var(--success);
+  }
+  .onboard-footer {
+    margin-top: 12px; display: flex; justify-content: flex-end; gap: 8px;
+  }
+  .onboard-dismiss-btn {
+    background: none; border: 1px solid var(--border); color: var(--text-3);
+    border-radius: 6px; font-size: 11.5px; padding: 4px 12px;
+    cursor: pointer; font-family: inherit; transition: color .15s, border-color .15s;
+  }
+  .onboard-dismiss-btn:hover { color: var(--text-1); border-color: var(--border-2); }
 </style>
 <!-- Supabase auth -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./supabase-config.js"></script>
 </head>
 <body>
+
+<!-- SKIP TO MAIN CONTENT (keyboard/screen reader accessibility) -->
+<a href="#main-content" class="skip-link">Skip to main content</a>
+
+<!-- FLOATING ACCESSIBILITY BAR -->
+<div id="a11yBar" aria-label="Accessibility controls">
+  <div id="a11yBarPanel" role="dialog" aria-label="Accessibility options">
+    <div class="a11y-bar-label">Text Size</div>
+    <div class="a11y-bar-row">
+      <button class="a11y-size-btn" data-scale="90"  onclick="a11ySetScale(90)"  title="Small">A<sup style="font-size:7px">−</sup></button>
+      <button class="a11y-size-btn active" data-scale="100" onclick="a11ySetScale(100)" title="Default">A</button>
+      <button class="a11y-size-btn" data-scale="115" onclick="a11ySetScale(115)" title="Large">A<sup style="font-size:7px">+</sup></button>
+      <button class="a11y-size-btn" data-scale="130" onclick="a11ySetScale(130)" title="XL">A<sup style="font-size:7px">++</sup></button>
+    </div>
+    <div class="a11y-toggle-row">
+      <span>High Contrast</span>
+      <input type="checkbox" id="a11yBarHC" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;" onchange="toggleHighContrast(this.checked)">
+    </div>
+    <div class="a11y-toggle-row">
+      <span>Reduce Motion</span>
+      <input type="checkbox" id="a11yBarRM" style="width:14px;height:14px;accent-color:var(--accent);cursor:pointer;" onchange="toggleReduceMotion(this.checked)">
+    </div>
+    <div style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px;">
+      <button onclick="openUserSettings('appearance')" style="width:100%;padding:5px 0;background:var(--accent-glow);border:1px solid rgba(139,92,246,0.3);border-radius:6px;color:var(--accent-2);font-size:10px;font-weight:700;cursor:pointer;font-family:inherit;letter-spacing:0.03em;">More in Settings →</button>
+    </div>
+  </div>
+  <button id="a11yBarToggle" onclick="document.getElementById('a11yBarPanel').classList.toggle('open')" aria-label="Accessibility options" title="Accessibility">
+    <i class="ti ti-accessibility"></i>
+  </button>
+</div>
 
 <!-- ===== TOP NAVBAR ===== -->
 <div class="topnav">
@@ -1824,6 +2265,11 @@
       <span id="authUserName"></span>
     </div>
     <button class="auth-logout-btn topnav-icon-btn" onclick="doLogout()" title="Sign out"><i class="ti ti-logout"></i></button>
+    <button class="cmd-k-badge" onclick="openCmdPalette()" title="Command palette (⌘K)">
+      <i class="ti ti-search" style="font-size:13px;"></i>
+      Search&hellip;
+      <kbd id="cmdKHint">⌘K</kbd>
+    </button>
     <button class="topnav-settings-btn topnav-icon-btn" onclick="openUserSettings()" title="Settings"><i class="ti ti-settings"></i></button>
     <button onclick="toggleAppTheme()" id="themeToggleBtn" title="Toggle light/dark mode" style="width:38px;height:21px;border-radius:11px;background:var(--surface-3);border:1px solid var(--border-2);cursor:pointer;position:relative;padding:0;transition:background 0.22s,border-color 0.22s;flex-shrink:0;">
       <span id="themeToggleThumb" style="position:absolute;top:3px;left:3px;width:13px;height:13px;border-radius:50%;background:var(--accent);transition:transform 0.2s,background 0.22s;display:block;"></span>
@@ -1832,7 +2278,7 @@
 </div>
 
 <!-- ===== MAIN AREA ===== -->
-<div class="main-area">
+<div class="main-area" id="main-content">
 
   <!-- PAGE BODY -->
   <div class="page-body">
@@ -1893,9 +2339,14 @@
     <!-- Card Grid -->
     <div class="acct-card-grid" id="acctGrid"></div>
     <div id="emptyState" class="empty-state" style="display:none;">
-      <div class="empty-icon">📭</div>
-      <h3>No accounts found</h3>
-      <p>Add your first account or adjust your filters.</p>
+      <div class="empty-state-icon"><i class="ti ti-users-group" style="font-size:28px;color:var(--accent-2);"></i></div>
+      <h3>No accounts yet</h3>
+      <p>Add your first affiliate account to start tracking content, scripts, and daily plans across all your channels.</p>
+      <div class="empty-state-row">
+        <button class="empty-state-action" onclick="openModal()">
+          <i class="ti ti-plus"></i> Add Account
+        </button>
+      </div>
     </div>
 
   </div>
@@ -1934,9 +2385,14 @@
 
     <div class="comp-grid" id="compGrid"></div>
     <div id="compEmptyState" class="empty-state" style="display:none;">
-      <div class="empty-icon">🔍</div>
+      <div class="empty-state-icon"><i class="ti ti-eye-search" style="font-size:28px;color:var(--accent-2);"></i></div>
       <h3>No competitors added yet</h3>
-      <p>Add competitor accounts to track for inspiration and ideas.</p>
+      <p>Track competitor accounts to surface viral content, hooks, and angles you can replicate in your own posts.</p>
+      <div class="empty-state-row">
+        <button class="empty-state-action" onclick="openCompModal()">
+          <i class="ti ti-plus"></i> Add Competitor
+        </button>
+      </div>
     </div>
 
     <!-- Niche Intel Panel — always visible -->
@@ -2038,9 +2494,17 @@
       </div>
       <div class="scripts-grid" id="scriptsGrid"></div>
       <div id="scriptsEmptyState" class="empty-state" style="display:none;">
-        <div class="empty-icon" style="font-size:36px;opacity:0.12;margin-bottom:16px;"><i class="ti ti-flame"></i></div>
+        <div class="empty-state-icon"><i class="ti ti-flame" style="font-size:28px;color:var(--accent-2);"></i></div>
         <h3>No viral scripts saved yet</h3>
-        <p>Find a viral video from a competitor and save the script here to replicate later.</p>
+        <p>Find a viral video from a competitor, extract the script, and save it here to replicate with your own twist.</p>
+        <div class="empty-state-row">
+          <button class="empty-state-action" onclick="openScriptModal()">
+            <i class="ti ti-plus"></i> Add Script
+          </button>
+          <button class="empty-state-action-ghost" onclick="document.querySelector('[data-tab=competitors]').click()">
+            <i class="ti ti-eye-search"></i> Browse Competitors
+          </button>
+        </div>
       </div>
     </div>
 
@@ -3573,7 +4037,62 @@
         <div style="margin-top:10px;"><button onclick="switchTab('${btnTab}')" style="background:none;border:1px solid var(--border-2);border-radius:var(--radius-xs);color:var(--text-3);font-size:11px;padding:4px 14px;cursor:pointer;font-family:inherit;">${btnLabel} →</button></div>
       </div>`;
 
+    // ── Onboarding checklist (shown until dismissed) ──
+    const onboardDismissed = localStorage.getItem('onboardingDismissed') === '1';
+    const onboardCollapsed = localStorage.getItem('onboardingCollapsed') === '1';
+    const onboardStepsRaw  = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
+
+    const onboardStepDefs = [
+      { id: 'accounts',   label: 'Add your first account',          tab: 'my-accounts',    done: accounts.length > 0 },
+      { id: 'scripts',    label: 'Save a viral script',             tab: 'viral-scripts',  done: viralScripts.length > 0 },
+      { id: 'replicator', label: 'Open the Video Replicator',       tab: 'video-replicator', done: !!onboardStepsRaw.replicator },
+      { id: 'plan',       label: 'Plan your first post',            tab: 'calendar',       done: dailyItems.length > 0 },
+      { id: 'settings',   label: 'Customise your profile',          tab: null,             done: !!onboardStepsRaw.settings },
+    ];
+
+    // Auto-save auto-detected steps
+    const autoSteps = { ...onboardStepsRaw };
+    let autoChanged = false;
+    onboardStepDefs.forEach(s => {
+      if (s.done && !autoSteps[s.id]) { autoSteps[s.id] = true; autoChanged = true; }
+    });
+    if (autoChanged) localStorage.setItem('onboardingSteps', JSON.stringify(autoSteps));
+
+    const stepsState = onboardStepDefs.map(s => ({ ...s, done: s.done || !!autoSteps[s.id] }));
+    const doneSteps  = stepsState.filter(s => s.done).length;
+    const allDone    = doneSteps === stepsState.length;
+    const pct        = Math.round(doneSteps / stepsState.length * 100);
+
+    function onboardStepHtml(s) {
+      return `<div class="onboard-step${s.done ? ' done' : ''}" onclick="onboardStepClick('${s.id}','${s.tab || ''}')">
+        <div class="onboard-step-check">${s.done ? '<i class="ti ti-check" style="font-size:9px;"></i>' : ''}</div>
+        <span>${s.label}</span>
+      </div>`;
+    }
+
+    const onboardHtml = (onboardDismissed || allDone) ? '' : `
+      <div class="onboard-card" id="onboardCard">
+        <div class="onboard-header">
+          <div class="onboard-title">
+            <i class="ti ti-rocket" style="color:var(--accent-2);font-size:15px;"></i>
+            Setup guide
+            <span class="onboard-progress-text">${doneSteps}/${stepsState.length} done</span>
+          </div>
+          <button class="onboard-collapse-btn" onclick="onboardToggleCollapse()" id="onboardCollapseBtn" title="${onboardCollapsed ? 'Expand' : 'Collapse'}">
+            <i class="ti ${onboardCollapsed ? 'ti-chevron-down' : 'ti-chevron-up'}"></i>
+          </button>
+        </div>
+        <div class="onboard-progress-bar"><div class="onboard-progress-fill" style="width:${pct}%;"></div></div>
+        <div id="onboardStepsList" style="${onboardCollapsed ? 'display:none;' : ''}">
+          <div class="onboard-steps">${stepsState.map(onboardStepHtml).join('')}</div>
+          <div class="onboard-footer">
+            <button class="onboard-dismiss-btn" onclick="onboardDismiss()">Dismiss</button>
+          </div>
+        </div>
+      </div>`;
+
     container.innerHTML = `
+      ${onboardHtml}
       <div class="db-greeting">
         <div class="db-greeting-date">${dateStr}</div>
         <div class="db-greeting-title">${greeting}.</div>
@@ -3700,6 +4219,9 @@
     goalsPerPlatform: {},      // { 'TikTok': 3, 'Instagram': 2, ... }
     // Appearance
     accentColor: 'purple',
+    bgTheme: 'midnight',
+    highContrast: false,
+    reduceMotion: false,
   };
   function getUserSettings() {
     try {
@@ -5857,13 +6379,14 @@ RULES — read carefully:
   // --- Copy all Veo 3 prompts to clipboard ---
   function copyAllVeoPrompts() {
     const prompts = segments.map((s, i) => `[Seg ${i+1} — ${Math.floor(s.startTime/60)}:${String(Math.floor(s.startTime%60)).padStart(2,'0')}–${Math.floor(s.endTime/60)}:${String(Math.floor(s.endTime%60)).padStart(2,'0')}]\n${s.veoPrompt || '(empty)'}`);
-    if (!prompts.length) { alert('No segments yet.'); return; }
+    if (!prompts.length) { if (typeof showToast === 'function') showToast('No segments yet.', 'warning'); else alert('No segments yet.'); return; }
     navigator.clipboard.writeText(prompts.join('\n\n')).then(() => {
       const btn = event.currentTarget;
       const orig = btn.textContent;
       btn.textContent = '✓ Copied!';
       btn.style.color = '#4ade80';
       setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800);
+      if (typeof showToast === 'function') showToast(`${prompts.length} Veo 3 prompt${prompts.length !== 1 ? 's' : ''} copied to clipboard`, 'success');
     });
   }
 
@@ -6895,8 +7418,10 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
       });
       saveSegments();
       if (btn) { btn.textContent = '✅ Done!'; setTimeout(() => { btn.textContent = '✨ AI Describe'; btn.disabled = false; }, 2500); }
+      if (typeof showToast === 'function') showToast(`AI descriptions applied to ${parsed.length} scene${parsed.length !== 1 ? 's' : ''}`, 'success');
     } catch(err) {
-      alert('AI Describe failed: ' + err.message);
+      if (typeof showToast === 'function') showToast('AI Describe failed: ' + err.message, 'error', 5000);
+      else alert('AI Describe failed: ' + err.message);
       if (btn) { btn.textContent = '✨ AI Describe'; btn.disabled = false; }
     }
   }
@@ -8171,6 +8696,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       btn.textContent = `✅ ${built} done`;
       setTimeout(() => { btn.textContent = '🍌 Gen All NB'; btn.disabled = false; }, 2500);
     }
+    if (typeof showToast === 'function') showToast(`NB prompts built for ${built} scene${built !== 1 ? 's' : ''}`, 'success');
   }
 
 
@@ -9966,6 +10492,77 @@ TECHNICAL SPECS:
     applyUiZoom(val);
   }
 
+  // ── Background theme ──
+  function selectBgTheme(btn) {
+    document.querySelectorAll('.bg-theme-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    applyBgTheme(btn.dataset.bg);
+  }
+  function applyBgTheme(theme) {
+    const el = document.documentElement;
+    if (theme && theme !== 'midnight') {
+      el.setAttribute('data-bg-theme', theme);
+    } else {
+      el.removeAttribute('data-bg-theme');
+    }
+  }
+
+  // ── High Contrast ──
+  function toggleHighContrast(on) {
+    if (on) {
+      document.documentElement.setAttribute('data-a11y-hc', '');
+    } else {
+      document.documentElement.removeAttribute('data-a11y-hc');
+    }
+    // Sync Settings panel checkbox
+    const el = document.getElementById('uset-hc-toggle');
+    if (el) el.checked = on;
+    // Sync a11y bar checkbox
+    const bar = document.getElementById('a11yBarHC');
+    if (bar) bar.checked = on;
+  }
+
+  // ── Reduce Motion ──
+  function toggleReduceMotion(on) {
+    if (on) {
+      document.documentElement.setAttribute('data-a11y-rm', '');
+    } else {
+      document.documentElement.removeAttribute('data-a11y-rm');
+    }
+    // Sync Settings panel checkbox
+    const el = document.getElementById('uset-rm-toggle');
+    if (el) el.checked = on;
+    // Sync a11y bar checkbox
+    const bar = document.getElementById('a11yBarRM');
+    if (bar) bar.checked = on;
+  }
+
+  // ── Quick a11y bar scale ──
+  function a11ySetScale(scale) {
+    applyUiZoom(scale);
+    const slider = document.getElementById('uset-scale-slider');
+    const display = document.getElementById('uset-scale-display');
+    if (slider) slider.value = scale;
+    if (display) display.textContent = scale + '%';
+    // Update button states
+    document.querySelectorAll('.a11y-size-btn').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.scale) === scale);
+    });
+    // Save
+    const s = getUserSettings();
+    s.uiScale = scale;
+    saveUserSettings(s);
+  }
+
+  // Close a11y bar on outside click
+  document.addEventListener('click', (e) => {
+    const bar = document.getElementById('a11yBarPanel');
+    const btn = document.getElementById('a11yBarToggle');
+    if (bar && btn && !bar.contains(e.target) && !btn.contains(e.target)) {
+      bar.classList.remove('open');
+    }
+  });
+
   function applyUiZoom(scale) {
     const zoom = scale / 100;
     document.body.style.zoom = zoom;
@@ -10016,6 +10613,12 @@ TECHNICAL SPECS:
     // Accent color
     const chosen = document.querySelector('.uset-accent-swatch.selected');
     if (chosen) { s.accentColor = chosen.dataset.color; applyAccentColor(s.accentColor); }
+    // Background theme
+    const activeBg = document.querySelector('.bg-theme-btn.active');
+    if (activeBg) { s.bgTheme = activeBg.dataset.bg; applyBgTheme(s.bgTheme); }
+    // Accessibility toggles
+    s.highContrast = document.getElementById('uset-hc-toggle')?.checked || false;
+    s.reduceMotion = document.getElementById('uset-rm-toggle')?.checked || false;
     saveUserSettings(s);
     const resolved = s.themeMode === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
@@ -10131,6 +10734,13 @@ TECHNICAL SPECS:
     if (s.uiScale) applyUiZoom(s.uiScale);
     // Accent color
     if (s.accentColor) applyAccentColor(s.accentColor);
+    // Background theme
+    if (s.bgTheme && s.bgTheme !== 'midnight') applyBgTheme(s.bgTheme);
+    // High contrast
+    if (s.highContrast) toggleHighContrast(true);
+    // Reduce motion — also respect OS preference
+    const prefersRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (s.reduceMotion || prefersRM) toggleReduceMotion(true);
     // Reminder
     if (s.reminderEnabled && s.reminderTime) _scheduleReminder(s.reminderTime);
     const mode = s.themeMode || 'system';
@@ -10156,9 +10766,19 @@ TECHNICAL SPECS:
     const display = document.getElementById('uset-scale-display');
     if (slider) slider.value = scale;
     if (display) display.textContent = scale + '%';
+    // Background theme
+    const bgTheme = s.bgTheme || 'midnight';
+    document.querySelectorAll('.bg-theme-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.bg === bgTheme);
+    });
+    // Accessibility toggles
+    const hcEl = document.getElementById('uset-hc-toggle');
+    if (hcEl) hcEl.checked = !!s.highContrast;
+    const rmEl = document.getElementById('uset-rm-toggle');
+    if (rmEl) rmEl.checked = !!s.reduceMotion;
   }
 
-  function openUserSettings() {
+  function openUserSettings(tab) {
     const s = getUserSettings();
     // Setup tab
     document.getElementById('uset-dlPath').value = s.dlPath || '';
@@ -10188,7 +10808,7 @@ TECHNICAL SPECS:
       sw.classList.toggle('selected', sw.dataset.color === accentName);
     });
     document.getElementById('userSettingsOverlay').classList.add('open');
-    switchUserTab('profile');
+    switchUserTab(tab || 'profile');
   }
 
   function closeUserSettings() {
@@ -10307,6 +10927,7 @@ TECHNICAL SPECS:
     const el = document.getElementById('admSaveStatus');
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 1800);
+    if (typeof showToast === 'function') showToast('Settings saved', 'success', 2000);
   }
 
   // ---- Admin Accounts ----
@@ -11416,6 +12037,46 @@ TECHNICAL SPECS:
         <div style="font-size:10px;color:var(--text-3);margin-bottom:8px;">Changes preview live — click Save to keep.</div>
         <button onclick="previewUsetScale(100); document.getElementById('uset-scale-slider').value=100;" style="padding:4px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;color:var(--text-2);font-size:11px;cursor:pointer;font-family:inherit;">Reset to 100%</button>
 
+        <div class="uset-section-title" style="margin-top:24px;">Background Style</div>
+        <div class="uset-desc">Choose the darkness and tone of the app background. Only applies in Dark mode.</div>
+        <div class="bg-theme-grid" id="bgThemePicker">
+          <button class="bg-theme-btn active" data-bg="midnight" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#09090d 0%,#131319 100%);"></div>
+            <span class="bg-theme-label">Midnight</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e 0%,#0c1830 100%);"></div>
+            <span class="bg-theme-label">Abyss</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000 0%,#101010 100%);"></div>
+            <span class="bg-theme-label">Carbon</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12 0%,#181e2c 100%);"></div>
+            <span class="bg-theme-label">Slate</span>
+          </button>
+        </div>
+
+        <div class="uset-section-title">Accessibility</div>
+        <div class="uset-desc">Adjustments to improve readability and reduce visual noise.</div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">High Contrast</div>
+              <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Boosts text and border contrast throughout the app for better readability.</div>
+            </div>
+            <input type="checkbox" id="uset-hc-toggle" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;" onchange="toggleHighContrast(this.checked)">
+          </label>
+          <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">Reduce Motion</div>
+              <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Disables animations and transitions — useful for vestibular disorders or distraction sensitivity.</div>
+            </div>
+            <input type="checkbox" id="uset-rm-toggle" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;" onchange="toggleReduceMotion(this.checked)">
+          </label>
+        </div>
+
         <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
       </div>
 
@@ -11472,7 +12133,7 @@ TECHNICAL SPECS:
           <div style="background:rgba(124,106,247,0.07);border:1px solid var(--border-accent);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
             <div>
               <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Pro <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $49/mo</span> <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--grad-accent);color:#fff;margin-left:4px;">RECOMMENDED</span></div>
-              <div style="font-size:11px;color:var(--text-3);">Unlimited accounts · Full Video Studio + Veo 3 · Unlimited competitor tracking · Cloud browser workflows</div>
+              <div style="font-size:11px;color:var(--text-3);">Unlimited accounts · Full Video Studio + Veo 3 · Unlimited competitor tracking · Claude browser workflows</div>
             </div>
           </div>
           <!-- Agency -->
@@ -11787,6 +12448,236 @@ TECHNICAL SPECS:
     </div>
   </div>
 </div>
+
+<!-- COMMAND PALETTE -->
+<div id="cmdPalette" role="dialog" aria-modal="true" aria-label="Command palette" onclick="if(event.target===this)closeCmdPalette()">
+  <div class="cmd-box">
+    <div class="cmd-search-row">
+      <i class="ti ti-search"></i>
+      <input id="cmdInput" type="text" placeholder="Search tabs, actions, settings…" autocomplete="off" spellcheck="false" oninput="renderCmdList()" onkeydown="cmdKeyNav(event)">
+      <kbd class="cmd-esc-hint">ESC</kbd>
+    </div>
+    <div id="cmdList"></div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div id="toastContainer"></div>
+
+<script>
+// ── Toast notification system ──
+(function() {
+  const ICONS = {
+    success: '<i class="ti ti-circle-check"></i>',
+    error:   '<i class="ti ti-circle-x"></i>',
+    info:    '<i class="ti ti-info-circle"></i>',
+    warning: '<i class="ti ti-alert-triangle"></i>',
+  };
+
+  window.showToast = function(msg, type = 'info', duration = 3500) {
+    const container = document.getElementById('toastContainer');
+    if (!container) return;
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.innerHTML = `
+      <span class="toast-icon">${ICONS[type] || ICONS.info}</span>
+      <span class="toast-msg">${msg}</span>
+      <span class="toast-close"><i class="ti ti-x"></i></span>`;
+    container.appendChild(t);
+    requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
+
+    const dismiss = () => {
+      t.classList.add('hiding');
+      setTimeout(() => t.remove(), 300);
+    };
+    t.addEventListener('click', dismiss);
+    setTimeout(dismiss, duration);
+    return t;
+  };
+})();
+
+// ── Onboarding checklist helpers ──
+window.onboardStepClick = function(stepId, tab) {
+  // Mark step as manually visited
+  const steps = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
+  if (stepId === 'replicator' || stepId === 'settings') {
+    steps[stepId] = true;
+    localStorage.setItem('onboardingSteps', JSON.stringify(steps));
+  }
+  if (tab) switchTab(tab);
+  else if (stepId === 'settings') openUserSettings('profile');
+  // Re-render dashboard after a tick so the step mark shows
+  setTimeout(() => {
+    if (document.getElementById('tab-dashboard')?.classList.contains('active')) renderDashboard();
+  }, 80);
+};
+
+window.onboardToggleCollapse = function() {
+  const collapsed = localStorage.getItem('onboardingCollapsed') === '1';
+  localStorage.setItem('onboardingCollapsed', collapsed ? '0' : '1');
+  const list = document.getElementById('onboardStepsList');
+  const btn  = document.getElementById('onboardCollapseBtn');
+  if (!list || !btn) return;
+  const nowCollapsed = !collapsed;
+  list.style.display = nowCollapsed ? 'none' : '';
+  btn.title = nowCollapsed ? 'Expand' : 'Collapse';
+  const icon = btn.querySelector('i');
+  if (icon) icon.className = `ti ${nowCollapsed ? 'ti-chevron-down' : 'ti-chevron-up'}`;
+};
+
+window.onboardDismiss = function() {
+  localStorage.setItem('onboardingDismissed', '1');
+  const card = document.getElementById('onboardCard');
+  if (card) card.style.display = 'none';
+};
+
+// ── Command Palette (⌘K) ──
+(function() {
+  // Detect Mac vs Windows/Linux to show correct hint
+  const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
+  const hint = document.getElementById('cmdKHint');
+  if (hint) hint.textContent = isMac ? '⌘K' : 'Ctrl+K';
+
+  // Command registry
+  const COMMANDS = [
+    // Navigation
+    { group: 'Navigate', label: 'Dashboard',         icon: 'ti-layout-dashboard', action: () => switchTab('dashboard') },
+    { group: 'Navigate', label: 'My Accounts',       icon: 'ti-users',            action: () => switchTab('my-accounts') },
+    { group: 'Navigate', label: 'Viral Scripts',     icon: 'ti-flame',            action: () => switchTab('viral-scripts') },
+    { group: 'Navigate', label: 'Daily Plan',        icon: 'ti-calendar',         action: () => switchTab('calendar') },
+    { group: 'Navigate', label: 'Video Replicator',  icon: 'ti-movie',            action: () => switchTab('video-replicator') },
+    { group: 'Navigate', label: 'Video Producer',    icon: 'ti-pencil',           action: () => switchTab('video-producer') },
+    { group: 'Navigate', label: 'Competitors',       icon: 'ti-eye',              action: () => switchTab('competitors') },
+    // Actions
+    { group: 'Actions', label: 'Add Account',         icon: 'ti-user-plus',       action: () => { switchTab('my-accounts'); setTimeout(() => openModal?.(), 120); } },
+    { group: 'Actions', label: 'New Viral Script',    icon: 'ti-file-plus',       action: () => { switchTab('viral-scripts'); setTimeout(() => openScriptModal?.(), 120); } },
+    { group: 'Actions', label: 'Open Settings',       icon: 'ti-settings',        action: () => openUserSettings() },
+    { group: 'Actions', label: 'Appearance Settings', icon: 'ti-palette',         action: () => openUserSettings('appearance') },
+    { group: 'Actions', label: 'Profile Settings',    icon: 'ti-user-circle',     action: () => openUserSettings('profile') },
+    { group: 'Actions', label: 'Toggle Dark/Light Mode', icon: 'ti-sun',          action: () => toggleAppTheme?.() },
+    { group: 'Actions', label: 'Sign Out',            icon: 'ti-logout',          action: () => doLogout?.() },
+  ];
+
+  let activeIdx = 0;
+  let filtered = [];
+
+  function getFiltered(q) {
+    if (!q) return COMMANDS;
+    const lower = q.toLowerCase();
+    return COMMANDS.filter(c =>
+      c.label.toLowerCase().includes(lower) ||
+      c.group.toLowerCase().includes(lower)
+    );
+  }
+
+  window.renderCmdList = function() {
+    const q = document.getElementById('cmdInput')?.value || '';
+    filtered = getFiltered(q);
+    activeIdx = 0;
+    paintList();
+  };
+
+  function paintList() {
+    const list = document.getElementById('cmdList');
+    if (!list) return;
+    if (!filtered.length) {
+      list.innerHTML = '<div class="cmd-empty">No matching commands</div>';
+      return;
+    }
+    let html = '';
+    let lastGroup = '';
+    filtered.forEach((cmd, i) => {
+      if (cmd.group !== lastGroup) {
+        html += `<div class="cmd-group-label">${cmd.group}</div>`;
+        lastGroup = cmd.group;
+      }
+      html += `<div class="cmd-item${i === activeIdx ? ' active' : ''}" data-idx="${i}" onclick="runCmd(${i})">
+        <i class="ti ${cmd.icon}"></i>
+        <span>${cmd.label}</span>
+      </div>`;
+    });
+    list.innerHTML = html;
+  }
+
+  window.runCmd = function(idx) {
+    const cmd = filtered[idx];
+    if (!cmd) return;
+    closeCmdPalette();
+    cmd.action();
+  };
+
+  window.cmdKeyNav = function(e) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIdx = Math.min(activeIdx + 1, filtered.length - 1);
+      paintList();
+      scrollActiveIntoView();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIdx = Math.max(activeIdx - 1, 0);
+      paintList();
+      scrollActiveIntoView();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      runCmd(activeIdx);
+    } else if (e.key === 'Escape') {
+      closeCmdPalette();
+    }
+  };
+
+  function scrollActiveIntoView() {
+    const el = document.querySelector('.cmd-item.active');
+    el?.scrollIntoView({ block: 'nearest' });
+  }
+
+  window.openCmdPalette = function() {
+    const pal = document.getElementById('cmdPalette');
+    const input = document.getElementById('cmdInput');
+    if (!pal) return;
+    pal.classList.add('open');
+    if (input) { input.value = ''; input.focus(); }
+    filtered = COMMANDS;
+    activeIdx = 0;
+    paintList();
+  };
+
+  window.closeCmdPalette = function() {
+    document.getElementById('cmdPalette')?.classList.remove('open');
+  };
+
+  // Global keyboard shortcut
+  document.addEventListener('keydown', (e) => {
+    const isK = e.key === 'k' || e.key === 'K';
+    const mod = isMac ? e.metaKey : e.ctrlKey;
+    if (mod && isK && !e.shiftKey) {
+      e.preventDefault();
+      const pal = document.getElementById('cmdPalette');
+      if (pal?.classList.contains('open')) closeCmdPalette();
+      else openCmdPalette();
+    }
+  });
+})();
+
+// ── Skeleton helpers for segment cards ──
+window.showSegmentSkeletons = function(count = 3) {
+  const container = document.getElementById('segmentsContainer');
+  if (!container) return;
+  container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
+  container.innerHTML = Array.from({ length: count }, () => `
+    <div class="seg-card-skeleton">
+      <div class="skel-header">
+        <div class="skeleton" style="height:14px;width:55px;border-radius:4px;"></div>
+        <div class="skeleton" style="height:14px;width:72px;border-radius:4px;"></div>
+        <div class="skeleton" style="height:14px;width:44px;border-radius:4px;margin-left:auto;"></div>
+      </div>
+      <div class="skeleton" style="height:80px;width:100%;border-radius:6px;"></div>
+      <div class="skeleton" style="height:10px;width:40%;border-radius:4px;"></div>
+      <div class="skeleton" style="height:52px;width:100%;border-radius:6px;"></div>
+      <div class="skeleton" style="height:10px;width:55%;border-radius:4px;"></div>
+      <div class="skeleton" style="height:38px;width:100%;border-radius:6px;"></div>
+    </div>`).join('');
+};
+</script>
 
 </body>
 </html>

@@ -22,7 +22,7 @@
     --border: rgba(255,255,255,0.08);
     --border-accent: rgba(124,106,247,0.35);
     --text: #f0eeff;
-    --text-muted: rgba(240,238,255,0.55);
+    --text-muted: rgba(240,238,255,0.72);
     --accent: #7c6af7;
     --accent2: #a78bfa;
     --accent3: #c4b5fd;
@@ -69,14 +69,22 @@
   }
   .nav-links a:hover { color: var(--text); }
   .nav-cta {
-    padding: 8px 20px; border-radius: 8px;
+    padding: 9px 22px; border-radius: 8px;
     background: var(--grad-accent);
-    color: #fff !important; font-weight: 600;
+    color: #fff !important; font-weight: 700;
     font-size: 0.875rem; text-decoration: none;
-    box-shadow: 0 0 20px rgba(124,106,247,0.35);
-    transition: box-shadow 0.2s, opacity 0.2s;
+    box-shadow: 0 0 24px rgba(124,106,247,0.45), 0 2px 8px rgba(0,0,0,0.3);
+    transition: box-shadow 0.2s, transform 0.15s;
+    letter-spacing: 0.01em;
   }
-  .nav-cta:hover { box-shadow: 0 0 30px rgba(124,106,247,0.55); opacity: 0.9; }
+  .nav-cta:hover { box-shadow: 0 0 36px rgba(124,106,247,0.65), 0 2px 12px rgba(0,0,0,0.4); transform: translateY(-1px); }
+  /* Nav scrolled state */
+  nav { transition: box-shadow 0.3s ease, background 0.3s ease, border-color 0.3s ease; }
+  nav.nav-scrolled {
+    background: rgba(10,10,15,0.92);
+    border-bottom-color: rgba(124,106,247,0.22);
+    box-shadow: 0 4px 32px rgba(0,0,0,0.45), 0 0 40px rgba(124,106,247,0.12);
+  }
 
   /* ── HERO ── */
   .hero {
@@ -276,7 +284,7 @@
     transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
     position: relative; overflow: hidden;
   }
-  .feat-card.wide { grid-column: span 2; }
+  .feat-card.wide { grid-column: span 1; } /* uniform grid — no more uneven spans */
   .feat-card::after {
     content: '';
     position: absolute; inset: 0;
@@ -544,6 +552,238 @@
     .stat-item:last-child { border-bottom: none; }
     footer { flex-direction: column; text-align: center; }
     .cta-card { padding: 40px 28px; }
+    .compare-table { border-radius: var(--radius); overflow: hidden; }
+    .compare-row { grid-template-columns: 1fr 1fr; }
+    .compare-row.header .compare-cell:first-child { display: none; }
+    .compare-cell { font-size: 0.85rem; }
+    .testimonial-grid { grid-template-columns: 1fr; }
+    .faq-body.open p { font-size: 0.875rem; }
+  }
+  @media (max-width: 640px) {
+    .mobile-sticky-cta { display: flex; }
+    body { padding-bottom: 72px; }
+  }
+
+  /* ── FAQ ── */
+  .faq-list { max-width: 720px; margin: 48px auto 0; }
+  .faq-item { border-bottom: 1px solid var(--border); }
+  .faq-item:first-child { border-top: 1px solid var(--border); }
+  .faq-trigger {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 20px 2px; cursor: pointer; width: 100%; background: none; border: none;
+    color: var(--text); font-family: inherit; font-size: 0.95rem; font-weight: 600;
+    text-align: left; gap: 16px; transition: color 0.2s;
+  }
+  .faq-trigger:hover { color: var(--accent2); }
+  .faq-icon {
+    flex-shrink: 0; width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(124,106,247,0.1); border: 1px solid var(--border-accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8rem; color: var(--accent2); font-weight: 700;
+    transition: transform 0.25s, background 0.2s;
+  }
+  .faq-item.open .faq-icon { transform: rotate(45deg); background: rgba(124,106,247,0.22); }
+  .faq-body { max-height: 0; overflow: hidden; transition: max-height 0.32s ease; }
+  .faq-body p { padding: 0 2px 20px; font-size: 0.9rem; color: var(--text-muted); line-height: 1.75; }
+  .faq-item.open .faq-body { max-height: 300px; }
+
+  /* ── COMPARISON TABLE ── */
+  .compare-table {
+    margin-top: 48px; border-radius: var(--radius);
+    border: 1px solid var(--border); overflow: hidden;
+  }
+  .compare-row { display: grid; grid-template-columns: 1fr 1fr 1fr; }
+  .compare-row + .compare-row { border-top: 1px solid var(--border); }
+  .compare-row.header { background: var(--bg2); }
+  .compare-cell {
+    padding: 14px 22px; font-size: 0.875rem;
+    border-right: 1px solid var(--border);
+    display: flex; align-items: center; gap: 9px;
+    line-height: 1.5;
+  }
+  .compare-cell:last-child { border-right: none; }
+  .compare-cell.col-label { color: var(--text-muted); font-weight: 500; }
+  .compare-cell.col-bad { color: var(--text-muted); }
+  .compare-cell.col-good {
+    color: var(--text);
+    background: rgba(124,106,247,0.04);
+    font-weight: 500;
+  }
+  .compare-cell.col-good i { color: #34d399; font-size: 1rem; flex-shrink: 0; }
+  .compare-cell.col-bad i { color: var(--text-muted); opacity: 0.45; font-size: 1rem; flex-shrink: 0; }
+  .compare-row.header .compare-cell { font-size: 0.78rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.07em; }
+  .compare-row.header .compare-cell:nth-child(3) { color: var(--accent2); background: rgba(124,106,247,0.06); }
+
+  /* ── SOCIAL PROOF / TESTIMONIALS ── */
+  .testimonial-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 18px; margin-top: 48px;
+  }
+  .testimonial-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 26px;
+    display: flex; flex-direction: column; gap: 16px;
+    transition: border-color 0.25s, transform 0.2s;
+  }
+  .testimonial-card:hover { border-color: var(--border-accent); transform: translateY(-3px); }
+  .t-stars { display: flex; gap: 3px; }
+  .t-star { color: #fbbf24; font-size: 0.9rem; }
+  .t-quote { font-size: 0.9rem; color: var(--text); line-height: 1.7; flex: 1; }
+  .t-quote.placeholder {
+    color: var(--text-muted); font-style: italic; opacity: 0.5;
+    border: 1px dashed rgba(255,255,255,0.08); border-radius: 8px;
+    padding: 12px; background: rgba(255,255,255,0.02);
+    display: flex; align-items: center; justify-content: center;
+    text-align: center; min-height: 80px; font-size: 0.82rem;
+  }
+  .t-author { display: flex; align-items: center; gap: 10px; }
+  .t-avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: var(--grad-accent); display: flex; align-items: center;
+    justify-content: center; font-size: 0.8rem; font-weight: 800; color: #fff;
+    flex-shrink: 0;
+  }
+  .t-avatar.placeholder-av { background: var(--surface-hover); border: 1px dashed rgba(255,255,255,0.1); }
+  .t-name { font-size: 0.875rem; font-weight: 700; color: var(--text); }
+  .t-handle { font-size: 0.78rem; color: var(--text-muted); }
+
+  /* ── MOBILE STICKY CTA ── */
+  .mobile-sticky-cta {
+    display: none;
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 80;
+    padding: 12px 16px 16px;
+    background: rgba(10,10,15,0.94);
+    backdrop-filter: blur(16px);
+    border-top: 1px solid var(--border);
+    gap: 10px; align-items: center;
+  }
+  .mobile-sticky-cta a {
+    flex: 1; text-align: center; padding: 13px 0; border-radius: 10px;
+    background: var(--grad-accent); color: #fff;
+    font-size: 0.95rem; font-weight: 700; text-decoration: none;
+    box-shadow: 0 0 20px rgba(124,106,247,0.4);
+  }
+  .mobile-sticky-note {
+    font-size: 0.72rem; color: var(--text-muted); text-align: center;
+    white-space: nowrap; flex-shrink: 0;
+  }
+
+  /* ── FOCUS INDICATORS ── */
+  *:focus-visible {
+    outline: 2px solid var(--accent2);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* Landing page animations are intentional and always on.
+     Users can disable animations inside the app via Settings → Appearance → Reduce Motion. */
+
+  /* ── PREFERS HIGH CONTRAST ── */
+  @media (prefers-contrast: more) {
+    :root {
+      --text-muted: rgba(240,238,255,0.90);
+      --border: rgba(255,255,255,0.20);
+      --border-accent: rgba(124,106,247,0.60);
+    }
+    .how-card p, .feat-card p, .section-sub,
+    .t-quote, .faq-body p, .price-desc,
+    .stat-label, .cta-card p {
+      color: rgba(240,238,255,0.90) !important;
+    }
+    .nav-links a, .footer-links a, .footer-copy { color: rgba(240,238,255,0.85) !important; }
+    .compare-cell.col-bad { color: rgba(240,238,255,0.80) !important; }
+  }
+
+  /* ── SCROLL FADE-IN ── */
+  .fade-in {
+    opacity: 0;
+    transform: translateY(24px);
+    transition: opacity 0.55s ease, transform 0.55s ease;
+  }
+  .fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .fade-in-delay-1 { transition-delay: 0.1s; }
+  .fade-in-delay-2 { transition-delay: 0.2s; }
+  .fade-in-delay-3 { transition-delay: 0.3s; }
+  .fade-in-delay-4 { transition-delay: 0.4s; }
+  .fade-in-delay-5 { transition-delay: 0.5s; }
+
+  /* ── PLATFORM TRUST STRIP ── */
+  .trust-strip {
+    width: 100%; padding: 18px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    background: rgba(255,255,255,0.015);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+  }
+  .trust-label {
+    font-size: 0.72rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .trust-icons {
+    display: flex; align-items: center; gap: 28px; flex-wrap: wrap; justify-content: center;
+  }
+  .trust-icon-item {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 0.82rem; font-weight: 600; color: var(--text-muted);
+    opacity: 0.75; transition: opacity 0.2s;
+  }
+  .trust-icon-item:hover { opacity: 1; }
+  .trust-icon-svg {
+    width: 20px; height: 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* ── FEATURE SECTION INLINE CTA ── */
+  .features-cta {
+    margin-top: 48px;
+    padding: 28px 32px;
+    border-radius: var(--radius);
+    background: rgba(124,106,247,0.06);
+    border: 1px solid var(--border-accent);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 24px; flex-wrap: wrap;
+  }
+  .features-cta-text h3 {
+    font-size: 1.05rem; font-weight: 700; margin-bottom: 5px;
+  }
+  .features-cta-text p {
+    font-size: 0.875rem; color: var(--text-muted); line-height: 1.5;
+  }
+  @media (max-width: 640px) {
+    .features-cta { flex-direction: column; text-align: center; }
+    .features-cta .btn-primary { width: 100%; justify-content: center; }
+  }
+
+  /* ── HERO PREVIEW ANIMATION ── */
+  @keyframes preview-float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-6px); }
+  }
+  @keyframes preview-glow-pulse {
+    0%, 100% { box-shadow: 0 0 40px rgba(124,106,247,0.25), 0 0 80px rgba(124,106,247,0.1); }
+    50% { box-shadow: 0 0 60px rgba(124,106,247,0.4), 0 0 120px rgba(124,106,247,0.18); }
+  }
+  .hero-preview-animated {
+    animation: preview-float 5s ease-in-out infinite, preview-glow-pulse 4s ease-in-out infinite;
+  }
+  @keyframes blink-cursor {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+  .preview-cursor { animation: blink-cursor 1s step-end infinite; }
+  @keyframes typing-bar {
+    0% { width: 0%; }
+    70% { width: 85%; }
+    90% { width: 85%; }
+    100% { width: 0%; }
+  }
+  .preview-typing-bar {
+    animation: typing-bar 3.5s ease-in-out infinite;
+    height: 8px; border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
   }
 </style>
 </head>
@@ -593,15 +833,15 @@
 
 <!-- HERO -->
 <section class="hero">
-  <div class="hero-badge">
+  <div class="hero-badge fade-in">
     <span class="dot"></span>
-    AI-Powered Video Studio
+    Early Access is Open
   </div>
-  <h1>Clone any viral video.<br><span class="grad">Then scale it yours.</span></h1>
-  <p class="hero-sub">
+  <h1 class="fade-in fade-in-delay-1">Clone any viral video.<br><span class="grad">Then scale it yours.</span></h1>
+  <p class="hero-sub fade-in fade-in-delay-2">
     Affiliate OS reverse-engineers what's working across social media, rewrites it in your voice, and hands you a production-ready script in seconds.
   </p>
-  <div class="hero-actions">
+  <div class="hero-actions fade-in fade-in-delay-3">
     <a href="/login.html" class="btn-primary">
       <i class="ti ti-player-play-filled"></i>
       Start for free
@@ -613,60 +853,92 @@
   </div>
 </section>
 
+<!-- PLATFORM TRUST STRIP -->
+<div class="trust-strip">
+  <div class="trust-label">Works with your favourite platforms</div>
+  <div class="trust-icons">
+    <div class="trust-icon-item">
+      <!-- TikTok -->
+      <svg class="trust-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.33-6.34V8.82a8.18 8.18 0 004.78 1.52V6.89a4.85 4.85 0 01-1.01-.2z"/></svg>
+      TikTok
+    </div>
+    <div class="trust-icon-item">
+      <!-- Instagram -->
+      <svg class="trust-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+      Instagram Reels
+    </div>
+    <div class="trust-icon-item">
+      <!-- YouTube -->
+      <svg class="trust-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+      YouTube Shorts
+    </div>
+    <div class="trust-icon-item">
+      <!-- Facebook -->
+      <svg class="trust-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+      Facebook Reels
+    </div>
+    <div class="trust-icon-item">
+      <!-- Google Flow / Veo -->
+      <svg class="trust-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+      Google Flow
+    </div>
+  </div>
+</div>
+
 <!-- MARQUEE -->
 <div class="marquee-wrap">
   <div class="marquee-track">
     <!-- First pass -->
     <div class="marquee-item"><i class="ti ti-video"></i> AI Video Studio</div>
-    <div class="marquee-item"><i class="ti ti-script"></i> Viral Script Generator</div>
+    <div class="marquee-item"><i class="ti ti-edit"></i> Script Rewriter</div>
     <div class="marquee-item"><i class="ti ti-users"></i> Multi-Account Manager</div>
     <div class="marquee-item"><i class="ti ti-calendar-event"></i> Daily Content Plan</div>
     <div class="marquee-item"><i class="ti ti-eye"></i> Competitor Intel</div>
     <div class="marquee-item"><i class="ti ti-chart-bar"></i> Performance Dashboard</div>
-    <div class="marquee-item"><i class="ti ti-bolt"></i> One-Click Publish</div>
+    <div class="marquee-item"><i class="ti ti-copy"></i> Scene-by-Scene Prompts</div>
     <div class="marquee-item"><i class="ti ti-brain"></i> AI Rewrite Engine</div>
-    <div class="marquee-item"><i class="ti ti-trend-up"></i> Trend Radar</div>
-    <div class="marquee-item"><i class="ti ti-infinity"></i> Unlimited Scripts</div>
+    <div class="marquee-item"><i class="ti ti-sparkles"></i> Veo 3.1 Fast</div>
+    <div class="marquee-item"><i class="ti ti-infinity"></i> Unlimited Projects</div>
     <!-- Second pass (duplicate for seamless loop) -->
     <div class="marquee-item"><i class="ti ti-video"></i> AI Video Studio</div>
-    <div class="marquee-item"><i class="ti ti-script"></i> Viral Script Generator</div>
+    <div class="marquee-item"><i class="ti ti-edit"></i> Script Rewriter</div>
     <div class="marquee-item"><i class="ti ti-users"></i> Multi-Account Manager</div>
     <div class="marquee-item"><i class="ti ti-calendar-event"></i> Daily Content Plan</div>
     <div class="marquee-item"><i class="ti ti-eye"></i> Competitor Intel</div>
     <div class="marquee-item"><i class="ti ti-chart-bar"></i> Performance Dashboard</div>
-    <div class="marquee-item"><i class="ti ti-bolt"></i> One-Click Publish</div>
+    <div class="marquee-item"><i class="ti ti-copy"></i> Scene-by-Scene Prompts</div>
     <div class="marquee-item"><i class="ti ti-brain"></i> AI Rewrite Engine</div>
-    <div class="marquee-item"><i class="ti ti-trend-up"></i> Trend Radar</div>
-    <div class="marquee-item"><i class="ti ti-infinity"></i> Unlimited Scripts</div>
+    <div class="marquee-item"><i class="ti ti-sparkles"></i> Veo 3.1 Fast</div>
+    <div class="marquee-item"><i class="ti ti-infinity"></i> Unlimited Projects</div>
   </div>
 </div>
 
 <!-- HOW IT WORKS -->
 <section id="how">
   <div class="container">
-    <div class="section-label">How it works</div>
-    <h2 class="section-title">From idea to script in 4 steps</h2>
-    <p class="section-sub">No agency. No guesswork. Just a repeatable system that takes the viral content you find and turns it into your next post.</p>
+    <div class="section-label fade-in">How it works</div>
+    <h2 class="section-title fade-in fade-in-delay-1">From idea to script in 4 steps</h2>
+    <p class="section-sub fade-in fade-in-delay-2">No agency. No guesswork. Just a repeatable system that takes the viral content you find and turns it into your next post.</p>
     <div class="how-grid">
-      <div class="how-card">
+      <div class="how-card fade-in fade-in-delay-1">
         <div class="how-num">Step 01</div>
         <h3>Find what's viral</h3>
         <p>Paste a competitor's profile or video URL. Our AI surfaces exactly what's blowing up in your niche right now.</p>
       </div>
-      <div class="how-card">
+      <div class="how-card fade-in fade-in-delay-2">
         <div class="how-num">Step 02</div>
         <h3>Analyze the hook</h3>
         <p>We break down the hook, structure, pacing, and CTA of the top-performing video so you understand why it worked.</p>
       </div>
-      <div class="how-card">
+      <div class="how-card fade-in fade-in-delay-3">
         <div class="how-num">Step 03</div>
         <h3>Rewrite in your voice</h3>
         <p>One click rewrites the script for your product, brand, and audience — original enough to stand out, proven enough to convert.</p>
       </div>
-      <div class="how-card">
+      <div class="how-card fade-in fade-in-delay-4">
         <div class="how-num">Step 04</div>
-        <h3>Generate & post</h3>
-        <p>Turn the script into a Veo 3 video prompt, shoot, or record voiceover — then schedule it across all your accounts from one dashboard.</p>
+        <h3>Generate & ship</h3>
+        <p>Turn the rewritten script into a Veo 3 video prompt, shoot, or record voiceover — then track all your accounts from one clean dashboard.</p>
       </div>
     </div>
   </div>
@@ -676,26 +948,150 @@
 <div class="stats-strip">
   <div class="stats-inner">
     <div class="stat-item">
-      <div class="stat-val">8s</div>
-      <div class="stat-label">Average script generation time</div>
+      <div class="stat-val">Free</div>
+      <div class="stat-label">To start — no credit card required</div>
     </div>
     <div class="stat-item">
       <div class="stat-val">∞</div>
-      <div class="stat-label">Scripts per month</div>
+      <div class="stat-label">Scripts and projects — no caps</div>
     </div>
     <div class="stat-item">
       <div class="stat-val">1</div>
-      <div class="stat-label">File. All your accounts. All your posts.</div>
+      <div class="stat-label">Dashboard for every account you run</div>
     </div>
   </div>
 </div>
 
+<!-- SOCIAL PROOF -->
+<section id="testimonials" style="padding: 80px 24px 0;">
+  <div class="container">
+    <div style="text-align:center;">
+      <div class="section-label">Early users</div>
+      <h2 class="section-title">What creators are saying</h2>
+      <p class="section-sub" style="margin: 0 auto;">Real feedback from affiliate creators in early access.</p>
+    </div>
+    <div class="testimonial-grid">
+
+      <div class="testimonial-card">
+        <div class="t-stars">
+          <span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span>
+        </div>
+        <div class="t-quote placeholder">Your review here — drop us a line at support@affiliateos.app</div>
+        <div class="t-author">
+          <div class="t-avatar placeholder-av"></div>
+          <div>
+            <div class="t-name" style="opacity:0.4;">Early Adopter</div>
+            <div class="t-handle" style="opacity:0.3;">@yourhandle</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="t-stars">
+          <span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span>
+        </div>
+        <div class="t-quote placeholder">Your review here — drop us a line at support@affiliateos.app</div>
+        <div class="t-author">
+          <div class="t-avatar placeholder-av"></div>
+          <div>
+            <div class="t-name" style="opacity:0.4;">Early Adopter</div>
+            <div class="t-handle" style="opacity:0.3;">@yourhandle</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="testimonial-card">
+        <div class="t-stars">
+          <span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span><span class="t-star">★</span>
+        </div>
+        <div class="t-quote placeholder">Your review here — drop us a line at support@affiliateos.app</div>
+        <div class="t-author">
+          <div class="t-avatar placeholder-av"></div>
+          <div>
+            <div class="t-name" style="opacity:0.4;">Early Adopter</div>
+            <div class="t-handle" style="opacity:0.3;">@yourhandle</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- APP PREVIEW — drop in a screenshot or video clip here when ready -->
+<section id="preview" style="padding: 0 24px 80px;">
+  <div class="container" style="text-align:center;">
+    <div class="section-label fade-in" style="margin-bottom:14px;">See it in action</div>
+    <!-- VIDEO: uncomment and replace src when you have the clip
+    <video autoplay muted loop playsinline style="width:100%;max-width:960px;border-radius:20px;border:1px solid var(--border-accent);box-shadow:var(--glow-strong);">
+      <source src="/assets/demo.mp4" type="video/mp4">
+    </video>
+    -->
+    <!-- SCREENSHOT placeholder — replace this div with an <img> tag when ready -->
+    <div class="hero-preview-animated fade-in fade-in-delay-1" style="
+      max-width: 960px; margin: 0 auto;
+      aspect-ratio: 16/9;
+      border-radius: 20px;
+      border: 1px solid var(--border-accent);
+      background: linear-gradient(135deg, rgba(124,106,247,0.07) 0%, rgba(10,10,15,0.95) 100%);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 20px;
+      position: relative; overflow: hidden;
+    ">
+      <!-- grid overlay -->
+      <div style="position:absolute;inset:0;background-image:linear-gradient(rgba(124,106,247,0.06) 1px,transparent 1px),linear-gradient(90deg,rgba(124,106,247,0.06) 1px,transparent 1px);background-size:48px 48px;pointer-events:none;"></div>
+      <!-- mock UI elements -->
+      <div style="position:absolute;top:16px;left:20px;right:20px;display:flex;align-items:center;gap:10px;opacity:0.5;">
+        <div style="width:8px;height:8px;border-radius:50%;background:#f87171;"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#fbbf24;"></div>
+        <div style="width:8px;height:8px;border-radius:50%;background:#34d399;"></div>
+        <div style="flex:1;height:6px;border-radius:3px;background:rgba(255,255,255,0.06);"></div>
+      </div>
+      <!-- mock sidebar panels -->
+      <div style="position:absolute;top:40px;bottom:16px;left:20px;width:22%;border-radius:10px;background:rgba(124,106,247,0.05);border:1px solid rgba(124,106,247,0.12);display:flex;flex-direction:column;gap:8px;padding:12px;">
+        <div style="height:7px;border-radius:4px;background:rgba(124,106,247,0.3);width:60%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.08);width:85%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.08);width:70%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.08);width:80%;"></div>
+        <div style="margin-top:8px;height:7px;border-radius:4px;background:rgba(124,106,247,0.2);width:50%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:90%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:65%;"></div>
+      </div>
+      <!-- mock main area -->
+      <div style="position:absolute;top:40px;bottom:16px;left:calc(22% + 28px);right:20px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:12px;padding:16px;">
+        <div style="display:flex;gap:8px;">
+          <div style="height:6px;border-radius:3px;background:rgba(124,106,247,0.4);width:30%;"></div>
+          <div style="height:6px;border-radius:3px;background:rgba(255,255,255,0.08);width:20%;"></div>
+        </div>
+        <!-- typing animation bar -->
+        <div class="preview-typing-bar" style="width:70%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:90%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:75%;"></div>
+        <div style="margin-top:4px;display:flex;gap:8px;flex-wrap:wrap;">
+          <div style="height:28px;border-radius:8px;width:90px;background:rgba(124,106,247,0.2);border:1px solid rgba(124,106,247,0.3);"></div>
+          <div style="height:28px;border-radius:8px;width:70px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);"></div>
+        </div>
+        <div style="height:1px;background:rgba(255,255,255,0.05);margin:4px 0;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:80%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:60%;"></div>
+        <div style="height:5px;border-radius:4px;background:rgba(255,255,255,0.06);width:70%;"></div>
+      </div>
+      <!-- center label -->
+      <div style="position:relative;z-index:2;text-align:center;">
+        <div style="font-size:0.88rem;font-weight:600;color:var(--text-muted);letter-spacing:0.02em;">
+          <i class="ti ti-sparkles" style="color:var(--accent2);margin-right:6px;"></i>App preview coming soon
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- FEATURES -->
 <section id="features">
   <div class="container">
-    <div class="section-label">Features</div>
-    <h2 class="section-title">Everything you need to scale</h2>
-    <p class="section-sub">Built for creators running multiple affiliate accounts who need volume without sacrificing quality.</p>
+    <div class="section-label fade-in">Features</div>
+    <h2 class="section-title fade-in fade-in-delay-1">Everything you need to scale</h2>
+    <p class="section-sub fade-in fade-in-delay-2">Built for creators running multiple affiliate accounts who need volume without sacrificing quality.</p>
     <div class="features-grid">
 
       <div class="feat-card wide">
@@ -706,17 +1102,17 @@
       </div>
 
       <div class="feat-card">
-        <div class="feat-icon"><i class="ti ti-script"></i></div>
-        <h3>Viral Script Generator</h3>
-        <p>Paste a viral video, get a rewritten version for your niche. Hooks, transitions, CTAs — all optimized.</p>
-        <span class="feat-tag"><i class="ti ti-bolt"></i> 14 templates</span>
+        <div class="feat-icon"><i class="ti ti-edit"></i></div>
+        <h3>Script Rewriter</h3>
+        <p>Paste a viral script, get a rewritten version for your product and voice. Hooks, transitions, CTAs — adapted, not copied.</p>
+        <span class="feat-tag"><i class="ti ti-bolt"></i> Your voice, proven structure</span>
       </div>
 
       <div class="feat-card wide">
         <div class="feat-icon"><i class="ti ti-users-group"></i></div>
         <h3>Multi-Account Manager</h3>
-        <p>Track up to 6 affiliate accounts side by side — posting status, daily plan, scripts, and performance. Never lose track of which account needs content today.</p>
-        <span class="feat-tag"><i class="ti ti-layout-grid"></i> Up to 6 accounts</span>
+        <p>Track all your affiliate accounts side by side — posting status, daily plan, scripts, and performance. Never lose track of which account needs content today.</p>
+        <span class="feat-tag"><i class="ti ti-layout-grid"></i> All your accounts, one place</span>
       </div>
 
       <div class="feat-card">
@@ -737,6 +1133,67 @@
         <p>See what's converting across all your accounts with a clean analytics view built for affiliate creators.</p>
       </div>
 
+    </div>
+
+    <!-- FEATURES INLINE CTA -->
+    <div class="features-cta fade-in">
+      <div class="features-cta-text">
+        <h3>Ready to stop posting from scratch?</h3>
+        <p>Join creators already using Affiliate OS to clone what works and ship content in minutes, not hours.</p>
+      </div>
+      <a href="/login.html" class="btn-primary" style="white-space:nowrap;font-size:0.95rem;padding:13px 28px;">
+        <i class="ti ti-rocket"></i>
+        Start for free
+      </a>
+    </div>
+
+  </div>
+</section>
+
+<!-- COMPARISON TABLE -->
+<section id="compare" style="padding: 80px 24px 0;">
+  <div class="container">
+    <div style="text-align:center;">
+      <div class="section-label">Why switch</div>
+      <h2 class="section-title">The old way vs. Affiliate OS</h2>
+      <p class="section-sub" style="margin: 0 auto;">Stop juggling tabs, docs, and half-baked AI prompts.</p>
+    </div>
+    <div class="compare-table">
+      <div class="compare-row header">
+        <div class="compare-cell col-label">What you need</div>
+        <div class="compare-cell col-bad">Doing it manually</div>
+        <div class="compare-cell col-good">Affiliate OS</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Find viral content in your niche</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> Hours of scrolling TikTok/Reels</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> Paste a URL, get instant breakdown</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Rewrite scripts for your brand</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> ChatGPT, copy/paste, re-prompt 10×</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> One-click rewrite in your voice</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Create Veo 3 video prompts</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> Build each prompt manually from scratch</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> Auto-generated, scene-by-scene</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Manage multiple accounts</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> Spreadsheets + sticky notes</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> One dashboard for every account</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Track what's working</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> Manual notes, forgotten by Tuesday</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> Performance view built for affiliates</div>
+      </div>
+      <div class="compare-row">
+        <div class="compare-cell col-label">Time to post new content</div>
+        <div class="compare-cell col-bad"><i class="ti ti-x"></i> 2–4 hours per video</div>
+        <div class="compare-cell col-good"><i class="ti ti-check"></i> Under 15 minutes, start to finish</div>
+      </div>
     </div>
   </div>
 </section>
@@ -794,7 +1251,7 @@
           <li><i class="ti ti-check"></i> Full Video Replicator</li>
           <li><i class="ti ti-check"></i> Full Video Studio + Veo 3</li>
           <li><i class="ti ti-check"></i> Unlimited competitor tracking</li>
-          <li><i class="ti ti-check"></i> Cloud browser workflows</li>
+          <li><i class="ti ti-check"></i> Claude browser workflows <span style="font-size:0.72rem;color:var(--accent3);background:rgba(124,106,247,0.12);border:1px solid var(--border-accent);border-radius:4px;padding:1px 6px;margin-left:2px;">soon</span></li>
         </ul>
         <a href="/login.html" class="price-btn price-btn-primary">Start 7-day free trial</a>
         <div class="price-note"><i class="ti ti-lock"></i> No credit card required</div>
@@ -814,7 +1271,97 @@
           <li><i class="ti ti-check"></i> Dedicated onboarding</li>
           <li>&nbsp;</li>
         </ul>
-        <button class="price-btn price-btn-ghost" disabled style="opacity:0.5;cursor:not-allowed;">Notify me</button>
+        <div style="display:flex;gap:6px;">
+          <input type="email" id="agencyEmailInput" placeholder="your@email.com"
+            style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-hover);color:var(--text);font-size:0.8rem;font-family:inherit;outline:none;min-width:0;"
+            onfocus="this.style.borderColor='var(--border-accent)'" onblur="this.style.borderColor='var(--border)'">
+          <button onclick="(function(){const i=document.getElementById('agencyEmailInput');if(!i.value||!i.value.includes('@')){i.focus();return;}const b=this;b.textContent='✓';b.style.background='rgba(52,211,153,0.2)';b.style.color='#34d399';b.style.borderColor='rgba(52,211,153,0.4)';i.value='';setTimeout(()=>{b.textContent='Notify';b.style.background='';b.style.color='';b.style.borderColor='';},2500);}).call(this)"
+            style="padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-hover);color:var(--text-muted);font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:all 0.2s;">Notify</button>
+        </div>
+        <div class="price-note" style="margin-top:8px;"><i class="ti ti-mail"></i> We'll email you when Agency launches</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- FAQ -->
+<section id="faq" style="padding: 96px 24px 64px;">
+  <div class="container">
+    <div style="text-align:center;">
+      <div class="section-label">FAQ</div>
+      <h2 class="section-title">Common questions</h2>
+    </div>
+    <div class="faq-list">
+
+      <div class="faq-item open">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          How much does it cost?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Affiliate OS is free to start — no credit card required. You get 2 account slots, the dashboard, and manual script entry. Paid plans start at $19/mo for the Script Rewriter and Video Replicator. The Pro plan ($49/mo) unlocks full Video Studio with Veo 3 prompts and unlimited accounts. Agency ($99/mo) is in development — sign up to the waitlist in the pricing section.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          What is Veo 3 and how does Affiliate OS use it?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Veo 3 (specifically Veo 3.1 Fast) is Google's AI video generation model, available through Google Flow. Affiliate OS automatically generates structured JSON prompts from your rewritten scripts — including scene descriptions, camera directions, and voiceover — ready to paste directly into Flow. No manual prompt engineering needed.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          Do I need to be a video editor or tech-savvy to use this?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Not at all. Affiliate OS is built for creators, not engineers. If you can paste a URL and click a button, you can use the full platform. The Video Studio generates ready-to-use prompts — just copy them into Google Flow or your preferred tool and hit generate.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          Can I manage multiple affiliate accounts?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Yes — that's the whole point. Affiliate OS was built from the ground up for creators running multiple accounts across different products and niches. The dashboard lets you track daily status, scripts, and content plans for every account in one place. Pro users get unlimited account slots.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          Will the rewritten scripts get flagged as duplicate content?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>No. The rewriter doesn't copy and paste — it analyzes the hook structure, format, and pacing of a viral video, then writes an entirely new script for your product and voice. The result is original content inspired by proven formats, not copied content.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          Is there a free trial for paid plans?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Yes — Starter and Pro plans include a 7-day free trial, no credit card required. Start with the free tier and upgrade anytime from your settings. You can cancel before the trial ends and you won't be charged.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
+          What platforms does Affiliate OS support?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Affiliate OS is a web app that works in any browser — no install required. The content you create works for any short-form platform: TikTok, Instagram Reels, YouTube Shorts, Facebook Reels, and more. Claude browser workflows (for automated posting) are coming soon in the Pro plan.</p>
+        </div>
       </div>
 
     </div>
@@ -824,8 +1371,8 @@
 <!-- CTA -->
 <section class="cta-section">
   <div class="cta-card">
-    <h2>Ready to scale your content?</h2>
-    <p>Join creators using Affiliate OS to post more, test faster, and grow every account — all from one place.</p>
+    <h2>Your next viral post is one rewrite away.</h2>
+    <p>Stop starting from scratch. Affiliate OS takes what's already working and turns it into your next post — in seconds, not hours.</p>
     <a href="/login.html" class="btn-primary" style="font-size:1.05rem; padding: 15px 36px;">
       <i class="ti ti-rocket"></i>
       Get started free
@@ -863,11 +1410,29 @@
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a href="/login.html">Sign up</a>
+    <a href="/privacy.html">Privacy</a>
+    <a href="/terms.html">Terms</a>
   </div>
-  <div class="footer-copy">© 2025 Affiliate OS. All rights reserved.</div>
+  <div class="footer-copy">© 2026 Affiliate OS. All rights reserved.</div>
 </footer>
 
+<!-- MOBILE STICKY CTA -->
+<div class="mobile-sticky-cta">
+  <a href="/login.html">Start for free</a>
+  <span class="mobile-sticky-note">No credit card &nbsp;·&nbsp; Free plan available</span>
+</div>
+
 <script>
+  // ── FAQ accordion ──
+  function toggleFaq(btn) {
+    const item = btn.closest('.faq-item');
+    const isOpen = item.classList.contains('open');
+    // close all
+    document.querySelectorAll('.faq-item.open').forEach(el => el.classList.remove('open'));
+    // open clicked if it was closed
+    if (!isOpen) item.classList.add('open');
+  }
+
   // ── Mobile burger ──
   const burger = document.getElementById('burger');
   const mobileMenu = document.getElementById('mobileMenu');
@@ -912,13 +1477,13 @@
               <div class="nav-user-dropdown-name">${name}</div>
               <div class="nav-user-dropdown-email">${email}</div>
             </div>
-            <a href="/app" class="nav-dropdown-btn"><i class="ti ti-layout-dashboard"></i> Open App</a>
+            <a href="/app.html" class="nav-dropdown-btn"><i class="ti ti-layout-dashboard"></i> Open App</a>
             <button class="nav-dropdown-btn danger" id="landingSignOut"><i class="ti ti-logout"></i> Sign out</button>
           </div>
         </div>`;
 
       document.getElementById('navAuthArea').innerHTML = chipHTML;
-      document.getElementById('mobileAuthArea').innerHTML = `<a href="/app" class="mob-cta">Open App</a>`;
+      document.getElementById('mobileAuthArea').innerHTML = `<a href="/app.html" class="mob-cta">Open App</a>`;
 
       // Toggle dropdown
       document.getElementById('navUserChip').addEventListener('click', (e) => {
@@ -939,6 +1504,36 @@
     } catch(e) {
       // Supabase not available — leave default "Get Started" button
     }
+  })();
+
+  // ── Nav scroll shadow ──
+  (function() {
+    const nav = document.querySelector('nav');
+    const onScroll = () => nav.classList.toggle('nav-scrolled', window.scrollY > 60);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  })();
+
+  // ── Scroll fade-in (IntersectionObserver) ──
+  (function() {
+    // Landing page animations always run — reduce motion is an in-app setting only.
+    // Hero elements animate in immediately on load (they're already visible)
+    const heroEls = document.querySelectorAll('.hero .fade-in');
+    heroEls.forEach((el, i) => {
+      setTimeout(() => el.classList.add('visible'), 80 + i * 120);
+    });
+
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          io.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.12 });
+
+    // Observe all .fade-in elements except those in hero (handled above)
+    document.querySelectorAll('.fade-in:not(.hero .fade-in)').forEach(el => io.observe(el));
   })();
 </script>
 </body>
