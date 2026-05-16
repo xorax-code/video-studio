@@ -106,7 +106,7 @@
   }
 
   /* Smooth transitions for theme switching */
-  body, .sidebar, .sidebar-brand, .main-area, .topbar, .page-body,
+  body, .main-area, .topbar, .page-body,
   .surface, .table-wrap, .stat-card, .modal, .search-box input,
   .filter-select, .btn, .tab, .vs-panel, .modal-overlay,
   .plan-card, .daily-item, .cal-day {
@@ -528,7 +528,11 @@
     min-width: 0;
   }
 
-  .topbar-actions { display: flex; align-items: center; gap: 6px; }
+  /* ===== FORM LABELS ===== */
+  .form-label {
+    display: block; font-size: 11px; font-weight: 600;
+    color: var(--text-2); margin-bottom: 5px; letter-spacing: 0.02em;
+  }
 
   /* ===== PAGE BODY ===== */
   .page-body {
@@ -751,6 +755,8 @@
   .tag-c3 { background: rgba(168,85,247,0.15); color: var(--tag-purple); }
   .tag-c4 { background: rgba(239,68,68,0.15); color: var(--tag-red); }
   .tag-c5 { background: rgba(20,184,166,0.15); color: var(--tag-teal); }
+  /* Competitor tag — used as .tag.tag-green */
+  .tag-green { background: rgba(34,197,94,0.15); color: var(--tag-green); border-color: rgba(34,197,94,0.25); }
 
   /* ===== NOTE TEXT ===== */
   .note-text { color: var(--text-3); font-size: 11px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -1501,8 +1507,7 @@
     .comp-grid { grid-template-columns: 1fr !important; }
 
     /* ── Video Replicator / Video Studio — single column ── */
-    #tab-video-replicator > div,
-    #tab-video-producer > div { grid-template-columns: 1fr !important; }
+    #tab-video-studio > div { grid-template-columns: 1fr !important; }
 
     /* ── VS panels — full width, readable font sizes ── */
     .vs-panel { font-size: 13px; }
@@ -2032,7 +2037,7 @@
     transition: color .15s, background .15s, border-color .15s;
     white-space: nowrap; flex-shrink: 0; letter-spacing: 0.01em;
   }
-  .cmd-k-badge:hover { color: var(--text-1); background: var(--surface-3); border-color: var(--border-3); }
+  .cmd-k-badge:hover { color: var(--text-1); background: var(--surface-3); border-color: var(--border-2); }
   .cmd-k-badge kbd {
     font-size: 10px; font-family: inherit;
     background: var(--surface-3); border: 1px solid var(--border-2);
@@ -2795,102 +2800,6 @@
       <div style="display:flex;gap:8px;justify-content:flex-end;">
         <button class="btn btn-secondary" onclick="closePlanModal()">Cancel</button>
         <button class="btn btn-primary" onclick="savePlan()">Save Plan</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- (WCT modal removed — merged into plan modal) -->
-  <div id="wctModalOverlay" style="display:none;" onclick="if(event.target===this)closeWeeklyTypeModal()">
-    <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:var(--radius);padding:22px;width:480px;max-width:95vw;max-height:90vh;overflow-y:auto;">
-      <div style="font-size:13px;font-weight:600;color:var(--text-1);margin-bottom:16px;" id="wctModalTitle">New Content Type</div>
-
-      <!-- Icon row -->
-      <div class="form-group" style="margin-bottom:14px;">
-        <label class="form-label">Icon</label>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="wctIconPicker">
-          <button class="wct-modal-icon-btn selected" data-icon="🎬" onclick="selectWctIcon(this)">🎬</button>
-          <button class="wct-modal-icon-btn" data-icon="📱" onclick="selectWctIcon(this)">📱</button>
-          <button class="wct-modal-icon-btn" data-icon="🛒" onclick="selectWctIcon(this)">🛒</button>
-          <button class="wct-modal-icon-btn" data-icon="📈" onclick="selectWctIcon(this)">📈</button>
-          <button class="wct-modal-icon-btn" data-icon="🔥" onclick="selectWctIcon(this)">🔥</button>
-          <button class="wct-modal-icon-btn" data-icon="✂️" onclick="selectWctIcon(this)">✂️</button>
-          <button class="wct-modal-icon-btn" data-icon="💡" onclick="selectWctIcon(this)">💡</button>
-          <button class="wct-modal-icon-btn" data-icon="🎯" onclick="selectWctIcon(this)">🎯</button>
-          <button class="wct-modal-icon-btn" data-icon="👥" onclick="selectWctIcon(this)">👥</button>
-          <button class="wct-modal-icon-btn" data-icon="⭐" onclick="selectWctIcon(this)">⭐</button>
-          <button class="wct-modal-icon-btn" data-icon="🎤" onclick="selectWctIcon(this)">🎤</button>
-          <button class="wct-modal-icon-btn" data-icon="📣" onclick="selectWctIcon(this)">📣</button>
-        </div>
-      </div>
-
-      <!-- Label + type -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-        <div class="form-group">
-          <label class="form-label">Label</label>
-          <input type="text" id="wctLabel" placeholder="e.g. Regular Video" maxlength="40" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Category</label>
-          <select id="wctCategory" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
-            <option value="product">Product Video</option>
-            <option value="growth">Account Growth</option>
-            <option value="custom">Custom</option>
-          </select>
-        </div>
-      </div>
-
-      <!-- Per day + color -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;">
-        <div class="form-group">
-          <label class="form-label">Videos per day <span style="font-size:9px;color:var(--text-3);font-weight:400;">(per account)</span></label>
-          <input type="number" id="wctPerDay" min="1" max="20" value="1" oninput="updateWctPreviewLine()" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Accent color</label>
-          <input type="color" id="wctColor" value="#10b981" style="width:100%;height:36px;padding:2px 4px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);cursor:pointer;">
-        </div>
-      </div>
-      <div id="wctPreviewLine" style="font-size:10px;color:var(--text-3);margin-bottom:12px;padding:5px 8px;background:var(--surface-2);border-radius:var(--radius-xs);"></div>
-
-      <!-- Account scope -->
-      <div class="form-group" style="margin-bottom:12px;">
-        <label class="form-label">Apply to accounts</label>
-        <div style="display:flex;gap:8px;margin-bottom:8px;">
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);cursor:pointer;">
-            <input type="radio" name="wctScope" value="all" id="wctScopeAll" checked onchange="toggleWctAccountPicker()" style="accent-color:var(--accent);">
-            All accounts
-          </label>
-          <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);cursor:pointer;">
-            <input type="radio" name="wctScope" value="specific" id="wctScopeSpecific" onchange="toggleWctAccountPicker()" style="accent-color:var(--accent);">
-            Specific accounts
-          </label>
-        </div>
-        <div id="wctAccountPicker" style="display:none;flex-wrap:wrap;gap:5px;max-height:100px;overflow-y:auto;"></div>
-      </div>
-
-      <!-- Active days -->
-      <div class="form-group" style="margin-bottom:16px;">
-        <label class="form-label">Active days</label>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;" id="wctDaysBtns">
-          <button class="plan-day-btn active" data-day="0">Sun</button>
-          <button class="plan-day-btn active" data-day="1">Mon</button>
-          <button class="plan-day-btn active" data-day="2">Tue</button>
-          <button class="plan-day-btn active" data-day="3">Wed</button>
-          <button class="plan-day-btn active" data-day="4">Thu</button>
-          <button class="plan-day-btn active" data-day="5">Fri</button>
-          <button class="plan-day-btn active" data-day="6">Sat</button>
-        </div>
-      </div>
-
-      <!-- Notes -->
-      <div class="form-group" style="margin-bottom:16px;">
-        <label class="form-label">Notes / content ideas <span style="font-size:9px;color:var(--text-3);">(optional)</span></label>
-        <textarea id="wctNotes" rows="3" placeholder="Script ideas, hooks, talking points, references…" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;resize:vertical;line-height:1.5;"></textarea>
-      </div>
-
-      <div style="display:flex;gap:8px;justify-content:flex-end;">
-        <button class="btn btn-secondary" onclick="closeWeeklyTypeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveWeeklyType()">Save</button>
       </div>
     </div>
   </div>
@@ -4506,7 +4415,7 @@
 
   function saveAccount() {
     const username = document.getElementById('fUsername').value.trim();
-    if (!username) { alert('Username is required.'); return; }
+    if (!username) { showToast('Username is required.', 'warning'); return; }
     const platform = document.getElementById('fPlatform').value;
     const pickedColor = document.getElementById('fBrandColor').value;
     const defaultColor = platformColors[platform] || '#7c6af7';
@@ -4638,7 +4547,7 @@
   function saveCompetitor() {
     const name = document.getElementById('cName').value.trim();
     const handle = document.getElementById('cHandle').value.trim();
-    if (!name && !handle) { alert('Name or handle is required.'); return; }
+    if (!name && !handle) { showToast('Name or handle is required.', 'warning'); return; }
     const data = {
       platform: document.getElementById('cPlatform').value,
       niche: document.getElementById('cNiche').value.trim(),
@@ -5028,7 +4937,7 @@
 
   function saveScript() {
     const title = document.getElementById('sTitle').value.trim();
-    if (!title) { alert('Script title is required.'); return; }
+    if (!title) { showToast('Script title is required.', 'warning'); return; }
     const data = {
       status: document.getElementById('sStatus').value,
       format: document.getElementById('sFormat').value,
@@ -10531,14 +10440,27 @@ TECHNICAL SPECS:
     const { data: { session } } = await _sb.auth.getSession();
     if (session) {
       DB.setUser(session.user.id);
+      // Read Stripe tier from app_metadata (written by webhook)
+      window._stripeCustomerId = session.user.app_metadata?.stripe_customer_id || null;
+      window._stripeTier = session.user.app_metadata?.stripe_tier || 'free';
       // Prefer display name from settings, fall back to email
       const _s = getUserSettings();
       updateUserChip(_s.displayName || session.user.email);
       // Listen for sign-out events (e.g. token expiry)
-      _sb.auth.onAuthStateChange((event) => {
-        if (event === 'SIGNED_OUT' && window.location.protocol !== 'file:')
+      _sb.auth.onAuthStateChange((event, newSession) => {
+        if (event === 'SIGNED_OUT' && window.location.protocol !== 'file:') {
           window.location.href = '/login.html';
+        }
+        if (event === 'USER_UPDATED' && newSession) {
+          window._stripeCustomerId = newSession.user.app_metadata?.stripe_customer_id || null;
+          window._stripeTier = newSession.user.app_metadata?.stripe_tier || 'free';
+        }
       });
+      // Handle post-checkout redirect
+      if (window.location.search.includes('upgraded=1')) {
+        history.replaceState({}, '', '/app');
+        setTimeout(() => showToast('🎉 Welcome to Affiliate OS Pro! Your plan is now active.', 'success', 5000), 800);
+      }
       initApp();
       return;
     }
@@ -10898,6 +10820,144 @@ TECHNICAL SPECS:
   function switchUserTab(name) {
     document.querySelectorAll('.uset-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
     document.querySelectorAll('.uset-tab-content').forEach(c => c.classList.toggle('active', c.id === 'uset-tab-' + name));
+    if (name === 'billing') renderBillingTab();
+  }
+
+  // ── Stripe price IDs — fill these in after creating products in Stripe dashboard ──
+  const STRIPE_PRICES = {
+    starter: 'price_1TXVdNJEBUETI2v8Z0emWAmh',
+    pro:     'price_1TXVdnJEBUETI2v8zMFyiwH4',
+    agency:  'price_1TXVeGJEBUETI2v8pMkY16DK',
+  };
+
+  const PLAN_INFO = {
+    free:    { label: 'Free',    price: '$0/mo',   desc: '3 accounts · Dashboard · Viral Scripts · Daily Plan' },
+    starter: { label: 'Starter', price: '$19/mo',  desc: '5 accounts · Video Replicator · Competitor tracking · Script rewriter' },
+    pro:     { label: 'Pro',     price: '$49/mo',  desc: 'Unlimited accounts · Full Video Studio + Veo 3 · Claude browser workflows' },
+    agency:  { label: 'Agency',  price: '$99/mo',  desc: 'Everything in Pro · 2 team seats · White-label · API access' },
+  };
+
+  const PLAN_ORDER = ['free', 'starter', 'pro', 'agency'];
+
+  function renderBillingTab() {
+    const container = document.getElementById('billingTabContent');
+    if (!container) return;
+
+    const tier       = window._stripeTier || 'free';
+    const customerId = window._stripeCustomerId || null;
+    const planInfo   = PLAN_INFO[tier] || PLAN_INFO.free;
+    const tierIdx    = PLAN_ORDER.indexOf(tier);
+
+    const manageBtnHtml = customerId
+      ? `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Manage Plan</button>`
+      : `<button disabled style="padding:8px 18px;border-radius:8px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-3);font-size:12px;font-weight:600;cursor:not-allowed;font-family:inherit;">Free Plan</button>`;
+
+    const plansHtml = PLAN_ORDER.map((planKey, idx) => {
+      const info       = PLAN_INFO[planKey];
+      const isCurrent  = planKey === tier;
+      const isUpgrade  = idx > tierIdx;
+      const isAgency   = planKey === 'agency';
+      const border     = isCurrent ? '1px solid var(--border-accent)' : '1px solid var(--border)';
+      const bg         = isCurrent ? 'rgba(124,106,247,0.07)' : 'var(--surface-2)';
+
+      let actionHtml = '';
+      if (isCurrent) {
+        actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;">CURRENT</span>`;
+      } else if (isAgency) {
+        actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(124,106,247,0.12);color:var(--accent-2);">COMING SOON</span>`;
+      } else if (isUpgrade && STRIPE_PRICES[planKey] && !STRIPE_PRICES[planKey].includes('_HERE')) {
+        actionHtml = `<button onclick="startCheckout('${planKey}')" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
+      } else if (isUpgrade) {
+        actionHtml = `<button disabled title="Price ID not configured yet" style="padding:7px 16px;border-radius:7px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-3);font-size:11.5px;font-weight:600;cursor:not-allowed;font-family:inherit;">Upgrade</button>`;
+      }
+
+      const rec = planKey === 'pro' && tier === 'free'
+        ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--grad-accent);color:#fff;margin-left:6px;">RECOMMENDED</span>`
+        : '';
+
+      return `<div style="background:${bg};border:${border};border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+        <div>
+          <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">
+            ${info.label} <span style="font-size:11px;font-weight:500;color:var(--text-3);">— ${info.price}</span>${rec}
+          </div>
+          <div style="font-size:11px;color:var(--text-3);">${info.desc}</div>
+        </div>
+        ${actionHtml}
+      </div>`;
+    }).join('');
+
+    container.innerHTML = `
+      <div class="uset-section-title">Current Plan</div>
+      <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+            <span style="font-size:15px;font-weight:800;color:var(--text-1);">${planInfo.label}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#4ade80;letter-spacing:.05em;">ACTIVE</span>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);">${planInfo.desc}</div>
+        </div>
+        ${manageBtnHtml}
+      </div>
+
+      <div class="uset-section-title">Subscription Plans</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        ${plansHtml}
+      </div>
+
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
+        <i class="ti ti-credit-card" style="color:var(--accent-2);font-size:18px;flex-shrink:0;"></i>
+        <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Billing is powered by Stripe. Your payment details are never stored on our servers. You can cancel or change your plan at any time from the Customer Portal.</div>
+      </div>`;
+  }
+
+  async function startCheckout(planKey) {
+    const priceId = STRIPE_PRICES[planKey];
+    if (!priceId || priceId.includes('_HERE')) {
+      showToast('Stripe price IDs not configured yet — see STRIPE_PRICES in app.html', 'warning', 5000);
+      return;
+    }
+    const { data: { session } } = await _sb.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (!session) { showToast('Please sign in first.', 'warning'); return; }
+
+    const btn = document.querySelector(`[onclick="startCheckout('${planKey}')"]`);
+    if (btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
+
+    try {
+      const res  = await fetch('/.netlify/functions/create-checkout-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ priceId, userId: session.user.id, email: session.user.email }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        showToast('Checkout error: ' + (data.error || 'Unknown error'), 'error', 5000);
+        if (btn) { btn.textContent = 'Upgrade'; btn.disabled = false; }
+      }
+    } catch (err) {
+      showToast('Network error: ' + err.message, 'error');
+      if (btn) { btn.textContent = 'Upgrade'; btn.disabled = false; }
+    }
+  }
+
+  async function openBillingPortal() {
+    const customerId = window._stripeCustomerId;
+    if (!customerId) { showToast('No billing account found.', 'warning'); return; }
+
+    showToast('Opening billing portal…', 'info', 2000);
+    try {
+      const res  = await fetch('/.netlify/functions/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json();
+      if (data.url) window.open(data.url, '_blank');
+      else showToast('Portal error: ' + (data.error || 'Unknown'), 'error');
+    } catch (err) {
+      showToast('Network error: ' + err.message, 'error');
+    }
   }
 
   function updateClaudeBrowserDisplay() {
@@ -12181,57 +12241,7 @@ TECHNICAL SPECS:
       <!-- ABOUT -->
       <!-- BILLING -->
       <div id="uset-tab-billing" class="uset-tab-content">
-        <div class="uset-section-title">Current Plan</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border-2);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-          <div>
-            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-              <span style="font-size:15px;font-weight:800;color:var(--text-1);">Pro Trial</span>
-              <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(16,185,129,0.15);color:#4ade80;letter-spacing:.05em;">ACTIVE</span>
-            </div>
-            <div style="font-size:11px;color:var(--text-3);">7-day free trial · No credit card on file</div>
-          </div>
-          <button style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;opacity:0.6;pointer-events:none;" title="Stripe coming soon">Manage Plan</button>
-        </div>
-
-        <div class="uset-section-title">Subscription Plans</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
-          <!-- Free -->
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Free <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $0/mo</span></div>
-              <div style="font-size:11px;color:var(--text-3);">2 accounts · Dashboard + Accounts · Manual scripts only</div>
-            </div>
-          </div>
-          <!-- Starter -->
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Starter <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $19/mo</span></div>
-              <div style="font-size:11px;color:var(--text-3);">5 accounts · Script rewriter · Video Replicator · Competitor tracking (10 accounts) · Daily plan</div>
-            </div>
-          </div>
-          <!-- Pro -->
-          <div style="background:rgba(124,106,247,0.07);border:1px solid var(--border-accent);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">Pro <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $49/mo</span> <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--grad-accent);color:#fff;margin-left:4px;">RECOMMENDED</span></div>
-              <div style="font-size:11px;color:var(--text-3);">Unlimited accounts · Full Video Studio + Veo 3 · Unlimited competitor tracking · Claude browser workflows</div>
-            </div>
-          </div>
-          <!-- Agency -->
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:3px;">
-                <span style="font-size:13px;font-weight:700;color:var(--text-1);">Agency <span style="font-size:11px;font-weight:500;color:var(--text-3);">— $99/mo</span></span>
-                <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;">COMING SOON</span>
-              </div>
-              <div style="font-size:11px;color:var(--text-3);">Everything in Pro · 2 team seats · White-label · API access</div>
-            </div>
-          </div>
-        </div>
-
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
-          <i class="ti ti-credit-card" style="color:var(--accent-2);font-size:18px;flex-shrink:0;"></i>
-          <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Billing is powered by Stripe. Your payment details are never stored on our servers. Invoices and subscription management will be available here once billing is live.</div>
-        </div>
+        <div id="billingTabContent"><!-- rendered by renderBillingTab() --></div>
       </div>
 
       <!-- SECURITY -->
