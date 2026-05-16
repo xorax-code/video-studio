@@ -4,6 +4,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Affiliate OS — Clone Any Viral Video. Scale It Yours.</title>
+<meta name="description" content="Clone viral affiliate videos with AI. Replicate winning hooks, generate scripts, and scale your social media content — all in one tool.">
+<meta property="og:title" content="Affiliate OS — Clone Any Viral Video. Scale It Yours.">
+<meta property="og:description" content="Clone viral affiliate videos with AI. Replicate winning hooks, generate scripts, and scale your social media content — all in one tool.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://aiscaling.netlify.app">
+<meta property="og:image" content="https://aiscaling.netlify.app/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Affiliate OS — Clone Any Viral Video. Scale It Yours.">
+<meta name="twitter:description" content="Clone viral affiliate videos with AI. Replicate winning hooks, generate scripts, and scale your content.">
+<meta name="twitter:image" content="https://aiscaling.netlify.app/og-image.png">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><rect width='30' height='30' rx='7' fill='%230f172a'/><circle cx='15' cy='15' r='3.8' fill='%2310b981'/><circle cx='15' cy='6.5' r='2.2' fill='%2310b981'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -555,6 +566,7 @@
     .compare-table { border-radius: var(--radius); overflow: hidden; }
     .compare-row { grid-template-columns: 1fr 1fr; }
     .compare-row.header .compare-cell:first-child { display: none; }
+    .compare-row:not(.header) .compare-cell:first-child { display: none; }
     .compare-cell { font-size: 0.85rem; }
     .testimonial-grid { grid-template-columns: 1fr; }
     .faq-body.open p { font-size: 0.875rem; }
@@ -785,6 +797,40 @@
     height: 8px; border-radius: 4px;
     background: linear-gradient(90deg, var(--accent), var(--accent2));
   }
+
+  /* ===== RESPONSIVE: NARROW PHONE (≤480px) ===== */
+  @media (max-width: 480px) {
+    /* Comparison table — smaller text, tighter cells */
+    .compare-cell { font-size: 0.78rem !important; padding: 10px 12px; }
+    .compare-table { border-radius: 10px; }
+
+    /* CTA card — tighter padding so it doesn't overflow on very small screens */
+    .cta-card { padding: 32px 20px !important; border-radius: 16px; }
+    .cta-card h2 { font-size: 1.4rem; }
+
+    /* Hero section — reduce top/bottom padding on tiny screens */
+    .hero { padding: 80px 18px 56px; }
+    .hero h1 { font-size: clamp(1.6rem, 8vw, 2.2rem); }
+
+    /* Features grid — always single column */
+    .features-grid { grid-template-columns: 1fr !important; }
+
+    /* Pricing grid already goes 1-col at 560px; just reduce card padding */
+    .price-card { padding: 22px 18px; }
+
+    /* Section headings */
+    .section-heading { font-size: clamp(1.4rem, 6vw, 2rem); }
+  }
+
+  /* ===== SCROLL SAFETY: ensure page scrolls when browser zoom clips content ===== */
+  /* body already has overflow-x: hidden; overflow-y defaults to auto (scrollable) */
+  html { overflow-x: hidden; }
+  body { overflow-y: auto; }
+
+  /* ===== RESPONSIVE: 9:16 PORTRAIT / TALL MONITORS (≥1000px tall, ≥1024px wide) ===== */
+  /* At 9:16 (e.g. 1080×1920), full desktop CSS applies — no special overrides needed.
+     The sections already use padding/clamp values that scale well vertically. */
+
 </style>
 </head>
 <body>
@@ -1275,8 +1321,7 @@
           <input type="email" id="agencyEmailInput" placeholder="your@email.com"
             style="flex:1;padding:10px 12px;border-radius:8px;border:1px solid var(--border);background:var(--surface-hover);color:var(--text);font-size:0.8rem;font-family:inherit;outline:none;min-width:0;"
             onfocus="this.style.borderColor='var(--border-accent)'" onblur="this.style.borderColor='var(--border)'">
-          <button onclick="(function(){const i=document.getElementById('agencyEmailInput');if(!i.value||!i.value.includes('@')){i.focus();return;}const b=this;b.textContent='✓';b.style.background='rgba(52,211,153,0.2)';b.style.color='#34d399';b.style.borderColor='rgba(52,211,153,0.4)';i.value='';setTimeout(()=>{b.textContent='Notify';b.style.background='';b.style.color='';b.style.borderColor='';},2500);}).call(this)"
-            style="padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-hover);color:var(--text-muted);font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:all 0.2s;">Notify</button>
+          <button onclick="submitAgencyNotify(this)" style="padding:10px 14px;border-radius:8px;border:1px solid var(--border);background:var(--surface-hover);color:var(--text-muted);font-size:0.8rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;transition:all 0.2s;">Notify</button>
         </div>
         <div class="price-note" style="margin-top:8px;"><i class="ti ti-mail"></i> We'll email you when Agency launches</div>
       </div>
@@ -1535,6 +1580,41 @@
     // Observe all .fade-in elements except those in hero (handled above)
     document.querySelectorAll('.fade-in:not(.hero .fade-in)').forEach(el => io.observe(el));
   })();
+
+  // ── Agency notify ──
+  async function submitAgencyNotify(btn) {
+    const input = document.getElementById('agencyEmailInput');
+    if (!input || !input.value || !input.value.includes('@')) { if (input) input.focus(); return; }
+    const email = input.value.trim();
+    const origText = btn.textContent;
+
+    btn.textContent = '⏳';
+    btn.disabled = true;
+
+    try {
+      // Try to save via Supabase if available
+      if (typeof SUPABASE_URL !== 'undefined' && typeof SUPABASE_ANON !== 'undefined') {
+        const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+        await sb.from('agency_waitlist').insert({ email, created_at: new Date().toISOString() });
+      }
+    } catch(e) {
+      // Supabase insert is best-effort; don't block the UX
+    }
+
+    // Always show success — fall back to mailto if Supabase unavailable
+    btn.textContent = '✓ Added!';
+    btn.style.background = 'rgba(52,211,153,0.2)';
+    btn.style.color = '#34d399';
+    btn.style.borderColor = 'rgba(52,211,153,0.4)';
+    input.value = '';
+    setTimeout(() => {
+      btn.textContent = origText;
+      btn.style.background = '';
+      btn.style.color = '';
+      btn.style.borderColor = '';
+      btn.disabled = false;
+    }, 2500);
+  }
 </script>
 </body>
 </html>

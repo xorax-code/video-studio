@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Social Media Account Organizer</title>
+<title>Affiliate OS</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><rect width='30' height='30' rx='7' fill='%230f172a'/><circle cx='15' cy='15' r='3.8' fill='%2310b981'/><circle cx='15' cy='6.5' r='2.2' fill='%2310b981'/><circle cx='23.5' cy='20' r='2.2' fill='%2310b981'/><circle cx='6.5' cy='20' r='2.2' fill='%2310b981'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -1431,7 +1432,7 @@
     color: var(--text-1);
   }
   .auth-user-avatar {
-    width: 18px; height: 18px;
+    width: 22px; height: 22px;
     border-radius: 50%;
     background: var(--accent);
     display: flex; align-items: center; justify-content: center;
@@ -1439,6 +1440,13 @@
     color: #fff;
     font-weight: 800;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+  .auth-user-avatar img {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    border-radius: 50%;
+    display: block;
   }
   .dl-service-row { transition: filter 0.12s, border-color 0.12s; }
   .dl-service-row:hover { filter: brightness(1.12); }
@@ -1804,7 +1812,9 @@
   }
 
   /* ===== BACKGROUND THEMES ===== */
-  html[data-bg-theme="abyss"] {
+  /* Background themes: only apply in dark mode — in light mode these are ignored
+     so light text/surface variables from data-theme="light" stay intact */
+  html[data-bg-theme="abyss"]:not([data-theme="light"]) {
     --bg: #050d1e;
     --sidebar-bg: #07112a;
     --topbar-bg: rgba(5,13,30,0.82);
@@ -1817,7 +1827,7 @@
     --glass-2: rgba(12,24,48,0.72);
     --glass-border: rgba(100,140,255,0.1);
   }
-  html[data-bg-theme="carbon"] {
+  html[data-bg-theme="carbon"]:not([data-theme="light"]) {
     --bg: #000000;
     --sidebar-bg: #080808;
     --topbar-bg: rgba(0,0,0,0.88);
@@ -1829,7 +1839,7 @@
     --glass: rgba(10,10,10,0.82);
     --glass-2: rgba(18,18,18,0.72);
   }
-  html[data-bg-theme="slate"] {
+  html[data-bg-theme="slate"]:not([data-theme="light"]) {
     --bg: #090c12;
     --sidebar-bg: #0c101a;
     --topbar-bg: rgba(9,12,18,0.82);
@@ -1996,7 +2006,7 @@
   #toastContainer {
     position: fixed; bottom: 24px; right: 24px;
     display: flex; flex-direction: column; gap: 10px;
-    z-index: 9999; pointer-events: none;
+    z-index: 10600; pointer-events: none; /* above all modals (10500) */
   }
   .toast {
     pointer-events: auto;
@@ -2173,6 +2183,170 @@
     cursor: pointer; font-family: inherit; transition: color .15s, border-color .15s;
   }
   .onboard-dismiss-btn:hover { color: var(--text-1); border-color: var(--border-2); }
+
+  /* ===== HELP TIPS (inline ? tooltip icons) ===== */
+  .help-tip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 13px; height: 13px; border-radius: 50%;
+    background: var(--surface-3); border: 1px solid var(--border-2);
+    color: var(--text-3); font-size: 8px; font-weight: 800;
+    cursor: help; position: relative; flex-shrink: 0;
+    line-height: 1; vertical-align: middle; margin-left: 4px;
+    user-select: none; transition: border-color 0.15s, color 0.15s;
+  }
+  .help-tip:hover { border-color: var(--accent); color: var(--accent-2); }
+  .help-tip::after {
+    content: attr(data-tip);
+    position: absolute; bottom: calc(100% + 7px); left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: 8px; padding: 8px 11px;
+    font-size: 11px; font-weight: 400; color: var(--text-2);
+    white-space: pre-line; width: 220px; line-height: 1.55;
+    box-shadow: var(--shadow-panel);
+    opacity: 0; pointer-events: none; transition: opacity 0.15s;
+    z-index: 1002; text-transform: none; letter-spacing: 0; font-family: inherit;
+  }
+  .help-tip:hover::after { opacity: 1; }
+  /* Flip tooltip downward when near the top of the screen */
+  .help-tip.tip-below::after { bottom: auto; top: calc(100% + 7px); }
+
+  /* ===== WELCOME TOUR OVERLAY ===== */
+  #welcomeTourOverlay {
+    display: none; position: fixed; inset: 0; z-index: 10500;
+    background: rgba(0,0,0,0.78); backdrop-filter: blur(6px);
+    align-items: center; justify-content: center;
+  }
+  #welcomeTourOverlay.open { display: flex; }
+  .welcome-tour-box {
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: 18px; padding: 32px 28px 24px;
+    width: min(470px, 94vw); max-height: 92vh; overflow-y: auto;
+    box-shadow: var(--shadow-panel), 0 0 60px rgba(124,106,247,0.18);
+    display: flex; flex-direction: column; gap: 18px;
+    animation: wtFadeUp 0.28s ease;
+  }
+  @keyframes wtFadeUp {
+    from { opacity: 0; transform: translateY(18px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .wt-header { text-align: center; }
+  .wt-logo { font-size: 36px; margin-bottom: 8px; }
+  .wt-title { font-size: 1.35rem; font-weight: 800; color: var(--text-1); margin-bottom: 4px; letter-spacing: -0.03em; }
+  .wt-sub { font-size: 12.5px; color: var(--text-3); line-height: 1.55; }
+  .wt-steps { display: flex; flex-direction: column; gap: 10px; }
+  .wt-step {
+    display: flex; align-items: flex-start; gap: 13px;
+    padding: 13px 15px; border-radius: 11px;
+    background: var(--glass-2); border: 1px solid var(--glass-border);
+    backdrop-filter: blur(10px);
+  }
+  .wt-step-num {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--grad-accent); color: #fff;
+    font-size: 12px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .wt-step-title { font-size: 13px; font-weight: 700; color: var(--text-1); margin-bottom: 3px; }
+  .wt-step-desc  { font-size: 11.5px; color: var(--text-3); line-height: 1.5; }
+  .wt-footer { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+  .wt-start-btn {
+    width: 100%; padding: 13px; font-size: 14px; font-weight: 700;
+    background: var(--grad-accent); border: none; border-radius: 10px;
+    color: #fff; cursor: pointer; font-family: inherit;
+    letter-spacing: -0.2px; transition: opacity 0.15s;
+  }
+  .wt-start-btn:hover { opacity: 0.87; }
+  .wt-skip { font-size: 12px; color: var(--text-3); cursor: pointer; background: none; border: none; font-family: inherit; padding: 2px 0; }
+  .wt-skip:hover { color: var(--text-2); }
+
+  /* ===== KEYBOARD SHORTCUTS MODAL ===== */
+  #shortcutsModal {
+    display: none; position: fixed; inset: 0; z-index: 10500;
+    background: rgba(0,0,0,0.72); backdrop-filter: blur(5px);
+    align-items: center; justify-content: center;
+  }
+  #shortcutsModal.open { display: flex; }
+  .shortcuts-box {
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: 16px; padding: 24px;
+    width: min(500px, 94vw); max-height: 88vh; overflow-y: auto;
+    box-shadow: var(--shadow-panel);
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .sc-group-label {
+    font-size: 10px; font-weight: 700; color: var(--text-3);
+    text-transform: uppercase; letter-spacing: 1px;
+    margin: 12px 0 4px;
+  }
+  .sc-group-label:first-child { margin-top: 0; }
+  .sc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 4px; border-bottom: 1px solid var(--border);
+    font-size: 12.5px; color: var(--text-2);
+  }
+  .sc-row:last-child { border-bottom: none; }
+  .sc-keys { display: flex; gap: 4px; flex-shrink: 0; }
+  .sc-keys kbd {
+    display: inline-flex; align-items: center; justify-content: center;
+    padding: 2px 8px; background: var(--surface-2); border: 1px solid var(--border-2);
+    border-radius: 5px; font-size: 11px; font-weight: 600;
+    font-family: inherit; color: var(--text-1); min-width: 24px;
+  }
+
+  /* ===== STEP PROGRESS (flow strips) ===== */
+  .step-active { color: var(--accent-2) !important; }
+  .step-done   { color: #4ade80 !important; }
+
+  /* ===== RESPONSIVE: VIDEO STUDIO — NARROW / MOBILE (≤800px) ===== */
+  @media (max-width: 800px) {
+    /* Stack the two-column layout to single column */
+    #vsLayout {
+      flex-direction: column !important;
+      overflow: visible !important;
+      height: auto !important;
+      min-height: 0;
+    }
+    /* Left col (panels) becomes a scrollable horizontal strip at top */
+    #vsLeftCol {
+      width: 100% !important;
+      max-height: 320px;
+      overflow-y: auto !important;
+      border-right: none !important;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    /* Hide the drag divider — not useful in stacked mode */
+    #vsColDivider { display: none !important; }
+    /* Right col (segments + script) fills remaining height */
+    #vsRightCol {
+      overflow-y: auto !important;
+      min-height: 400px;
+      flex: 1;
+    }
+    /* Remove fixed min-widths that can break flex on small screens */
+    .search-box { min-width: 0 !important; min-width: 120px; }
+    .adm-label  { min-width: 0 !important; }
+    /* Make the whole VS tab scrollable so nothing clips */
+    #tab-video-studio {
+      height: auto !important;
+      overflow-y: auto !important;
+    }
+  }
+
+  /* ===== RESPONSIVE: VIDEO STUDIO — PORTRAIT / 9:16 TALL MONITORS (≥1000px tall) ===== */
+  @media (min-height: 1000px) {
+    /* Give the segments rail more vertical breathing room */
+    #segmentsContainer { min-height: 480px; }
+    /* Taller panels on left col */
+    #vsLeftCol { max-height: none; }
+  }
+
+  /* ===== SCROLL SAFETY: ensure modals/panels scroll when UI zoom clips them ===== */
+  /* (already set on .feat-modal-box and #userSettingsPanel, this covers any overrides) */
+  .feat-modal-box  { overflow-y: auto !important; max-height: 88vh; }
+  #userSettingsPanel { overflow-y: auto !important; max-height: 90vh; }
+
 </style>
 <!-- Supabase auth -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -2474,6 +2648,9 @@
       <button class="vs-subtab" id="vsSubtab-ideas" onclick="switchScriptSubTab('ideas')">
         <i class="ti ti-bulb"></i> Ideas
       </button>
+      <button class="vs-subtab" id="vsSubtab-calendar" onclick="switchScriptSubTab('calendar')">
+        <i class="ti ti-calendar"></i> Calendar
+      </button>
     </div>
 
     <!-- ===== SCRIPTS PANEL ===== -->
@@ -2568,6 +2745,48 @@
     </div>
 
     <!-- ===== IDEAS INBOX PANEL ===== -->
+    <!-- ===== CONTENT CALENDAR PANEL ===== -->
+    <div id="vsSubpanel-calendar" style="display:none;margin-bottom:40px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <i class="ti ti-calendar" style="font-size:22px;color:var(--accent-2);"></i>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--text-1);">Content Calendar</div>
+            <div style="font-size:11px;color:var(--text-3);">Schedule scripts to accounts. Dot = post planned.</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <button onclick="vsCalPrevMonth()" style="padding:4px 12px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:13px;">‹</button>
+          <span id="vsCalMonthLabel" style="font-size:13px;font-weight:600;color:var(--text-1);min-width:130px;text-align:center;"></span>
+          <button onclick="vsCalNextMonth()" style="padding:4px 12px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:13px;">›</button>
+          <button onclick="vsCalGoToday()" style="padding:4px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:6px;color:var(--text-3);cursor:pointer;font-size:11px;">Today</button>
+        </div>
+      </div>
+      <!-- Day headers -->
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-bottom:3px;">
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Sun</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Mon</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Tue</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Wed</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Thu</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Fri</div>
+        <div style="text-align:center;font-size:10px;font-weight:600;color:var(--text-3);padding:4px 0;">Sat</div>
+      </div>
+      <!-- Calendar grid -->
+      <div id="vsCalGrid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px;"></div>
+      <!-- Selected day detail -->
+      <div id="vsCalDayDetail" style="display:none;margin-top:16px;border:1px solid var(--border-2);border-radius:10px;padding:14px;background:var(--surface-2);">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <span id="vsCalDayDetailTitle" style="font-size:13px;font-weight:700;color:var(--text-1);"></span>
+          <div style="display:flex;gap:6px;">
+            <button onclick="vsCalSchedulePost()" style="padding:4px 12px;font-size:11px;font-weight:600;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.4);border-radius:6px;color:var(--accent-2);cursor:pointer;">+ Schedule Post</button>
+            <button onclick="document.getElementById('vsCalDayDetail').style.display='none'" style="padding:4px 8px;font-size:11px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:6px;color:var(--text-3);cursor:pointer;">✕</button>
+          </div>
+        </div>
+        <div id="vsCalDayItems" style="display:flex;flex-direction:column;gap:8px;"></div>
+      </div>
+    </div>
+
     <div id="vsSubpanel-ideas" style="display:none;margin-bottom:40px;">
       <div style="display:flex;gap:10px;margin-bottom:20px;padding:16px;background:var(--surface-2);border-radius:10px;border:1px solid var(--border);">
         <input type="text" id="ideaQuickInput" placeholder="Quick idea capture — type and press Enter or click Add..." style="flex:1;padding:10px 14px;border-radius:8px;border:1px solid var(--border-2);background:var(--surface);color:var(--text-1);font-size:14px;" onkeydown="if(event.key==='Enter')quickAddIdea()">
@@ -2612,9 +2831,9 @@
         </div>
         <!-- Date nav -->
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-          <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:3px 9px;">‹</button>
+          <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:3px 9px;" aria-label="Previous day">‹</button>
           <span id="dailyDateLabel" style="font-size:12px;font-weight:600;color:var(--text-1);flex:1;text-align:center;min-width:120px;"></span>
-          <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:3px 9px;">›</button>
+          <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:3px 9px;" aria-label="Next day">›</button>
           <input type="date" id="dailyDatePicker" onchange="jumpToDate(this.value)" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;cursor:pointer;color-scheme:dark;">
           <button class="btn btn-secondary" onclick="goToToday()" style="padding:3px 8px;font-size:10px;">Today</button>
           <button class="btn btn-secondary" onclick="goToTomorrow()" style="padding:3px 8px;font-size:10px;">Tomorrow</button>
@@ -2869,7 +3088,7 @@
         <!-- Avatar -->
         <div id="vsPanelAvatar" class="vs-panel" style="flex-shrink:0;position:relative;">
           <div class="vs-panel-header collapsible" onclick="vsPanelToggle(this)">
-            <span>Avatar</span>
+            <span>Avatar <span class="help-tip tip-below" data-tip="Upload your face photo here. NB Pro uses this as Photo 1 — your on-screen character for every scene. One photo powers all segments.">?</span></span>
             <div style="display:flex;gap:4px;align-items:center;">
               <button class="btn" onclick="event.stopPropagation();saveAvatarProfile()" style="padding:2px 7px;font-size:10px;">Save</button>
               <span class="vsp-arrow">▾</span>
@@ -2951,7 +3170,7 @@
         <!-- Background — producer only -->
         <div class="vs-panel producer-only" style="flex-shrink:0;">
           <div class="vs-panel-header collapsible" onclick="vsPanelToggle(this)">
-            <span>Background</span>
+            <span>Background <span class="help-tip tip-below" data-tip="Upload your scene photo here. NB Pro composites your face onto this as Photo 2.\n\nOr tap "Use Avatar Photo BG" to use only Photo 1 — great if your avatar photo already shows the background you want.">?</span></span>
             <div style="display:flex;gap:4px;align-items:center;">
               <span id="bgSavedNote" style="display:none;font-size:10px;color:#5a8a5a;">✓ Saved</span>
               <button class="btn" onclick="event.stopPropagation();clearBgImage()" id="clearBgBtn" style="padding:2px 7px;font-size:10px;display:none;color:var(--text-3);">Clear</button>
@@ -3001,6 +3220,13 @@
                 <button onclick="rewriteScript()" style="margin-left:auto;padding:2px 7px;font-size:9px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:3px;color:var(--warning);cursor:pointer;flex-shrink:0;">Auto-fix</button>
               </div>
             </div>
+            <!-- URL-to-Script — producer only -->
+            <button class="producer-only" id="urlToScriptBtn" onclick="generateScriptFromUrl()"
+              style="width:100%;padding:6px 0;font-size:10.5px;font-weight:600;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.4);border-radius:6px;color:#818cf8;cursor:pointer;font-family:inherit;flex-shrink:0;"
+              title="Generate a full ad script from your Brand Kit product URL">
+              🔗 Generate Script from URL
+            </button>
+
             <!-- Split button — producer only, full width -->
             <button class="producer-only" onclick="splitScriptToScenes()"
               style="width:100%;padding:7px 0;font-size:11px;font-weight:700;background:var(--grad-accent);border:1px solid rgba(167,139,250,0.5);border-radius:6px;color:#fff;cursor:pointer;font-family:inherit;letter-spacing:-0.1px;flex-shrink:0;"
@@ -3055,6 +3281,46 @@
           </div>
         </div>
 
+        <!-- Brand Kit — starts collapsed -->
+        <div id="vsPanelBrandKit" class="vs-panel producer-only" style="flex-shrink:0;" data-collapsed="1">
+          <div class="vs-panel-header collapsible" onclick="vsPanelToggle(this)">
+            <span>Brand Kit <span class="help-tip tip-below" data-tip="Save your product info here once. Scripts, hooks, and ad variations will automatically use your brand voice and talking points.">?</span></span>
+            <span class="vsp-arrow" style="transform:rotate(-90deg)">▾</span>
+          </div>
+          <div class="vs-panel-body" style="padding:8px;gap:6px;display:none;">
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Product Name</div>
+              <input type="text" id="bkProductName" placeholder="e.g. Java Burn, SlimBoost Pro…" oninput="saveBrandKit()" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;">
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Product URL</div>
+              <div style="display:flex;gap:4px;">
+                <input type="url" id="bkProductUrl" placeholder="https://…" oninput="saveBrandKit()" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;min-width:0;">
+                <button onclick="scrapeProductUrl()" id="bkScrapeBtn" title="AI will guess product info from the URL — results may not be exact" aria-label="AI guess product info from URL" style="padding:3px 7px;font-size:11px;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.35);border-radius:3px;color:#818cf8;cursor:pointer;flex-shrink:0;white-space:nowrap;">AI Guess</button>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Tone</div>
+              <select id="bkTone" onchange="saveBrandKit()" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                <option value="energetic">Energetic / Hype</option>
+                <option value="conversational">Conversational</option>
+                <option value="urgent">Urgent / FOMO</option>
+                <option value="professional">Professional</option>
+                <option value="storytelling">Storytelling</option>
+              </select>
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Key Talking Points <span style="font-weight:400;font-size:8px;text-transform:none;letter-spacing:0;">(one per line)</span></div>
+              <textarea id="bkTalkingPoints" rows="3" placeholder="Burns fat fast&#10;No diet needed&#10;Doctor approved" oninput="saveBrandKit()" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;resize:vertical;box-sizing:border-box;line-height:1.5;"></textarea>
+            </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">CTA</div>
+              <input type="text" id="bkCta" placeholder="e.g. Link in bio, Comment INFO below…" oninput="saveBrandKit()" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;">
+            </div>
+            <div id="bkSavedNote" style="display:none;font-size:9px;color:var(--accent);text-align:right;margin-top:2px;">✓ Saved</div>
+          </div>
+        </div>
+
         <!-- Saved Library -->
         <div id="vsPanelSaved" class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;position:relative;">
           <div class="vs-panel-header collapsible" style="padding:5px 10px;" onclick="vsPanelToggle(this)">
@@ -3083,28 +3349,28 @@
       <div id="vsRightCol" style="display:flex;flex-direction:column;gap:8px;overflow-x:hidden;overflow-y:hidden;min-height:0;flex:1;min-width:0;">
 
         <!-- Step flow strip — replicator only -->
-        <div class="replicator-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
-          <span style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Upload Video</span>
+        <div id="repFlowStrip" class="replicator-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
+          <span id="rep-step-1" style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Upload Video</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Detect Cuts</span>
+          <span id="rep-step-2" style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Detect Cuts</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ Transcribe</span>
+          <span id="rep-step-3" style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ Transcribe</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Process Everything</span>
+          <span id="rep-step-4" style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Process Everything</span>
           <span style="margin-left:auto;font-size:9.5px;color:var(--text-3);opacity:0.7;white-space:nowrap;padding-left:8px;">Set avatar first →</span>
         </div>
 
         <!-- Step flow strip — producer only -->
         <div class="producer-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
-          <span style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Paste Script</span>
+          <span id="pro-step-1" style="font-weight:700;color:var(--accent-2);white-space:nowrap;">① Paste Script</span>
           <span style="margin:0 8px;opacity:0.4;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Split (8s)</span>
+          <span id="pro-step-2" style="font-weight:700;color:var(--text-2);white-space:nowrap;">② Split (8s)</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ AI Describe</span>
+          <span id="pro-step-3" style="font-weight:700;color:var(--text-2);white-space:nowrap;">③ AI Describe</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Gen All NB</span>
+          <span id="pro-step-4" style="font-weight:700;color:var(--text-2);white-space:nowrap;">④ Gen All NB</span>
           <span style="margin:0 6px;opacity:0.4;flex-shrink:0;">→</span>
-          <span style="font-weight:700;color:var(--text-2);white-space:nowrap;">⑤ Run All Scenes</span>
+          <span id="pro-step-5" style="font-weight:700;color:var(--text-2);white-space:nowrap;">⑤ Run All Scenes</span>
           <span style="margin-left:auto;font-size:9.5px;color:var(--text-3);opacity:0.7;white-space:nowrap;padding-left:8px;">Set avatar + bg first →</span>
         </div>
 
@@ -3157,18 +3423,12 @@
             <span style="flex-shrink:0;">Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
             <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end;">
               <button class="btn replicator-only" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
-              <div class="replicator-only" style="display:flex;align-items:center;gap:4px;padding:2px 6px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;" title="Which image's background to use in the Nano Banana character swap prompt">
-                <span style="font-size:9px;color:var(--text-3);white-space:nowrap;">NB bg:</span>
-                <select id="nbBgSource" style="font-size:10px;padding:1px 4px;background:transparent;border:none;color:var(--text-2);font-family:inherit;outline:none;cursor:pointer;">
-                  <option value="photo2">Photo 2 (Reference)</option>
-                  <option value="photo1">Photo 1 (Avatar)</option>
-                </select>
-              </div>
               <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
               <button class="btn" onclick="showPreflightModal(false)" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Pre-flight check, then download all images and copy the run instruction">▶ Run All Scenes</button>
               <button class="btn" onclick="showPreflightModal(true)" style="padding:3px 9px;font-size:10px;font-weight:600;background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.4);color:var(--warning);" title="Resume — pre-flight then run, skipping scenes already marked ✅ DONE">⚡ Resume</button>
+              <button class="btn producer-only" id="hookVariationsBtn" onclick="generateHookVariations()" style="padding:3px 10px;font-size:10px;border-color:rgba(251,146,60,0.4);color:#fb923c;" title="Generate 5 alternative opening hooks for scene 1, scored by ad strength">🎣 Hook Variations</button>
               <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe</button>
-              <button class="btn producer-only" id="condenseAllBtn" onclick="condenseAllScripts()" style="padding:3px 10px;font-size:10px;border-color:rgba(96,165,250,0.4);color:#60a5fa;" title="Rewrite over-limit scenes to fit within 8 seconds of speech">✂ Condense</button>
+              <button class="btn" id="condenseAllBtn" onclick="condenseAllScripts()" style="padding:3px 10px;font-size:10px;border-color:rgba(96,165,250,0.4);color:#60a5fa;" title="Rewrite over-limit scenes to fit within 8 seconds of speech">✂ Condense</button>
               <button class="btn producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts()" style="padding:3px 10px;font-size:10px;font-weight:700;border-color:rgba(251,191,36,0.5);color:var(--warning);" title="Build NB Pro prompts for all scenes using their visual descriptions">🍌 Gen All NB</button>
               <button class="btn" onclick="copyAllVeoPrompts()" style="padding:3px 10px;font-size:10px;border-color:rgba(139,92,246,0.4);color:#a78bfa;" title="Copy all Veo 3 prompts to clipboard, one per line">📋 Copy All Veo</button>
               <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
@@ -3437,6 +3697,23 @@
   </div>
 </div>
 
+<!-- ===== HOOK VARIATIONS MODAL ===== -->
+<div id="hookVariationsModal" class="feat-modal-overlay" onclick="if(event.target===this)closeHookVariationsModal()">
+  <div class="feat-modal-box" style="max-width:520px;">
+    <div class="feat-modal-header">
+      <span class="feat-modal-title">🎣 Hook Variations</span>
+      <button class="feat-modal-close" onclick="closeHookVariationsModal()">✕</button>
+    </div>
+    <div style="padding:4px 20px 6px;font-size:10.5px;color:var(--text-3);">GPT-scored alternative openers for Scene 1. Click one to apply it.</div>
+    <div id="hookVariationsList" style="padding:8px 20px 16px;display:flex;flex-direction:column;gap:10px;max-height:420px;overflow-y:auto;">
+      <div style="text-align:center;padding:24px;color:var(--text-3);font-size:12px;">Generating hooks…</div>
+    </div>
+    <div class="feat-modal-footer" style="justify-content:flex-end;">
+      <button class="btn" onclick="closeHookVariationsModal()" style="background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-2);padding:8px 18px;border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px;">Close</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===== AUTH WALL ===== -->
 <div class="auth-wall" id="authWall">
   <div class="auth-card">
@@ -3516,6 +3793,9 @@
     </div>
   </div>
 </div>
+
+<!-- ===== TOAST CONTAINER ===== -->
+<div id="toastContainer"></div>
 
 <!-- ===== MY ACCOUNTS MODAL ===== -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModalOnBg(event)">
@@ -3771,6 +4051,44 @@
     return { get, set, remove, migrateLocalStorage, setUser };
   })();
 
+  // ── Confirm toast (replaces native confirm() dialogs) ──
+  window.showConfirm = function(message, onYes, onNo) {
+    const container = document.getElementById('toastContainer');
+    if (!container) { if (onYes && window.confirm(message)) onYes(); return; }
+    const t = document.createElement('div');
+    t.className = 'toast toast-warning';
+    t.style.cssText = 'pointer-events:auto;min-width:300px;max-width:420px;gap:10px;flex-wrap:wrap;align-items:flex-start;';
+    t.innerHTML = `
+      <span class="toast-icon"><i class="ti ti-alert-triangle"></i></span>
+      <span class="toast-msg" style="flex:1;line-height:1.5;">${message}</span>
+      <div style="display:flex;gap:6px;flex-shrink:0;margin-top:2px;">
+        <button class="sc-yes" style="padding:3px 12px;background:var(--danger);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Yes</button>
+        <button class="sc-no"  style="padding:3px 10px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-2);font-size:11px;cursor:pointer;font-family:inherit;">No</button>
+      </div>`;
+    container.appendChild(t);
+    requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
+    const dismiss = () => { t.classList.add('hiding'); setTimeout(() => t.remove(), 300); };
+    t.querySelector('.sc-yes').onclick = () => { dismiss(); if (onYes) onYes(); };
+    t.querySelector('.sc-no').onclick  = () => { dismiss(); if (onNo)  onNo();  };
+  };
+
+  // ── Toast notification system ──
+  window.showToast = function(msg, type = 'info', duration = 3500) {
+    let container = document.getElementById('toastContainer');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toastContainer';
+      document.body.appendChild(container);
+    }
+    const icons = { success: 'ti-circle-check', error: 'ti-alert-circle', warning: 'ti-alert-triangle', info: 'ti-info-circle' };
+    const t = document.createElement('div');
+    t.className = `toast toast-${type}`;
+    t.innerHTML = `<span class="toast-icon"><i class="ti ${icons[type] || icons.info}"></i></span><span class="toast-msg">${msg}</span><button class="toast-close" onclick="this.parentElement.classList.add('hiding');setTimeout(()=>this.parentElement.remove(),300);">✕</button>`;
+    container.appendChild(t);
+    requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
+    setTimeout(() => { t.classList.add('hiding'); setTimeout(() => t.remove(), 300); }, duration);
+  };
+
   // ===== SHARED =====
   const platformEmojis = { TikTok: '🎵', Instagram: '📸', Facebook: '👤', YouTube: '▶️', Other: '🌐' };
 
@@ -3814,7 +4132,7 @@
     } else {
       if (tab === 'dashboard') renderDashboard();
       if (tab === 'competitors') renderCompetitors();
-      if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); }
+      if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); renderIdeasInbox(); }
       if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
     }
   }
@@ -4000,7 +4318,24 @@
         </div>
       </div>`;
 
+    // "Start Here" card — only shown the first few times (before user has processed any video)
+    const hideStartCard = localStorage.getItem('hideStartCard') === '1' || segments.length > 0;
+    const startCardHtml = hideStartCard ? '' : `
+      <div style="background:linear-gradient(135deg,rgba(124,106,247,0.12),rgba(16,185,129,0.08));border:1px solid rgba(124,106,247,0.35);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden;margin-bottom:2px;">
+        <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(124,106,247,0.08) 0%,transparent 70%);pointer-events:none;"></div>
+        <div style="font-size:36px;flex-shrink:0;">🎬</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:14px;font-weight:800;color:var(--text-1);letter-spacing:-0.03em;margin-bottom:4px;">Clone your first viral video</div>
+          <div style="font-size:12px;color:var(--text-3);line-height:1.5;">Paste a TikTok or Reel URL → AI splits it into scenes → copy your NB Pro &amp; Veo 3 prompts.</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
+          <button onclick="switchTab('video-replicator');localStorage.setItem('hideStartCard','1');" style="padding:9px 18px;font-size:12px;font-weight:700;background:var(--grad-accent);border:none;border-radius:8px;color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">Open Replicator →</button>
+          <button onclick="this.closest('div[style]').remove();localStorage.setItem('hideStartCard','1')" style="background:none;border:none;font-size:11px;color:var(--text-3);cursor:pointer;font-family:inherit;text-align:center;">Dismiss</button>
+        </div>
+      </div>`;
+
     container.innerHTML = `
+      ${startCardHtml}
       ${onboardHtml}
       <div class="db-greeting">
         <div class="db-greeting-date">${dateStr}</div>
@@ -4080,20 +4415,145 @@
   function switchScriptSubTab(name) {
     activeScriptSubTab = name;
     // update buttons
-    ['scripts','hooks','ctas','ideas'].forEach(n => {
+    ['scripts','hooks','ctas','ideas','calendar'].forEach(n => {
       const btn = document.getElementById('vsSubtab-' + n);
       if (btn) btn.classList.toggle('active', n === name);
     });
     // show/hide panels
-    ['scripts','hooks','ctas','ideas'].forEach(n => {
+    ['scripts','hooks','ctas','ideas','calendar'].forEach(n => {
       const panel = document.getElementById('vsSubpanel-' + n);
       if (panel) panel.style.display = n === name ? '' : 'none';
     });
     // trigger renders
-    if (name === 'scripts') renderScripts();
-    if (name === 'hooks') renderHookBank();
-    if (name === 'ctas') renderCTALibrary();
-    if (name === 'ideas') renderIdeasInbox();
+    if (name === 'scripts')  renderScripts();
+    if (name === 'hooks')    renderHookBank();
+    if (name === 'ctas')     renderCTALibrary();
+    if (name === 'ideas')    renderIdeasInbox();
+    if (name === 'calendar') renderVsCalendar();
+  }
+
+  // ===== VIRAL SCRIPTS CONTENT CALENDAR =====
+  let _vsCalYear  = new Date().getFullYear();
+  let _vsCalMonth = new Date().getMonth(); // 0-based
+  let _vsCalSelectedDate = null;
+
+  const _vsCalMonthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+  function vsCalPrevMonth() { _vsCalMonth--; if (_vsCalMonth < 0) { _vsCalMonth = 11; _vsCalYear--; } renderVsCalendar(); }
+  function vsCalNextMonth() { _vsCalMonth++; if (_vsCalMonth > 11) { _vsCalMonth = 0;  _vsCalYear++; } renderVsCalendar(); }
+  function vsCalGoToday()   { const n = new Date(); _vsCalYear = n.getFullYear(); _vsCalMonth = n.getMonth(); renderVsCalendar(); }
+
+  function renderVsCalendar() {
+    const labelEl = document.getElementById('vsCalMonthLabel');
+    if (labelEl) labelEl.textContent = _vsCalMonthNames[_vsCalMonth] + ' ' + _vsCalYear;
+
+    const grid = document.getElementById('vsCalGrid');
+    if (!grid) return;
+
+    const today   = new Date().toISOString().slice(0, 10);
+    const firstDay = new Date(_vsCalYear, _vsCalMonth, 1).getDay(); // 0=Sun
+    const daysInMonth = new Date(_vsCalYear, _vsCalMonth + 1, 0).getDate();
+
+    // Build account color map for dots
+    const acctColors = ['#818cf8','#34d399','#fb923c','#f472b6','#60a5fa','#a78bfa','#fbbf24'];
+    const acctColorMap = {};
+    (accounts || []).forEach((a, i) => { acctColorMap[a.id] = acctColors[i % acctColors.length]; });
+
+    let cells = '';
+    // Empty cells before first day
+    for (let s = 0; s < firstDay; s++) cells += '<div></div>';
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const key = `${_vsCalYear}-${String(_vsCalMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const isToday    = key === today;
+      const isSelected = key === _vsCalSelectedDate;
+      const dayItems   = (dailyItems || []).filter(i => i.date === key);
+      const dotAccts   = [...new Set(dayItems.map(i => i.accountId))].slice(0, 4);
+
+      const bg      = isSelected ? 'rgba(139,92,246,0.2)' : isToday ? 'rgba(139,92,246,0.08)' : 'var(--surface-2)';
+      const border  = isSelected ? '1.5px solid rgba(139,92,246,0.6)' : isToday ? '1px solid rgba(139,92,246,0.3)' : '1px solid var(--border)';
+      const numColor = isToday ? 'var(--accent-2)' : 'var(--text-2)';
+
+      const dots = dotAccts.map(id => `<div style="width:6px;height:6px;border-radius:50%;background:${acctColorMap[id] || '#64748b'};flex-shrink:0;"></div>`).join('');
+      const countBadge = dayItems.length > 4 ? `<span style="font-size:8px;color:var(--text-3);">+${dayItems.length-4}</span>` : '';
+      const hoverIn  = isSelected ? '' : `this.style.background='var(--surface-3)'`;
+      const hoverOut = `this.style.background='${bg}'`;
+
+      cells += `<div onclick="vsCalSelectDay('${key}')" style="min-height:56px;border-radius:6px;padding:5px 6px;cursor:pointer;background:${bg};border:${border};display:flex;flex-direction:column;gap:3px;transition:background 0.1s;" onmouseenter="${hoverIn}" onmouseleave="${hoverOut}">
+        <div style="font-size:11px;font-weight:${isToday?'700':'500'};color:${numColor};">${d}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center;">${dots}${countBadge}</div>
+      </div>`;
+    }
+    grid.innerHTML = cells;
+
+    // Refresh day detail if a date is selected
+    if (_vsCalSelectedDate) vsCalRenderDayDetail(_vsCalSelectedDate);
+  }
+
+  function vsCalSelectDay(dateKey) {
+    _vsCalSelectedDate = dateKey;
+    renderVsCalendar(); // re-render to update selection highlight
+    vsCalRenderDayDetail(dateKey);
+  }
+
+  function vsCalRenderDayDetail(dateKey) {
+    const detail = document.getElementById('vsCalDayDetail');
+    const title  = document.getElementById('vsCalDayDetailTitle');
+    const items  = document.getElementById('vsCalDayItems');
+    if (!detail || !title || !items) return;
+
+    const [y, m, d] = dateKey.split('-').map(Number);
+    const label = _vsCalMonthNames[m-1] + ' ' + d + ', ' + y;
+    title.textContent = label;
+    detail.style.display = 'block';
+
+    const dayItems = (dailyItems || []).filter(i => i.date === dateKey);
+    if (dayItems.length === 0) {
+      items.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:8px 0;">Nothing scheduled. Click "+ Schedule Post" to add one.</div>';
+      return;
+    }
+    items.innerHTML = dayItems.map(item => {
+      const acct = (accounts || []).find(a => a.id === item.accountId);
+      const acctName = acct ? (acct.name || acct.platform || 'Account') : 'Unknown account';
+      const preview = (item.script || '').slice(0, 80) + ((item.script || '').length > 80 ? '…' : '');
+      const doneStyle = item.done ? 'opacity:0.5;text-decoration:line-through;' : '';
+      return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;${doneStyle}">
+        <input type="checkbox" ${item.done?'checked':''} onchange="vsCalToggleDone('${item.id}',this.checked)" style="margin-top:3px;cursor:pointer;accent-color:var(--accent);">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:600;color:var(--accent-2);margin-bottom:2px;">${escHtml(acctName)}</div>
+          ${preview ? `<div style="font-size:11px;color:var(--text-2);line-height:1.4;">${escHtml(preview)}</div>` : '<div style="font-size:11px;color:var(--text-3);">No script</div>'}
+        </div>
+        <button onclick="vsCalRemoveItem('${item.id}')" style="padding:2px 7px;font-size:10px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);cursor:pointer;flex-shrink:0;">✕</button>
+      </div>`;
+    }).join('');
+  }
+
+  function vsCalToggleDone(id, checked) {
+    const item = (dailyItems || []).find(i => i.id === id);
+    if (item) { item.done = checked; saveDailyItems(); }
+  }
+
+  function vsCalRemoveItem(id) {
+    showConfirm('Remove this scheduled post?', () => {
+      dailyItems = (dailyItems || []).filter(i => i.id !== id);
+      saveDailyItems();
+      renderVsCalendar();
+    });
+  }
+
+  function vsCalSchedulePost() {
+    // Pre-fill the daily plan modal with selected date then open it
+    if (_vsCalSelectedDate) {
+      // Navigate to Calendar tab with that date selected
+      switchTab('calendar');
+      setTimeout(() => {
+        if (typeof jumpToDate === 'function') jumpToDate(_vsCalSelectedDate);
+        if (typeof openDailyItemModal === 'function') openDailyItemModal();
+      }, 200);
+    } else {
+      switchTab('calendar');
+      setTimeout(() => { if (typeof openDailyItemModal === 'function') openDailyItemModal(); }, 200);
+    }
   }
 
   // ===== COLLAPSIBLE VS PANEL TOGGLE =====
@@ -4443,9 +4903,10 @@
 
   function editAccount(id) { openModal(id); }
   function deleteAccount(id) {
-    if (!confirm('Delete this account?')) return;
-    accounts = accounts.filter(a => a.id !== id);
-    saveAccounts(); renderTable();
+    showConfirm('Delete this account?', () => {
+      accounts = accounts.filter(a => a.id !== id);
+      saveAccounts(); renderTable();
+    });
   }
 
   function togglePass() {
@@ -4568,9 +5029,10 @@
 
   function editCompetitor(id) { openCompModal(id); }
   function deleteCompetitor(id) {
-    if (!confirm('Remove this competitor?')) return;
-    competitors = competitors.filter(c => c.id !== id);
-    saveCompetitors(); renderCompetitors();
+    showConfirm('Remove this competitor?', () => {
+      competitors = competitors.filter(c => c.id !== id);
+      saveCompetitors(); renderCompetitors();
+    });
   }
 
   // ===== SEED VIRAL SCRIPTS (merges by ID) =====
@@ -4956,9 +5418,10 @@
 
   function editScript(id) { openScriptModal(id); }
   function deleteScript(id) {
-    if (!confirm('Remove this viral script?')) return;
-    viralScripts = viralScripts.filter(s => s.id !== id);
-    saveScriptsStore(); renderScripts();
+    showConfirm('Remove this viral script?', () => {
+      viralScripts = viralScripts.filter(s => s.id !== id);
+      saveScriptsStore(); renderScripts();
+    });
   }
 
   // Keyboard
@@ -5431,6 +5894,30 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
       clearBtn.style.display = 'none';
       if (activeLabel) activeLabel.style.display = 'none';
     }
+    // Refresh NB Pro card bg thumbnails for all visible segments
+    _refreshNbBgThumbs();
+  }
+
+  function _refreshNbBgThumbs() {
+    if (!segments || segments.length === 0) return;
+    segments.forEach((_, i) => {
+      const wrap = document.getElementById('nbpreview-wrap-' + i);
+      if (!wrap) return;
+      const thumbRow = wrap.querySelector('[data-nb-bg-row]');
+      if (!thumbRow) return;
+      if (bgFromAvatar) {
+        thumbRow.innerHTML = '<span style="font-size:11px;color:var(--text-3);">🖼 Using avatar photo as background (Photo 1 only — no Photo 2 needed)</span>';
+      } else {
+        const hasImg = !!bgImageDataUrl;
+        thumbRow.innerHTML = `
+          <div onclick="document.getElementById('bgImgInput').click()" style="width:36px;height:36px;border-radius:5px;overflow:hidden;border:1.5px solid ${hasImg ? 'var(--accent)' : 'var(--border)'};cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--bg-2);flex-shrink:0;">
+            ${hasImg ? `<img id="nb-bg-thumb-${i}" src="${bgImageDataUrl}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:16px;">🖼</span>`}
+          </div>
+          <span style="font-size:10px;color:${hasImg ? 'var(--accent)' : 'var(--text-3)'};">
+            ${hasImg ? '📎 Photo 2 set — attach this image as Photo 2 in NB Pro (same for all scenes)' : 'No background uploaded — upload in the Background panel to use as Photo 2'}
+          </span>`;
+      }
+    });
   }
 
   function onBgImageChange(e) {
@@ -5460,20 +5947,102 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
 
   function useAvatarAsBg() {
     if (!avatarImageDataUrl) {
-      alert('No avatar photo loaded yet — upload one in the Avatar panel first.');
+      showToast('No avatar photo loaded yet — upload one in the Avatar panel first.', 'warning');
       return;
     }
     bgFromAvatar = true;
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl);
     DB.set('sm_bg_from_avatar', '1');
-    // Sync the NB bg source dropdown to photo1 so prompts match
-    const nbBgEl = document.getElementById('nbBgSource');
-    if (nbBgEl) nbBgEl.value = 'photo1';
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'block';
     const note = document.getElementById('bgSavedNote');
     if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
+  }
+
+  // --- Brand Kit ---
+  let _bkSaveTimer = null;
+
+  function getBrandKit() {
+    return {
+      productName: document.getElementById('bkProductName')?.value.trim() || '',
+      productUrl:  document.getElementById('bkProductUrl')?.value.trim()  || '',
+      tone:        document.getElementById('bkTone')?.value               || 'conversational',
+      talkingPoints: document.getElementById('bkTalkingPoints')?.value.trim() || '',
+      cta:         document.getElementById('bkCta')?.value.trim()         || '',
+    };
+  }
+
+  function saveBrandKit() {
+    clearTimeout(_bkSaveTimer);
+    _bkSaveTimer = setTimeout(() => {
+      DB.set('sm_brand_kit', JSON.stringify(getBrandKit()));
+      const note = document.getElementById('bkSavedNote');
+      if (note) { note.style.display = 'block'; setTimeout(() => note.style.display = 'none', 1800); }
+    }, 600);
+  }
+
+  function loadBrandKit() {
+    DB.get('sm_brand_kit').then(saved => {
+      if (!saved) return;
+      try {
+        const kit = JSON.parse(saved);
+        const set = (id, val) => { const el = document.getElementById(id); if (el) el.value = val || ''; };
+        set('bkProductName',   kit.productName);
+        set('bkProductUrl',    kit.productUrl);
+        set('bkTalkingPoints', kit.talkingPoints);
+        set('bkCta',           kit.cta);
+        const toneEl = document.getElementById('bkTone');
+        if (toneEl && kit.tone) toneEl.value = kit.tone;
+      } catch(e) {}
+    });
+  }
+
+  async function scrapeProductUrl() {
+    const url = document.getElementById('bkProductUrl')?.value.trim();
+    if (!url) { showToast('Paste a product URL first.', 'warning'); return; }
+    const btn = document.getElementById('bkScrapeBtn');
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+    try {
+      const key = getApiKey();
+      if (!key) { showToast('Add your OpenAI API key in Settings first.', 'warning'); return; }
+      // Use GPT to extract product info from the URL (fetched via CORS proxy fallback)
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You are a product research assistant. The user will give you a product URL. Return a JSON object with these fields: productName (string), talkingPoints (array of 4-6 short benefit strings), suggestedCta (string). Keep talking points punchy, 3-7 words each. Return ONLY valid JSON, no markdown.' },
+            { role: 'user', content: 'Product URL: ' + url + '\n\nExtract the product name, 4-6 key talking points (benefits/claims), and suggest a CTA for a social media ad. Infer from the URL domain and path if you cannot browse it.' }
+          ],
+          max_tokens: 400,
+          temperature: 0.4,
+        })
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `API error ${res.status}`); }
+      const data = await res.json();
+      const raw = data.choices?.[0]?.message?.content?.trim() || '';
+      const jsonStr = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      const parsed = JSON.parse(jsonStr);
+      if (parsed.productName) {
+        const nameEl = document.getElementById('bkProductName');
+        if (nameEl && !nameEl.value) nameEl.value = parsed.productName;
+      }
+      if (parsed.talkingPoints?.length) {
+        const tpEl = document.getElementById('bkTalkingPoints');
+        if (tpEl && !tpEl.value) tpEl.value = parsed.talkingPoints.join('\n');
+      }
+      if (parsed.suggestedCta) {
+        const ctaEl = document.getElementById('bkCta');
+        if (ctaEl && !ctaEl.value) ctaEl.value = parsed.suggestedCta;
+      }
+      saveBrandKit();
+    } catch(e) {
+      showToast('Could not fetch product info: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = '🔍'; btn.disabled = false; }
+    }
   }
 
   function loadBgImage() {
@@ -5505,24 +6074,46 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   }
 
   function clearVideo() {
-    if (!confirm('Clear the reference video? This will also clear all segments.')) return;
+    showConfirm('Clear the reference video? This will also clear all segments.', () => {
+      if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
+      refVideoFile = null;
+      // Clear timestamps and segments — they belong to the old video
+      whisperSegments = [];
+      segments = [];
+      saveCurrentProjectData();
+      const videoEl = document.getElementById('refVideoEl');
+      videoEl.removeAttribute('src');
+      videoEl.load();
+      videoEl.style.display = 'none';
+      document.getElementById('videoUploadPlaceholder').style.display = 'block';
+      document.getElementById('clearVideoBtn').style.display = 'none';
+      const _slb = document.getElementById('saveVideoLibBtn');
+      if (_slb) _slb.style.display = 'none';
+      if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = '';
+      document.getElementById('refVideoInput').value = '';
+      document.getElementById('videoUploadZone').onclick = function() { document.getElementById('refVideoInput').click(); };
+    });
+  }
+
+  // Silently resets the video player UI without touching segments or showing any confirm.
+  // Used when switching/creating projects so we never accidentally erase project data.
+  function _resetVideoUI() {
     if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
     refVideoFile = null;
-    // Clear timestamps and segments — they belong to the old video
-    whisperSegments = [];
-    segments = [];
-    saveCurrentProjectData();
     const videoEl = document.getElementById('refVideoEl');
-    videoEl.removeAttribute('src');
-    videoEl.load();
-    videoEl.style.display = 'none';
-    document.getElementById('videoUploadPlaceholder').style.display = 'block';
-    document.getElementById('clearVideoBtn').style.display = 'none';
-    const _slb = document.getElementById('saveVideoLibBtn');
-    if (_slb) _slb.style.display = 'none';
-    if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = '';
-    document.getElementById('refVideoInput').value = '';
-    document.getElementById('videoUploadZone').onclick = function() { document.getElementById('refVideoInput').click(); };
+    if (videoEl) { videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
+    const placeholder = document.getElementById('videoUploadPlaceholder');
+    if (placeholder) placeholder.style.display = 'block';
+    const clearBtn = document.getElementById('clearVideoBtn');
+    if (clearBtn) clearBtn.style.display = 'none';
+    const slb = document.getElementById('saveVideoLibBtn');
+    if (slb) slb.style.display = 'none';
+    const fn = document.getElementById('videoFileName');
+    if (fn) fn.textContent = '';
+    const inp = document.getElementById('refVideoInput');
+    if (inp) inp.value = '';
+    const zone = document.getElementById('videoUploadZone');
+    if (zone) zone.onclick = function() { document.getElementById('refVideoInput').click(); };
   }
 
   // ===== REFERENCE VIDEO LIBRARY =====
@@ -5530,7 +6121,7 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   // 'sm_refvideo_lib', each video Blob under 'sm_refvideo_blob_<id>', and the
   // optional Whisper transcript under 'sm_refvideo_tx_<id>'.
   async function saveCurrentVideoToLibrary() {
-    if (!refVideoFile) { alert('Upload a video first, then save it to the library.'); return; }
+    if (!refVideoFile) { showToast('Upload a video first, then save it to the library.', 'warning'); return; }
     const defaultName = (refVideoFile.name || 'Reference video').replace(/\.[^.]+$/, '');
     const name = prompt('Name this reference video:', defaultName);
     if (name === null) return;
@@ -5551,7 +6142,7 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
       const btn = document.getElementById('saveVideoLibBtn');
       if (btn) { const o = btn.textContent; btn.textContent = '✓ Saved'; setTimeout(() => { btn.textContent = o; }, 2000); }
     } catch (e) {
-      alert('Could not save video to library: ' + ((e && e.message) || e));
+      showToast('Could not save video to library: ' + ((e && e.message) || e), 'error');
     }
   }
 
@@ -5590,13 +6181,46 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   async function loadVideoFromLibrary(id) {
     // Loading a library video replaces the current video and clears its
     // segments — warn first so in-progress segment work isn't lost silently.
-    if (segments.length > 0 &&
-        !confirm('Loading this video will replace the current video and clear its ' + segments.length + ' segment(s). Continue?')) {
+    if (segments.length > 0) {
+      showConfirm('Loading this video will replace the current video and clear its ' + segments.length + ' segment(s). Continue?', async () => {
+        let blob;
+        try { blob = await DB.get('sm_refvideo_blob_' + id); } catch (e) { blob = null; }
+        if (!blob) { showToast('Video data not found — it may have been cleared.', 'error'); return; }
+        let lib = [];
+        try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
+        const meta = lib.find(v => v.id === id) || {};
+        const file = new File([blob], meta.fileName || (meta.name || 'library-video') + '.mp4', { type: blob.type || meta.type || 'video/mp4' });
+        refVideoFile = file;
+        if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
+        refVideoObjectUrl = URL.createObjectURL(file);
+        const videoEl = document.getElementById('refVideoEl');
+        videoEl.src = refVideoObjectUrl;
+        videoEl.style.display = 'block';
+        document.getElementById('videoUploadPlaceholder').style.display = 'none';
+        document.getElementById('clearVideoBtn').style.display = 'inline-block';
+        const _slb = document.getElementById('saveVideoLibBtn');
+        if (_slb) _slb.style.display = 'inline-block';
+        document.getElementById('videoUploadZone').onclick = null;
+        if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
+        // The old segments belong to the previously loaded video — clear them.
+        segments = [];
+        // Restore the saved transcript if there is one, so Whisper doesn't need rerunning
+        whisperSegments = [];
+        if (meta.hasTranscript) {
+          try {
+            const tx = await DB.get('sm_refvideo_tx_' + id);
+            if (tx) whisperSegments = JSON.parse(tx);
+          } catch (e) { /* transcript optional */ }
+        }
+        saveCurrentProjectData();
+        renderSegments();
+        closeVideoLibrary();
+      });
       return;
     }
     let blob;
     try { blob = await DB.get('sm_refvideo_blob_' + id); } catch (e) { blob = null; }
-    if (!blob) { alert('Video data not found — it may have been cleared.'); return; }
+    if (!blob) { showToast('Video data not found — it may have been cleared.', 'error'); return; }
     let lib = [];
     try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
     const meta = lib.find(v => v.id === id) || {};
@@ -5629,18 +6253,19 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   }
 
   async function deleteVideoFromLibrary(id) {
-    if (!confirm('Remove this video from your library? This cannot be undone.')) return;
-    try {
-      await DB.remove('sm_refvideo_blob_' + id);
-      await DB.remove('sm_refvideo_tx_' + id);
-      let lib = [];
-      try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
-      lib = lib.filter(v => v.id !== id);
-      await DB.set('sm_refvideo_lib', JSON.stringify(lib));
-    } catch (e) {
-      alert('Could not delete: ' + ((e && e.message) || e));
-    }
-    openVideoLibrary();
+    showConfirm('Remove this video from your library? This cannot be undone.', async () => {
+      try {
+        await DB.remove('sm_refvideo_blob_' + id);
+        await DB.remove('sm_refvideo_tx_' + id);
+        let lib = [];
+        try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
+        lib = lib.filter(v => v.id !== id);
+        await DB.set('sm_refvideo_lib', JSON.stringify(lib));
+      } catch (e) {
+        showToast('Could not delete: ' + ((e && e.message) || e), 'error');
+      }
+      openVideoLibrary();
+    });
   }
 
   // --- OpenAI API key management ---
@@ -5668,10 +6293,14 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   // If the text has changed enough from the Whisper transcript, clear stale timestamps
   // so distributeScript falls through to the sentence-proportional split instead.
   let _lastWhisperText = '';
+  let _masterScriptSaveTimer = null;
   function onMasterScriptInput(el) {
     const newText = el.value;
     checkScriptFlagged(newText);
-    saveSegments();
+    clearTimeout(_masterScriptSaveTimer);
+    _masterScriptSaveTimer = setTimeout(() => saveSegments(), 500);
+    // Update step strip whenever script changes
+    setTimeout(() => updateStepProgress?.(), 100);
 
     // If Whisper segments exist, check whether the current text still resembles them.
     // Similarity = shared words / total words (Jaccard-ish). Below 70% → stale → clear.
@@ -5694,10 +6323,10 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
   async function rewriteScript() {
     const scriptEl = document.getElementById('originalScript');
     const original = (scriptEl?.value || '').trim();
-    if (!original) { alert('Paste or transcribe a script first.'); return; }
+    if (!original) { showToast('Paste or transcribe a script first.', 'warning'); return; }
 
     const apiKey = getApiKey();
-    if (!apiKey) { alert('No API key available.'); return; }
+    if (!apiKey) { showToast('No API key available.', 'warning'); return; }
 
     const btn = document.getElementById('rewriteBtn');
     const origLabel = btn.textContent;
@@ -5784,7 +6413,7 @@ RULES — read carefully:
       }
 
     } catch (err) {
-      alert('Rewrite failed: ' + err.message);
+      showToast('Rewrite failed: ' + err.message, 'error');
     } finally {
       btn.disabled = false;
       btn.textContent = origLabel;
@@ -5796,9 +6425,9 @@ RULES — read carefully:
     const textarea = document.getElementById('rewrittenScript');
     if (!textarea) return;
     const val = textarea.value.trim();
-    if (!val) { alert('No rewritten script yet — click ✏ Rewrite first.'); return; }
+    if (!val) { showToast('No rewritten script yet — click ✏ Rewrite first.', 'warning'); return; }
 
-    if (!segments || segments.length === 0) { alert('Detect Cuts first, then apply the rewrite.'); return; }
+    if (!segments || segments.length === 0) { showToast('Detect Cuts first, then apply the rewrite.', 'warning'); return; }
 
     if (rewrittenSegScripts && rewrittenSegScripts.length > 0) {
       // Re-parse the textarea in case user edited it (by [SEGn] prefix)
@@ -6021,7 +6650,7 @@ RULES — read carefully:
   // --- Whisper transcription ---
   async function transcribeVideo() {
     if (!refVideoFile) {
-      alert('Upload a video first, then click Transcribe.');
+      showToast('Upload a video first, then click Transcribe.', 'warning');
       return;
     }
     const btn = document.getElementById('transcribeBtn');
@@ -6131,7 +6760,7 @@ RULES — read carefully:
   async function autoSegment() {
     const videoEl = document.getElementById('refVideoEl');
     if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) {
-      alert('Please upload a video first and wait for it to load.');
+      showToast('Please upload a video first and wait for it to load.', 'warning');
       return;
     }
     const dur = videoEl.duration;
@@ -6187,7 +6816,7 @@ RULES — read carefully:
   async function autoSegmentBySceneChange() {
     const videoEl = document.getElementById('refVideoEl');
     if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) {
-      alert('Please upload a video first and wait for it to load.');
+      showToast('Please upload a video first and wait for it to load.', 'warning');
       return;
     }
 
@@ -6322,20 +6951,20 @@ RULES — read carefully:
 
     if (btn) {
       btn.disabled = false;
-      btn.textContent = '✅ ' + segments.length + ' cuts found';
-      setTimeout(() => { btn.textContent = '🎞 Detect Cuts'; }, 4000);
+      btn.innerHTML = '✅ ' + segments.length + ' cuts found';
+      setTimeout(() => { btn.innerHTML = '<i class="ti ti-scissors"></i> Detect Cuts'; }, 4000);
     }
   }
 
   // --- Mark scene change manually at current playback time ---
   async function markSceneChange() {
     const videoEl = document.getElementById('refVideoEl');
-    if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) { alert('Please upload a video first.'); return; }
+    if (!videoEl || !videoEl.duration || isNaN(videoEl.duration)) { showToast('Please upload a video first.', 'warning'); return; }
     const t = videoEl.currentTime;
     if (segments.length > 0) {
       const prev = segments[segments.length - 1];
       if (t <= prev.startTime + 0.5) {
-        alert('Seek further into the video before marking a new scene.'); return;
+        showToast('Seek further into the video before marking a new scene.', 'warning'); return;
       }
       prev.endTime = t;
     }
@@ -6348,23 +6977,22 @@ RULES — read carefully:
 
   // --- Clear all segments ---
   function clearSegments() {
-    if (segments.length > 0 && !confirm('Clear all ' + segments.length + ' segment' + (segments.length !== 1 ? 's' : '') + '? This cannot be undone.')) return;
-    segments = [];
-    saveSegments();
-    renderSegments();
+    if (segments.length === 0) { segments = []; saveSegments(); renderSegments(); return; }
+    showConfirm('Clear all ' + segments.length + ' segment' + (segments.length !== 1 ? 's' : '') + '? This cannot be undone.', () => {
+      segments = [];
+      saveSegments();
+      renderSegments();
+    });
   }
 
   // --- Copy all Veo 3 prompts to clipboard ---
   function copyAllVeoPrompts() {
     const prompts = segments.map((s, i) => `[Seg ${i+1} — ${Math.floor(s.startTime/60)}:${String(Math.floor(s.startTime%60)).padStart(2,'0')}–${Math.floor(s.endTime/60)}:${String(Math.floor(s.endTime%60)).padStart(2,'0')}]\n${s.veoPrompt || '(empty)'}`);
-    if (!prompts.length) { if (typeof showToast === 'function') showToast('No segments yet.', 'warning'); else alert('No segments yet.'); return; }
+    if (!prompts.length) { showToast('No segments yet.', 'warning'); return; }
+    const btn = event?.currentTarget || document.querySelector('[onclick*="copyAllVeoPrompts"]');
     navigator.clipboard.writeText(prompts.join('\n\n')).then(() => {
-      const btn = event.currentTarget;
-      const orig = btn.textContent;
-      btn.textContent = '✓ Copied!';
-      btn.style.color = '#4ade80';
-      setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800);
-      if (typeof showToast === 'function') showToast(`${prompts.length} Veo 3 prompt${prompts.length !== 1 ? 's' : ''} copied to clipboard`, 'success');
+      if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; btn.style.color = '#4ade80'; setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800); }
+      showToast(`${prompts.length} Veo 3 prompt${prompts.length !== 1 ? 's' : ''} copied to clipboard`, 'success');
     });
   }
 
@@ -6776,7 +7404,10 @@ RULES — read carefully:
 
         <!-- Script -->
         <div class="seg-field-script">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);margin-bottom:2px;">Script ${scriptBadgeHtml(seg)}</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--text-3);">Script ${scriptBadgeHtml(seg)}</span>
+            <button id="rewrite-seg-btn-${i}" onclick="rewriteSegmentScript(${i})" title="AI rewrite this scene to fit within 8s" style="background:none;border:1px solid rgba(96,165,250,0.3);border-radius:3px;color:#60a5fa;font-size:9px;padding:1px 6px;cursor:pointer;white-space:nowrap;">↺ Rewrite</button>
+          </div>
           <textarea id="script-seg-${i}"
             oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
             class="seg-ta-base seg-ta-script"
@@ -6813,16 +7444,26 @@ RULES — read carefully:
             style="display:none;"
             placeholder="Describe the scene for NB Pro…"
           >${escHtml(seg.nbPrompt || '')}</textarea>
-          <div id="nbpreview-wrap-${i}" style="display:none;margin-top:4px;align-items:center;gap:6px;">
-            <div id="nbpreview-zone-${i}" onclick="document.getElementById('nbpreview-input-${i}').click()"
-              style="width:40px;height:40px;border:1px dashed rgba(251,191,36,0.3);border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:rgba(251,191,36,0.04);">
-              ${seg.nbPreviewDataUrl
-                ? `<img src="${seg.nbPreviewDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:2px;">`
-                : `<span style="font-size:14px;opacity:0.4;">🍌</span>`}
+          <!-- Photo 2 background reminder + NB composite upload -->
+          <div id="nbpreview-wrap-${i}" style="display:none;margin-top:5px;flex-direction:column;gap:4px;">
+            ${!bgFromAvatar ? `<div data-nb-bg-row style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);border-radius:4px;">
+              <div onclick="document.getElementById('bgImgInput').click()" title="Click to upload background"
+                style="width:36px;height:36px;border-radius:3px;overflow:hidden;flex-shrink:0;cursor:pointer;background:var(--surface-2);border:1px solid rgba(251,191,36,0.25);display:flex;align-items:center;justify-content:center;">
+                ${bgImageDataUrl ? `<img id="nb-bg-thumb-${i}" src="${bgImageDataUrl}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:16px;opacity:0.4;">🖼</span>`}
+              </div>
+              <span style="font-size:9px;color:var(--text-3);line-height:1.4;flex:1;">${bgImageDataUrl ? '<span style="color:rgba(251,191,36,0.8);font-weight:600;">📎 Photo 2 set</span> — attach this image as Photo 2 in NB Pro (same for all scenes)' : '<span style="color:var(--danger);opacity:0.7;">No background uploaded</span> — upload in the Background panel to use as Photo 2'}</span>
+            </div>` : `<div data-nb-bg-row style="font-size:9px;color:rgba(251,191,36,0.6);padding:3px 6px;">🖼 Using avatar photo as background (Photo 1 only — no Photo 2 needed)</div>`}
+            <div style="display:flex;align-items:center;gap:6px;">
+              <div id="nbpreview-zone-${i}" onclick="document.getElementById('nbpreview-input-${i}').click()"
+                style="width:36px;height:36px;border:1px dashed rgba(251,191,36,0.3);border-radius:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;background:rgba(251,191,36,0.04);">
+                ${seg.nbPreviewDataUrl
+                  ? `<img src="${seg.nbPreviewDataUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:2px;">`
+                  : `<span style="font-size:13px;opacity:0.4;">🍌</span>`}
+              </div>
+              <span style="font-size:9px;color:var(--text-3);line-height:1.3;">Upload NB Pro<br>composite result</span>
+              ${seg.nbPreviewDataUrl ? `<button onclick="clearNbPreview(${i})" style="margin-left:auto;font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;">✕</button>` : ''}
+              <input type="file" id="nbpreview-input-${i}" accept="image/*" style="display:none;" onchange="onNbPreviewChange(${i}, this)">
             </div>
-            <span style="font-size:9px;color:var(--text-3);line-height:1.3;">Upload NB Pro<br>composite result</span>
-            ${seg.nbPreviewDataUrl ? `<button onclick="clearNbPreview(${i})" style="margin-left:auto;font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;">✕</button>` : ''}
-            <input type="file" id="nbpreview-input-${i}" accept="image/*" style="display:none;" onchange="onNbPreviewChange(${i}, this)">
           </div>
         </div>
 
@@ -6849,13 +7490,12 @@ RULES — read carefully:
     requestAnimationFrame(() => {
       container.querySelectorAll('textarea').forEach(ta => autoGrow(ta));
     });
+    // Update step progress strip whenever segments change
+    setTimeout(() => updateStepProgress?.(), 80);
   }
 
-  // --- Get current NB background source setting ---
-  function getNbBgSource() {
-    const el = document.getElementById('nbBgSource');
-    return el ? el.value : 'photo2';
-  }
+  // Background source is always Photo 2 (uploaded background) unless bgFromAvatar is set.
+  // The per-segment dropdown was removed — background panel drives Photo 2 for all scenes.
 
   // --- Pull jewelry + accessory details from the avatar inventory ---
   // These small items are the ones most likely to get dropped in NB Pro
@@ -6881,15 +7521,11 @@ RULES — read carefully:
   function buildSegmentNanoBananaPrompt(i, frameDataUrl, scriptSlice, setting, productName, productDetails) {
     let instruction, negPrompt;
     if (bgFromAvatar) {
-      // Avatar BG mode: only Photo 1 uploaded — keep person AND background from it
+      // Avatar BG mode: Photo 1 is both person and background
       instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
-    } else if (getNbBgSource() === 'photo1') {
-      // Photo 1 bg mode: use pose from Photo 2 but keep background from Photo 1
-      instruction = 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
     } else {
-      // Default: place person from Photo 1 into scene from Photo 2
+      // Standard: person from Photo 1, background/scene from Photo 2 (uploaded background)
       instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
     }
@@ -6901,12 +7537,11 @@ RULES — read carefully:
   function buildSegmentNanoBananaEndPrompt(i, setting, productName, productDetails) {
     let instruction, negPrompt;
     if (bgFromAvatar) {
+      // Avatar BG mode: Photo 1 is both person and background
       instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
-    } else if (getNbBgSource() === 'photo1') {
-      instruction = 'Place the person from reference photo 1 into the same pose and body position shown in reference photo 2. Keep the person\'s exact appearance, clothing, and background environment from reference photo 1 unchanged. Only adopt the pose/position from photo 2 — do not use the background or setting from photo 2.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
     } else {
+      // Standard: person from Photo 1, background/scene from Photo 2 (uploaded background)
       instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
       negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
     }
@@ -6957,9 +7592,9 @@ RULES — read carefully:
 
   // --- Analyze all segment videos with GPT-4o Vision ---
   async function analyzeAllFrames() {
-    if (segments.length === 0) { alert('No segments yet — run Detect Cuts first.'); return; }
+    if (segments.length === 0) { showToast('No segments yet — run Detect Cuts first.', 'warning'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('AI analysis is not available right now. Please contact the app owner.'); return; }
+    if (!apiKey) { showToast('AI analysis is not available right now. Please contact the app owner.', 'warning'); return; }
 
     const pronoun = getAvatarPronoun();
     const btn = document.getElementById('analyzeFramesBtn');
@@ -7006,7 +7641,7 @@ RULES — read carefully:
         if (data.error) {
           btn.disabled = false;
           btn.textContent = '❌ ' + (data.error.code || data.error.type || 'Error');
-          alert('OpenAI error on segment ' + (i+1) + ':\n' + data.error.message);
+          showToast('OpenAI error on segment ' + (i+1) + ': ' + data.error.message, 'error');
           saveSegments();
           return;
         }
@@ -7014,7 +7649,7 @@ RULES — read carefully:
 
         // If OpenAI refused the image, retry with only the start frame (no end frame)
         const isRefusal = !description || /i('m| am) sorry|can't assist|cannot assist|I apologize|unable to (help|assist)/i.test(description);
-        if (isRefusal && (frameList.length > 1 || endFrame)) {
+        if (isRefusal && frameList.length > 1) {
           const retryContent = [
             { type: 'text', text: `Describe the physical movements and actions visible in this image using "${pronoun}" as the subject. Short action sentences only — focus on what hands and arms are doing, what objects are being held or moved. No identity, no appearance, no background.` },
             { type: 'image_url', image_url: { url: frameList[0], detail: 'low' } }
@@ -7031,20 +7666,19 @@ RULES — read carefully:
         if (!description || /i('m| am) sorry|can't assist|cannot assist/i.test(description)) { skipped++; continue; }
         seg.action = description;
 
-        // Update the action display in the card immediately
+        // Update the textarea value immediately (use .value, not .textContent, for textareas)
         const actionEl = document.getElementById('action-seg-' + i);
         if (actionEl) {
-          actionEl.style.color = '#6a9a4a';
-          actionEl.style.background = '#0a150a';
-          actionEl.style.border = '1px solid #1a2a1a';
-          actionEl.style.borderRadius = '2px';
-          actionEl.style.padding = '3px 6px';
-          actionEl.textContent = '🎬 ' + description;
+          actionEl.value = description;
+          autoGrow(actionEl);
+          // Brief green flash to signal the field was just AI-filled
+          actionEl.style.borderColor = 'rgba(74,222,128,0.6)';
+          setTimeout(() => { if (actionEl) actionEl.style.borderColor = ''; }, 1200);
         }
       } catch (e) {
         btn.disabled = false;
         btn.textContent = '❌ Error';
-        alert('Segment ' + (i+1) + ' failed:\n' + (e.message || String(e)));
+        showToast('Segment ' + (i+1) + ' failed: ' + (e.message || String(e)), 'error');
         saveSegments();
         return;
       }
@@ -7092,12 +7726,219 @@ RULES — read carefully:
     return 'person speaks naturally to camera — confident posture, real eye contact, natural hand gestures';
   }
 
+  // URL-to-Script: GPT generates a full ad script from Brand Kit data
+  async function generateScriptFromUrl() {
+    const kit = getBrandKit();
+    let url = kit.productUrl;
+    if (!url) {
+      url = prompt('No product URL in Brand Kit. Enter one now:');
+      if (!url) return;
+      const urlEl = document.getElementById('bkProductUrl');
+      if (urlEl) { urlEl.value = url; saveBrandKit(); }
+    }
+    const key = getApiKey();
+    if (!key) { showToast('Add your OpenAI API key in Settings first.', 'warning'); return; }
+
+    const btn = document.getElementById('urlToScriptBtn');
+    if (btn) { btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+
+    try {
+      const productName  = kit.productName  || 'the product';
+      const toneMap      = { energetic:'energetic and hype', conversational:'casual and conversational', urgent:'urgent with FOMO', professional:'polished and professional', storytelling:'story-driven and emotional' };
+      const toneDesc     = toneMap[kit.tone] || 'conversational';
+      const talkingPts   = kit.talkingPoints ? kit.talkingPoints.split('\n').filter(Boolean).map(l => '• ' + l).join('\n') : '';
+      const cta          = kit.cta || 'Link in bio';
+      const productType  = (document.getElementById('studioProduct')?.value) || 'affiliate';
+
+      const systemPrompt = `You are an expert short-form affiliate marketing video scriptwriter. Write punchy, conversational TikTok/Reels ad scripts that sound natural when spoken aloud. Each sentence should be ≤18 words (fits ~8 seconds of speech). Use pattern interrupts, social proof cues, and emotional hooks. Never use hashtags, emojis, or stage directions. Return ONLY the spoken script text, nothing else.`;
+
+      const userPrompt = `Write a 45-65 second TikTok ad script (spoken aloud) for this product:
+
+Product: ${productName}
+URL: ${url}
+Product type: ${productType}
+Tone: ${toneDesc}
+${talkingPts ? 'Key talking points:\n' + talkingPts : ''}
+CTA: ${cta}
+
+Rules:
+- Open with a strong pattern-interrupt hook (question, bold claim, or relatable pain)
+- 6-8 short punchy sentences total
+- Work in the key talking points naturally
+- End with the CTA: "${cta}"
+- Each sentence ≤18 words
+- Sound like a real person talking, not an ad`;
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [{ role: 'system', content: systemPrompt }, { role: 'user', content: userPrompt }],
+          max_tokens: 600,
+          temperature: 0.8,
+        })
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `API error ${res.status}`); }
+      const data = await res.json();
+      const script = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!script) throw new Error('Empty response from GPT');
+
+      const scriptEl = document.getElementById('originalScript');
+      if (scriptEl) {
+        scriptEl.value = script;
+        onMasterScriptInput(scriptEl);
+      }
+      // Auto-split immediately
+      setTimeout(() => splitScriptToScenes(), 100);
+    } catch(e) {
+      showToast('Script generation failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = '🔗 Generate Script from URL'; btn.disabled = false; }
+    }
+  }
+
+  // Per-segment script rewrite
+  async function rewriteSegmentScript(i) {
+    const key = getApiKey();
+    if (!key) { showToast('Add your OpenAI API key in Settings first.', 'warning'); return; }
+    const ta  = document.getElementById('script-seg-' + i);
+    const btn = document.getElementById('rewrite-seg-btn-' + i);
+    if (!ta) return;
+    const current = ta.value.trim() || segments[i]?.script?.trim() || '';
+    if (!current) { showToast('No script in this scene yet.', 'warning'); return; }
+
+    const prevScript = i > 0 ? (segments[i-1]?.script || '') : '';
+    const nextScript = i < segments.length-1 ? (segments[i+1]?.script || '') : '';
+
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+    try {
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'You rewrite individual video ad scenes to fit within 8 seconds of speech (≤18 words). Keep the core message, trim filler. Sound natural and conversational. Return ONLY the rewritten scene text, nothing else.' },
+            { role: 'user', content: `Rewrite this scene to ≤18 words while keeping its meaning.\n\n${prevScript ? 'Previous scene: "' + prevScript + '"\n' : ''}Current scene: "${current}"\n${nextScript ? 'Next scene: "' + nextScript + '"' : ''}` }
+          ],
+          max_tokens: 120,
+          temperature: 0.6,
+        })
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `API error ${res.status}`); }
+      const data = await res.json();
+      const rewritten = data.choices?.[0]?.message?.content?.trim() || '';
+      if (!rewritten) throw new Error('Empty response');
+      ta.value = rewritten;
+      segments[i].script = rewritten;
+      autoGrow(ta);
+      debounceSave();
+      // Flash green
+      ta.style.borderColor = '#4ade80';
+      setTimeout(() => ta.style.borderColor = '', 1200);
+    } catch(e) {
+      showToast('Rewrite failed: ' + e.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = '↺ Rewrite'; btn.disabled = false; }
+    }
+  }
+
+  // Hook Variations + Ad Scoring
+  function closeHookVariationsModal() {
+    document.getElementById('hookVariationsModal').style.display = 'none';
+  }
+
+  function applyHookVariation(text) {
+    // Replace first segment's script text
+    if (segments.length === 0) { showToast('No segments yet — split a script into scenes first.', 'warning'); return; }
+    segments[0].script = text;
+    const ta = document.getElementById('script-seg-0');
+    if (ta) ta.value = text;
+    saveSegments();
+    closeHookVariationsModal();
+    // Flash the first card
+    const card = document.getElementById('seg-card-0');
+    if (card) { card.style.outline = '2px solid var(--accent)'; setTimeout(() => card.style.outline = '', 1200); }
+  }
+
+  async function generateHookVariations() {
+    if (segments.length === 0) { showToast('Split your script into scenes first.', 'warning'); return; }
+    const key = getApiKey();
+    if (!key) { showToast('Add your OpenAI API key in Settings first.', 'warning'); return; }
+
+    const modal = document.getElementById('hookVariationsModal');
+    const list  = document.getElementById('hookVariationsList');
+    const btn   = document.getElementById('hookVariationsBtn');
+    modal.style.display = 'flex';
+    list.innerHTML = '<div style="text-align:center;padding:24px;color:var(--text-3);font-size:12px;">⏳ Generating hooks…</div>';
+    if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+    try {
+      const kit        = getBrandKit();
+      const firstSeg   = segments[0]?.script || document.getElementById('originalScript')?.value?.split(/[.!?]/)[0] || '';
+      const fullScript = segments.map(s => s.script).join(' ');
+      const productName = kit.productName || (document.getElementById('studioProduct')?.options[document.getElementById('studioProduct')?.selectedIndex]?.text) || 'the product';
+      const toneMap   = { energetic:'energetic and hype', conversational:'casual and conversational', urgent:'urgent with FOMO', professional:'polished and professional', storytelling:'story-driven' };
+      const toneDesc  = toneMap[kit.tone] || 'conversational';
+      const cta       = kit.cta || '';
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + key },
+        body: JSON.stringify({
+          model: 'gpt-4o',
+          messages: [
+            { role: 'system', content: 'You are an expert TikTok/Reels ad copywriter specializing in pattern-interrupt hooks. Return ONLY valid JSON.' },
+            { role: 'user', content: `Generate 5 alternative opening hooks for this affiliate ad. Each should be ≤18 words, spoken aloud, no hashtags or emojis.
+
+Product: ${productName}
+Tone: ${toneDesc}
+Current opening: "${firstSeg}"
+Full script context: "${fullScript.slice(0, 400)}"
+${cta ? 'CTA: ' + cta : ''}
+
+Return a JSON array of 5 objects: [{"hook": "...", "score": 8, "why": "short reason (≤8 words)"}]
+Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity gap. Return ONLY the JSON array.` }
+          ],
+          max_tokens: 600,
+          temperature: 0.9,
+        })
+      });
+      if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `API error ${res.status}`); }
+      const data = await res.json();
+      const raw = data.choices?.[0]?.message?.content?.trim() || '';
+      const jsonStr = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      const hooks = JSON.parse(jsonStr);
+      window._vsHookResults = hooks; // stored so onclick can reference by index safely
+
+      list.innerHTML = hooks.map((h, i) => {
+        const score = h.score || 0;
+        const scoreColor = score >= 8 ? '#4ade80' : score >= 6 ? '#fbbf24' : '#f87171';
+        return `<div style="border:1px solid var(--border-2);border-radius:8px;padding:12px 14px;background:var(--surface-2);display:flex;flex-direction:column;gap:6px;">
+          <div style="display:flex;align-items:flex-start;gap:10px;">
+            <div style="font-size:18px;font-weight:900;color:${scoreColor};flex-shrink:0;line-height:1;min-width:24px;">${score}</div>
+            <div style="font-size:12px;color:var(--text-1);line-height:1.5;flex:1;">${escHtml(h.hook)}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:10px;color:var(--text-3);flex:1;font-style:italic;">${escHtml(h.why || '')}</span>
+            <button onclick="applyHookVariation(window._vsHookResults[${i}].hook)" style="padding:4px 12px;font-size:10.5px;font-weight:600;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:5px;color:#818cf8;cursor:pointer;white-space:nowrap;">↩ Use This Hook</button>
+          </div>
+        </div>`;
+      }).join('');
+    } catch(e) {
+      list.innerHTML = `<div style="color:var(--danger);padding:16px;font-size:12px;">Failed: ${escHtml(e.message)}</div>`;
+    } finally {
+      if (btn) { btn.textContent = '🎣 Hook Variations'; btn.disabled = false; }
+    }
+  }
+
   // Split the script into ~8s scenes at sentence boundaries
   function splitScriptToScenes() {
     const scriptEl = document.getElementById('originalScript');
     const raw = scriptEl ? scriptEl.value.trim() : '';
     if (!raw) {
-      alert('Paste your script into the Script / Transcript box first, then click ✂ Split into Scenes.');
+      showToast('Paste your script into the Script / Transcript box first, then click ✂ Split into Scenes.', 'warning');
       return;
     }
 
@@ -7112,7 +7953,7 @@ RULES — read carefully:
       .filter(s => s.length > 0);
 
     if (rawSentences.length === 0) {
-      alert('Could not parse any sentences. Make sure your script has punctuation (. ! ?).');
+      showToast('Could not parse any sentences. Make sure your script has punctuation (. ! ?).', 'warning');
       return;
     }
 
@@ -7148,7 +7989,7 @@ RULES — read carefully:
     }
 
     if (sceneTexts.length === 0) {
-      alert('Could not create any scenes. Try adding more text to your script.');
+      showToast('Could not create any scenes. Try adding more text to your script.', 'warning');
       return;
     }
 
@@ -7180,7 +8021,7 @@ RULES — read carefully:
     const totSec = Math.round(elapsed);
     const countEl = document.getElementById('segmentCount');
     if (countEl) countEl.textContent = `${total} scene${total !== 1 ? 's' : ''}`;
-    alert(`✓ ${total} scene${total !== 1 ? 's' : ''} created (≈${totSec}s total).\n\nEach scene is timed to ~8s of speech and ends at a natural sentence boundary.\n\nNow click ⚡ Generate All Prompts.`);
+    showToast(`${total} scene${total !== 1 ? 's' : ''} created — now click ⚡ Generate All Prompts.`, 'success');
   }
 
   // NB Pro starting-frame prompt for script-only scenes (no video frame reference)
@@ -7215,7 +8056,6 @@ RULES — read carefully:
       } else {
         // Uploaded background photo → attach as Photo 2 in NB Pro, applied to every scene
         obj.background_reference = 'Use the environment / background from reference Photo 2 as the scene backdrop. Keep the background realistic and consistent across scenes — do not alter or reimagine it.';
-        obj.photo_2 = '(attach your uploaded background photo as Photo 2 in NB Pro — same image for every scene)';
       }
     }
     return JSON.stringify(obj, null, 2);
@@ -7223,7 +8063,7 @@ RULES — read carefully:
 
   function generateAllSegmentPrompts() {
     if (segments.length === 0) {
-      alert('No scenes yet.\n\n• Paste your script and click ✂ Split into Scenes, or\n• Upload a video and click Detect Cuts.');
+      showToast('No scenes yet. Paste your script and click ✂ Split into Scenes.', 'warning');
       return;
     }
     const productSel = document.getElementById('studioProduct');
@@ -7238,7 +8078,7 @@ RULES — read carefully:
     });
 
     // If all segments are still empty, try distributing from the original script box
-    if (segments.every(s => !s.script.trim())) {
+    if (segments.every(s => !(s.script || '').trim())) {
       distributeScript();
     }
 
@@ -7280,9 +8120,9 @@ RULES — read carefully:
   // --- AI Describe Scenes (Producer mode) ---
   // Sends each scene's script to GPT and fills in Action + Visual Description fields
   async function aiDescribeScenes() {
-    if (segments.length === 0) { alert('Split your script into scenes first.'); return; }
+    if (segments.length === 0) { showToast('Split your script into scenes first.', 'warning'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('AI features are not available right now. Please contact support.'); return; }
+    if (!apiKey) { showToast('AI features are not available right now. Please contact support.', 'warning'); return; }
 
     const btn = document.getElementById('aiDescribeBtn');
     if (btn) { btn.textContent = '⏳ Describing…'; btn.disabled = true; }
@@ -7291,7 +8131,7 @@ RULES — read carefully:
     const setting = document.getElementById('studioSetting')?.value.trim() || '';
 
     const sceneList = segments.map((s, i) =>
-      `Scene ${i + 1} (~${Math.round(s.endTime - s.startTime)}s): "${s.script.trim()}"`
+      `Scene ${i + 1} (~${Math.round(s.endTime - s.startTime)}s): "${(s.script || '').trim()}"`
     ).join('\n');
 
     const hasBgImage = !!bgImageDataUrl;
@@ -7370,7 +8210,7 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
       const data = await res.json();
       let parsed;
       try {
-        let raw = data.choices[0].message.content || '';
+        let raw = data.choices?.[0]?.message?.content || '';
         // Strip markdown code fences if present
         raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
         // Find the JSON array even if there's preamble text
@@ -7396,10 +8236,9 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
       });
       saveSegments();
       if (btn) { btn.textContent = '✅ Done!'; setTimeout(() => { btn.textContent = '✨ AI Describe'; btn.disabled = false; }, 2500); }
-      if (typeof showToast === 'function') showToast(`AI descriptions applied to ${parsed.length} scene${parsed.length !== 1 ? 's' : ''}`, 'success');
+      showToast(`AI descriptions applied to ${parsed.length} scene${parsed.length !== 1 ? 's' : ''}`, 'success');
     } catch(err) {
-      if (typeof showToast === 'function') showToast('AI Describe failed: ' + err.message, 'error', 5000);
-      else alert('AI Describe failed: ' + err.message);
+      showToast('AI Describe failed: ' + err.message, 'error', 5000);
       if (btn) { btn.textContent = '✨ AI Describe'; btn.disabled = false; }
     }
   }
@@ -7636,7 +8475,7 @@ No markdown. Return only the JSON object.`
   // before any Veo credits are spent inside Flow.
   function showPreflightModal(skipDone) {
     if (segments.length === 0) {
-      alert('No segments yet — split a video or script into scenes first.');
+      showToast('No segments yet — split a video or script into scenes first.', 'warning');
       return;
     }
     let readyCount = 0, issueCount = 0, skipCount = 0, totalCredits = 0;
@@ -7708,27 +8547,28 @@ No markdown. Return only the JSON object.`
   // ── One-button happy path: Analyze video → Generate prompts → Pre-flight ──
   async function processEverything() {
     if (segments.length === 0) {
-      alert('No segments yet — upload a video and run Detect Cuts first.');
+      showToast('No segments yet — upload a video and run Detect Cuts first.', 'warning');
       return;
     }
-    if (!confirm('Process Everything will:\n\n  1. Analyze the video frames (AI)\n  2. Generate all NB Pro + Veo 3 prompts\n  3. Open the pre-flight check\n\nThis uses AI calls and may take a minute. Continue?')) return;
-    const btn = document.getElementById('processEverythingBtn');
-    const origText = btn ? btn.textContent : '';
-    if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
-    // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
-    try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
-    // Step 2 — generate all prompts
-    if (btn) btn.textContent = '⏳ Generating prompts…';
-    try {
-      generateAllSegmentPrompts();
-    } catch (e) {
+    showConfirm('Run Process Everything? This analyzes video frames and generates all NB Pro + Veo 3 prompts. May take a minute.', async () => {
+      const btn = document.getElementById('processEverythingBtn');
+      const origText = btn ? btn.textContent : '';
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
+      // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
+      try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
+      // Step 2 — generate all prompts
+      if (btn) btn.textContent = '⏳ Generating prompts…';
+      try {
+        generateAllSegmentPrompts();
+      } catch (e) {
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        showToast('Could not generate prompts: ' + ((e && e.message) || e), 'error');
+        return;
+      }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
-      alert('Could not generate prompts: ' + ((e && e.message) || e));
-      return;
-    }
-    if (btn) { btn.disabled = false; btn.textContent = origText; }
-    // Step 3 — pre-flight gate
-    showPreflightModal(false);
+      // Step 3 — pre-flight gate
+      showPreflightModal(false);
+    });
   }
 
   // ── Run All Scenes — download all images + copy one combined instruction ──
@@ -7736,32 +8576,12 @@ No markdown. Return only the JSON object.`
   // showed the user every issue — so the inline confirm() gates are skipped.
   function runAllScenes(skipDone, preflightDone) {
     const allReady = segments.filter(s => s.veoPrompt?.trim());
-    if (!allReady.length) { alert('Generate prompts first.'); return; }
+    if (!allReady.length) { showToast('Generate prompts first.', 'warning'); return; }
 
     const ready = skipDone ? allReady.filter(s => !s.done) : allReady;
-    if (!ready.length) { alert('All scenes are already done! Use "Run All Scenes" to re-run them, or click "Redo" on individual scenes.'); return; }
+    if (!ready.length) { showToast('All scenes are already done! Use "Run All Scenes" to re-run them, or click "Redo" on individual scenes.', 'warning'); return; }
 
-    if (!preflightDone) {
-      const unready = segments.filter(s => !s.veoPrompt?.trim());
-      if (unready.length && !skipDone) {
-        if (!confirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`)) return;
-      }
-
-      // ── Veo 3 JSON safety pre-flight ───────────────────────────────────────
-      // Catch broken/invalid prompts before burning Veo generations on them.
-      const lintIssues = [];
-      ready.forEach((s) => {
-        const idx = segments.indexOf(s);
-        const r = lintVeoJSON(s.veoPrompt);
-        if (!r.ok) lintIssues.push(`Scene ${idx + 1}: ${r.errors.join(', ')}`);
-      });
-      if (lintIssues.length) {
-        const preview = lintIssues.slice(0, 8).join('\n');
-        const more = lintIssues.length > 8 ? `\n…and ${lintIssues.length - 8} more` : '';
-        if (!confirm(`⚠ ${lintIssues.length} scene(s) have Veo 3 prompt problems:\n\n${preview}${more}\n\nRun anyway?`)) return;
-      }
-    }
-
+    // Declare all variables up front so confirm callbacks can close over them
     const appUrl = window.location.href;
     const _usr = getUserSettings();
     const _adm = getAdminSettings();
@@ -7781,6 +8601,30 @@ No markdown. Return only the JSON object.`
       The avatar has these specific details. Check EACH line against the generated
       image and mark PASS / FAIL / UNSURE. Treat any UNSURE as a FAIL.
 ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).join('\n')}` : '';
+
+    // ── Confirm gates (run before the main logic, now that all vars are declared) ──
+    if (!preflightDone) {
+      const unready = segments.filter(s => !s.veoPrompt?.trim());
+      if (unready.length && !skipDone) {
+        showConfirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`, () => {
+          runAllScenes(skipDone, true);
+        });
+        return;
+      }
+      // ── Veo 3 JSON safety pre-flight ─────────────────────────────────────────
+      const lintIssues = [];
+      ready.forEach((s) => {
+        const idx = segments.indexOf(s);
+        const r = lintVeoJSON(s.veoPrompt);
+        if (!r.ok) lintIssues.push(`Scene ${idx + 1}: ${r.errors.join(', ')}`);
+      });
+      if (lintIssues.length) {
+        showConfirm(`⚠ ${lintIssues.length} scene(s) have Veo 3 prompt issues. Run anyway?`, () => {
+          runAllScenes(skipDone, true);
+        });
+        return;
+      }
+    }
 
     // ── MANUAL MODE: build a simple copy-paste prompt sheet ──────────────────
     if (!claudeBrowserMode) {
@@ -8177,7 +9021,7 @@ Report back: how many scenes completed successfully, and note any that had issue
   function copyClaudeInstruction(i) {
     const seg = segments[i];
     if (!seg || !seg.veoPrompt?.trim()) {
-      alert('Generate prompts first, then use this button.');
+      showToast('Generate prompts first, then use this button.', 'warning');
       return;
     }
 
@@ -8465,7 +9309,7 @@ ${veoPrompt}
   function copyAndOpenVeo3(i) {
     const el = document.getElementById('veo-seg-' + i);
     if (!el || !el.value.trim()) {
-      alert('Generate prompts first (click ⚡ Generate All Prompts), then use this button.');
+      showToast('Generate prompts first (click ⚡ Generate All Prompts), then use this button.', 'warning');
       return;
     }
     const doCopy = () => {
@@ -8545,9 +9389,9 @@ ${veoPrompt}
 
   // --- Condense over-limit scenes to fit within ~8s of speech ---
   async function condenseAllScripts() {
-    if (segments.length === 0) { alert('No scenes yet. Paste your script and click ✂ Split into 8s Scenes first.'); return; }
+    if (segments.length === 0) { showToast('No scenes yet. Paste your script and click ✂ Split into 8s Scenes first.', 'warning'); return; }
     const apiKey = getApiKey();
-    if (!apiKey) { alert('AI features are not available right now. Please contact support.'); return; }
+    if (!apiKey) { showToast('AI features are not available right now. Please contact support.', 'warning'); return; }
 
     // Sync all live textarea values first
     segments.forEach((seg, i) => {
@@ -8556,11 +9400,11 @@ ${veoPrompt}
     });
 
     // Find scenes that are over the word limit
-    const overLimit = segments.map((s, i) => ({ i, wc: s.script.trim().split(/\s+/).filter(Boolean).length, text: s.script.trim() }))
+    const overLimit = segments.map((s, i) => { const t = (s.script || '').trim(); return { i, wc: t.split(/\s+/).filter(Boolean).length, text: t }; })
       .filter(x => x.wc > TARGET_WORDS + 3); // allow a little slack
 
     if (overLimit.length === 0) {
-      alert('All scenes are already within the 8-second word limit — nothing to condense.');
+      showToast('All scenes are already within the 8-second word limit — nothing to condense.', 'warning');
       return;
     }
 
@@ -8596,7 +9440,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       const data = await res.json();
       let parsed;
       try {
-        let raw = data.choices[0].message.content || '';
+        let raw = data.choices?.[0]?.message?.content || '';
         raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
         const arrStart = raw.indexOf('['); const arrEnd = raw.lastIndexOf(']');
         if (arrStart !== -1 && arrEnd !== -1) raw = raw.slice(arrStart, arrEnd + 1);
@@ -8619,7 +9463,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       saveSegments();
       if (btn) { btn.textContent = `✅ ${updated} condensed`; setTimeout(() => { btn.textContent = '✂ Condense'; btn.disabled = false; }, 2500); }
     } catch(err) {
-      alert('Condense failed: ' + err.message);
+      showToast('Condense failed: ' + err.message, 'error');
       if (btn) { btn.textContent = '✂ Condense'; btn.disabled = false; }
     }
   }
@@ -8628,15 +9472,20 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
   function generateAllNBPrompts() {
     const producerSegs = segments.filter(s => s._scriptOnly);
     if (producerSegs.length === 0) {
-      alert('No producer scenes found. Paste your script and click ✂ Split (8s) first.');
+      showToast('No producer scenes found. Paste your script and click ✂ Split (8s) first.', 'warning');
       return;
     }
     const missing = producerSegs.filter(s => !s.frameDesc || !s.frameDesc.trim());
     if (missing.length > 0) {
-      const ok = confirm(`${missing.length} scene${missing.length !== 1 ? 's are' : ' is'} missing a Visual Description. Generate anyway? (Those scenes will use script text only — run ✨ AI Describe Scenes first for best results.)`);
-      if (!ok) return;
+      showConfirm(`${missing.length} scene${missing.length !== 1 ? 's are' : ' is'} missing a Visual Description. Generate anyway? (Those scenes will use script text only — run ✨ AI Describe Scenes first for best results.)`, () => {
+        _doGenerateAllNBPrompts();
+      });
+      return;
     }
+    _doGenerateAllNBPrompts();
+  }
 
+  function _doGenerateAllNBPrompts() {
     const btn = document.getElementById('genAllNBBtn');
     if (btn) { btn.textContent = '⏳ Building…'; btn.disabled = true; }
 
@@ -8674,7 +9523,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       btn.textContent = `✅ ${built} done`;
       setTimeout(() => { btn.textContent = '🍌 Gen All NB'; btn.disabled = false; }, 2500);
     }
-    if (typeof showToast === 'function') showToast(`NB prompts built for ${built} scene${built !== 1 ? 's' : ''}`, 'success');
+    showToast(`NB prompts built for ${built} scene${built !== 1 ? 's' : ''}`, 'success');
   }
 
 
@@ -8730,7 +9579,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
     const scenes = getScenes();
 
     if (!script && scenes.length === 0) {
-      alert('Please add the original script and/or at least one scene description.');
+      showToast('Please add the original script and/or at least one scene description.', 'warning');
       return;
     }
 
@@ -8896,7 +9745,7 @@ TECHNICAL SPECS:
   }
 
   function saveGeneratedToLibrary() {
-    if (segments.length === 0) { alert('Generate prompts first.'); return; }
+    if (segments.length === 0) { showToast('Generate prompts first.', 'warning'); return; }
     const productSel = document.getElementById('studioProduct');
     const productName = productSel && productSel.selectedIndex >= 0 ? (productSel.options[productSel.selectedIndex]?.text || 'Untitled') : 'Untitled';
     const settingVal = document.getElementById('studioSetting')?.value.trim() || '';
@@ -9155,7 +10004,7 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId);
     loadProjectData();
     renderProjectBar();
-    clearVideo();
+    _resetVideoUI(); // silently clear video UI — new project has no video, no confirm needed
   }
 
   function switchProject(id) {
@@ -9163,9 +10012,9 @@ TECHNICAL SPECS:
     saveCurrentProjectData();
     activeProjectId = id;
     DB.set(modeKey('sm_active_project'), activeProjectId);
-    loadProjectData();
+    loadProjectData(); // loads new project's segments before we touch the UI
     renderProjectBar();
-    clearVideo();
+    _resetVideoUI(); // silently clear video UI — don't wipe newly-loaded project segments
   }
 
   function renameProject() {
@@ -9179,14 +10028,15 @@ TECHNICAL SPECS:
   }
 
   function deleteProject(id) {
-    if (projects.length <= 1) { alert("Can't delete the only project."); return; }
-    if (!confirm('Delete this project and all its segments?')) return;
-    projects = projects.filter(p => p.id !== id);
-    if (activeProjectId === id) activeProjectId = projects[0].id;
-    DB.set(modeKey('sm_projects'), JSON.stringify(projects));
-    DB.set(modeKey('sm_active_project'), activeProjectId);
-    loadProjectData();
-    renderProjectBar();
+    if (projects.length <= 1) { showToast('Can\'t delete the only project.', 'warning'); return; }
+    showConfirm('Delete this project and all its segments?', () => {
+      projects = projects.filter(p => p.id !== id);
+      if (activeProjectId === id) activeProjectId = projects[0].id;
+      DB.set(modeKey('sm_projects'), JSON.stringify(projects));
+      DB.set(modeKey('sm_active_project'), activeProjectId);
+      loadProjectData();
+      renderProjectBar();
+    });
   }
 
   // ── Export / Import project as JSON ──────────────────────────────────────
@@ -9236,9 +10086,9 @@ TECHNICAL SPECS:
         if (data.product && document.getElementById('studioProduct')) document.getElementById('studioProduct').value = data.product;
         if (data.format  && document.getElementById('studioFormat'))  document.getElementById('studioFormat').value  = data.format;
         if (data.avatarDesc && document.getElementById('avatarDesc')) document.getElementById('avatarDesc').value = data.avatarDesc;
-        alert(`✅ Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`);
+        showToast(`Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`, 'success');
       } catch (e) {
-        alert('Import failed: ' + e.message);
+        showToast('Import failed: ' + e.message, 'error');
       } finally {
         input.value = '';
       }
@@ -9310,6 +10160,7 @@ TECHNICAL SPECS:
     loadAvatarImage();
     loadAvatarInventory();
     loadBgImage();
+    loadBrandKit();
     populateAvatarAccountPicker();
     renderApiKeyStatus();
     // switchStudioMode handles library + projects loading
@@ -9568,7 +10419,7 @@ TECHNICAL SPECS:
 
   function saveCalEntry() {
     const accountId = document.getElementById('calAccountSel').value;
-    if (!accountId) { alert('Select an account.'); return; }
+    if (!accountId) { showToast('Select an account.', 'warning'); return; }
     const notes = document.getElementById('calNotes').value.trim();
     videoLog.push({ id: Date.now().toString(), accountId, date: calSelectedDate, notes });
     saveVideoLog();
@@ -9594,27 +10445,29 @@ TECHNICAL SPECS:
     const planned = dailyItems.filter(i => i.date === calSelectedDate).length;
     const logged  = videoLog.filter(e => e.date === calSelectedDate).length;
     const total   = planned + logged;
-    if (total === 0) { alert('Nothing to clear on this day.'); return; }
-    if (!confirm(`Clear ${total} item${total!==1?'s':''} from ${calSelectedDate}? (${planned} planned + ${logged} logged)\n\nThis cannot be undone.`)) return;
-    dailyItems = dailyItems.filter(i => i.date !== calSelectedDate);
-    videoLog   = videoLog.filter(e => e.date !== calSelectedDate);
-    saveDailyItems();
-    saveVideoLog();
-    closeCalModal();
-    renderCalendar();
-    renderDailyPlan();
+    if (total === 0) { showToast('Nothing to clear on this day.', 'warning'); return; }
+    showConfirm(`Clear ${total} item${total!==1?'s':''} from ${calSelectedDate}? This cannot be undone.`, () => {
+      dailyItems = dailyItems.filter(i => i.date !== calSelectedDate);
+      videoLog   = videoLog.filter(e => e.date !== calSelectedDate);
+      saveDailyItems();
+      saveVideoLog();
+      closeCalModal();
+      renderCalendar();
+      renderDailyPlan();
+    });
   }
 
   function clearAllCalendar() {
     const total = dailyItems.length + videoLog.length;
-    if (total === 0) { alert('The calendar is already empty.'); return; }
-    if (!confirm(`Clear everything from the calendar?\n\n${dailyItems.length} planned item${dailyItems.length!==1?'s':''} + ${videoLog.length} logged video${videoLog.length!==1?'s':''} will be permanently erased.\n\nThis cannot be undone.`)) return;
-    dailyItems = [];
-    videoLog   = [];
-    saveDailyItems();
-    saveVideoLog();
-    renderCalendar();
-    renderDailyPlan();
+    if (total === 0) { showToast('The calendar is already empty.', 'warning'); return; }
+    showConfirm(`Clear everything from the calendar? ${dailyItems.length} planned item${dailyItems.length!==1?'s':''} + ${videoLog.length} logged video${videoLog.length!==1?'s':''} will be permanently erased.`, () => {
+      dailyItems = [];
+      videoLog   = [];
+      saveDailyItems();
+      saveVideoLog();
+      renderCalendar();
+      renderDailyPlan();
+    });
   }
 
   // ===== WEEKLY BLUEPRINT (merged plans) =====
@@ -9734,9 +10587,9 @@ TECHNICAL SPECS:
   function savePlan() {
     const prod   = parseInt(document.getElementById('planProductPerDay').value)  || 0;
     const growth = parseInt(document.getElementById('planGrowthPerDay').value)   || 0;
-    if (prod === 0 && growth === 0) { alert('Set at least one video type count above 0.'); return; }
+    if (prod === 0 && growth === 0) { showToast('Set at least one video type count above 0.', 'warning'); return; }
     const days = Array.from(document.querySelectorAll('#planDaysBtns .plan-day-btn.active')).map(b => parseInt(b.dataset.day));
-    if (days.length === 0) { alert('Select at least one posting day.'); return; }
+    if (days.length === 0) { showToast('Select at least one posting day.', 'warning'); return; }
     const scope = document.getElementById('planScopeSpecific').checked ? 'specific' : 'all';
     const accountIds = scope === 'specific'
       ? Array.from(document.querySelectorAll('#planAccountPicker .wct-acct-chip.sel')).map(c => c.dataset.id)
@@ -9764,12 +10617,13 @@ TECHNICAL SPECS:
   }
 
   function deletePlan(id) {
-    if (!confirm('Delete this plan?')) return;
-    postPlans = postPlans.filter(p => p.id !== id);
-    savePlans();
-    renderPlans();
-    renderCalendar();
-    renderDailyPlan();
+    showConfirm('Delete this plan?', () => {
+      postPlans = postPlans.filter(p => p.id !== id);
+      savePlans();
+      renderPlans();
+      renderCalendar();
+      renderDailyPlan();
+    });
   }
 
   function _planAcctLabel(plan) {
@@ -10160,7 +11014,7 @@ TECHNICAL SPECS:
 
   function saveDailyItem() {
     const accountId = document.getElementById('dailyItemAccount').value;
-    if (!accountId) { alert('Select an account.'); return; }
+    if (!accountId) { showToast('Select an account.', 'warning'); return; }
     const data = {
       accountId,
       inspoUrl: document.getElementById('dailyItemInspo').value.trim(),
@@ -10219,6 +11073,14 @@ TECHNICAL SPECS:
     // Restore the last active tab (default to dashboard on first open)
     const savedTab = localStorage.getItem('sm_active_tab') || 'dashboard';
     switchTab(savedTab);
+
+    // Warn before closing tab if there's unsaved segment work in progress
+    window.addEventListener('beforeunload', e => {
+      if (segments && segments.length > 0 && segments.some(s => s.veoPrompt || s.nbPrompt || s.script)) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   }
 
   // ===== THEME TOGGLE =====
@@ -10325,8 +11187,7 @@ TECHNICAL SPECS:
     const { error } = await _sb.auth.signUp({ email, password });
     if (error) { showAuthError(error.message); return; }
     showAuthError('✓ Account created! Check your email to confirm, then sign in.');
-    // Note: legacy code tried to push to users array here — Supabase handles this now
-    onAuthSuccess(newUser.username);
+    // After email confirmation the SIGNED_IN event fires and calls onAuthSuccess automatically
   }
 
   function onAuthSuccess(username) {
@@ -10340,6 +11201,15 @@ TECHNICAL SPECS:
     updateUserChip(username);
     // Boot the app
     initApp();
+    // On very first login, default to Dashboard and show the welcome tour
+    const isFirstLogin = !localStorage.getItem('hasLoggedInBefore');
+    if (isFirstLogin) {
+      localStorage.setItem('hasLoggedInBefore', '1');
+      setTimeout(() => {
+        switchTab('dashboard');
+        setTimeout(() => openWelcomeTour(), 600);
+      }, 300);
+    }
   }
 
   function updateUserChip(emailOrName) {
@@ -10350,9 +11220,19 @@ TECHNICAL SPECS:
     const raw = (emailOrName || '').trim();
     const display = raw.includes('@') ? raw.split('@')[0] : raw;
     const safe = display || '?';
-    if (chip)    chip.style.display = 'flex';
-    if (initial) initial.textContent = safe[0].toUpperCase();
-    if (nameEl)  nameEl.textContent  = safe !== '?' ? safe : '';
+    if (chip) chip.style.display = 'flex';
+    if (nameEl) nameEl.textContent = safe !== '?' ? safe : '';
+    // Show profile photo if the user has uploaded one, otherwise show initial letter
+    if (initial) {
+      const avatarUrl = getUserSettings()?.avatarDataUrl;
+      if (avatarUrl) {
+        initial.innerHTML = `<img src="${avatarUrl}" alt="Profile" onerror="this.parentElement.innerHTML='${safe[0].toUpperCase()}'">`;
+        initial.style.background = 'transparent';
+      } else {
+        initial.innerHTML = safe[0].toUpperCase();
+        initial.style.background = '';
+      }
+    }
   }
 
   // ===== HIDDEN ADMIN KEY PANEL =====
@@ -11067,7 +11947,7 @@ TECHNICAL SPECS:
     const el = document.getElementById('admSaveStatus');
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 1800);
-    if (typeof showToast === 'function') showToast('Settings saved', 'success', 2000);
+    showToast('Settings saved', 'success', 2000);
   }
 
   // ---- Admin Accounts ----
@@ -11124,7 +12004,7 @@ TECHNICAL SPECS:
       url: document.getElementById('adm-acc-url').value.trim(),
       notes: document.getElementById('adm-acc-notes').value.trim()
     };
-    if (!acc.handle) { alert('Handle is required.'); return; }
+    if (!acc.handle) { showToast('Handle is required.', 'warning'); return; }
     if (_admEditAccId !== null) { s.admAccounts[_admEditAccId] = acc; }
     else { s.admAccounts.push(acc); }
     saveAdminSettings(s);
@@ -11133,11 +12013,12 @@ TECHNICAL SPECS:
   }
 
   function deleteAdmAccount(idx) {
-    if (!confirm('Remove this account?')) return;
-    const s = getAdminSettings();
-    s.admAccounts = (s.admAccounts || []).filter((_, i) => i !== idx);
-    saveAdminSettings(s);
-    renderAdmAccounts();
+    showConfirm('Remove this account?', () => {
+      const s = getAdminSettings();
+      s.admAccounts = (s.admAccounts || []).filter((_, i) => i !== idx);
+      saveAdminSettings(s);
+      renderAdmAccounts();
+    });
   }
 
   // ---- Backup / Restore ----
@@ -11164,25 +12045,28 @@ TECHNICAL SPECS:
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (!confirm('This will overwrite current data. Continue?')) return;
-        if (data.adminSettings) saveAdminSettings(data.adminSettings);
-        if (data.accounts) localStorage.setItem('sm_accounts', JSON.stringify(data.accounts));
-        if (data.competitors) localStorage.setItem('sm_competitors', JSON.stringify(data.competitors));
-        if (data.viralScripts) localStorage.setItem('sm_viral_scripts', JSON.stringify(data.viralScripts));
-        if (data.studio) localStorage.setItem('sm_studio_library', JSON.stringify(data.studio));
-        alert('Import complete. Reload the page to see changes.');
-      } catch(err) { alert('Invalid backup file.'); }
+        showConfirm('This will overwrite current data. Continue?', () => {
+          if (data.adminSettings) saveAdminSettings(data.adminSettings);
+          if (data.accounts) localStorage.setItem('sm_accounts', JSON.stringify(data.accounts));
+          if (data.competitors) localStorage.setItem('sm_competitors', JSON.stringify(data.competitors));
+          if (data.viralScripts) localStorage.setItem('sm_viral_scripts', JSON.stringify(data.viralScripts));
+          if (data.studio) localStorage.setItem('sm_studio_library', JSON.stringify(data.studio));
+          showToast('Import complete. Reload the page to see changes.', 'success');
+        });
+      } catch(err) { showToast('Invalid backup file.', 'error'); }
     };
     reader.readAsText(file);
     e.target.value = '';
   }
 
   function admReset() {
-    if (!confirm('⚠ Reset ALL app data? This cannot be undone.')) return;
-    if (!confirm('Are you sure? Everything will be cleared.')) return;
-    ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library','sm_admin_settings'].forEach(k => localStorage.removeItem(k));
-    alert('Data cleared. The page will now reload.');
-    location.reload();
+    showConfirm('⚠ Reset ALL app data? This cannot be undone.', () => {
+      showConfirm('Are you sure? Everything will be cleared.', () => {
+        ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library','sm_admin_settings'].forEach(k => localStorage.removeItem(k));
+        showToast('Data cleared. The page will now reload.', 'success');
+        setTimeout(() => location.reload(), 1200);
+      });
+    });
   }
 
   // ========================================================
@@ -11307,8 +12191,8 @@ TECHNICAL SPECS:
   function saveProductModal() {
     const name = document.getElementById('pmName').value.trim();
     const url = document.getElementById('pmUrl').value.trim();
-    if (!name) { alert('Product name is required.'); return; }
-    if (!url) { alert('Affiliate URL is required.'); return; }
+    if (!name) { showToast('Product name is required.', 'warning'); return; }
+    if (!url) { showToast('Affiliate URL is required.', 'warning'); return; }
     const platforms = [...document.querySelectorAll('[name="pmPlat"]:checked')].map(cb => cb.value);
     const id = document.getElementById('pmEditId').value;
     if (id) {
@@ -11330,10 +12214,11 @@ TECHNICAL SPECS:
   }
 
   function deleteProduct(id) {
-    if (!confirm('Delete this product?')) return;
-    products = products.filter(p => p.id !== id);
-    saveProducts();
-    renderProductVault();
+    showConfirm('Delete this product?', () => {
+      products = products.filter(p => p.id !== id);
+      saveProducts();
+      renderProductVault();
+    });
   }
 
   function copyProductLink(id, btn) {
@@ -11462,7 +12347,7 @@ TECHNICAL SPECS:
 
   function saveHookModal() {
     const text = document.getElementById('hmText').value.trim();
-    if (!text) { alert('Hook text is required.'); return; }
+    if (!text) { showToast('Hook text is required.', 'warning'); return; }
     const id = document.getElementById('hmEditId').value;
     if (id) {
       const h = hooks.find(x => x.id === id);
@@ -11476,10 +12361,11 @@ TECHNICAL SPECS:
   }
 
   function deleteHook(id) {
-    if (!confirm('Delete this hook?')) return;
-    hooks = hooks.filter(h => h.id !== id);
-    saveHooks();
-    renderHookBank();
+    showConfirm('Delete this hook?', () => {
+      hooks = hooks.filter(h => h.id !== id);
+      saveHooks();
+      renderHookBank();
+    });
   }
 
   function copyHook(id, btn) {
@@ -11600,7 +12486,7 @@ TECHNICAL SPECS:
 
   function saveCTAModal() {
     const text = document.getElementById('ctamText').value.trim();
-    if (!text) { alert('CTA text is required.'); return; }
+    if (!text) { showToast('CTA text is required.', 'warning'); return; }
     const platforms = [...document.querySelectorAll('[name="ctamPlat"]:checked')].map(cb => cb.value);
     const id = document.getElementById('ctamEditId').value;
     if (id) {
@@ -11615,10 +12501,11 @@ TECHNICAL SPECS:
   }
 
   function deleteCTA(id) {
-    if (!confirm('Delete this CTA?')) return;
-    ctas = ctas.filter(c => c.id !== id);
-    saveCTALibrary();
-    renderCTALibrary();
+    showConfirm('Delete this CTA?', () => {
+      ctas = ctas.filter(c => c.id !== id);
+      saveCTALibrary();
+      renderCTALibrary();
+    });
   }
 
   function copyCTA(id, btn) {
@@ -11748,10 +12635,11 @@ TECHNICAL SPECS:
   }
 
   function deletePerformanceLog(id) {
-    if (!confirm('Delete this log entry?')) return;
-    performanceLogs = performanceLogs.filter(l => l.id !== id);
-    savePerformanceLogs();
-    renderPerformanceLog();
+    showConfirm('Delete this log entry?', () => {
+      performanceLogs = performanceLogs.filter(l => l.id !== id);
+      savePerformanceLogs();
+      renderPerformanceLog();
+    });
   }
 
   // ============================================================
@@ -11836,8 +12724,8 @@ TECHNICAL SPECS:
   function saveRecycleModal() {
     const title = document.getElementById('rcmTitle').value.trim();
     const content = document.getElementById('rcmContent').value.trim();
-    if (!title) { alert('Title is required.'); return; }
-    if (!content) { alert('Content is required.'); return; }
+    if (!title) { showToast('Title is required.', 'warning'); return; }
+    if (!content) { showToast('Content is required.', 'warning'); return; }
     const tags = document.getElementById('rcmTags').value.split(',').map(t => t.trim()).filter(Boolean);
     const id = document.getElementById('rcmEditId').value;
     if (id) {
@@ -11852,10 +12740,11 @@ TECHNICAL SPECS:
   }
 
   function deleteRecycleItem(id) {
-    if (!confirm('Delete this recycled item?')) return;
-    recycleItems = recycleItems.filter(r => r.id !== id);
-    saveRecycleItems();
-    renderContentRecycler();
+    showConfirm('Delete this recycled item?', () => {
+      recycleItems = recycleItems.filter(r => r.id !== id);
+      saveRecycleItems();
+      renderContentRecycler();
+    });
   }
 
   function useRecycleItem(id, btn) {
@@ -11972,7 +12861,7 @@ TECHNICAL SPECS:
 
   function saveIdeaModal() {
     const title = document.getElementById('iimTitle').value.trim();
-    if (!title) { alert('Title is required.'); return; }
+    if (!title) { showToast('Title is required.', 'warning'); return; }
     const tags = document.getElementById('iimTags').value.split(',').map(t => t.trim()).filter(Boolean);
     const id = document.getElementById('iimEditId').value;
     if (id) {
@@ -11987,10 +12876,11 @@ TECHNICAL SPECS:
   }
 
   function deleteIdea(id) {
-    if (!confirm('Delete this idea?')) return;
-    ideas = ideas.filter(i => i.id !== id);
-    saveIdeas();
-    renderIdeasInbox();
+    showConfirm('Delete this idea?', () => {
+      ideas = ideas.filter(i => i.id !== id);
+      saveIdeas();
+      renderIdeasInbox();
+    });
   }
 
   function cycleIdeaStatus(id) {
@@ -12136,638 +13026,4 @@ TECHNICAL SPECS:
             </div>
           </div>
           <div id="uset-modeDetail" style="font-size:11px;color:var(--text-3);line-height:1.6;border-top:1px solid var(--border);padding-top:10px;">
-            <strong style="color:var(--text-2);">ON (Automated):</strong> You paste the instruction into Claude — it opens Flow, uploads your images, pastes all prompts, generates every scene, and marks them done automatically.<br><br>
-            <strong style="color:var(--text-2);">OFF (Manual):</strong> Clicking Run or Copy gives you a clean prompt sheet. You log into Flow yourself and paste each prompt manually.
-          </div>
-        </div>
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveUserSettingsTab()">Save Settings</button></div>
-      </div>
-
-      <!-- APPEARANCE -->
-      <div id="uset-tab-appearance" class="uset-tab-content">
-        <div class="uset-section-title">Accent Color</div>
-        <div class="uset-desc">Changes the highlight color used throughout the app — buttons, borders, gradients, and glow effects. Takes effect immediately on save.</div>
-        <div class="uset-accent-swatches" style="margin-bottom:16px;">
-          <div class="uset-accent-swatch selected" data-color="purple" onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#7c6af7,#a78bfa);" title="Purple (default)"></div>
-          <div class="uset-accent-swatch"          data-color="blue"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);" title="Blue"></div>
-          <div class="uset-accent-swatch"          data-color="teal"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#14b8a6,#2dd4bf);" title="Teal"></div>
-          <div class="uset-accent-swatch"          data-color="green"  onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#22c55e,#4ade80);" title="Green"></div>
-          <div class="uset-accent-swatch"          data-color="rose"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f43f5e,#fb7185);" title="Rose"></div>
-          <div class="uset-accent-swatch"          data-color="orange" onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f97316,#fb923c);" title="Orange"></div>
-          <div class="uset-accent-swatch"          data-color="amber"  onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);" title="Amber"></div>
-          <div class="uset-accent-swatch"          data-color="pink"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#ec4899,#f472b6);" title="Pink"></div>
-        </div>
-
-        <div class="uset-section-title">Color Theme</div>
-        <div class="uset-desc">Choose a color scheme, or let it automatically match your system setting.</div>
-        <div style="display:flex;gap:8px;margin-bottom:20px;">
-          <button id="uset-theme-dark"   class="uset-theme-btn" onclick="selectUsetTheme('dark')">🌙 Dark</button>
-          <button id="uset-theme-light"  class="uset-theme-btn" onclick="selectUsetTheme('light')">☀️ Light</button>
-          <button id="uset-theme-system" class="uset-theme-btn" onclick="selectUsetTheme('system')">💻 System</button>
-        </div>
-
-        <div class="uset-section-title">UI Scale</div>
-        <div class="uset-desc">Scale the entire interface up or down.</div>
-        <div class="uset-scale-row">
-          <span style="font-size:11px;color:var(--text-2);flex-shrink:0;">80%</span>
-          <input id="uset-scale-slider" type="range" min="80" max="150" step="5" value="100" oninput="previewUsetScale(this.value)">
-          <span style="font-size:11px;color:var(--text-2);flex-shrink:0;">150%</span>
-          <span class="uset-scale-val" id="uset-scale-display">100%</span>
-        </div>
-        <div style="font-size:10px;color:var(--text-3);margin-bottom:8px;">Changes preview live — click Save to keep.</div>
-        <button onclick="previewUsetScale(100); document.getElementById('uset-scale-slider').value=100;" style="padding:4px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;color:var(--text-2);font-size:11px;cursor:pointer;font-family:inherit;">Reset to 100%</button>
-
-        <div class="uset-section-title" style="margin-top:24px;">Background Style</div>
-        <div class="uset-desc">Choose the darkness and tone of the app background. Only applies in Dark mode.</div>
-        <div class="bg-theme-grid" id="bgThemePicker">
-          <button class="bg-theme-btn active" data-bg="midnight" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#09090d 0%,#131319 100%);"></div>
-            <span class="bg-theme-label">Midnight</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e 0%,#0c1830 100%);"></div>
-            <span class="bg-theme-label">Abyss</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000 0%,#101010 100%);"></div>
-            <span class="bg-theme-label">Carbon</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12 0%,#181e2c 100%);"></div>
-            <span class="bg-theme-label">Slate</span>
-          </button>
-        </div>
-
-        <div class="uset-section-title">Accessibility</div>
-        <div class="uset-desc">Adjustments to improve readability and reduce visual noise.</div>
-        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:16px;">
-          <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-1);">High Contrast</div>
-              <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Boosts text and border contrast throughout the app for better readability.</div>
-            </div>
-            <input type="checkbox" id="uset-hc-toggle" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;" onchange="toggleHighContrast(this.checked)">
-          </label>
-          <label style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-1);">Reduce Motion</div>
-              <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Disables animations and transitions — useful for vestibular disorders or distraction sensitivity.</div>
-            </div>
-            <input type="checkbox" id="uset-rm-toggle" style="width:17px;height:17px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;" onchange="toggleReduceMotion(this.checked)">
-          </label>
-        </div>
-
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
-      </div>
-
-      <!-- DATA -->
-      <div id="uset-tab-data" class="uset-tab-content">
-        <div class="uset-section-title">Export Your Data</div>
-        <div class="uset-desc">Save all your segments, scripts, accounts, competitors, and settings to a JSON file you can restore anytime.</div>
-        <button class="uset-btn-save" onclick="admExport()" style="margin-top:4px;"><i class="ti ti-download"></i> Export All Data</button>
-
-        <div class="uset-section-title" style="margin-top:24px;">Import Data</div>
-        <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
-        <input id="usetImportFile" type="file" accept=".json" style="display:none" onchange="admImport(event)">
-        <button onclick="document.getElementById('usetImportFile').click()" style="margin-top:4px;padding:9px 20px;background:rgba(124,106,247,0.12);border:1px solid rgba(124,106,247,0.3);border-radius:7px;color:var(--accent-2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;"><i class="ti ti-upload"></i> Import from JSON</button>
-
-        <div style="margin-top:28px;padding:14px;background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.18);border-radius:8px;">
-          <div style="font-size:11px;font-weight:700;color:var(--danger);margin-bottom:5px;">⚠ Danger Zone</div>
-          <div style="font-size:11px;color:var(--text-2);margin-bottom:10px;">Clear all data and reset the app to a clean state. This cannot be undone.</div>
-          <button onclick="if(confirm('Reset everything? This cannot be undone.')){ localStorage.clear(); location.reload(); }" style="padding:7px 16px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Reset All Data</button>
-        </div>
-      </div>
-
-      <!-- ABOUT -->
-      <!-- BILLING -->
-      <div id="uset-tab-billing" class="uset-tab-content">
-        <div id="billingTabContent"><!-- rendered by renderBillingTab() --></div>
-      </div>
-
-      <!-- SECURITY -->
-      <div id="uset-tab-security" class="uset-tab-content">
-        <div class="uset-section-title">Change Password</div>
-        <div class="uset-desc">Update the password for your Affiliate OS account. You'll need to be signed in.</div>
-        <div class="uset-row" style="flex-direction:column;align-items:flex-start;gap:8px;margin-bottom:18px;">
-          <label class="uset-label">New Password</label>
-          <input id="uset-newPassword" class="uset-input" type="password" placeholder="••••••••" autocomplete="new-password" style="width:100%;max-width:320px;">
-          <label class="uset-label" style="margin-top:4px;">Confirm Password</label>
-          <input id="uset-confirmPassword" class="uset-input" type="password" placeholder="••••••••" autocomplete="new-password" style="width:100%;max-width:320px;">
-          <div id="uset-pwError" style="display:none;font-size:11px;color:var(--danger);margin-top:2px;"></div>
-          <div id="uset-pwSuccess" style="display:none;font-size:11px;color:var(--success);font-weight:600;margin-top:2px;"><i class="ti ti-check"></i> Password updated successfully</div>
-        </div>
-        <div class="uset-save-row" style="margin-bottom:24px;">
-          <button class="uset-btn-save" onclick="saveNewPassword()">Update Password</button>
-        </div>
-
-        <div class="uset-section-title">Active Session</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:20px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">Current browser session</div>
-              <div style="font-size:11px;color:var(--text-3);" id="uset-sessionInfo">Signed in via Supabase Auth</div>
-            </div>
-            <button onclick="doLogout()" style="padding:6px 14px;border-radius:7px;background:none;border:1px solid var(--danger);color:var(--danger);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:background .15s;" onmouseover="this.style.background='rgba(239,68,68,0.08)'" onmouseout="this.style.background='none'">
-              <i class="ti ti-logout"></i> Sign out
-            </button>
-          </div>
-        </div>
-
-        <div class="uset-section-title">Two-Factor Authentication</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px;">
-          <i class="ti ti-shield-lock" style="color:var(--accent-2);font-size:20px;flex-shrink:0;"></i>
-          <div>
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">2FA via authenticator app</div>
-            <div style="font-size:11px;color:var(--text-3);">Two-factor authentication will be available in a future update.</div>
-          </div>
-          <span style="margin-left:auto;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;white-space:nowrap;">COMING SOON</span>
-        </div>
-      </div>
-
-      <!-- HELP / SUPPORT -->
-      <div id="uset-tab-help" class="uset-tab-content">
-        <div class="uset-section-title">FAQ</div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:22px;" id="faqList">
-          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
-            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">How do I add a new account? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
-            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Go to the <strong>My Accounts</strong> tab and click <strong>+ Add Account</strong>. Fill in the platform, username, URL, and any tags or notes. Your account will appear in the table and dashboard immediately.</div>
-          </details>
-          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
-            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">How does the script rewriter work? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
-            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Go to <strong>Viral Scripts</strong>, paste in a viral video script you found, and click Rewrite. The AI adjusts the wording, tone, and CTA to fit your product and account voice. It doesn't generate scripts from scratch — it remixes ones that are already proven to work.</div>
-          </details>
-          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
-            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">What is the Video Replicator? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
-            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">The <strong>Video Replicator</strong> downloads a viral video, splits it into segments, and generates Veo 3 prompts for each scene so you can recreate the structure with your own product. Paste a video URL and click Process Everything to start.</div>
-          </details>
-          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
-            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">Do I need my own API keys to use the app? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
-            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">No — API access is included with your subscription. All AI features (script rewriting, video generation, scene analysis) are powered by our shared infrastructure. You don't need to sign up for any third-party services.</div>
-          </details>
-          <details style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;overflow:hidden;">
-            <summary style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text-1);cursor:pointer;list-style:none;display:flex;align-items:center;justify-content:space-between;">Is my data backed up? <i class="ti ti-chevron-down" style="font-size:12px;color:var(--text-3);"></i></summary>
-            <div style="padding:0 16px 14px;font-size:11.5px;color:var(--text-2);line-height:1.65;border-top:1px solid var(--border);">Your account data syncs to the cloud via Supabase when you're signed in, so it persists across devices and browsers. Settings and preferences are also saved locally as a backup. You can export everything as a JSON file from the <strong>Data</strong> tab.</div>
-          </details>
-        </div>
-
-        <div class="uset-section-title">Keyboard Shortcuts</div>
-        <div class="uset-shortcuts" style="margin-bottom:22px;">
-          <span class="uset-shortcut-key">Alt + D</span><span class="uset-shortcut-desc">Go to Dashboard</span>
-          <span class="uset-shortcut-key">Alt + A</span><span class="uset-shortcut-desc">Go to My Accounts</span>
-          <span class="uset-shortcut-key">Alt + V</span><span class="uset-shortcut-desc">Go to Video Producer</span>
-          <span class="uset-shortcut-key">Alt + S</span><span class="uset-shortcut-desc">Go to Viral Scripts</span>
-          <span class="uset-shortcut-key">Alt + P</span><span class="uset-shortcut-desc">Go to Post Planner</span>
-          <span class="uset-shortcut-key">Esc</span><span class="uset-shortcut-desc">Close any open modal</span>
-        </div>
-
-        <div class="uset-section-title">Contact Support</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;display:flex;align-items:center;gap:12px;">
-          <i class="ti ti-mail" style="color:var(--accent-2);font-size:20px;flex-shrink:0;"></i>
-          <div style="flex:1;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:2px;">Email Support</div>
-            <div style="font-size:11px;color:var(--text-3);">Having an issue or want to request a feature? Reach out and we'll get back to you.</div>
-          </div>
-          <a href="mailto:support@affiliateos.app" style="padding:7px 14px;border-radius:7px;background:var(--surface-3);border:1px solid var(--border-2);color:var(--text-1);font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;transition:border-color .15s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-2)'">Send Email</a>
-        </div>
-      </div>
-
-      <div id="uset-tab-about" class="uset-tab-content">
-        <div style="display:flex;align-items:center;gap:14px;margin-bottom:22px;padding-bottom:18px;border-bottom:1px solid var(--border);">
-          <div style="width:48px;height:48px;border-radius:12px;background:var(--grad-accent);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🎬</div>
-          <div>
-            <div style="font-size:16px;font-weight:800;color:var(--text-1);letter-spacing:-0.5px;">AffiliateOS</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Version 1.5 · Built for affiliate video scaling</div>
-            <div style="font-size:10px;color:var(--text-3);margin-top:1px;">Deployed at <span style="color:var(--accent-2);">aiscaling.netlify.app</span></div>
-          </div>
-        </div>
-
-        <div class="uset-section-title">What's New</div>
-        <div class="uset-changelog">
-          <div class="uset-cl-item">
-            <div class="uset-cl-version">v1.5</div>
-            <div><div class="uset-cl-text">Dashboard home tab with daily greeting, stat tiles, today's plan, and account health. Daily motivational quote. Profile, Goals, Accent Color, and About settings. Account card grid with last-posted health and planned posts.</div><div class="uset-cl-date">May 2026</div></div>
-          </div>
-          <div class="uset-cl-item">
-            <div class="uset-cl-version">v1.4</div>
-            <div><div class="uset-cl-text">Glass/glow visual polish across all surfaces. Competitor intel panel. Landing page full redesign — new hero, static segment mock, features toggle, and social proof section.</div><div class="uset-cl-date">May 2026</div></div>
-          </div>
-          <div class="uset-cl-item">
-            <div class="uset-cl-version">v1.3</div>
-            <div><div class="uset-cl-text">Segment cards as horizontal scrolling rail. Split by 8s + word-count splitter. Generate All NB Prompts batch button. Step-flow strip in Video Producer.</div><div class="uset-cl-date">April 2026</div></div>
-          </div>
-          <div class="uset-cl-item">
-            <div class="uset-cl-version">v1.2</div>
-            <div><div class="uset-cl-text">Viral Scripts sub-tabs (Hook Bank, CTA Library). Collapsible VS panels. Tabler icon system. Dark/light/system theme toggle.</div><div class="uset-cl-date">April 2026</div></div>
-          </div>
-        </div>
-
-        <div class="uset-section-title" style="margin-top:22px;">Keyboard Shortcuts</div>
-        <div class="uset-shortcuts">
-          <span class="uset-shortcut-key">Alt + D</span><span class="uset-shortcut-desc">Go to Dashboard</span>
-          <span class="uset-shortcut-key">Alt + A</span><span class="uset-shortcut-desc">Go to My Accounts</span>
-          <span class="uset-shortcut-key">Alt + V</span><span class="uset-shortcut-desc">Go to Video Producer</span>
-          <span class="uset-shortcut-key">Alt + S</span><span class="uset-shortcut-desc">Go to Viral Scripts</span>
-          <span class="uset-shortcut-key">Alt + P</span><span class="uset-shortcut-desc">Go to Post Planner</span>
-          <span class="uset-shortcut-key">Esc</span><span class="uset-shortcut-desc">Close any open modal</span>
-        </div>
-      </div>
-
-    </div>
-    <!-- Footer -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 22px;border-top:1px solid var(--border);flex-shrink:0;">
-      <div style="font-size:10px;color:var(--text-3);">Settings sync to the cloud when signed in &nbsp;·&nbsp; also saved locally as backup</div>
-      <div id="usetSaveStatus" style="display:none;font-size:11px;color:var(--success);font-weight:600;"><i class="ti ti-check"></i> Saved</div>
-    </div>
-  </div>
-</div>
-
-<!-- ===== ADMIN OVERLAY ===== -->
-<div id="adminOverlay">
-  <!-- PIN Gate -->
-  <div id="adminPinGate">
-    <div style="font-size:30px;margin-bottom:12px;">🔐</div>
-    <div style="font-size:16px;font-weight:700;color:var(--text-1);margin-bottom:5px;">Admin Access</div>
-    <div style="font-size:12px;color:var(--text-2);margin-bottom:22px;">Enter PIN to continue</div>
-    <input id="adminPinInput" type="password" maxlength="10" placeholder="·····"
-      onkeydown="if(event.key==='Enter')verifyAdminPin()">
-    <div id="adminPinError" style="display:none;color:var(--danger);font-size:12px;margin-bottom:10px;">Incorrect PIN — try again</div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="closeAdminOverlay()" style="flex:1;padding:10px;background:var(--surface-3);border:1px solid var(--border);border-radius:7px;color:var(--text-2);cursor:pointer;font-size:13px;font-family:inherit;">Cancel</button>
-      <button onclick="verifyAdminPin()" style="flex:1;padding:10px;background:var(--accent);border:none;border-radius:7px;color:#fff;font-weight:600;cursor:pointer;font-size:13px;font-family:inherit;">Unlock</button>
-    </div>
-  </div>
-
-  <!-- Main Panel -->
-  <div id="adminPanel">
-    <!-- Header -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:1px solid var(--border);flex-shrink:0;">
-      <div style="display:flex;align-items:center;gap:9px;">
-        <span style="font-size:17px;">⚙️</span>
-        <span style="font-weight:700;font-size:14px;color:var(--text-1);">Admin Settings</span>
-      </div>
-      <button onclick="closeAdminOverlay()" style="width:26px;height:26px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:13px;display:flex;align-items:center;justify-content:center;">✕</button>
-    </div>
-
-    <!-- Tab Bar -->
-    <div style="display:flex;gap:2px;padding:10px 16px 0;border-bottom:1px solid var(--border);flex-shrink:0;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;">
-      <button class="adm-tab active" data-tab="general" onclick="switchAdminTab('general')">General</button>
-      <button class="adm-tab" data-tab="workflow" onclick="switchAdminTab('workflow')">Workflow</button>
-      <button class="adm-tab" data-tab="accounts" onclick="switchAdminTab('accounts')">Accounts</button>
-      <button class="adm-tab" data-tab="prompts" onclick="switchAdminTab('prompts')">Prompts</button>
-      <button class="adm-tab" data-tab="backup" onclick="switchAdminTab('backup')">Backup</button>
-    </div>
-
-    <!-- Content -->
-    <div style="overflow-y:auto;flex:1;padding:20px 24px;">
-
-      <!-- GENERAL -->
-      <div id="adm-tab-general" class="adm-tab-content active">
-        <div class="adm-section-title">Default Download Path</div>
-        <div class="adm-desc">Fallback Downloads folder path used when a user hasn't set their own in Settings. Each user's personal path (set via ⚙ Settings) always takes priority over this.</div>
-        <div class="adm-row">
-          <label class="adm-label">Default Downloads Path</label>
-          <input id="adm-dlPath" class="adm-input" type="text" placeholder="C:\Users\YourName\Downloads">
-        </div>
-        <div class="adm-desc" style="margin-top:2px;font-size:10px;">Use Windows backslashes. If blank and user hasn't set a path, falls back to <code style="color:var(--accent-2);">C:\Users\x\Downloads</code>.</div>
-        <div class="adm-save-row"><button class="adm-btn-save" onclick="saveAdminTab('general')">Save Changes</button></div>
-      </div>
-
-      <!-- WORKFLOW -->
-      <div id="adm-tab-workflow" class="adm-tab-content">
-        <div class="adm-section-title">Wait Times</div>
-        <div class="adm-row">
-          <label class="adm-label">NB Pro Generation Wait (seconds)</label>
-          <input id="adm-nbWait" class="adm-input adm-input-short" type="number" min="10" max="600" placeholder="180">
-          <span class="adm-hint">How long to wait for NB Pro to generate an image</span>
-        </div>
-        <div class="adm-row">
-          <label class="adm-label">Veo 3 Generation Wait (minutes)</label>
-          <input id="adm-veoWait" class="adm-input adm-input-short" type="number" min="1" max="20" placeholder="6">
-          <span class="adm-hint">How long to wait for Veo 3 to render a video</span>
-        </div>
-        <div class="adm-section-title" style="margin-top:20px;">Retry Rules</div>
-        <div class="adm-row">
-          <label class="adm-label">Max Tab-Refresh Attempts</label>
-          <input id="adm-maxRetry" class="adm-input adm-input-short" type="number" min="0" placeholder="0">
-          <span class="adm-hint">0 = infinite (never give up on a scene)</span>
-        </div>
-        <div class="adm-row">
-          <label class="adm-label">Unusual Activity Cooldown (seconds)</label>
-          <input id="adm-cooldown" class="adm-input adm-input-short" type="number" min="30" placeholder="120">
-          <span class="adm-hint">Wait time after a Google unusual-activity flag before retrying</span>
-        </div>
-        <div class="adm-section-title" style="margin-top:20px;">Generation</div>
-        <div class="adm-row">
-          <label class="adm-label">Default Veo Model</label>
-          <select id="adm-model" class="adm-input adm-input-short" style="cursor:pointer;">
-            <option value="Veo 3 Fast">Veo 3 Fast</option>
-            <option value="Veo 3">Veo 3</option>
-          </select>
-          <span class="adm-hint">Model used in generated workflow instructions</span>
-        </div>
-        <div class="adm-row">
-          <label class="adm-label">Credit Budget Warning</label>
-          <input id="adm-creditBudget" class="adm-input adm-input-short" type="number" min="0" placeholder="0">
-          <span class="adm-hint">Warn before running if estimated credits exceed this (0 = off)</span>
-        </div>
-        <div class="adm-save-row"><button class="adm-btn-save" onclick="saveAdminTab('workflow')">Save Changes</button></div>
-      </div>
-
-      <!-- ACCOUNTS -->
-      <div id="adm-tab-accounts" class="adm-tab-content">
-        <div class="adm-section-title">Social Media Accounts</div>
-        <div class="adm-desc">Manage the accounts you create content for. These are private — only accessible from admin.</div>
-        <div id="admAccountList"></div>
-        <button class="adm-btn-add" onclick="openAdmAddAccount()" style="margin-top:4px;">+ Add Account</button>
-        <div id="admAccountForm" style="display:none;background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:16px;margin-top:14px;">
-          <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:14px;" id="admAccFormTitle">New Account</div>
-          <div class="adm-row">
-            <label class="adm-label">Platform</label>
-            <select id="adm-acc-platform" class="adm-input adm-input-short" style="cursor:pointer;">
-              <option>TikTok</option><option>Instagram</option><option>Facebook</option><option>YouTube</option><option>Other</option>
-            </select>
-          </div>
-          <div class="adm-row"><label class="adm-label">Username / Handle</label><input id="adm-acc-handle" class="adm-input" type="text" placeholder="@yourhandle"></div>
-          <div class="adm-row"><label class="adm-label">Display Name</label><input id="adm-acc-name" class="adm-input" type="text" placeholder="My Brand Page"></div>
-          <div class="adm-row"><label class="adm-label">Profile URL</label><input id="adm-acc-url" class="adm-input" type="text" placeholder="https://tiktok.com/@yourhandle"></div>
-          <div class="adm-row"><label class="adm-label">Notes</label><input id="adm-acc-notes" class="adm-input" type="text" placeholder="e.g. main page, niche, login email..."></div>
-          <div style="display:flex;gap:8px;margin-top:14px;">
-            <button class="adm-btn-save" onclick="saveAdmAccount()">Save Account</button>
-            <button onclick="document.getElementById('admAccountForm').style.display='none'" style="padding:8px 14px;background:var(--surface-3);border:1px solid var(--border);border-radius:6px;color:var(--text-2);cursor:pointer;font-size:12px;font-family:inherit;">Cancel</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- PROMPTS -->
-      <div id="adm-tab-prompts" class="adm-tab-content">
-        <div class="adm-section-title">Default Prompt Templates</div>
-        <div class="adm-desc">These pre-fill the NB Pro and Veo 3 prompt fields when you add a new scene segment. Leave blank to start from scratch each time.</div>
-        <div class="adm-row" style="flex-direction:column;align-items:flex-start;gap:6px;">
-          <label class="adm-label">Default NB Pro Prompt</label>
-          <textarea id="adm-nbDefault" class="adm-textarea" placeholder="e.g. Cinematic portrait, golden hour lighting, 9:16 vertical..."></textarea>
-        </div>
-        <div class="adm-row" style="flex-direction:column;align-items:flex-start;gap:6px;margin-top:14px;">
-          <label class="adm-label">Default Veo 3 Prompt</label>
-          <textarea id="adm-veoDefault" class="adm-textarea" placeholder="e.g. Cinematic video, smooth camera movement, photorealistic..."></textarea>
-        </div>
-        <div class="adm-save-row"><button class="adm-btn-save" onclick="saveAdminTab('prompts')">Save Changes</button></div>
-      </div>
-
-      <!-- BACKUP -->
-      <div id="adm-tab-backup" class="adm-tab-content">
-        <div class="adm-section-title">Export Data</div>
-        <div class="adm-desc">Download all your segments, scripts, accounts, competitors, and admin settings as a single JSON file.</div>
-        <button class="adm-btn-save" onclick="admExport()" style="margin-top:6px;">⬇ Export All Data</button>
-
-        <div class="adm-section-title" style="margin-top:26px;">Import Data</div>
-        <div class="adm-desc">Restore from a previously exported JSON file. This overwrites current data.</div>
-        <input id="admImportFile" type="file" accept=".json" style="display:none" onchange="admImport(event)">
-        <button onclick="document.getElementById('admImportFile').click()" style="margin-top:6px;padding:9px 20px;background:rgba(124,106,247,0.12);border:1px solid rgba(124,106,247,0.3);border-radius:7px;color:var(--accent-2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">⬆ Import from JSON</button>
-
-        <div class="adm-section-title" style="margin-top:26px;">Reset</div>
-        <div class="adm-desc">Clear all app data from local storage. Cannot be undone — export first if you want a backup.</div>
-        <button onclick="admReset()" style="margin-top:6px;padding:9px 20px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.25);border-radius:7px;color:var(--danger);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">🗑 Reset All Data</button>
-      </div>
-
-    </div>
-
-    <!-- Footer -->
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 22px;border-top:1px solid var(--border);flex-shrink:0;">
-      <div style="font-size:10px;color:var(--text-3);">AffiliateOS Admin · All settings stored locally</div>
-      <div id="admSaveStatus" style="display:none;font-size:11px;color:var(--success);font-weight:600;">✓ Saved</div>
-    </div>
-  </div>
-</div>
-
-<!-- COMMAND PALETTE -->
-<div id="cmdPalette" role="dialog" aria-modal="true" aria-label="Command palette" onclick="if(event.target===this)closeCmdPalette()">
-  <div class="cmd-box">
-    <div class="cmd-search-row">
-      <i class="ti ti-search"></i>
-      <input id="cmdInput" type="text" placeholder="Search tabs, actions, settings…" autocomplete="off" spellcheck="false" oninput="renderCmdList()" onkeydown="cmdKeyNav(event)">
-      <kbd class="cmd-esc-hint">ESC</kbd>
-    </div>
-    <div id="cmdList"></div>
-  </div>
-</div>
-
-<!-- TOAST CONTAINER -->
-<div id="toastContainer"></div>
-
-<script>
-// ── Toast notification system ──
-(function() {
-  const ICONS = {
-    success: '<i class="ti ti-circle-check"></i>',
-    error:   '<i class="ti ti-circle-x"></i>',
-    info:    '<i class="ti ti-info-circle"></i>',
-    warning: '<i class="ti ti-alert-triangle"></i>',
-  };
-
-  window.showToast = function(msg, type = 'info', duration = 3500) {
-    const container = document.getElementById('toastContainer');
-    if (!container) return;
-    const t = document.createElement('div');
-    t.className = `toast toast-${type}`;
-    t.innerHTML = `
-      <span class="toast-icon">${ICONS[type] || ICONS.info}</span>
-      <span class="toast-msg">${msg}</span>
-      <span class="toast-close"><i class="ti ti-x"></i></span>`;
-    container.appendChild(t);
-    requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
-
-    const dismiss = () => {
-      t.classList.add('hiding');
-      setTimeout(() => t.remove(), 300);
-    };
-    t.addEventListener('click', dismiss);
-    setTimeout(dismiss, duration);
-    return t;
-  };
-})();
-
-// ── Onboarding checklist helpers ──
-window.onboardStepClick = function(stepId, tab) {
-  // Mark step as manually visited
-  const steps = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
-  if (stepId === 'replicator' || stepId === 'settings') {
-    steps[stepId] = true;
-    localStorage.setItem('onboardingSteps', JSON.stringify(steps));
-  }
-  if (tab) switchTab(tab);
-  else if (stepId === 'settings') openUserSettings('profile');
-  // Re-render dashboard after a tick so the step mark shows
-  setTimeout(() => {
-    if (document.getElementById('tab-dashboard')?.classList.contains('active')) renderDashboard();
-  }, 80);
-};
-
-window.onboardToggleCollapse = function() {
-  const collapsed = localStorage.getItem('onboardingCollapsed') === '1';
-  localStorage.setItem('onboardingCollapsed', collapsed ? '0' : '1');
-  const list = document.getElementById('onboardStepsList');
-  const btn  = document.getElementById('onboardCollapseBtn');
-  if (!list || !btn) return;
-  const nowCollapsed = !collapsed;
-  list.style.display = nowCollapsed ? 'none' : '';
-  btn.title = nowCollapsed ? 'Expand' : 'Collapse';
-  const icon = btn.querySelector('i');
-  if (icon) icon.className = `ti ${nowCollapsed ? 'ti-chevron-down' : 'ti-chevron-up'}`;
-};
-
-window.onboardDismiss = function() {
-  localStorage.setItem('onboardingDismissed', '1');
-  const card = document.getElementById('onboardCard');
-  if (card) card.style.display = 'none';
-};
-
-// ── Command Palette (⌘K) ──
-(function() {
-  // Detect Mac vs Windows/Linux to show correct hint
-  const isMac = /Mac|iPhone|iPad/i.test(navigator.platform || navigator.userAgent);
-  const hint = document.getElementById('cmdKHint');
-  if (hint) hint.textContent = isMac ? '⌘K' : 'Ctrl+K';
-
-  // Command registry
-  const COMMANDS = [
-    // Navigation
-    { group: 'Navigate', label: 'Dashboard',         icon: 'ti-layout-dashboard', action: () => switchTab('dashboard') },
-    { group: 'Navigate', label: 'My Accounts',       icon: 'ti-users',            action: () => switchTab('my-accounts') },
-    { group: 'Navigate', label: 'Viral Scripts',     icon: 'ti-flame',            action: () => switchTab('viral-scripts') },
-    { group: 'Navigate', label: 'Daily Plan',        icon: 'ti-calendar',         action: () => switchTab('calendar') },
-    { group: 'Navigate', label: 'Video Replicator',  icon: 'ti-movie',            action: () => switchTab('video-replicator') },
-    { group: 'Navigate', label: 'Video Producer',    icon: 'ti-pencil',           action: () => switchTab('video-producer') },
-    { group: 'Navigate', label: 'Competitors',       icon: 'ti-eye',              action: () => switchTab('competitors') },
-    // Actions
-    { group: 'Actions', label: 'Add Account',         icon: 'ti-user-plus',       action: () => { switchTab('my-accounts'); setTimeout(() => openModal?.(), 120); } },
-    { group: 'Actions', label: 'New Viral Script',    icon: 'ti-file-plus',       action: () => { switchTab('viral-scripts'); setTimeout(() => openScriptModal?.(), 120); } },
-    { group: 'Actions', label: 'Open Settings',       icon: 'ti-settings',        action: () => openUserSettings() },
-    { group: 'Actions', label: 'Appearance Settings', icon: 'ti-palette',         action: () => openUserSettings('appearance') },
-    { group: 'Actions', label: 'Profile Settings',    icon: 'ti-user-circle',     action: () => openUserSettings('profile') },
-    { group: 'Actions', label: 'Toggle Dark/Light Mode', icon: 'ti-sun',          action: () => toggleAppTheme?.() },
-    { group: 'Actions', label: 'Sign Out',            icon: 'ti-logout',          action: () => doLogout?.() },
-  ];
-
-  let activeIdx = 0;
-  let filtered = [];
-
-  function getFiltered(q) {
-    if (!q) return COMMANDS;
-    const lower = q.toLowerCase();
-    return COMMANDS.filter(c =>
-      c.label.toLowerCase().includes(lower) ||
-      c.group.toLowerCase().includes(lower)
-    );
-  }
-
-  window.renderCmdList = function() {
-    const q = document.getElementById('cmdInput')?.value || '';
-    filtered = getFiltered(q);
-    activeIdx = 0;
-    paintList();
-  };
-
-  function paintList() {
-    const list = document.getElementById('cmdList');
-    if (!list) return;
-    if (!filtered.length) {
-      list.innerHTML = '<div class="cmd-empty">No matching commands</div>';
-      return;
-    }
-    let html = '';
-    let lastGroup = '';
-    filtered.forEach((cmd, i) => {
-      if (cmd.group !== lastGroup) {
-        html += `<div class="cmd-group-label">${cmd.group}</div>`;
-        lastGroup = cmd.group;
-      }
-      html += `<div class="cmd-item${i === activeIdx ? ' active' : ''}" data-idx="${i}" onclick="runCmd(${i})">
-        <i class="ti ${cmd.icon}"></i>
-        <span>${cmd.label}</span>
-      </div>`;
-    });
-    list.innerHTML = html;
-  }
-
-  window.runCmd = function(idx) {
-    const cmd = filtered[idx];
-    if (!cmd) return;
-    closeCmdPalette();
-    cmd.action();
-  };
-
-  window.cmdKeyNav = function(e) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      activeIdx = Math.min(activeIdx + 1, filtered.length - 1);
-      paintList();
-      scrollActiveIntoView();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      activeIdx = Math.max(activeIdx - 1, 0);
-      paintList();
-      scrollActiveIntoView();
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      runCmd(activeIdx);
-    } else if (e.key === 'Escape') {
-      closeCmdPalette();
-    }
-  };
-
-  function scrollActiveIntoView() {
-    const el = document.querySelector('.cmd-item.active');
-    el?.scrollIntoView({ block: 'nearest' });
-  }
-
-  window.openCmdPalette = function() {
-    const pal = document.getElementById('cmdPalette');
-    const input = document.getElementById('cmdInput');
-    if (!pal) return;
-    pal.classList.add('open');
-    if (input) { input.value = ''; input.focus(); }
-    filtered = COMMANDS;
-    activeIdx = 0;
-    paintList();
-  };
-
-  window.closeCmdPalette = function() {
-    document.getElementById('cmdPalette')?.classList.remove('open');
-  };
-
-  // Global keyboard shortcut
-  document.addEventListener('keydown', (e) => {
-    const isK = e.key === 'k' || e.key === 'K';
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    if (mod && isK && !e.shiftKey) {
-      e.preventDefault();
-      const pal = document.getElementById('cmdPalette');
-      if (pal?.classList.contains('open')) closeCmdPalette();
-      else openCmdPalette();
-    }
-  });
-})();
-
-// ── Skeleton helpers for segment cards ──
-window.showSegmentSkeletons = function(count = 3) {
-  const container = document.getElementById('segmentsContainer');
-  if (!container) return;
-  container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
-  container.innerHTML = Array.from({ length: count }, () => `
-    <div class="seg-card-skeleton">
-      <div class="skel-header">
-        <div class="skeleton" style="height:14px;width:55px;border-radius:4px;"></div>
-        <div class="skeleton" style="height:14px;width:72px;border-radius:4px;"></div>
-        <div class="skeleton" style="height:14px;width:44px;border-radius:4px;margin-left:auto;"></div>
-      </div>
-      <div class="skeleton" style="height:80px;width:100%;border-radius:6px;"></div>
-      <div class="skeleton" style="height:10px;width:40%;border-radius:4px;"></div>
-      <div class="skeleton" style="height:52px;width:100%;border-radius:6px;"></div>
-      <div class="skeleton" style="height:10px;width:55%;border-radius:4px;"></div>
-      <div class="skeleton" style="height:38px;width:100%;border-radius:6px;"></div>
-    </div>`).join('');
-};
-</script>
-
-</body>
-</html>
+            <strong style="color:var(--text-2);">ON (Automated):</strong> You paste the instruction into Claude — it opens Flow, uploads your images, pastes all prompts, generates every scene, and marks them d                                                                                                                                                                                                                                                                                                                                                  
