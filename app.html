@@ -3250,7 +3250,7 @@
               <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="const ta=document.getElementById('avatarInventory');const arr=this.querySelector('.inv-arrow');const open=ta.style.display!=='none';ta.style.display=open?'none':'';arr.style.transform=open?'rotate(-90deg)':'rotate(0deg)';">
                 <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent-2);">🔍 Appearance Inventory</span>
                 <div style="display:flex;align-items:center;gap:4px;" onclick="event.stopPropagation()">
-                  <span id="avatarInventoryStatus" style="font-size:9px;color:var(--text-3);"></span>
+                  <span id="avatarInventoryStatus" style="font-size:9px;color:var(--accent-2);"></span>
                   <button id="retryInventoryBtn" title="Retry auto-fill" onclick="event.stopPropagation();if(avatarImageDataUrl){extractAvatarInventory(avatarImageDataUrl);}else{showToast('Set an avatar first','warning');}" style="display:none;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.35);border-radius:3px;color:#818cf8;font-size:9px;padding:1px 6px;cursor:pointer;white-space:nowrap;">↺ Retry</button>
                   <span class="inv-arrow" style="font-size:10px;color:var(--text-3);transition:transform 0.2s;transform:rotate(-90deg);" onclick="event.stopPropagation();const ta=document.getElementById('avatarInventory');const open=ta.style.display!=='none';ta.style.display=open?'none':'';this.style.transform=open?'rotate(-90deg)':'rotate(0deg)';">▾</span>
                 </div>
@@ -4816,7 +4816,7 @@
     veoWaitMin: 6,
     maxTabRefresh: 0,
     cooldownSec: 120,
-    defaultModel: 'Veo 3 Fast',
+    defaultModel: 'Veo 3.1 Fast',
     creditBudget: 0,
     nbPromptDefault: '',
     veoPromptDefault: '',
@@ -6195,6 +6195,12 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (field) field.value = text;
       DB.set('sm_avatar_inventory', text);
       if (retryBtn) retryBtn.style.display = 'none';
+      // Auto-expand the section so the user can see the filled result
+      if (field && field.style.display === 'none') {
+        field.style.display = '';
+        const arr = document.querySelector('.inv-arrow');
+        if (arr) arr.style.transform = 'rotate(0deg)';
+      }
       if (status) {
         status.textContent = '✓ auto-filled — edit if needed';
         setTimeout(() => { if (status) status.textContent = ''; }, 6000);
@@ -6203,6 +6209,12 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       console.error('[AvatarInventory]', e);
       if (status) status.textContent = '⚠ ' + (e && e.message ? e.message.slice(0, 40) : 'failed') + ' — fill in manually';
       if (retryBtn) retryBtn.style.display = '';
+      // Auto-expand on error too so the Retry button context is visible
+      if (field && field.style.display === 'none') {
+        field.style.display = '';
+        const arr = document.querySelector('.inv-arrow');
+        if (arr) arr.style.transform = 'rotate(0deg)';
+      }
     }
   }
 
@@ -9109,7 +9121,7 @@ No markdown. Return only the JSON object.`
     const nbWaitSec = _adm.nbWaitSec || 180;
     const veoWaitMin = _adm.veoWaitMin || 6;
     const cooldownSec = _adm.cooldownSec || 120;
-    const defaultModel = _adm.defaultModel || 'Veo 3 Fast';
+    const defaultModel = _adm.defaultModel || 'Veo 3.1 Fast';
 
     // Avatar appearance inventory — embedded into CHECK 1 so the verification is
     // specific to this avatar. Falls back to the generic check when empty.
@@ -9241,11 +9253,12 @@ APP URL: ${appUrl}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 FLOW TAB — USE EXISTING, DO NOT CREATE NEW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Use tabs_context_mcp to list ALL open tabs. Find a tab whose URL contains "labs.google/fx/tools/flow" AND whose title includes a date (e.g. "Flow - May 11"). That is the existing project — use it for every scene.
+Use tabs_context_mcp to list ALL open tabs. Find a tab whose URL contains "labs.google/fx/tools/flow". The project tab typically has a date in its title (e.g. "Flow - May 11") — prefer that if multiple Flow tabs exist. If no tab has a date but one has the correct URL and is NOT the homepage, use that tab.
 • Do NOT navigate to flow and create a new project
-• Do NOT use a tab titled just "Flow" with no date (that is the homepage, not a project)
+• Do NOT use a tab titled just "Flow" with no date AND no project content (that is the homepage, not a project)
 • If multiple project tabs exist, use the most recent one
-• For each new scene: click the "+ New prompt" button in the LEFT sidebar to reset — do NOT open a new tab or navigate away
+• PHASE 1 (NB Pro) only: click "+ New prompt" in the LEFT sidebar before each new scene to reset the bar
+• PHASE 2 (Veo 3): do NOT click "+ New prompt" — "Add to Prompt" on the composite resets the bar automatically
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 THE BOTTOM BAR HAS TWO MODES — IMAGE (NB Pro) AND VIDEO (Veo 3)
@@ -9293,15 +9306,22 @@ APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
 
 STEP A — Read image from app tab:
   javascript_tool, tabId=APP_TAB_ID:
-    return window.__vsFrames['KEY'];
+    const val = (window.__vsFrames||{})['KEY'];
+    if (!val) return 'ERROR: KEY not found in __vsFrames — run: return Object.keys(window.__vsFrames||{}) to list available keys';
+    return val;
   → Returns a base64 data URL string. Keep it — you will use it in Step B.
 
 STEP B — Store on Flow tab:
   javascript_tool, tabId=FLOW_TAB_ID:
     window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
-    return 'stored';
+    return 'stored: ' + (window.__pendingImg?.length||0) + ' chars';
+  ⚠ The data URL from STEP A may be 150,000–400,000 characters. Paste it in full — do not truncate.
+  After STEP B, verify the returned length is > 1000 chars. If it shows 0 or a short string,
+  STEP A may have returned an error — re-run STEP A and check the KEY name is correct.
 
-STEP C — Inject into file input (React-compatible):
+STEP C — Inject into file input (React-compatible, SLOT-aware):
+  SLOT = 0 for Photo 1 (avatar), SLOT = 1 for Photo 2 (start frame).
+  Replace SLOT in the code below with the actual number (0 or 1) before running.
   javascript_tool, tabId=FLOW_TAB_ID:
     (async () => {
       try {
@@ -9310,16 +9330,17 @@ STEP C — Inject into file input (React-compatible):
         const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
         const dt = new DataTransfer();
         dt.items.add(file);
-        function findInput(node) {
-          if (!node) return null;
-          if (node instanceof HTMLInputElement && node.type==='file') return node;
+        const allInputs = [];
+        function findAllInputs(node) {
+          if (!node) return;
+          if (node instanceof HTMLInputElement && node.type==='file') { allInputs.push(node); return; }
           const sr = node.shadowRoot;
-          if (sr) { const f=findInput(sr); if(f) return f; }
-          for (const c of (node.children||[])) { const f=findInput(c); if(f) return f; }
-          return null;
+          if (sr) findAllInputs(sr);
+          for (const c of (node.children||[])) findAllInputs(c);
         }
-        const input = findInput(document.body);
-        if (!input) return 'ERROR: no file input found';
+        findAllInputs(document.body);
+        if (!allInputs.length) return 'ERROR: no file input found';
+        const input = allInputs[SLOT] || allInputs[0];
         // Set files via DataTransfer
         input.files = dt.files;
         // React fiber approach — bypasses synthetic event system
@@ -9330,7 +9351,7 @@ STEP C — Inject into file input (React-compatible):
             if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
               fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
               window.__pendingImg = null;
-              return 'SUCCESS_REACT';
+              return 'SUCCESS_REACT slot=' + SLOT + ' of ' + allInputs.length;
             }
             fiber = fiber.return;
           }
@@ -9339,13 +9360,20 @@ STEP C — Inject into file input (React-compatible):
         input.dispatchEvent(new Event('change',{bubbles:true}));
         input.dispatchEvent(new Event('input',{bubbles:true}));
         window.__pendingImg = null;
-        return 'SUCCESS_DOM';
+        return 'SUCCESS_DOM slot=' + SLOT + ' of ' + allInputs.length;
       } catch(e) { return 'ERROR: '+e.message; }
     })()
 
+  Photo 1 (avatar): run STEP C with SLOT=0
+  Photo 2 (start frame): run STEP C with SLOT=1
+⚠ TIMING: The file input only exists in the DOM when the NB Pro panel is open AND a photo
+  slot is in its "ready to receive" state. If STEP C returns 'ERROR: no file input found':
+    1. Click directly on the Photo 1 or Photo 2 upload area/slot in the NB Pro panel
+    2. Immediately run STEP C again (the input appears briefly when the slot is active)
+
 After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
-If result says SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
-If no thumbnail after 2 attempts, try STEP C again once more before moving on.
+If SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
+If no thumbnail after 2 attempts, try clicking the slot again then run STEP C once more.
 ⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9361,7 +9389,7 @@ After a composite is verified, attach it to the Veo 3 prompt using "Add to Promp
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO MARK A SCENE DONE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-After downloading: find the app tab (URL: ${appUrl}) → javascript_tool → window.markSceneDone(SCENE_INDEX)
+After verifying: find the app tab (URL: ${appUrl}) → javascript_tool → window.markSceneDone(SCENE_INDEX)
 SCENE_INDEX is 0-based: Scene 1 = index 0, Scene 2 = index 1, etc.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9394,8 +9422,14 @@ UNUSUAL ACTIVITY / POLICY FLAG specifically:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 IMAGE FRAMES — STORED IN APP MEMORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-All frame images are stored in the app tab as window.__vsFrames.
-Use HOW TO INJECT AN IMAGE below for every upload — do NOT use file_upload or look for files on disk.
+⚠ CRITICAL: Do NOT refresh or close the app tab (${appUrl}) at any point during this workflow.
+  window.__vsFrames is stored in memory only — a refresh clears it and the frames are gone.
+  If the app tab is ever accidentally refreshed, stop and ask the user to re-run the workflow.
+
+All frame images are stored in window.__vsFrames on the app tab.
+⚠ ALWAYS use HOW TO INJECT AN IMAGE — do NOT pick from the Flow asset library.
+  Assets in the Flow library may be from a previous session and will be WRONG/STALE.
+  The only correct source is window.__vsFrames (the app's live memory for this run).
 `;
 
     // Store frames in app memory — browser Claude reads them directly via javascript_tool
@@ -9418,6 +9452,11 @@ Use HOW TO INJECT AN IMAGE below for every upload — do NOT use file_upload or 
     instruction += `
 Use HOW TO INJECT AN IMAGE for each key listed above when its scene comes up.
 Do not pre-inject everything upfront — inject each image right before it is needed.
+⚠ Keys use the absolute scene index and may NOT be sequential — e.g. if Scene 2 was skipped,
+  keys will be 'scene0' and 'scene2' (no 'scene1'). Always use the KEY listed above exactly.
+⚠ Before injecting during any RETRY, first verify the app tab still has the frames:
+  javascript_tool on APP_TAB_ID: return Object.keys(window.__vsFrames||{})
+  If the list is empty (app tab was refreshed), stop and ask the user to re-run the workflow.
 `;
 
     // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
@@ -9437,7 +9476,7 @@ Do not pre-inject everything upfront — inject each image right before it is ne
 ╚══════════════════════════════════════════════╝
 All frame images are stored in window.__vsFrames on the app tab. Use HOW TO INJECT AN IMAGE
 for each scene's photos — do NOT use file_upload or look for files on disk.
-BATCH MODE: queue all generations without waiting, then verify + download in one pass.
+BATCH MODE: queue all generations without waiting, then verify all in one pass.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 1A — QUEUE ALL NB PRO GENERATIONS (do NOT wait between scenes)
@@ -9447,12 +9486,19 @@ generating card (arrow appears even while generating) → Reuse Prompt → remov
 Photo 2 → inject the next scene's frame → clear prompt → paste new prompt.
 
 REUSE PROMPT STEPS (scenes 2+):
-  1. Hover over the previous scene's generating card — the expand arrow (▶) appears even while generating
-  2. Click the arrow → click "Reuse Prompt" — Photo 1 (avatar) and NB Pro mode reload automatically
-  3. Remove Photo 2 (click its × button)
-  4. Inject the next scene's Photo 2 using HOW TO INJECT AN IMAGE with the scene's KEY
-  5. Clear the prompt field, paste the new scene's prompt
-  6. Click Generate — move immediately to the next scene without waiting
+  1. Hover over the previous scene's generating OR finished card
+     — the expand arrow (▶) appears on hover even while the card is still generating
+     — if the arrow does not appear immediately, try hovering the bottom edge or corner of the card
+  2. Click the arrow → click "Reuse Prompt" — NB Pro mode reloads with the previous settings
+  3. Screenshot immediately — confirm:
+     a) Format is still 9:16 vertical — if it changed, reset it now before doing anything else
+     b) Photo 1 (avatar) is still loaded in its slot
+        → If Photo 1 is missing: inject it again using HOW TO INJECT AN IMAGE with KEY='avatar' (SLOT=0)
+        → If Photo 1 is present: leave it, do not touch it
+  4. Remove Photo 2 (click its × button to clear the old scene's start frame)
+  5. Inject the next scene's Photo 2 using HOW TO INJECT AN IMAGE with the scene's KEY (SLOT=1)
+  6. Click inside the prompt field → press Ctrl+A to select all → press Delete to clear → paste the new scene's prompt
+  7. Click Generate — move immediately to the next scene without waiting
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
@@ -9461,23 +9507,25 @@ REUSE PROMPT STEPS (scenes 2+):
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
 ${idx === 0
-  ? `Full setup — open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
+  ? `Full setup:
+• Click "+ New prompt" in the LEFT sidebar to reset the bar
+• Open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-    ? `• Inject Photo 1 (avatar): use HOW TO INJECT AN IMAGE with KEY='avatar'`
+    ? `• Inject Photo 1 (avatar, SLOT=0): use HOW TO INJECT AN IMAGE with KEY='avatar'`
     : `• No avatar — skip Photo 1`}
 ${hasFrame
-    ? `• Inject Photo 2 (start frame): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
+    ? `• Inject Photo 2 (start frame, SLOT=1): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
     : `• No start frame — skip Photo 2`}
 • Set format: 9:16 vertical`
-  : `Reuse Prompt from Scene ${idx} (hover → expand arrow → Reuse Prompt → remove old Photo 2)
+  : `Reuse Prompt from the previous card — App Scene ${runScenes[idx-1].i+1} (hover → expand arrow → Reuse Prompt → confirm 9:16 format → remove old Photo 2)
 ${hasFrame
-    ? `• Inject Photo 2: use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
+    ? `• Inject Photo 2 (SLOT=1): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
     : `• No start frame — skip Photo 2`}`}
 • Paste this prompt exactly:
 
 ${nbPrompt}
 
-• Click Generate — DO NOT WAIT. Move immediately to the next scene.
+• Click Generate — take a screenshot to confirm a new generating card appeared, then move immediately to the next scene. Do NOT wait for it to finish.
 `;
     });
 
@@ -9487,7 +9535,9 @@ ${nbPrompt}
 PHASE 1B — VERIFY ALL COMPOSITES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 All ${totalRunScenes} NB Pro generations are now queued and running in parallel. Go through the Flow
-sidebar from top to bottom (Scene 1 = first entry, Scene 2 = second, etc.) and for each one:
+sidebar from BOTTOM to TOP (Flow shows newest first — Scene 1 was queued first so it is the BOTTOM entry; Scene N is the TOP entry). Scroll down to find Scene 1 and work upward.
+⚠ After retries, extra cards appear at the top — do NOT count position. Hover each card to confirm which scene it belongs to by reading the thumbnail or prompt.
+For each composite:
 
   1. Wait for it to finish if still generating (up to ${nbWaitSec} seconds)
   2. Take a screenshot of the result
@@ -9510,7 +9560,9 @@ ${bgFromAvatar
 
 After checking all ${totalRunScenes}:
   • For each FLAGGED scene: redo it individually — click "+ New prompt", set up NB Pro from scratch
-    with the exact same photos and prompt, generate, verify.
+    with the exact same photos and prompt, set format to 9:16 vertical, generate, verify.
+    ⚠ Each redo creates a NEW composite card at the TOP of the sidebar — this is the card to use
+    in Phase 2, not the failed attempt. The failed card can be ignored.
   • Keep retrying flagged scenes until they pass.
   • Do NOT start Phase 2 until every scene is marked COMPOSITE READY.
 `;
@@ -9525,12 +9577,36 @@ After checking all ${totalRunScenes}:
 ║      PHASE 2 — ALL VEO 3 VIDEOS                ║
 ╚══════════════════════════════════════════════╝
 BATCH MODE: Queue ALL Veo 3 generations first without waiting. Then go back and verify,
-download, and mark done each one in order. Each scene gets its own unique prompt and start frame.
+then mark done each one in order. Each scene gets its own unique prompt and start frame.
+⚠ Do NOT download anything. Videos stay in the Flow project — user downloads manually.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 PHASE 2A — QUEUE ALL VEO 3 GENERATIONS (do NOT wait between scenes)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-For each scene: click "+ New prompt", switch to VIDEO mode, upload the composite, set model + duration, paste the prompt, click Generate — then immediately move to the next scene WITHOUT waiting.
+For each scene: find its composite card → click "Add to Prompt" → switch to VIDEO mode →
+set model + duration → paste the prompt → click Generate → immediately move to next scene.
+
+HOW TO ATTACH THE COMPOSITE (do this for every scene):
+  SIDEBAR ORDER: Composites are listed newest-first (top = most recent). Scene 1's composite
+  was generated first, so it is near the BOTTOM. Scene N's composite is near the TOP.
+  Scroll down to find earlier scenes. After Phase 1B redos, the newest composite for a scene
+  is the one highest in the sidebar — use that one.
+  1. Find the NB Pro composite for this scene in the sidebar:
+     • It is a STILL IMAGE (no play icon, no duration badge) — not a video card
+     • If multiple still-image cards exist for this scene (from Phase 1B retries), use the NEWEST (highest)
+     • Hover each still-image card to confirm which scene it belongs to before clicking
+  2. Hover over it — an "Add to Prompt" button appears
+  3. Click "Add to Prompt" — the image loads into the bottom bar as the start frame
+     ⚠ "Add to Prompt" does NOT cancel or affect any other ongoing generations — it is safe to click
+       while other videos are still generating.
+  4. Click the media icon → select "Video" to switch to VIDEO mode
+  5. Confirm the start-frame thumbnail is still visible in the bar
+     → If thumbnail disappeared after switching to VIDEO mode: go back to the composite card,
+       hover, click "Add to Prompt" again, then re-switch to VIDEO mode and confirm before continuing.
+     → Do NOT try to re-inject it via HOW TO INJECT AN IMAGE — only "Add to Prompt" works here.
+  6. Set model and duration, paste prompt, click Generate
+⚠ Do NOT click "+ New prompt" before "Add to Prompt" — this would clear the bar.
+   Instead: use "Add to Prompt" on the composite card directly, which resets the bar automatically.
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt)';
@@ -9538,14 +9614,19 @@ For each scene: click "+ New prompt", switch to VIDEO mode, upload the composite
       const wordCount = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
-1. Click "+ New prompt" at the TOP of the LEFT sidebar → switch bottom bar to VIDEO mode (media icon → Video)
-2. Upload "SCENE ${i+1} COMPOSITE" as start frame: find input[type=file] on Flow tab → file_upload with its full path from ${dlPath}\\
+1. Find Scene ${i+1}'s NB Pro composite in the sidebar:
+   • NB Pro composites are STILL IMAGES (no play icon, no duration badge) — not video cards
+   • If multiple still-image cards exist for this scene (due to Phase 1B retries), use the NEWEST one (highest in sidebar)
+   • Do NOT use position to identify scenes — hover each card to confirm it belongs to Scene ${i+1}
+   → Hover the correct card → click "Add to Prompt"
+2. Switch to VIDEO mode (media icon → Video) — confirm start frame thumbnail is visible
+   → If thumbnail gone after mode switch: re-do "Add to Prompt" on the composite → switch to VIDEO again
 3. Model: ${defaultModel} · Duration: ${duration}s  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
 4. Paste this prompt exactly:
 
 ${veoPrompt}
 
-5. Click Generate — DO NOT WAIT. Move immediately to the next scene.
+5. Click Generate — take a screenshot to confirm a new video card started generating, then move immediately to the next scene. Do NOT wait for it to finish.
 `;
     });
 
@@ -9556,8 +9637,10 @@ PHASE 2B — VERIFY ALL VEO 3 VIDEOS
 All ${totalRunScenes} Veo 3 videos are generating in parallel. Do NOT download them —
 leave them in the Flow project. The user will download manually after reviewing.
 
-Go through the Flow sidebar top to bottom (Scene 1 = first entry, in order).
-For each one that has finished:
+Go through the Flow sidebar BOTTOM to TOP (Flow shows newest first — Scene 1 is at the BOTTOM, Scene N is at the TOP). Scroll down to Scene 1 and work upward.
+⚠ Do NOT use position to identify scenes — retries create extra cards. Hover each card to confirm which scene it is.
+⚠ Veo 3 video cards show a play icon or duration badge. NB Pro composites are still images with no duration. Only interact with VIDEO cards in this phase.
+For each video card — wait up to ${veoWaitMin} minutes for it to finish if still generating, then:
 
   1. Play or scrub through the video
   2. Apply this quality check — the ONLY thing that matters is the speech:
@@ -9583,8 +9666,14 @@ For each one that has finished:
   4. FLAG → note the scene number, continue checking the rest
 
 After all ${totalRunScenes} are checked:
-  • For each FLAGGED scene: redo individually — "+ New prompt", VIDEO mode, "Add to Prompt"
-    its composite, paste its exact prompt, generate, verify speech, then markSceneDone.
+  • For each FLAGGED scene: redo individually —
+    find Scene N's NEWEST composite in sidebar (highest still-image card — no play icon, no duration badge;
+    if multiple still-image cards exist from Phase 1B retries, use the highest / most recent one) →
+    hover → "Add to Prompt" → switch to VIDEO mode →
+    confirm start-frame thumbnail visible → set model + duration → paste its exact prompt →
+    Generate → verify speech → markSceneDone(SCENE_INDEX).
+    (0-based index: Scene 1 = 0, Scene 2 = 1, Scene 3 = 2, etc.)
+    ⚠ Do NOT click "+ New prompt" before "Add to Prompt" — that clears the bar.
   • Keep retrying until speech is clean. Still do not download — leave in project.
 `;
 
@@ -9660,7 +9749,7 @@ Report back: how many scenes completed successfully, and note any that had issue
     const _sadm = getAdminSettings();
     const _snbWait = _sadm.nbWaitSec || 180;
     const _sveoWait = _sadm.veoWaitMin || 6;
-    const _sModel = _sadm.defaultModel || 'Veo 3 Fast';
+    const _sModel = _sadm.defaultModel || 'Veo 3.1 Fast';
     const _sClaudeBrowser = _susr.claudeBrowserMode !== false;
 
     // Avatar appearance inventory — embedded into CHECK 1 below so verification
@@ -9733,7 +9822,7 @@ GOOGLE FLOW UI MAP (memorize — do not explore)
 • NB Pro panel: TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
 • File inputs are hidden in shadow DOM — use HOW TO INJECT AN IMAGE (javascript_tool injection)
 • Veo 3 (Video mode): model dropdown, duration, prompt field, Generate button
-• After video renders: hover to reveal ⬇ download button
+• After video renders: hover to reveal playback controls — do NOT click the download button (leave video in project)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE YOU START
@@ -9747,20 +9836,27 @@ BEFORE YOU START
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
-KEY = 'avatar' for Photo 1, or 'scene${i}' for Photo 2.
+KEY = 'avatar' for Photo 1 (SLOT=0), or 'scene${i}' for Photo 2 (SLOT=1).
 APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
 
 STEP A — Read image from app tab:
   javascript_tool, tabId=APP_TAB_ID:
-    return window.__vsFrames['KEY'];
+    const val = (window.__vsFrames||{})['KEY'];
+    if (!val) return 'ERROR: KEY not found in __vsFrames — run: return Object.keys(window.__vsFrames||{}) to list available keys';
+    return val;
   → Returns a base64 data URL string. Keep it — you will use it in Step B.
 
 STEP B — Store on Flow tab:
   javascript_tool, tabId=FLOW_TAB_ID:
     window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
-    return 'stored';
+    return 'stored: ' + (window.__pendingImg?.length||0) + ' chars';
+  ⚠ The data URL from STEP A may be 150,000–400,000 characters. Paste it in full — do not truncate.
+  After STEP B, verify the returned length is > 1000 chars. If it shows 0 or a short string,
+  STEP A may have returned an error — re-run STEP A and check the KEY name is correct.
 
-STEP C — Inject into file input (React-compatible):
+STEP C — Inject into file input (React-compatible, SLOT-aware):
+  SLOT = 0 for Photo 1 (avatar), SLOT = 1 for Photo 2 (start frame).
+  Replace SLOT in the code below with the actual number (0 or 1) before running.
   javascript_tool, tabId=FLOW_TAB_ID:
     (async () => {
       try {
@@ -9769,16 +9865,17 @@ STEP C — Inject into file input (React-compatible):
         const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
         const dt = new DataTransfer();
         dt.items.add(file);
-        function findInput(node) {
-          if (!node) return null;
-          if (node instanceof HTMLInputElement && node.type==='file') return node;
+        const allInputs = [];
+        function findAllInputs(node) {
+          if (!node) return;
+          if (node instanceof HTMLInputElement && node.type==='file') { allInputs.push(node); return; }
           const sr = node.shadowRoot;
-          if (sr) { const f=findInput(sr); if(f) return f; }
-          for (const c of (node.children||[])) { const f=findInput(c); if(f) return f; }
-          return null;
+          if (sr) findAllInputs(sr);
+          for (const c of (node.children||[])) findAllInputs(c);
         }
-        const input = findInput(document.body);
-        if (!input) return 'ERROR: no file input found';
+        findAllInputs(document.body);
+        if (!allInputs.length) return 'ERROR: no file input found';
+        const input = allInputs[SLOT] || allInputs[0];
         // Set files via DataTransfer
         input.files = dt.files;
         // React fiber approach — bypasses synthetic event system
@@ -9789,7 +9886,7 @@ STEP C — Inject into file input (React-compatible):
             if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
               fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
               window.__pendingImg = null;
-              return 'SUCCESS_REACT';
+              return 'SUCCESS_REACT slot=' + SLOT + ' of ' + allInputs.length;
             }
             fiber = fiber.return;
           }
@@ -9798,21 +9895,28 @@ STEP C — Inject into file input (React-compatible):
         input.dispatchEvent(new Event('change',{bubbles:true}));
         input.dispatchEvent(new Event('input',{bubbles:true}));
         window.__pendingImg = null;
-        return 'SUCCESS_DOM';
+        return 'SUCCESS_DOM slot=' + SLOT + ' of ' + allInputs.length;
       } catch(e) { return 'ERROR: '+e.message; }
     })()
 
+  Photo 1 (avatar): run STEP C with SLOT=0
+  Photo 2 (start frame): run STEP C with SLOT=1
+⚠ TIMING: The file input only exists in the DOM when the NB Pro panel is open AND a photo
+  slot is in its "ready to receive" state. If STEP C returns 'ERROR: no file input found':
+    1. Click directly on the Photo 1 or Photo 2 upload area/slot in the NB Pro panel
+    2. Immediately run STEP C again (the input appears briefly when the slot is active)
+
 After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
-If result says SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
-If no thumbnail after 2 attempts, try STEP C again once more before moving on.
+If SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
+If no thumbnail after 2 attempts, try clicking the slot again then run STEP C once more.
 ⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
-${hasAvatar ? `2. Inject Photo 1 (avatar): use HOW TO INJECT AN IMAGE with KEY='avatar'` : '2. No avatar — skip Photo 1'}
-${hasStartFrame ? `3. Inject Photo 2 (start frame): use HOW TO INJECT AN IMAGE with KEY='scene${i}'` : '3. No start frame — skip Photo 2'}
+${hasAvatar ? `2. Inject Photo 1 (avatar, SLOT=0): use HOW TO INJECT AN IMAGE with KEY='avatar'` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Inject Photo 2 (start frame, SLOT=1): use HOW TO INJECT AN IMAGE with KEY='scene${i}'` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
 5. Paste this NB Pro prompt:
 
@@ -9820,7 +9924,7 @@ ${nbPrompt}
 
 6. Click Generate — wait up to ${_snbWait}s for image to appear
 7. Take a screenshot of the generated NB Pro image
-8. VERIFY the image passes ALL of the following checks before clicking "Add to prompt":
+8. VERIFY the image passes ALL of the following checks before clicking "Add to Prompt":
 
    ✅ CHECK 1 — Avatar present & matches inventory
       The person from Photo 1 (the avatar) must be clearly visible.
@@ -9853,12 +9957,16 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — the props reference is Photo 1 (t
    • If retry 1 also fails: do a FULL TAB REFRESH — navigate to the same Flow URL, wait 10 seconds, redo from NB Pro upload with the exact same prompts and photos
    • Keep doing tab refresh → retry until checks 1 and 4 pass — do NOT skip this scene
    • If only checks 2 or 3 fail (background/prop mismatch) after multiple attempts: proceed to Step 2 anyway, note the mismatch in your report
-   • "Unusual activity" flag: do NOT modify the prompts — wait 2 minutes after tab refresh, then retry identically
+   • "Unusual activity" flag: do NOT modify the prompts — wait ${_sadm.cooldownSec || 120} seconds after tab refresh, then retry identically
 
 9. Once all checks pass (or after retry): move the composite into Veo 3 —
    Click "Add to Prompt" on the NB composite (hover over it to reveal the button).
    Then switch the bar to VIDEO mode (media icon → Video) and confirm the composite
    is showing in the start-frame slot. Do NOT download the composite.
+   → If the thumbnail disappeared after switching to VIDEO mode: go back to the composite,
+     hover, click "Add to Prompt" again, re-switch to VIDEO mode, confirm before continuing.
+   ⚠ If you had to retry Step 1 (tab refresh or re-generate), use "Add to Prompt" on the
+     NEW passing composite — not the original failed attempt.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — ${_sModel}
@@ -9953,7 +10061,7 @@ ${veoPrompt}
             <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
               Upload avatar as Photo 1 · Upload start frame as Photo 2<br>
               Set <strong style="color:var(--text-1);">9:16 vertical</strong> · Paste NB Pro prompt · Generate<br>
-              ✓ Check result looks right · Click <strong style="color:var(--text-1);">"Add to prompt"</strong>
+              ✓ Check result looks right · Click <strong style="color:var(--text-1);">"Add to Prompt"</strong>
             </div>
           </div>
 
@@ -9961,7 +10069,7 @@ ${veoPrompt}
             <div style="font-size:10px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 2 — Veo 3</div>
             <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
               NB Pro image becomes the starting frame<br>
-              Select <strong style="color:var(--text-1);">Veo 3 Fast</strong> · Set duration to <strong style="color:var(--text-1);">${duration} seconds</strong><br>
+              Select <strong style="color:var(--text-1);">Veo 3.1 Fast</strong> · Set duration to <strong style="color:var(--text-1);">${duration} seconds</strong><br>
               <span style="font-size:10px;color:var(--text-3);">(${wordCount} words ≈ ${Math.round(wordCount / WORDS_PER_SEC)}s of speech)</span><br>
               Paste Veo 3 prompt · Generate
             </div>
@@ -12617,7 +12725,7 @@ TECHNICAL SPECS:
     document.getElementById('adm-veoWait').value = s.veoWaitMin || 6;
     document.getElementById('adm-maxRetry').value = s.maxTabRefresh || 0;
     document.getElementById('adm-cooldown').value = s.cooldownSec || 120;
-    document.getElementById('adm-model').value = s.defaultModel || 'Veo 3 Fast';
+    document.getElementById('adm-model').value = s.defaultModel || 'Veo 3.1 Fast';
     document.getElementById('adm-creditBudget').value = s.creditBudget || 0;
     // Prompts
     document.getElementById('adm-nbDefault').value = s.nbPromptDefault || '';
