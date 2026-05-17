@@ -1153,6 +1153,21 @@
   .vs-panel-header.collapsible { cursor: pointer; user-select: none; }
   .vs-panel-header.collapsible:hover { color: var(--text-2); }
 
+  /* ── Video player mini / expanded toggle ── */
+  #vsPanelRefVideo { transition: none; }
+  #vsPanelRefVideo .video-panel-body { padding: 4px 8px 6px; flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; transition: padding 0.2s; }
+  #videoUploadZone  { transition: height 0.22s ease, max-height 0.22s ease; }
+  #vsPanelRefVideo.video-mini .video-panel-body { padding: 0 8px 4px; }
+  #vsPanelRefVideo.video-mini #videoUploadZone  { height: 54px !important; max-height: 54px !important; }
+  #vsPanelRefVideo.video-mini .video-scene-btns { display: none !important; }
+  #vsPanelRefVideo.video-mini .vs-panel-resize-handle { display: none; }
+  .video-mini-toggle {
+    background: none; border: 1px solid var(--border); border-radius: 4px;
+    color: var(--text-3); font-size: 10px; padding: 1px 7px; cursor: pointer;
+    white-space: nowrap; transition: color 0.15s, border-color 0.15s;
+  }
+  .video-mini-toggle:hover { color: var(--text-1); border-color: var(--border-2); }
+
   /* ── Video Studio: How it works banner ── */
   #vsHowItWorks {
     display: flex; align-items: center; justify-content: space-between;
@@ -3465,9 +3480,10 @@
               <button class="btn" id="saveVideoLibBtn" onclick="saveCurrentVideoToLibrary()" style="padding:2px 8px;font-size:10px;display:none;border-color:var(--accent);color:var(--accent-2);" title="Save this reference video to your library for reuse">＋ Save to Library</button>
               <button class="btn" id="openVideoLibBtn" onclick="openVideoLibrary()" style="padding:2px 8px;font-size:10px;" title="Browse saved reference videos">📚 Library</button>
               <button class="btn" id="clearVideoBtn" onclick="clearVideo()" style="padding:2px 8px;font-size:10px;display:none;">Clear</button>
+              <button class="video-mini-toggle" id="videoMiniToggleBtn" onclick="toggleVideoMini()" title="Collapse/expand video player" style="display:none;">▲ Collapse</button>
             </div>
           </div>
-          <div style="padding:4px 8px 6px;flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden;">
+          <div class="video-panel-body">
             <div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:stretch;flex:1;min-height:0;">
               <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden;">
                 <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:160px;max-height:160px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -3479,8 +3495,8 @@
                 </div>
                 <input type="file" id="refVideoInput" accept="video/mp4,video/*" style="display:none;" onchange="onVideoFileChange(event)">
               </div>
-              <!-- Scene buttons -->
-              <div style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;align-self:flex-start;padding-top:2px;">
+              <!-- Scene buttons — hidden in mini mode -->
+              <div class="video-scene-btns" style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;align-self:flex-start;padding-top:2px;">
                 <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--border-2);color:var(--text-1);width:100%;">✂ Mark Scene</button>
                 <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--accent);color:var(--accent-2);width:100%;" title="Auto-detect scene cuts and object changes"><i class="ti ti-scissors"></i> Detect Cuts</button>
                 <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:var(--danger);border-color:rgba(248,113,113,0.2);width:100%;"><i class="ti ti-trash"></i> Clear</button>
@@ -5727,6 +5743,7 @@
   let refVideoObjectUrl = null;
   let refVideoFile = null; // Raw File object for Whisper transcription
   let segments = []; // [{startTime, endTime, frameDataUrl, script, action, nbPrompt, veoPrompt}]
+  let _activeLibraryVideoId = null; // library video ID currently loaded into the player
   // Timestamped transcript chunks from Whisper verbose_json — [{start, end, text}]
   let whisperSegments = [];
   // Per-segment rewritten scripts from last Rewrite run — [{idx, original, rewritten}]
@@ -6217,6 +6234,7 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
     if (_slb) _slb.style.display = 'inline-block';
     if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
     document.getElementById('videoUploadZone').onclick = null;
+    showVideoMiniBtn(true);
   }
 
   function clearVideo() {
@@ -6238,6 +6256,8 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
       if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = '';
       document.getElementById('refVideoInput').value = '';
       document.getElementById('videoUploadZone').onclick = function() { document.getElementById('refVideoInput').click(); };
+      setVideoMini(false);
+      showVideoMiniBtn(false);
     });
   }
 
@@ -6324,46 +6344,7 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
     if (modal) modal.style.display = 'none';
   }
 
-  async function loadVideoFromLibrary(id) {
-    // Loading a library video replaces the current video and clears its
-    // segments — warn first so in-progress segment work isn't lost silently.
-    if (segments.length > 0) {
-      showConfirm('Loading this video will replace the current video and clear its ' + segments.length + ' segment(s). Continue?', async () => {
-        let blob;
-        try { blob = await DB.get('sm_refvideo_blob_' + id); } catch (e) { blob = null; }
-        if (!blob) { showToast('Video data not found — it may have been cleared.', 'error'); return; }
-        let lib = [];
-        try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
-        const meta = lib.find(v => v.id === id) || {};
-        const file = new File([blob], meta.fileName || (meta.name || 'library-video') + '.mp4', { type: blob.type || meta.type || 'video/mp4' });
-        refVideoFile = file;
-        if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
-        refVideoObjectUrl = URL.createObjectURL(file);
-        const videoEl = document.getElementById('refVideoEl');
-        videoEl.src = refVideoObjectUrl;
-        videoEl.style.display = 'block';
-        document.getElementById('videoUploadPlaceholder').style.display = 'none';
-        document.getElementById('clearVideoBtn').style.display = 'inline-block';
-        const _slb = document.getElementById('saveVideoLibBtn');
-        if (_slb) _slb.style.display = 'inline-block';
-        document.getElementById('videoUploadZone').onclick = null;
-        if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
-        // The old segments belong to the previously loaded video — clear them.
-        segments = [];
-        // Restore the saved transcript if there is one, so Whisper doesn't need rerunning
-        whisperSegments = [];
-        if (meta.hasTranscript) {
-          try {
-            const tx = await DB.get('sm_refvideo_tx_' + id);
-            if (tx) whisperSegments = JSON.parse(tx);
-          } catch (e) { /* transcript optional */ }
-        }
-        saveCurrentProjectData();
-        renderSegments();
-        closeVideoLibrary();
-      });
-      return;
-    }
+  async function _doLoadVideoFromLibrary(id, clearSegs) {
     let blob;
     try { blob = await DB.get('sm_refvideo_blob_' + id); } catch (e) { blob = null; }
     if (!blob) { showToast('Video data not found — it may have been cleared.', 'error'); return; }
@@ -6383,19 +6364,48 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
     if (_slb) _slb.style.display = 'inline-block';
     document.getElementById('videoUploadZone').onclick = null;
     if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
-    // The old segments belong to the previously loaded video — clear them.
-    segments = [];
-    // Restore the saved transcript if there is one, so Whisper doesn't need rerunning
-    whisperSegments = [];
-    if (meta.hasTranscript) {
-      try {
-        const tx = await DB.get('sm_refvideo_tx_' + id);
-        if (tx) whisperSegments = JSON.parse(tx);
-      } catch (e) { /* transcript optional */ }
+    _activeLibraryVideoId = id;
+    if (clearSegs) {
+      segments = [];
+      whisperSegments = [];
+      if (meta.hasTranscript) {
+        try {
+          const tx = await DB.get('sm_refvideo_tx_' + id);
+          if (tx) whisperSegments = JSON.parse(tx);
+        } catch (e) { /* transcript optional */ }
+      }
+    } else {
+      // Same video re-loaded after refresh — restore transcript only if we have none
+      if (!whisperSegments.length && meta.hasTranscript) {
+        try {
+          const tx = await DB.get('sm_refvideo_tx_' + id);
+          if (tx) whisperSegments = JSON.parse(tx);
+        } catch (e) { /* transcript optional */ }
+      }
     }
     saveCurrentProjectData();
     renderSegments();
     closeVideoLibrary();
+  }
+
+  async function loadVideoFromLibrary(id) {
+    // If this video is already linked to the active project, just restore the
+    // player without touching the saved segments (common after a page refresh).
+    const activeProject = getActiveProject();
+    const isSameVideo = activeProject && activeProject.libraryVideoId === id;
+    if (isSameVideo && segments.length > 0) {
+      await _doLoadVideoFromLibrary(id, false);
+      showToast('Video restored — segments kept.', 'success');
+      return;
+    }
+    // Different video (or no segments yet) — warn before clearing
+    if (segments.length > 0) {
+      showConfirm('Loading this video will replace the current video and clear its ' + segments.length + ' segment(s). Continue?', async () => {
+        await _doLoadVideoFromLibrary(id, true);
+      });
+      return;
+    }
+    await _doLoadVideoFromLibrary(id, true);
   }
 
   async function deleteVideoFromLibrary(id) {
@@ -7128,6 +7138,8 @@ RULES — read carefully:
       segments = [];
       saveSegments();
       renderSegments();
+      // Re-expand the video player so the user can work with the video again
+      setVideoMini(false);
     });
   }
 
@@ -7504,6 +7516,9 @@ RULES — read carefully:
     renderSegmentTimeline();
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
     if (segments.length === 0) {
+      // No segments — show toggle btn only if video is loaded, but keep expanded
+      const hasVideo = !!document.getElementById('refVideoEl')?.src;
+      showVideoMiniBtn(hasVideo);
       const emptyMsg = studioMode === 'producer'
         ? 'Paste your script and click <strong style="color:var(--text-2);">✂ Split into Scenes</strong> to create segments.'
         : 'Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.';
@@ -7511,6 +7526,12 @@ RULES — read carefully:
       const saveAllBtn = document.getElementById('saveAllBtn');
       if (saveAllBtn) saveAllBtn.style.display = 'none';
       return;
+    }
+    // Segments exist — show toggle button and auto-collapse player if not already mini
+    showVideoMiniBtn(true);
+    const panel = document.getElementById('vsPanelRefVideo');
+    if (panel && !panel.classList.contains('video-mini')) {
+      setVideoMini(true);
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
@@ -7659,16 +7680,23 @@ RULES — read carefully:
   function getAvatarAccessoryNote() {
     const inv = (document.getElementById('avatarInventory')?.value || avatarInventory || '').trim();
     if (!inv) return '';
-    const wanted = [];
+    let clothing = '';
+    const accessories = [];
     inv.split(/\r?\n/).forEach(line => {
-      const m = line.match(/^\s*(JEWELRY|OTHER)\s*:\s*(.+)$/i);
+      const m = line.match(/^\s*(CLOTHING|JEWELRY|OTHER)\s*:\s*(.+)$/i);
       if (!m) return;
+      const key = m[1].toUpperCase();
       const val = m[2].trim().replace(/\.+$/, '');
       if (!val || /^(none|none visible|n\/?a)$/i.test(val)) return;
-      wanted.push(val);
+      if (key === 'CLOTHING') { clothing = val; }
+      else { accessories.push(val); }
     });
-    if (!wanted.length) return '';
-    return ' Keep these specific details from the person in reference photo 1 clearly visible and unchanged: ' + wanted.join('; ') + '.';
+    let note = '';
+    // Clothing gets a hard "must wear exactly" instruction — NB Pro tends to change outfits
+    if (clothing) note += ` The person must be wearing exactly this outfit as shown in reference photo 1: ${clothing}. Do not change any part of the clothing.`;
+    // Jewelry/accessories get a "keep visible" instruction
+    if (accessories.length) note += ` Keep these specific details from reference photo 1 clearly visible and unchanged: ${accessories.join('; ')}.`;
+    return note;
   }
 
   // --- Build Nano Banana prompt for the START frame of a segment ---
@@ -8188,12 +8216,13 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     const poseHint = 'The person is looking confidently at the camera with a natural expression, mid-conversation.';
 
     const avatarNote = avatarDesc ? `Person description from Photo 1: ${avatarDesc}.` : '';
+    const clothingNote = getAvatarAccessoryNote(); // clothing + jewelry from Appearance Inventory
 
     // Creator-supplied visual description
     const visualNote = frameDesc ? ` Visual scene description from creator: ${frameDesc}.` : '';
 
     const obj = {
-      instruction: `Using the person from reference Photo 1 as the subject, generate a photorealistic lifestyle-photography starting frame for Scene ${sceneIndex + 1} of ${total}. ${poseHint}. ${settingNote} ${avatarNote}${visualNote} Any food, ingredients, products, or objects mentioned in the scene description must appear as physical props sitting on the surface DIRECTLY IN FRONT OF the presenter in the lower foreground — like a real cooking or wellness video where the items are always on the counter in front of the creator. The background must look like a REAL interior space photographed by a lifestyle photographer — real walls, real decor, real lighting. Not AI-generated, not a studio set, not a blurred gradient. Think Pinterest home, editorial lifestyle shoot. The frame should feel like a natural video freeze-frame — vertical 9:16, shallow depth of field on 85mm equivalent, warm natural light. This image will be used as the first frame of a Veo 3 video clip.`,
+      instruction: `Using the person from reference Photo 1 as the subject, generate a photorealistic lifestyle-photography starting frame for Scene ${sceneIndex + 1} of ${total}. ${poseHint}. ${settingNote} ${avatarNote}${clothingNote}${visualNote} Any food, ingredients, products, or objects mentioned in the scene description must appear as physical props sitting on the surface DIRECTLY IN FRONT OF the presenter in the lower foreground — like a real cooking or wellness video where the items are always on the counter in front of the creator. The background must look like a REAL interior space photographed by a lifestyle photographer — real walls, real decor, real lighting. Not AI-generated, not a studio set, not a blurred gradient. Think Pinterest home, editorial lifestyle shoot. The frame should feel like a natural video freeze-frame — vertical 9:16, shallow depth of field on 85mm equivalent, warm natural light. This image will be used as the first frame of a Veo 3 video clip.`,
       framing: 'vertical 9:16, medium close-up, person centered, 85mm equivalent, f/1.8 shallow depth of field',
       expression: isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
       style: 'photorealistic lifestyle editorial — real room, real light, real decor. Pinterest home aesthetic. NOT AI art, NOT studio backdrop, NOT blurred gradient',
@@ -8618,6 +8647,30 @@ No markdown. Return only the JSON object.`
       ? '<i class="ti ti-eye-off"></i>'
       : '<i class="ti ti-eye"></i>';
     if (btn) btn.title = hidden ? 'Hide prompt' : 'Show prompt';
+  }
+
+  // ── Video player mini / expand toggle ────────────────────────────────────
+  function setVideoMini(mini) {
+    const panel = document.getElementById('vsPanelRefVideo');
+    const btn   = document.getElementById('videoMiniToggleBtn');
+    if (!panel) return;
+    if (mini) {
+      panel.classList.add('video-mini');
+      if (btn) btn.textContent = '▼ Expand';
+    } else {
+      panel.classList.remove('video-mini');
+      if (btn) btn.textContent = '▲ Collapse';
+    }
+  }
+  function toggleVideoMini() {
+    const panel = document.getElementById('vsPanelRefVideo');
+    if (!panel) return;
+    setVideoMini(!panel.classList.contains('video-mini'));
+  }
+  // Show toggle button whenever a video is loaded
+  function showVideoMiniBtn(show) {
+    const btn = document.getElementById('videoMiniToggleBtn');
+    if (btn) btn.style.display = show ? '' : 'none';
   }
 
   // ── More-menu open / close ────────────────────────────────────────────────
@@ -10114,6 +10167,8 @@ TECHNICAL SPECS:
     if (!p) return;
     p.originalScript  = document.getElementById('originalScript')?.value || '';
     p.whisperSegments = whisperSegments;
+    if (typeof _activeLibraryVideoId !== 'undefined' && _activeLibraryVideoId)
+      p.libraryVideoId = _activeLibraryVideoId;
     p.segments = segments.map(s => ({
       startTime: s.startTime, endTime: s.endTime,
       frameDataUrl: s.frameDataUrl || null,
@@ -10133,6 +10188,7 @@ TECHNICAL SPECS:
     if (!p) return;
     segments        = (p.segments || []).map(s => ({ ...s }));
     whisperSegments = p.whisperSegments || [];
+    _activeLibraryVideoId = p.libraryVideoId || null;
     document.getElementById('originalScript').value = p.originalScript || '';
     renderSegments();
   }
