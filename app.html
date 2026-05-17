@@ -9467,9 +9467,14 @@ All frame images are stored in window.__vsFrames on the app tab.
     // Store frames in app memory — browser Claude reads them directly via javascript_tool
     // This avoids Chrome's download throttling entirely
     window.__vsFrames = {};
+    let _dlDelay = 0;
+    const _dlInterval = 400;
     if (avatarImageDataUrl) {
       window.__vsFrames['avatar'] = avatarImageDataUrl;
       instruction += `• KEY: 'avatar'  ← Photo 1 avatar (reuse every scene)\n`;
+      // Also download to disk so user has a local copy for manual fallback
+      downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', _dlDelay);
+      _dlDelay += _dlInterval;
     }
     segments.forEach((seg, globalI) => {
       if (!seg.veoPrompt?.trim()) return;
@@ -9478,6 +9483,9 @@ All frame images are stored in window.__vsFrames on the app tab.
         const key = `scene${globalI}`;
         window.__vsFrames[key] = seg.frameDataUrl;
         instruction += `• KEY: '${key}'  ← Scene ${globalI+1} start frame (Photo 2)\n`;
+        // Also download to disk so user has a local copy for manual fallback
+        downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${globalI+1}.jpg`, _dlDelay);
+        _dlDelay += _dlInterval;
       }
     });
 
