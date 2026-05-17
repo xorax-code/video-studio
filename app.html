@@ -9106,9 +9106,6 @@ No markdown. Return only the JSON object.`
     const _adm = getAdminSettings();
     const dlPath = getEffectiveDlPath();
     const claudeBrowserMode = _usr.claudeBrowserMode !== false;
-    // Session stamp — appended to every downloaded filename so new files never
-    // collide with old ones that share the same base name in Downloads.
-    const _sessionStamp = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12); // e.g. 202605171226
     const nbWaitSec = _adm.nbWaitSec || 180;
     const veoWaitMin = _adm.veoWaitMin || 6;
     const cooldownSec = _adm.cooldownSec || 120;
@@ -9150,23 +9147,16 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
 
     // ── MANUAL MODE: build a simple copy-paste prompt sheet ──────────────────
     if (!claudeBrowserMode) {
-      const avatarFile = `all_scenes_photo1_avatar.jpg`;
       let sheet = `ALL SCENES — MANUAL PROMPT SHEET\nGenerated: ${new Date().toLocaleString()}\n`;
       sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-      let dlIdx = 0;
       if (avatarImageDataUrl) {
-        downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIdx * 300);
-        dlIdx++;
-        sheet += `📁 Files saved to Downloads:\n• ${avatarFile}  ← Avatar (Photo 1 — reuse every scene)\n`;
+        sheet += `📁 Avatar photo: upload directly from this app (Photo 1 — reuse every scene)\n`;
       }
       segments.forEach((seg, gi) => {
         if (!seg.veoPrompt?.trim()) return;
         if (skipDone && seg.done) return;
         if (seg.frameDataUrl) {
-          const fn = `scene${gi+1}_photo2_startframe.jpg`;
-          downloadFrameAsFile(seg.frameDataUrl, fn, dlIdx * 300);
-          dlIdx++;
-          sheet += `• ${fn}  ← Scene ${gi+1} start frame (Photo 2)\n`;
+          sheet += `• Scene ${gi+1} start frame: upload directly from this app (Photo 2)\n`;
         }
       });
       sheet += `\n`;
@@ -9183,8 +9173,8 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
         const hasFrame = !!seg.frameDataUrl && !bgFromAvatar;
         sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSCENE ${mn} of ${mt}  (App Scene ${i+1})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
         sheet += `━ NB PRO\n`;
-        if (avatarImageDataUrl) sheet += `Photo 1: ${avatarFile}\n`;
-        if (hasFrame) sheet += `Photo 2: scene${i+1}_photo2_startframe.jpg\n`;
+        if (avatarImageDataUrl) sheet += `Photo 1: avatar image from app\n`;
+        if (hasFrame) sheet += `Photo 2: scene ${i+1} start frame from app\n`;
         sheet += `Format: 9:16 vertical\n\nNB Pro Prompt:\n${nbP}\n\n`;
         sheet += `━ VEO 3\nModel: ${defaultModel}   Duration: ${dur}s  (${wc} words ≈ ${Math.round(wc/2.3)}s)\n\nVeo 3 Prompt:\n${veoP}\n\n`;
       });
@@ -9240,8 +9230,8 @@ content error, in which case follow the retry steps below.
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 WORKFLOW SETTINGS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-• Veo 3 videos: Do NOT download them. Leave all generated videos in the Flow project — the user will download manually after reviewing. Your job is to generate and verify, not download.
-• NB Pro composites: You DO still need to download these (hover → ⬇) because they are re-uploaded as the Veo 3 start frame. This is the only download step in the workflow.
+• No downloads at all: Do NOT download anything — not composites, not videos. Everything stays in the Flow project. The user reviews and downloads manually.
+• Composite → Veo 3 handoff: use the "Add to Prompt" button directly on the NB Pro composite inside Flow. No download, no re-upload.
 • Google account: The user is already signed into Flow. Use the existing session.
 • No Bash commands: Do not use Bash for any step in this workflow.
 • NB Pro is required for every scene — do not skip it. See HOW TO OPEN NB PRO below.
@@ -9280,45 +9270,77 @@ HOW THIS RUN WORKS — TWO PHASES (do them in order)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 This run is split into two phases. Finish Phase 1 ENTIRELY before starting Phase 2.
 
-  PHASE 1 — generate, verify, and DOWNLOAD every Nano Banana composite.
-  PHASE 2 — for each scene, upload its downloaded composite as the Veo 3 start
-            frame and generate the video.
+  PHASE 1 — generate and verify every Nano Banana composite.
+  PHASE 2 — for each scene, use "Add to Prompt" on its composite, then generate the Veo 3 video.
 
 Why: NB Pro composites are cheap and fast; Veo 3 videos are slow and cost credits.
 Doing all composites first means a bad composite is caught BEFORE a Veo generation
 is spent on it.
 
-COMPOSITE HANDLING:
-  • In Phase 1, after a composite passes its checks, download it (hover → ⬇).
-    It saves to ${dlPath}\\ with whatever filename Flow gives it.
-  • Track which downloaded file belongs to which scene — remember each as
-    "SCENE N COMPOSITE".
-  • In Phase 2, upload that file as the Veo 3 START FRAME using the HOW TO UPLOAD
-    sequence (file_upload tool — never the file picker).
-  • Do NOT rely on "Add to prompt" — with many scenes you cannot hold them all in
-    the prompt at once; always download in Phase 1 and re-upload in Phase 2.
+COMPOSITE HANDOFF (Phase 1 → Phase 2):
+  • After a composite passes its checks, note its scene number.
+  • In Phase 2, click the "Add to Prompt" button on that composite inside Flow.
+    This attaches it directly to the prompt bar as the Veo 3 start frame.
+  • Do NOT download composites. Do NOT use file_upload for composites.
+    "Add to Prompt" is the only method — it works because Flow keeps the image in the project.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO UPLOAD AN IMAGE (file_upload tool only — never click upload buttons)
+HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ NEVER click any upload slot or button — it opens a native picker you cannot control.
-⚠️ NEVER call input.click() in javascript_tool.
+Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
+KEY = 'avatar' for Photo 1, or 'scene0' / 'scene1' / etc. for Photo 2.
+APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
 
-Steps every time:
-  1. find tool: query "input type file" or "file input" on the Flow tab
-  2. file_upload: paths=["${dlPath}\\{filename}"], ref={first ref returned}, tabId={Flow tab}
-  3. Screenshot to confirm thumbnail appeared
-  4. If no thumbnail after one attempt, try once more with same ref — then move on regardless
+STEP A — Read image from app tab:
+  javascript_tool, tabId=APP_TAB_ID:
+    return window.__vsFrames['KEY'];
+  → Returns a base64 data URL string. Keep it — you will use it in Step B.
+
+STEP B — Store on Flow tab:
+  javascript_tool, tabId=FLOW_TAB_ID:
+    window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
+    return 'stored';
+
+STEP C — Inject into file input:
+  javascript_tool, tabId=FLOW_TAB_ID:
+    (async () => {
+      try {
+        const r = await fetch(window.__pendingImg);
+        const blob = await r.blob();
+        const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        function findInput(node) {
+          if (!node) return null;
+          if (node instanceof HTMLInputElement && node.type==='file') return node;
+          const sr = node.shadowRoot;
+          if (sr) { const f=findInput(sr); if(f) return f; }
+          for (const c of (node.children||[])) { const f=findInput(c); if(f) return f; }
+          return null;
+        }
+        const input = findInput(document.body);
+        if (!input) return 'ERROR: no file input found';
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        window.__pendingImg = null;
+        return 'SUCCESS';
+      } catch(e) { return 'ERROR: '+e.message; }
+    })()
+
+After Step C: screenshot to confirm thumbnail appeared.
+If no thumbnail after 2 attempts, move on — do not get stuck.
+⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO DOWNLOAD AN NB PRO COMPOSITE
-(Only for NB Pro composites — NOT for final Veo 3 videos)
+HOW TO ADD A COMPOSITE TO THE NEXT PROMPT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Hover over the generated composite image to reveal controls
-2. Click the ⬇ download button (find: "download" or "aria-label*=ownload")
-3. If a quality picker appears, click any option
-4. Wait 5 seconds — file auto-saves to ${dlPath}\\ with Flow's filename
-5. Do NOT rename or move the file
+After a composite is verified, attach it to the Veo 3 prompt using "Add to Prompt":
+1. Find the composite in the Flow sidebar for that scene
+2. Hover over it or look for an "Add to Prompt" button (may appear on hover)
+3. Click "Add to Prompt" — the composite appears as the start frame in the bottom prompt bar
+4. Switch the bar to VIDEO mode (media icon → Video) and confirm the image is still there
+5. Do NOT download the composite. Do NOT click any download button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO MARK A SCENE DONE
@@ -9354,40 +9376,32 @@ UNUSUAL ACTIVITY / POLICY FLAG specifically:
   • If it persists for more than 5 tab-refresh attempts in a row, pause and report to the user that manual intervention is needed on the Flow account before continuing
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMAGE FILES IN DOWNLOADS — UPLOAD ALL AT ONCE:
+IMAGE FRAMES — STORED IN APP MEMORY
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-All images below have been downloaded to ${dlPath}\\
-FIRST THING: upload ALL of them to the Flow project in one go using file_upload with all paths
-at once. Once uploaded, Flow holds them in the project permanently — you will NOT need to
-upload them again. For each scene you will use "Add to Prompt" to attach the right image.
+All frame images are stored in the app tab as window.__vsFrames.
+Use HOW TO INJECT AN IMAGE below for every upload — do NOT use file_upload or look for files on disk.
 `;
 
-    // Download all images upfront — staggered 300ms apart to avoid Chrome's
-    // automatic-download blocker which cuts off after ~10 simultaneous triggers.
-    // _sessionStamp suffix prevents Chrome from renaming files that already exist.
-    const avatarFile = `all_scenes_photo1_avatar_${_sessionStamp}.jpg`;
-    let dlIndex = 0;
+    // Store frames in app memory — browser Claude reads them directly via javascript_tool
+    // This avoids Chrome's download throttling entirely
+    window.__vsFrames = {};
     if (avatarImageDataUrl) {
-      downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIndex * 300);
-      dlIndex++;
-      instruction += `• ${avatarFile}  ← Avatar (Photo 1 — reuse every scene)\n`;
+      window.__vsFrames['avatar'] = avatarImageDataUrl;
+      instruction += `• KEY: 'avatar'  ← Photo 1 avatar (reuse every scene)\n`;
     }
-
-    // Use the real segment index (globalI) for filenames/markSceneDone
     segments.forEach((seg, globalI) => {
       if (!seg.veoPrompt?.trim()) return;
       if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
-        const fname = `scene${globalI+1}_photo2_startframe_${_sessionStamp}.jpg`;
-        downloadFrameAsFile(seg.frameDataUrl, fname, dlIndex * 300);
-        dlIndex++;
-        instruction += `• ${fname}  ← Scene ${globalI+1} start frame\n`;
+        const key = `scene${globalI}`;
+        window.__vsFrames[key] = seg.frameDataUrl;
+        instruction += `• KEY: '${key}'  ← Scene ${globalI+1} start frame (Photo 2)\n`;
       }
     });
 
     instruction += `
-⬆ Upload ALL of the above files now using file_upload with all paths at once.
-Wait for thumbnails to confirm they are in the project before continuing.
+Use HOW TO INJECT AN IMAGE for each key listed above when its scene comes up.
+Do not pre-inject everything upfront — inject each image right before it is needed.
 `;
 
     // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
@@ -9405,8 +9419,8 @@ Wait for thumbnails to confirm they are in the project before continuing.
 ╔══════════════════════════════════════════════╗
 ║   PHASE 1 — ALL NANO BANANA COMPOSITES         ║
 ╚══════════════════════════════════════════════╝
-All images are already uploaded to the project. For each scene use "Add to Prompt"
-to attach the right image — no file uploads needed from here on.
+All frame images are stored in window.__vsFrames on the app tab. Use HOW TO INJECT AN IMAGE
+for each scene's photos — do NOT use file_upload or look for files on disk.
 BATCH MODE: queue all generations without waiting, then verify + download in one pass.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9414,34 +9428,34 @@ PHASE 1A — QUEUE ALL NB PRO GENERATIONS (do NOT wait between scenes)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Scene 1 is a full setup. Scenes 2+ use REUSE PROMPT — hover over the previous
 generating card (arrow appears even while generating) → Reuse Prompt → remove old
-Photo 2 → "Add to Prompt" the next scene's frame → clear prompt → paste new prompt.
+Photo 2 → inject the next scene's frame → clear prompt → paste new prompt.
 
 REUSE PROMPT STEPS (scenes 2+):
   1. Hover over the previous scene's generating card — the expand arrow (▶) appears even while generating
   2. Click the arrow → click "Reuse Prompt" — Photo 1 (avatar) and NB Pro mode reload automatically
   3. Remove Photo 2 (click its × button)
-  4. Click "Add to Prompt" → select the next scene's frame from the project (already uploaded)
+  4. Inject the next scene's Photo 2 using HOW TO INJECT AN IMAGE with the scene's KEY
   5. Clear the prompt field, paste the new scene's prompt
   6. Click Generate — move immediately to the next scene without waiting
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
-      const frameFile = `scene${i+1}_photo2_startframe.jpg`;
+      const frameKey  = `scene${i}`;
       const hasFrame  = !!seg.frameDataUrl && !bgFromAvatar;
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
 ${idx === 0
   ? `Full setup — open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-    ? `• Click "Add to Prompt" → select avatar from project: ${avatarFile} (Photo 1)`
+    ? `• Inject Photo 1 (avatar): use HOW TO INJECT AN IMAGE with KEY='avatar'`
     : `• No avatar — skip Photo 1`}
 ${hasFrame
-    ? `• Click "Add to Prompt" → select scene frame from project: ${frameFile} (Photo 2)`
+    ? `• Inject Photo 2 (start frame): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
     : `• No start frame — skip Photo 2`}
 • Set format: 9:16 vertical`
   : `Reuse Prompt from Scene ${idx} (hover → expand arrow → Reuse Prompt → remove old Photo 2)
 ${hasFrame
-    ? `• Click "Add to Prompt" → select from project: ${frameFile} (Photo 2)`
+    ? `• Inject Photo 2: use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
     : `• No start frame — skip Photo 2`}`}
 • Paste this prompt exactly:
 
@@ -9454,7 +9468,7 @@ ${nbPrompt}
     // ── PHASE 1B — verify + download all composites ──
     instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 1B — VERIFY AND DOWNLOAD ALL COMPOSITES
+PHASE 1B — VERIFY ALL COMPOSITES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 All ${totalRunScenes} NB Pro generations are now queued and running in parallel. Go through the Flow
 sidebar from top to bottom (Scene 1 = first entry, Scene 2 = second, etc.) and for each one:
@@ -9475,14 +9489,14 @@ ${bgFromAvatar
 
      ✅ CHECK 4 — Image not corrupted (not blank, distorted, illustrated, or melted)
 
-  4. If ALL checks pass: DOWNLOAD the composite (hover → ⬇). Note its filename as "SCENE N COMPOSITE".
-  5. If ANY check fails: FLAG this scene as needing a regen — note the scene number and continue checking the rest.
+  4. If ALL checks pass: note it as "SCENE N — COMPOSITE READY". Do not download anything.
+  5. If ANY check fails: FLAG this scene — note the scene number and continue checking the rest.
 
 After checking all ${totalRunScenes}:
   • For each FLAGGED scene: redo it individually — click "+ New prompt", set up NB Pro from scratch
-    with the exact same photos and prompt, generate, verify, download.
-  • Keep retrying flagged scenes (tab refresh between each attempt) until they pass.
-  • Do NOT start Phase 2 until every scene has a downloaded composite.
+    with the exact same photos and prompt, generate, verify.
+  • Keep retrying flagged scenes until they pass.
+  • Do NOT start Phase 2 until every scene is marked COMPOSITE READY.
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       // intentionally empty — order tracking only, sidebar order matches queue order
@@ -9509,7 +9523,7 @@ For each scene: click "+ New prompt", switch to VIDEO mode, upload the composite
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
 1. Click "+ New prompt" at the TOP of the LEFT sidebar → switch bottom bar to VIDEO mode (media icon → Video)
-2. Click "Add to Prompt" → select "SCENE ${i+1} COMPOSITE" from the project (already uploaded)
+2. Upload "SCENE ${i+1} COMPOSITE" as start frame: find input[type=file] on Flow tab → file_upload with its full path from ${dlPath}\\
 3. Model: ${defaultModel} · Duration: ${duration}s  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
 4. Paste this prompt exactly:
 
@@ -9595,7 +9609,7 @@ Report back: how many scenes completed successfully, and note any that had issue
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;font-size:11px;color:var(--text-2);">
           <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:10px 12px;">
-            ✅ All images downloaded to Downloads folder<br>
+            ✅ All frames stored in app memory (window.__vsFrames)<br>
             ✅ One instruction covers all ${sceneCount} scenes sequentially<br>
             ✅ Auto-retry included (infinite retry — never skips a scene)<br>
             ✅ Each scene auto-marked done in this app when complete
@@ -9652,13 +9666,10 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
     const nbPrompt  = seg.nbPrompt  || '(no NB Pro prompt generated yet)';
     const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
 
-    // Download images — Claude in Chrome uses file_upload tool with absolute path (no file picker).
-    // Session stamp prevents Chrome from renaming on collision with existing files.
-    const _sStamp = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
-    const avatarFile     = `scene${i + 1}_photo1_avatar_${_sStamp}.jpg`;
-    const startFrameFile = `scene${i + 1}_photo2_startframe_${_sStamp}.jpg`;
-    if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarFile);
-    if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl,   startFrameFile);
+    // Store frames in app memory for browser Claude to read via javascript_tool
+    window.__vsFrames = {};
+    if (hasAvatar) window.__vsFrames['avatar'] = avatarImageDataUrl;
+    if (hasStartFrame) window.__vsFrames[`scene${i}`] = seg.frameDataUrl;
 
     // ── MANUAL MODE: simple prompt card for this scene ────────────────────────
     if (!_sClaudeBrowser) {
@@ -9666,8 +9677,8 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
       const wc2  = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
       let sheet = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSCENE ${i+1} — MANUAL PROMPTS\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
       sheet += `━ NB PRO\n`;
-      if (hasAvatar) sheet += `Photo 1 (avatar): ${avatarFile}\n`;
-      if (hasStartFrame) sheet += `Photo 2 (start frame): ${startFrameFile}\n`;
+      if (hasAvatar) sheet += `Photo 1 (avatar): use avatar image from the app\n`;
+      if (hasStartFrame) sheet += `Photo 2 (start frame): use start frame from Scene ${i+1}\n`;
       sheet += `Format: 9:16 vertical\n\nNB Pro Prompt:\n${nbPrompt}\n\n`;
       sheet += `━ VEO 3\nModel: ${_sModel}   Duration: ${dur2}s  (${wc2} words ≈ ${Math.round(wc2/2.3)}s)\n\nVeo 3 Prompt:\n${veoPrompt}\n`;
       navigator.clipboard.writeText(sheet).catch(() => {
@@ -9704,42 +9715,72 @@ GOOGLE FLOW UI MAP (memorize — do not explore)
   — click it to choose the mode: IMAGE → "Nano Banana Pro", or VIDEO (= Veo 3).
   You switch this yourself for every scene: Image/NB Pro first, then Video for Veo 3.
 • NB Pro panel: TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
-• File inputs are hidden in shadow DOM — use the upload sequence below
+• File inputs are hidden in shadow DOM — use HOW TO INJECT AN IMAGE (javascript_tool injection)
 • Veo 3 (Video mode): model dropdown, duration, prompt field, Generate button
 • After video renders: hover to reveal ⬇ download button
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE YOU START
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Run Bash: echo %USERPROFILE%\\Downloads  — save as {dl}
-2. Run Bash: mkdir "%USERPROFILE%\\Downloads\\FlowVideos"
-3. Verify files exist:
-   dir "{dl}\\${avatarFile}"
-   dir "{dl}\\${startFrameFile}"
-4. Navigate to https://labs.google/fx/tools/flow
-
-Image files in Downloads:
-${hasAvatar     ? `• ${avatarFile}  ← Photo 1 (avatar)` : ''}
-${hasStartFrame ? `• ${startFrameFile}  ← Photo 2 (start frame)` : ''}
+1. Use tabs_context_mcp to list open tabs — note the tabId of the app tab and the Flow project tab
+2. javascript_tool on app tab: return Object.keys(window.__vsFrames||{})
+   → Confirm you see ${hasAvatar ? `'avatar'` : '(no avatar)'}${hasAvatar && hasStartFrame ? ` and ` : ''}${hasStartFrame ? `'scene${i}'` : ''} keys before proceeding
+3. Navigate to the Flow project tab
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO UPLOAD AN IMAGE
+HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ CRITICAL: NEVER click any upload button or image slot — this opens a native file
-picker you cannot interact with. NEVER use input.click() in javascript_tool either.
+Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
+KEY = 'avatar' for Photo 1, or 'scene${i}' for Photo 2.
+APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
 
-The ONLY allowed upload method:
-  1. Use find tool with query "input[type=file]" to get ref IDs (no clicking)
-  2. Call file_upload: paths:["{dl}\\{filename}"], ref:{ref}, tabId:{tab id}
-  3. Screenshot to confirm thumbnail appeared
-  4. If no thumbnail after one attempt → try once more with same ref — do NOT click anything
+STEP A — Read image from app tab:
+  javascript_tool, tabId=APP_TAB_ID:
+    return window.__vsFrames['KEY'];
+  → Returns a base64 data URL string. Keep it — you will use it in Step B.
+
+STEP B — Store on Flow tab:
+  javascript_tool, tabId=FLOW_TAB_ID:
+    window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
+    return 'stored';
+
+STEP C — Inject into file input:
+  javascript_tool, tabId=FLOW_TAB_ID:
+    (async () => {
+      try {
+        const r = await fetch(window.__pendingImg);
+        const blob = await r.blob();
+        const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        function findInput(node) {
+          if (!node) return null;
+          if (node instanceof HTMLInputElement && node.type==='file') return node;
+          const sr = node.shadowRoot;
+          if (sr) { const f=findInput(sr); if(f) return f; }
+          for (const c of (node.children||[])) { const f=findInput(c); if(f) return f; }
+          return null;
+        }
+        const input = findInput(document.body);
+        if (!input) return 'ERROR: no file input found';
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change',{bubbles:true}));
+        input.dispatchEvent(new Event('input',{bubbles:true}));
+        window.__pendingImg = null;
+        return 'SUCCESS';
+      } catch(e) { return 'ERROR: '+e.message; }
+    })()
+
+After Step C: screenshot to confirm thumbnail appeared.
+If no thumbnail after 2 attempts, move on — do not get stuck.
+⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
-${hasAvatar ? `2. Upload Photo 1 (avatar) — slot index 0, file: {dl}\\${avatarFile}` : '2. No avatar — skip Photo 1'}
-${hasStartFrame ? `3. Upload Photo 2 (start frame) — slot index 1, file: {dl}\\${startFrameFile}` : '3. No start frame — skip Photo 2'}
+${hasAvatar ? `2. Inject Photo 1 (avatar): use HOW TO INJECT AN IMAGE with KEY='avatar'` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Inject Photo 2 (start frame): use HOW TO INJECT AN IMAGE with KEY='scene${i}'` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
 5. Paste this NB Pro prompt:
 
@@ -9783,12 +9824,9 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — the props reference is Photo 1 (t
    • "Unusual activity" flag: do NOT modify the prompts — wait 2 minutes after tab refresh, then retry identically
 
 9. Once all checks pass (or after retry): move the composite into Veo 3 —
-   METHOD A: if an "Add to prompt" button is on the NB composite, click it, then switch
-     the bar to VIDEO mode (media icon → Video) and confirm the composite landed in the
-     start-frame slot.
-   METHOD B (reliable fallback): download the NB composite (hover → ⬇), switch the bar to
-     VIDEO mode, then upload that downloaded file as the Veo 3 start frame using the
-     upload sequence above. Use Method B whenever Method A doesn't carry the composite over.
+   Click "Add to Prompt" on the NB composite (hover over it to reveal the button).
+   Then switch the bar to VIDEO mode (media icon → Video) and confirm the composite
+   is showing in the start-frame slot. Do NOT download the composite.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 2 — ${_sModel}
@@ -9859,8 +9897,8 @@ ${veoPrompt}
       <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
         <div style="font-size:15px;flex-shrink:0;">🖼️</div>
         <div>
-          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Fully automated — images upload via file_upload tool</div>
-          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Claude in Chrome uses the file_upload tool to inject images directly into Flow's file inputs — no file picker, no manual steps needed.</div>
+          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Fully automated — images injected via javascript_tool</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Claude in Chrome reads frames from window.__vsFrames and injects them directly into Flow's file inputs — no downloads, no file picker, no manual steps needed.</div>
         </div>
       </div>` : '';
 
