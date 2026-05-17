@@ -9433,16 +9433,29 @@ COMPOSITE HANDOFF (Phase 1 → Phase 2):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Frame images are pre-downloaded to ~/Downloads/ at the start of this run.
+Frame images are pre-downloaded to the user's Downloads folder at the start of this run.
+Each filename includes a unique run ID — use the EXACT full path shown in the scene list.
 Use file_upload to inject them — no javascript_tool, no cross-tab transfer needed.
 
 HOW TO UPLOAD A PHOTO:
   1. Click the Photo 1 or Photo 2 slot → asset library panel opens
      ("No results found" + "Upload image" button). This is normal — do not close it.
-  2. Click "Upload image" in the asset library panel to open the file picker
-  3. Use file_upload tool with the file path shown in the scene list below
+  2. Click "Upload image" in the asset library panel
+  3. A Windows file picker dialog will open — follow WINDOWS FILE PICKER steps below
   4. Wait ~2 seconds for the thumbnail to appear in the slot
   5. Take a screenshot to confirm the thumbnail is visible before continuing
+
+WINDOWS FILE PICKER — TYPE THE PATH, DO NOT BROWSE:
+  When the Windows file dialog opens after clicking "Upload image":
+  a) DO NOT click thumbnails or browse folder contents
+  b) Click once in the "File name:" text box at the BOTTOM of the dialog
+  c) Select all existing text (Ctrl+A) and DELETE it
+  d) Type the FULL Windows path exactly as shown in the scene list
+     Example: C:\Users\x\Downloads\avatar_photo_1715987654.jpg
+  e) Press Enter — the dialog closes and the upload begins automatically
+
+  ⚠ Alternatively: use the file_upload tool directly with the full path — it handles
+    the file picker automatically without you needing to interact with the dialog.
 
   ⚠ If the thumbnail does not appear after ~3 seconds:
     → Click the photo slot again to reopen the asset library, then retry file_upload
@@ -9501,19 +9514,26 @@ The correct files to use are listed below:
 `;
 
     // Download all frames to disk — browser Claude uploads them via file_upload tool
+    // Use a run-scoped ID so filenames are unique every run (avoids Windows "(2)", "(3)" copies)
+    const _runId = Math.floor(Date.now() / 1000);
+    const _dlDir = getDlPath().replace(/\\/g, '\\\\');
     let _dlDelay = 0;
     const _dlInterval = 400;
+    const _avatarFile = `avatar_photo_${_runId}.jpg`;
     if (avatarImageDataUrl) {
-      instruction += `• ~/Downloads/avatar_photo.jpg  ← Photo 1 avatar (reuse every scene)\n`;
-      downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', _dlDelay);
+      instruction += `• ${getDlPath()}\\${_avatarFile}  ← Photo 1 avatar (reuse every scene)\n`;
+      downloadFrameAsFile(avatarImageDataUrl, _avatarFile, _dlDelay);
       _dlDelay += _dlInterval;
     }
+    const _sceneFiles = {};
     segments.forEach((seg, globalI) => {
       if (!seg.veoPrompt?.trim()) return;
       if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
-        instruction += `• ~/Downloads/frame_scene_${globalI+1}.jpg  ← Scene ${globalI+1} start frame (Photo 2)\n`;
-        downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${globalI+1}.jpg`, _dlDelay);
+        const _sf = `frame_scene_${globalI+1}_${_runId}.jpg`;
+        _sceneFiles[globalI+1] = _sf;
+        instruction += `• ${getDlPath()}\\${_sf}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
+        downloadFrameAsFile(seg.frameDataUrl, _sf, _dlDelay);
         _dlDelay += _dlInterval;
       }
     });
@@ -9521,9 +9541,7 @@ The correct files to use are listed below:
     instruction += `
 Use HOW TO INJECT AN IMAGE (file_upload) for each file listed above when its scene comes up.
 Do not pre-upload everything upfront — inject each image right before it is needed.
-⚠ File names use the absolute scene number and may NOT be sequential — e.g. if Scene 2 was
-  skipped, files are avatar_photo.jpg, frame_scene_1.jpg, and frame_scene_3.jpg.
-  Always use the exact file name listed above for each scene.
+⚠ File names include a unique run ID — use EXACTLY the path shown above. Do not guess or shorten.
 `;
 
     // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
@@ -9559,7 +9577,7 @@ REUSE PROMPT STEPS (scenes 2+):
   3. Screenshot immediately — confirm:
      a) Format is still 9:16 vertical — if it changed, reset it now before doing anything else
      b) Photo 1 (avatar) is still loaded in its slot
-        → If Photo 1 is missing: upload ~/Downloads/avatar_photo.jpg using HOW TO INJECT AN IMAGE
+        → If Photo 1 is missing: upload ${getDlPath()}\\${_avatarFile} using HOW TO INJECT AN IMAGE
         → If Photo 1 is present: leave it, do not touch it
   4. Remove Photo 2 (click its × button to clear the old scene's start frame)
   5. Upload the next scene's Photo 2 using HOW TO INJECT AN IMAGE with that scene's file path
@@ -9569,6 +9587,7 @@ REUSE PROMPT STEPS (scenes 2+):
     runScenes.forEach(({ seg, i }, idx) => {
       const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
       const hasFrame  = !!seg.frameDataUrl && !bgFromAvatar;
+      const _sf = _sceneFiles[i+1] || `frame_scene_${i+1}_${_runId}.jpg`;
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
 ${idx === 0
@@ -9576,15 +9595,15 @@ ${idx === 0
 • Click "+ New prompt" in the LEFT sidebar to reset the bar
 • Open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-    ? `• Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ~/Downloads/avatar_photo.jpg`
+    ? `• Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_avatarFile}`
     : `• No avatar — skip Photo 1`}
 ${hasFrame
-    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sf}`
     : `• No start frame — skip Photo 2`}
 • Set format: 9:16 vertical`
   : `Reuse Prompt from the previous card — App Scene ${runScenes[idx-1].i+1} (hover → expand arrow → Reuse Prompt → confirm 9:16 format → remove old Photo 2)
 ${hasFrame
-    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sf}`
     : `• No start frame — skip Photo 2`}`}
 • Paste this prompt exactly:
 
@@ -9837,10 +9856,14 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
     const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
 
     // Download frames to disk — browser Claude uploads them via file_upload tool
+    // Unique run ID prevents Windows from creating "(2)", "(3)" numbered copies
+    const _sRunId = Math.floor(Date.now() / 1000);
+    const _sAvatarFile = `avatar_photo_${_sRunId}.jpg`;
+    const _sFrameFile  = `frame_scene_${i+1}_${_sRunId}.jpg`;
     let _sDlDelay = 0;
     const _sDlInterval = 400;
-    if (hasAvatar) { downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', _sDlDelay); _sDlDelay += _sDlInterval; }
-    if (hasStartFrame) { downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${i+1}.jpg`, _sDlDelay); }
+    if (hasAvatar) { downloadFrameAsFile(avatarImageDataUrl, _sAvatarFile, _sDlDelay); _sDlDelay += _sDlInterval; }
+    if (hasStartFrame) { downloadFrameAsFile(seg.frameDataUrl, _sFrameFile, _sDlDelay); }
 
     // ── MANUAL MODE: simple prompt card for this scene ────────────────────────
     if (!_sClaudeBrowser) {
@@ -9862,7 +9885,7 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
     const instruction = `The user has asked you to generate a video for Scene ${i + 1} on Google Flow using Claude in Chrome tools. Work through the steps below in order. Stay on the existing Flow tab — do not open new windows or Chrome profiles.
 
 ⚡ EXECUTE IMMEDIATELY — DO NOT EXPLORE OR INVESTIGATE
-Every step is exact. Do NOT take exploratory screenshots, run javascript to "locate" elements, or "investigate" tools before using them. Start acting on Step 1 now. Files are in ~/Downloads/.
+Every step is exact. Do NOT take exploratory screenshots, run javascript to "locate" elements, or "investigate" tools before using them. Start acting on Step 1 now. Files are in the user's Downloads folder with unique run-ID names — use the EXACT paths shown below.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 ABOUT THIS PROJECT
@@ -9890,7 +9913,7 @@ GOOGLE FLOW UI MAP (memorize — do not explore)
   You switch this yourself for every scene: Image/NB Pro first, then Video for Veo 3.
 • NB Pro panel: TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
 • To expand NB Pro panel: javascript_tool: document.querySelector('[role="textbox"]')?.click()
-• To open photo slot: find text="Photo 1" or find aria-label containing "photo" → click → "Upload image" appears → click it → file_upload ~/Downloads/[filename]
+• To open photo slot: find text="Photo 1" or find aria-label containing "photo" → click → "Upload image" appears → click it → file_upload with the EXACT FULL PATH from BEFORE YOU START
 • Veo 3 (Video mode): model dropdown, duration, prompt field, Generate button
 • After video renders: hover to reveal playback controls — do NOT click the download button (leave video in project)
 
@@ -9898,20 +9921,29 @@ GOOGLE FLOW UI MAP (memorize — do not explore)
 BEFORE YOU START
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Use tabs_context_mcp to list open tabs — find the Flow project tab (URL contains "labs.google/fx/tools/flow/project/")
-2. Confirm these files exist in ~/Downloads/ before starting:
-${hasAvatar ? `   • ~/Downloads/avatar_photo.jpg  ← Photo 1 avatar` : '   • (no avatar file)'}
-${hasStartFrame ? `   • ~/Downloads/frame_scene_${i+1}.jpg  ← Photo 2 start frame` : '   • (no start frame file)'}
+2. The following files were downloaded to the user's computer at run start:
+${hasAvatar ? `   • ${getDlPath()}\\${_sAvatarFile}  ← Photo 1 avatar` : '   • (no avatar file)'}
+${hasStartFrame ? `   • ${getDlPath()}\\${_sFrameFile}  ← Photo 2 start frame` : '   • (no start frame file)'}
+   ⚠ These filenames include a unique run ID — use them EXACTLY as shown above.
 3. Navigate to the Flow project tab
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-Frame images are pre-downloaded to ~/Downloads/. Use file_upload to inject them.
+Frame images are pre-downloaded to the user's Downloads folder (unique run-ID names above).
+Use file_upload with the EXACT full path — do not browse for files.
 
 HOW TO UPLOAD A PHOTO:
   1. Click the Photo 1 or Photo 2 slot → asset library opens ("No results found" + "Upload image")
-  2. Click "Upload image" to open the file picker
-  3. Use file_upload tool with the file path shown in BEFORE YOU START above
+  2. Click "Upload image" — a Windows file picker dialog will appear
+  3. WINDOWS FILE PICKER — TYPE THE PATH, DO NOT BROWSE:
+     a) DO NOT click thumbnails or browse folder contents
+     b) Click once in the "File name:" text box at the BOTTOM of the dialog
+     c) Select all (Ctrl+A), DELETE existing text
+     d) Type the FULL Windows path exactly from BEFORE YOU START above
+        Example: ${getDlPath()}\\${_sAvatarFile}
+     e) Press Enter — upload begins automatically
+     ⚠ Alternatively: use the file_upload tool directly with the full path shown above
   4. Wait ~2 seconds for the thumbnail to appear in the slot
   5. Take a screenshot to confirm thumbnail is visible before continuing
 
@@ -9922,8 +9954,8 @@ HOW TO UPLOAD A PHOTO:
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
-${hasAvatar ? `2. Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ~/Downloads/avatar_photo.jpg` : '2. No avatar — skip Photo 1'}
-${hasStartFrame ? `3. Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg` : '3. No start frame — skip Photo 2'}
+${hasAvatar ? `2. Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sAvatarFile}` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sFrameFile}` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
 5. Paste this NB Pro prompt:
 
