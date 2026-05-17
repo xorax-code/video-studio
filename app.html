@@ -9106,6 +9106,9 @@ No markdown. Return only the JSON object.`
     const _adm = getAdminSettings();
     const dlPath = getEffectiveDlPath();
     const claudeBrowserMode = _usr.claudeBrowserMode !== false;
+    // Session stamp — appended to every downloaded filename so new files never
+    // collide with old ones that share the same base name in Downloads.
+    const _sessionStamp = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12); // e.g. 202605171226
     const nbWaitSec = _adm.nbWaitSec || 180;
     const veoWaitMin = _adm.veoWaitMin || 6;
     const cooldownSec = _adm.cooldownSec || 120;
@@ -9341,8 +9344,9 @@ upload them again. For each scene you will use "Add to Prompt" to attach the rig
 `;
 
     // Download all images upfront — staggered 300ms apart to avoid Chrome's
-    // automatic-download blocker which cuts off after ~10 simultaneous triggers
-    const avatarFile = `all_scenes_photo1_avatar.jpg`;
+    // automatic-download blocker which cuts off after ~10 simultaneous triggers.
+    // _sessionStamp suffix prevents Chrome from renaming files that already exist.
+    const avatarFile = `all_scenes_photo1_avatar_${_sessionStamp}.jpg`;
     let dlIndex = 0;
     if (avatarImageDataUrl) {
       downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIndex * 300);
@@ -9355,7 +9359,7 @@ upload them again. For each scene you will use "Add to Prompt" to attach the rig
       if (!seg.veoPrompt?.trim()) return;
       if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
-        const fname = `scene${globalI+1}_photo2_startframe.jpg`;
+        const fname = `scene${globalI+1}_photo2_startframe_${_sessionStamp}.jpg`;
         downloadFrameAsFile(seg.frameDataUrl, fname, dlIndex * 300);
         dlIndex++;
         instruction += `• ${fname}  ← Scene ${globalI+1} start frame\n`;
@@ -9626,9 +9630,11 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
     const nbPrompt  = seg.nbPrompt  || '(no NB Pro prompt generated yet)';
     const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
 
-    // Download images — Claude in Chrome uses file_upload tool with absolute path (no file picker)
-    const avatarFile     = `scene${i + 1}_photo1_avatar.jpg`;
-    const startFrameFile = `scene${i + 1}_photo2_startframe.jpg`;
+    // Download images — Claude in Chrome uses file_upload tool with absolute path (no file picker).
+    // Session stamp prevents Chrome from renaming on collision with existing files.
+    const _sStamp = new Date().toISOString().replace(/[-:T]/g,'').slice(0,12);
+    const avatarFile     = `scene${i + 1}_photo1_avatar_${_sStamp}.jpg`;
+    const startFrameFile = `scene${i + 1}_photo2_startframe_${_sStamp}.jpg`;
     if (hasAvatar)     downloadFrameAsFile(avatarImageDataUrl, avatarFile);
     if (hasStartFrame) downloadFrameAsFile(seg.frameDataUrl,   startFrameFile);
 
