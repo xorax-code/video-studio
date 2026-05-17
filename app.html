@@ -9294,9 +9294,9 @@ FIND TOOL PRIORITY (fastest to slowest — stop at the first one that works):
   • Photo 2 slot:   second upload area (SLOT=1 for injection)
   ⚠ HOW TO INJECT INTO A PHOTO SLOT:
     1. Click the Photo slot → asset library panel opens ("No results found" + "Upload image" button)
-    2. DO NOT click "Upload image". DO NOT close the panel.
-    3. Immediately run STEP A → STEP B → STEP C while the panel is open — the file input is live now.
-    4. STEP C injects the image and the panel closes automatically.
+    2. Click "Upload image" to open the file picker
+    3. Use file_upload tool with the correct file path from the scene list below
+    4. Wait ~2 seconds — thumbnail appears in the slot and the panel closes
   • Remove Photo 2: click the × on the Photo 2 thumbnail  →  find aria-label containing "Remove" near Photo 2
   • Prompt field:   the large textarea inside the NB Pro panel (NOT the bottom bar input)
                     find role="textbox" inside the NB Pro panel, or click the visible prompt area
@@ -9400,103 +9400,20 @@ COMPOSITE HANDOFF (Phase 1 → Phase 2):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⛔ STOP — READ THIS FIRST:
-STEP A → STEP B → STEP C is the ONLY approved method for image transfer. It is a
-proven, working protocol. Do NOT:
-  • explore "alternative data transfer methods"
-  • try window.opener, postMessage, SharedWorker, BroadcastChannel, or any other API
-  • try to encode the image differently or compress it
-  • use file_upload tool for frame images
-  • click any upload button in the Flow UI
-  • search for other approaches — they will not work and waste time
+Frame images are pre-downloaded to ~/Downloads/ at the start of this run.
+Use file_upload to inject them — no javascript_tool, no cross-tab transfer needed.
 
-If STEP A/B/C fails, the fix is always one of these three things:
-  1. Wrong KEY name → re-run STEP A and check Object.keys(window.__vsFrames||{})
-  2. Data URL truncated in STEP B → re-paste the full string (150k–400k chars is normal)
-  3. File input not in DOM yet → click the photo slot first, then immediately run STEP C
+HOW TO UPLOAD A PHOTO:
+  1. Click the Photo 1 or Photo 2 slot → asset library panel opens
+     ("No results found" + "Upload image" button). This is normal — do not close it.
+  2. Click "Upload image" in the asset library panel to open the file picker
+  3. Use file_upload tool with the file path shown in the scene list below
+  4. Wait ~2 seconds for the thumbnail to appear in the slot
+  5. Take a screenshot to confirm the thumbnail is visible before continuing
 
-There is no fourth option. Do not invent one. Run STEP A → B → C.
-
-Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
-KEY = 'avatar' for Photo 1, or 'scene0' / 'scene1' / etc. for Photo 2.
-APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
-
-STEP A — Read image from app tab:
-  javascript_tool, tabId=APP_TAB_ID:
-    const val = (window.__vsFrames||{})['KEY'];
-    if (!val) return 'ERROR: KEY not found in __vsFrames — run: return Object.keys(window.__vsFrames||{}) to list available keys';
-    return val;
-  → Returns a base64 data URL string. Keep it — you will use it in Step B.
-
-STEP B — Store on Flow tab:
-  javascript_tool, tabId=FLOW_TAB_ID:
-    window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
-    return 'stored: ' + (window.__pendingImg?.length||0) + ' chars';
-  ⚠ The data URL from STEP A may be 150,000–400,000 characters. Paste it in full — do not truncate.
-  After STEP B, verify the returned length is > 1000 chars. If it shows 0 or a short string,
-  STEP A may have returned an error — re-run STEP A and check the KEY name is correct.
-
-STEP C — Inject into file input (React-compatible, SLOT-aware):
-  SLOT = 0 for Photo 1 (avatar), SLOT = 1 for Photo 2 (start frame).
-  Replace SLOT in the code below with the actual number (0 or 1) before running.
-  javascript_tool, tabId=FLOW_TAB_ID:
-    (async () => {
-      try {
-        const r = await fetch(window.__pendingImg);
-        const blob = await r.blob();
-        const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const allInputs = [];
-        function findAllInputs(node) {
-          if (!node) return;
-          if (node instanceof HTMLInputElement && node.type==='file') { allInputs.push(node); return; }
-          const sr = node.shadowRoot;
-          if (sr) findAllInputs(sr);
-          for (const c of (node.children||[])) findAllInputs(c);
-        }
-        findAllInputs(document.body);
-        if (!allInputs.length) return 'ERROR: no file input found';
-        const input = allInputs[SLOT] || allInputs[0];
-        // Set files via DataTransfer
-        input.files = dt.files;
-        // React fiber approach — bypasses synthetic event system
-        const fKey = Object.keys(input).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
-        if (fKey) {
-          let fiber = input[fKey];
-          while (fiber) {
-            if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
-              fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
-              window.__pendingImg = null;
-              return 'SUCCESS_REACT slot=' + SLOT + ' of ' + allInputs.length;
-            }
-            fiber = fiber.return;
-          }
-        }
-        // Fallback: DOM events
-        input.dispatchEvent(new Event('change',{bubbles:true}));
-        input.dispatchEvent(new Event('input',{bubbles:true}));
-        window.__pendingImg = null;
-        return 'SUCCESS_DOM slot=' + SLOT + ' of ' + allInputs.length;
-      } catch(e) { return 'ERROR: '+e.message; }
-    })()
-
-  Photo 1 (avatar): run STEP C with SLOT=0
-  Photo 2 (start frame): run STEP C with SLOT=1
-⚠ TIMING: The file input only exists in the DOM when a photo slot is in "active/open" state.
-  Clicking a photo slot opens the asset library panel ("No results found" + "Upload image" button).
-  THIS IS NORMAL AND EXPECTED — do not close it, do not click "Upload image".
-  The file input IS NOW ACTIVE in the DOM. Run STEP C immediately while the panel is open.
-  STEP C will inject the image directly and the panel will close on its own.
-
-  If STEP C returns 'ERROR: no file input found' while the asset library is open:
-    → The panel may not have fully rendered yet. Wait 1 second, then run STEP C again.
-    → Do NOT click "Upload image". Do NOT use file_upload tool. Just run STEP C.
-
-After Step C succeeds: take a screenshot to confirm the thumbnail appeared in the photo slot.
-  If SUCCESS_REACT — React accepted it, thumbnail should be visible.
-  If SUCCESS_DOM — check thumbnail carefully; if missing, click the slot and re-run STEP C.
-⚠ Do NOT use file_upload tool for frame images. Do NOT click "Upload image" in the asset library.
+  ⚠ If the thumbnail does not appear after ~3 seconds:
+    → Click the photo slot again to reopen the asset library, then retry file_upload
+    → Do NOT use javascript_tool or any cross-tab method — only file_upload works here
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO ADD A COMPOSITE TO THE NEXT PROMPT
@@ -9542,27 +9459,19 @@ UNUSUAL ACTIVITY / POLICY FLAG specifically:
   • If it persists for more than 5 tab-refresh attempts in a row, pause and report to the user that manual intervention is needed on the Flow account before continuing
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMAGE FRAMES — STORED IN APP MEMORY
+IMAGE FRAMES — DOWNLOADED TO ~/Downloads/
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠ CRITICAL: Do NOT refresh or close the app tab (${appUrl}) at any point during this workflow.
-  window.__vsFrames is stored in memory only — a refresh clears it and the frames are gone.
-  If the app tab is ever accidentally refreshed, stop and ask the user to re-run the workflow.
-
-All frame images are stored in window.__vsFrames on the app tab.
-⚠ ALWAYS use HOW TO INJECT AN IMAGE — do NOT pick from the Flow asset library.
-  Assets in the Flow library may be from a previous session and will be WRONG/STALE.
-  The only correct source is window.__vsFrames (the app's live memory for this run).
+All frame images were downloaded to ~/Downloads/ when this run started.
+Use HOW TO INJECT AN IMAGE (file_upload) — do NOT pick from the Flow asset library.
+Assets in the Flow library may be from a previous session and will be WRONG/STALE.
+The correct files to use are listed below:
 `;
 
-    // Store frames in app memory — browser Claude reads them directly via javascript_tool
-    // This avoids Chrome's download throttling entirely
-    window.__vsFrames = {};
+    // Download all frames to disk — browser Claude uploads them via file_upload tool
     let _dlDelay = 0;
     const _dlInterval = 400;
     if (avatarImageDataUrl) {
-      window.__vsFrames['avatar'] = avatarImageDataUrl;
-      instruction += `• KEY: 'avatar'  ← Photo 1 avatar (reuse every scene)\n`;
-      // Also download to disk so user has a local copy for manual fallback
+      instruction += `• ~/Downloads/avatar_photo.jpg  ← Photo 1 avatar (reuse every scene)\n`;
       downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', _dlDelay);
       _dlDelay += _dlInterval;
     }
@@ -9570,23 +9479,18 @@ All frame images are stored in window.__vsFrames on the app tab.
       if (!seg.veoPrompt?.trim()) return;
       if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
-        const key = `scene${globalI}`;
-        window.__vsFrames[key] = seg.frameDataUrl;
-        instruction += `• KEY: '${key}'  ← Scene ${globalI+1} start frame (Photo 2)\n`;
-        // Also download to disk so user has a local copy for manual fallback
+        instruction += `• ~/Downloads/frame_scene_${globalI+1}.jpg  ← Scene ${globalI+1} start frame (Photo 2)\n`;
         downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${globalI+1}.jpg`, _dlDelay);
         _dlDelay += _dlInterval;
       }
     });
 
     instruction += `
-Use HOW TO INJECT AN IMAGE for each key listed above when its scene comes up.
-Do not pre-inject everything upfront — inject each image right before it is needed.
-⚠ Keys use the absolute scene index and may NOT be sequential — e.g. if Scene 2 was skipped,
-  keys will be 'scene0' and 'scene2' (no 'scene1'). Always use the KEY listed above exactly.
-⚠ Before injecting during any RETRY, first verify the app tab still has the frames:
-  javascript_tool on APP_TAB_ID: return Object.keys(window.__vsFrames||{})
-  If the list is empty (app tab was refreshed), stop and ask the user to re-run the workflow.
+Use HOW TO INJECT AN IMAGE (file_upload) for each file listed above when its scene comes up.
+Do not pre-upload everything upfront — inject each image right before it is needed.
+⚠ File names use the absolute scene number and may NOT be sequential — e.g. if Scene 2 was
+  skipped, files are avatar_photo.jpg, frame_scene_1.jpg, and frame_scene_3.jpg.
+  Always use the exact file name listed above for each scene.
 `;
 
     // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
@@ -9604,8 +9508,7 @@ Do not pre-inject everything upfront — inject each image right before it is ne
 ╔══════════════════════════════════════════════╗
 ║   PHASE 1 — ALL NANO BANANA COMPOSITES         ║
 ╚══════════════════════════════════════════════╝
-All frame images are stored in window.__vsFrames on the app tab. Use HOW TO INJECT AN IMAGE
-for each scene's photos — do NOT use file_upload or look for files on disk.
+Use HOW TO INJECT AN IMAGE (file_upload from ~/Downloads/) for each scene's photos.
 BATCH MODE: queue all generations without waiting, then verify all in one pass.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9623,16 +9526,15 @@ REUSE PROMPT STEPS (scenes 2+):
   3. Screenshot immediately — confirm:
      a) Format is still 9:16 vertical — if it changed, reset it now before doing anything else
      b) Photo 1 (avatar) is still loaded in its slot
-        → If Photo 1 is missing: inject it again using HOW TO INJECT AN IMAGE with KEY='avatar' (SLOT=0)
+        → If Photo 1 is missing: upload ~/Downloads/avatar_photo.jpg using HOW TO INJECT AN IMAGE
         → If Photo 1 is present: leave it, do not touch it
   4. Remove Photo 2 (click its × button to clear the old scene's start frame)
-  5. Inject the next scene's Photo 2 using HOW TO INJECT AN IMAGE with the scene's KEY (SLOT=1)
+  5. Upload the next scene's Photo 2 using HOW TO INJECT AN IMAGE with that scene's file path
   6. Click inside the prompt field → press Ctrl+A to select all → press Delete to clear → paste the new scene's prompt
   7. Click Generate — move immediately to the next scene without waiting
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
-      const frameKey  = `scene${i}`;
       const hasFrame  = !!seg.frameDataUrl && !bgFromAvatar;
       instruction += `
 ━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
@@ -9641,15 +9543,15 @@ ${idx === 0
 • Click "+ New prompt" in the LEFT sidebar to reset the bar
 • Open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-    ? `• Inject Photo 1 (avatar, SLOT=0): use HOW TO INJECT AN IMAGE with KEY='avatar'`
+    ? `• Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ~/Downloads/avatar_photo.jpg`
     : `• No avatar — skip Photo 1`}
 ${hasFrame
-    ? `• Inject Photo 2 (start frame, SLOT=1): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg`
     : `• No start frame — skip Photo 2`}
 • Set format: 9:16 vertical`
   : `Reuse Prompt from the previous card — App Scene ${runScenes[idx-1].i+1} (hover → expand arrow → Reuse Prompt → confirm 9:16 format → remove old Photo 2)
 ${hasFrame
-    ? `• Inject Photo 2 (SLOT=1): use HOW TO INJECT AN IMAGE with KEY='${frameKey}'`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg`
     : `• No start frame — skip Photo 2`}`}
 • Paste this prompt exactly:
 
@@ -9844,7 +9746,7 @@ Report back: how many scenes completed successfully, and note any that had issue
         </div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:18px;font-size:11px;color:var(--text-2);">
           <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.2);border-radius:6px;padding:10px 12px;">
-            ✅ All frames stored in app memory (window.__vsFrames)<br>
+            ✅ All frames downloaded to ~/Downloads/<br>
             ✅ One instruction covers all ${sceneCount} scenes sequentially<br>
             ✅ Auto-retry included (infinite retry — never skips a scene)<br>
             ✅ Each scene auto-marked done in this app when complete
@@ -9901,10 +9803,11 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
     const nbPrompt  = seg.nbPrompt  || '(no NB Pro prompt generated yet)';
     const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt generated yet)';
 
-    // Store frames in app memory for browser Claude to read via javascript_tool
-    window.__vsFrames = {};
-    if (hasAvatar) window.__vsFrames['avatar'] = avatarImageDataUrl;
-    if (hasStartFrame) window.__vsFrames[`scene${i}`] = seg.frameDataUrl;
+    // Download frames to disk — browser Claude uploads them via file_upload tool
+    let _sDlDelay = 0;
+    const _sDlInterval = 400;
+    if (hasAvatar) { downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', _sDlDelay); _sDlDelay += _sDlInterval; }
+    if (hasStartFrame) { downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${i+1}.jpg`, _sDlDelay); }
 
     // ── MANUAL MODE: simple prompt card for this scene ────────────────────────
     if (!_sClaudeBrowser) {
@@ -9950,108 +9853,40 @@ GOOGLE FLOW UI MAP (memorize — do not explore)
   — click it to choose the mode: IMAGE → "Nano Banana Pro", or VIDEO (= Veo 3).
   You switch this yourself for every scene: Image/NB Pro first, then Video for Veo 3.
 • NB Pro panel: TWO image slots — Photo 1 on LEFT, Photo 2 on RIGHT
-• File inputs are hidden in shadow DOM — use HOW TO INJECT AN IMAGE (javascript_tool injection)
+• To upload images: click the photo slot → "Upload image" → file_upload tool with ~/Downloads/[filename]
 • Veo 3 (Video mode): model dropdown, duration, prompt field, Generate button
 • After video renders: hover to reveal playback controls — do NOT click the download button (leave video in project)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 BEFORE YOU START
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Use tabs_context_mcp to list open tabs — note the tabId of the app tab and the Flow project tab
-2. javascript_tool on app tab: return Object.keys(window.__vsFrames||{})
-   → Confirm you see ${hasAvatar ? `'avatar'` : '(no avatar)'}${hasAvatar && hasStartFrame ? ` and ` : ''}${hasStartFrame ? `'scene${i}'` : ''} keys before proceeding
+1. Use tabs_context_mcp to list open tabs — find the Flow project tab (URL contains "labs.google/fx/tools/flow/project/")
+2. Confirm these files exist in ~/Downloads/ before starting:
+${hasAvatar ? `   • ~/Downloads/avatar_photo.jpg  ← Photo 1 avatar` : '   • (no avatar file)'}
+${hasStartFrame ? `   • ~/Downloads/frame_scene_${i+1}.jpg  ← Photo 2 start frame` : '   • (no start frame file)'}
 3. Navigate to the Flow project tab
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
-KEY = 'avatar' for Photo 1 (SLOT=0), or 'scene${i}' for Photo 2 (SLOT=1).
-APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
+Frame images are pre-downloaded to ~/Downloads/. Use file_upload to inject them.
 
-STEP A — Read image from app tab:
-  javascript_tool, tabId=APP_TAB_ID:
-    const val = (window.__vsFrames||{})['KEY'];
-    if (!val) return 'ERROR: KEY not found in __vsFrames — run: return Object.keys(window.__vsFrames||{}) to list available keys';
-    return val;
-  → Returns a base64 data URL string. Keep it — you will use it in Step B.
+HOW TO UPLOAD A PHOTO:
+  1. Click the Photo 1 or Photo 2 slot → asset library opens ("No results found" + "Upload image")
+  2. Click "Upload image" to open the file picker
+  3. Use file_upload tool with the file path shown in BEFORE YOU START above
+  4. Wait ~2 seconds for the thumbnail to appear in the slot
+  5. Take a screenshot to confirm thumbnail is visible before continuing
 
-STEP B — Store on Flow tab:
-  javascript_tool, tabId=FLOW_TAB_ID:
-    window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
-    return 'stored: ' + (window.__pendingImg?.length||0) + ' chars';
-  ⚠ The data URL from STEP A may be 150,000–400,000 characters. Paste it in full — do not truncate.
-  After STEP B, verify the returned length is > 1000 chars. If it shows 0 or a short string,
-  STEP A may have returned an error — re-run STEP A and check the KEY name is correct.
-
-STEP C — Inject into file input (React-compatible, SLOT-aware):
-  SLOT = 0 for Photo 1 (avatar), SLOT = 1 for Photo 2 (start frame).
-  Replace SLOT in the code below with the actual number (0 or 1) before running.
-  javascript_tool, tabId=FLOW_TAB_ID:
-    (async () => {
-      try {
-        const r = await fetch(window.__pendingImg);
-        const blob = await r.blob();
-        const file = new File([blob], 'frame.jpg', {type: blob.type||'image/jpeg'});
-        const dt = new DataTransfer();
-        dt.items.add(file);
-        const allInputs = [];
-        function findAllInputs(node) {
-          if (!node) return;
-          if (node instanceof HTMLInputElement && node.type==='file') { allInputs.push(node); return; }
-          const sr = node.shadowRoot;
-          if (sr) findAllInputs(sr);
-          for (const c of (node.children||[])) findAllInputs(c);
-        }
-        findAllInputs(document.body);
-        if (!allInputs.length) return 'ERROR: no file input found';
-        const input = allInputs[SLOT] || allInputs[0];
-        // Set files via DataTransfer
-        input.files = dt.files;
-        // React fiber approach — bypasses synthetic event system
-        const fKey = Object.keys(input).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
-        if (fKey) {
-          let fiber = input[fKey];
-          while (fiber) {
-            if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
-              fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
-              window.__pendingImg = null;
-              return 'SUCCESS_REACT slot=' + SLOT + ' of ' + allInputs.length;
-            }
-            fiber = fiber.return;
-          }
-        }
-        // Fallback: DOM events
-        input.dispatchEvent(new Event('change',{bubbles:true}));
-        input.dispatchEvent(new Event('input',{bubbles:true}));
-        window.__pendingImg = null;
-        return 'SUCCESS_DOM slot=' + SLOT + ' of ' + allInputs.length;
-      } catch(e) { return 'ERROR: '+e.message; }
-    })()
-
-  Photo 1 (avatar): run STEP C with SLOT=0
-  Photo 2 (start frame): run STEP C with SLOT=1
-⚠ TIMING: The file input only exists in the DOM when a photo slot is in "active/open" state.
-  Clicking a photo slot opens the asset library panel ("No results found" + "Upload image" button).
-  THIS IS NORMAL AND EXPECTED — do not close it, do not click "Upload image".
-  The file input IS NOW ACTIVE in the DOM. Run STEP C immediately while the panel is open.
-  STEP C will inject the image directly and the panel will close on its own.
-
-  If STEP C returns 'ERROR: no file input found' while the asset library is open:
-    → The panel may not have fully rendered yet. Wait 1 second, then run STEP C again.
-    → Do NOT click "Upload image". Do NOT use file_upload tool. Just run STEP C.
-
-After Step C succeeds: take a screenshot to confirm the thumbnail appeared in the photo slot.
-  If SUCCESS_REACT — React accepted it, thumbnail should be visible.
-  If SUCCESS_DOM — check thumbnail carefully; if missing, click the slot and re-run STEP C.
-⚠ Do NOT use file_upload tool for frame images. Do NOT click "Upload image" in the asset library.
+  ⚠ If thumbnail does not appear after ~3 seconds:
+    → Click the photo slot again to reopen the asset library, then retry file_upload
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
-${hasAvatar ? `2. Inject Photo 1 (avatar, SLOT=0): use HOW TO INJECT AN IMAGE with KEY='avatar'` : '2. No avatar — skip Photo 1'}
-${hasStartFrame ? `3. Inject Photo 2 (start frame, SLOT=1): use HOW TO INJECT AN IMAGE with KEY='scene${i}'` : '3. No start frame — skip Photo 2'}
+${hasAvatar ? `2. Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ~/Downloads/avatar_photo.jpg` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ~/Downloads/frame_scene_${i+1}.jpg` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
 5. Paste this NB Pro prompt:
 
@@ -10172,8 +10007,8 @@ ${veoPrompt}
       <div style="background:rgba(34,197,94,0.07);border:1px solid rgba(34,197,94,0.25);border-radius:6px;padding:10px 12px;margin-bottom:14px;display:flex;gap:8px;align-items:flex-start;">
         <div style="font-size:15px;flex-shrink:0;">🖼️</div>
         <div>
-          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Fully automated — images injected via javascript_tool</div>
-          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Claude in Chrome reads frames from window.__vsFrames and injects them directly into Flow's file inputs — no downloads, no file picker, no manual steps needed.</div>
+          <div style="font-size:10px;color:var(--success);font-weight:600;margin-bottom:2px;">Fully automated — images uploaded via file_upload from ~/Downloads/</div>
+          <div style="font-size:11px;color:var(--text-3);line-height:1.5;">Claude in Chrome uploads pre-downloaded frame files directly into Flow's photo slots — no manual steps needed.</div>
         </div>
       </div>` : '';
 
