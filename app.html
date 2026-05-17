@@ -3934,6 +3934,59 @@
 <!-- ===== TOAST CONTAINER ===== -->
 <div id="toastContainer"></div>
 
+<!-- ===== WELCOME TOUR OVERLAY ===== -->
+<div id="welcomeTourOverlay" onclick="if(event.target===this)closeWelcomeTour()">
+  <div class="welcome-tour-box">
+    <div class="wt-header">
+      <div class="wt-logo">🚀</div>
+      <div class="wt-title">Welcome to Affiliate OS</div>
+      <div class="wt-sub">Your AI-powered video replication studio. Here's how to get your first video in 3 steps:</div>
+    </div>
+    <div class="wt-steps">
+      <div class="wt-step">
+        <div class="wt-step-num">1</div>
+        <div>
+          <div class="wt-step-title">Paste a video URL</div>
+          <div class="wt-step-desc">Drop a TikTok or Instagram link in the Video Replicator. The AI downloads the script and splits it into scenes.</div>
+        </div>
+      </div>
+      <div class="wt-step">
+        <div class="wt-step-num">2</div>
+        <div>
+          <div class="wt-step-title">Upload your avatar &amp; generate prompts</div>
+          <div class="wt-step-desc">Add your photo, pick a background, then hit Generate All Prompts. NB Pro and Veo 3 prompts are ready in seconds.</div>
+        </div>
+      </div>
+      <div class="wt-step">
+        <div class="wt-step-num">3</div>
+        <div>
+          <div class="wt-step-title">Run All Scenes in Claude</div>
+          <div class="wt-step-desc">Click Run All Scenes, paste the instruction into Claude desktop, and watch it generate your videos automatically in Google Flow.</div>
+        </div>
+      </div>
+    </div>
+    <div class="wt-footer">
+      <button class="wt-start-btn" onclick="closeWelcomeTour();switchTab('video-replicator')">Let's go →</button>
+      <button class="wt-skip" onclick="closeWelcomeTour()">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== ADMIN OVERLAY ===== -->
+<div id="adminOverlay" onclick="if(event.target===this)closeAdminOverlay()">
+  <div id="adminPinGate">
+    <div style="font-size:22px;margin-bottom:10px;">🔐</div>
+    <div style="font-size:14px;font-weight:700;color:var(--text-1);margin-bottom:6px;">Admin Access</div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:14px;">Enter the admin PIN to continue.</div>
+    <input id="adminPinInput" type="password" placeholder="••••••••" autocomplete="off"
+      onkeydown="if(event.key==='Enter')verifyAdminPin()" />
+    <div id="adminPinError" style="display:none;color:var(--danger);font-size:11px;margin-bottom:8px;">Incorrect PIN</div>
+    <button onclick="verifyAdminPin()" style="width:100%;padding:9px;background:var(--grad-accent);border:none;border-radius:8px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">Unlock</button>
+    <button onclick="closeAdminOverlay()" style="width:100%;padding:7px;background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px;">Cancel</button>
+  </div>
+  <div id="adminPanel"></div>
+</div>
+
 <!-- ===== MY ACCOUNTS MODAL ===== -->
 <div class="modal-overlay" id="modalOverlay" style="display:none;" onclick="closeModalOnBg(event)">
   <div class="modal">
@@ -5600,15 +5653,15 @@
   // ===== COMMAND PALETTE =====
   const CMD_ITEMS = [
     { group: 'Navigate', label: 'Dashboard',         icon: 'ti-layout-dashboard',  action: () => switchTab('dashboard') },
-    { group: 'Navigate', label: 'Video Studio',      icon: 'ti-video',             action: () => switchTab('studio') },
-    { group: 'Navigate', label: 'Viral Scripts',     icon: 'ti-script',            action: () => switchTab('scripts') },
-    { group: 'Navigate', label: 'Accounts',          icon: 'ti-users',             action: () => switchTab('accounts') },
-    { group: 'Navigate', label: 'Analytics',         icon: 'ti-chart-bar',         action: () => switchTab('analytics') },
+    { group: 'Navigate', label: 'Video Replicator',  icon: 'ti-video',             action: () => switchTab('video-replicator') },
+    { group: 'Navigate', label: 'Viral Scripts',     icon: 'ti-script',            action: () => switchTab('viral-scripts') },
+    { group: 'Navigate', label: 'Accounts',          icon: 'ti-users',             action: () => switchTab('my-accounts') },
+    { group: 'Navigate', label: 'Calendar',          icon: 'ti-calendar',          action: () => switchTab('calendar') },
     { group: 'Navigate', label: 'Settings',          icon: 'ti-settings',          action: () => openUserSettings() },
-    { group: 'Studio',   label: 'Detect Cuts',       icon: 'ti-scissors',          action: () => { switchTab('studio'); setTimeout(autoSegmentBySceneChange, 200); } },
-    { group: 'Studio',   label: 'Process Everything',icon: 'ti-bolt',              action: () => { switchTab('studio'); setTimeout(processEverything, 200); } },
-    { group: 'Studio',   label: 'Generate Prompts',  icon: 'ti-wand',              action: () => { switchTab('studio'); setTimeout(generateAllSegmentPrompts, 200); } },
-    { group: 'Studio',   label: 'Run All Scenes',    icon: 'ti-player-play',       action: () => { switchTab('studio'); setTimeout(() => showPreflightModal(false), 200); } },
+    { group: 'Studio',   label: 'Detect Cuts',       icon: 'ti-scissors',          action: () => { switchTab('video-replicator'); setTimeout(autoSegmentBySceneChange, 200); } },
+    { group: 'Studio',   label: 'Process Everything',icon: 'ti-bolt',              action: () => { switchTab('video-replicator'); setTimeout(processEverything, 200); } },
+    { group: 'Studio',   label: 'Generate Prompts',  icon: 'ti-wand',              action: () => { switchTab('video-replicator'); setTimeout(generateAllSegmentPrompts, 200); } },
+    { group: 'Studio',   label: 'Run All Scenes',    icon: 'ti-player-play',       action: () => { switchTab('video-replicator'); setTimeout(() => showPreflightModal(false), 200); } },
     { group: 'Studio',   label: 'Copy All Veo Prompts', icon: 'ti-clipboard',     action: () => copyAllVeoPrompts() },
     { group: 'Studio',   label: 'Clear Segments',    icon: 'ti-trash',             action: () => clearSegments() },
     { group: 'Studio',   label: 'Open Video Library',icon: 'ti-books',             action: () => openVideoLibrary() },
@@ -6266,7 +6319,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       } else {
         const hasImg = !!bgImageDataUrl;
         thumbRow.innerHTML = `
-          <div onclick="document.getElementById('bgImgInput').click()" style="width:36px;height:36px;border-radius:5px;overflow:hidden;border:1.5px solid ${hasImg ? 'var(--accent)' : 'var(--border)'};cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--bg-2);flex-shrink:0;">
+          <div onclick="document.getElementById('bgImgInput').click()" style="width:36px;height:36px;border-radius:5px;overflow:hidden;border:1.5px solid ${hasImg ? 'var(--accent)' : 'var(--border)'};cursor:pointer;display:flex;align-items:center;justify-content:center;background:var(--surface-2);flex-shrink:0;">
             ${hasImg ? `<img id="nb-bg-thumb-${i}" src="${bgImageDataUrl}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:16px;">🖼</span>`}
           </div>
           <span style="font-size:10px;color:${hasImg ? 'var(--accent)' : 'var(--text-3)'};">
@@ -7142,6 +7195,7 @@ RULES — read carefully:
     }
     distributeScript();
     renderSegments();
+    saveSegments();
   }
 
   // --- Frame diff helpers ---
@@ -7310,6 +7364,7 @@ RULES — read carefully:
     // Use Whisper timestamps if available (most accurate), else proportional fallback
     if (!distributeScriptFromTimestamps()) distributeScript();
     renderSegments();
+    saveSegments();
 
     if (btn) {
       btn.disabled = false;
@@ -7335,6 +7390,7 @@ RULES — read carefully:
     segments.push({ startTime: t, endTime: dur, frameDataUrl, script: '', action: '', nbPrompt: '', veoPrompt: '' });
     distributeScript();
     renderSegments();
+    saveSegments();
   }
 
   // --- Clear all segments ---
@@ -7353,7 +7409,7 @@ RULES — read carefully:
   function copyAllVeoPrompts() {
     const prompts = segments.map((s, i) => `[Seg ${i+1} — ${Math.floor(s.startTime/60)}:${String(Math.floor(s.startTime%60)).padStart(2,'0')}–${Math.floor(s.endTime/60)}:${String(Math.floor(s.endTime%60)).padStart(2,'0')}]\n${s.veoPrompt || '(empty)'}`);
     if (!prompts.length) { showToast('No segments yet.', 'warning'); return; }
-    const btn = event?.currentTarget || document.querySelector('[onclick*="copyAllVeoPrompts"]');
+    const btn = (typeof event !== 'undefined' && event?.currentTarget) || document.querySelector('[onclick*="copyAllVeoPrompts"]');
     navigator.clipboard.writeText(prompts.join('\n\n')).then(() => {
       if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; btn.style.color = '#4ade80'; setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800); }
       showToast(`${prompts.length} Veo 3 prompt${prompts.length !== 1 ? 's' : ''} copied to clipboard`, 'success');
@@ -9516,12 +9572,12 @@ The correct files to use are listed below:
     // Download all frames to disk — browser Claude uploads them via file_upload tool
     // Use a run-scoped ID so filenames are unique every run (avoids Windows "(2)", "(3)" copies)
     const _runId = Math.floor(Date.now() / 1000);
-    const _dlDir = getDlPath().replace(/\\/g, '\\\\');
+    const _dlDir = getEffectiveDlPath().replace(/\\/g, '\\\\');
     let _dlDelay = 0;
     const _dlInterval = 400;
     const _avatarFile = `avatar_photo_${_runId}.jpg`;
     if (avatarImageDataUrl) {
-      instruction += `• ${getDlPath()}\\${_avatarFile}  ← Photo 1 avatar (reuse every scene)\n`;
+      instruction += `• ${getEffectiveDlPath()}\\${_avatarFile}  ← Photo 1 avatar (reuse every scene)\n`;
       downloadFrameAsFile(avatarImageDataUrl, _avatarFile, _dlDelay);
       _dlDelay += _dlInterval;
     }
@@ -9532,7 +9588,7 @@ The correct files to use are listed below:
       if (seg.frameDataUrl) {
         const _sf = `frame_scene_${globalI+1}_${_runId}.jpg`;
         _sceneFiles[globalI+1] = _sf;
-        instruction += `• ${getDlPath()}\\${_sf}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
+        instruction += `• ${getEffectiveDlPath()}\\${_sf}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
         downloadFrameAsFile(seg.frameDataUrl, _sf, _dlDelay);
         _dlDelay += _dlInterval;
       }
@@ -9577,7 +9633,7 @@ REUSE PROMPT STEPS (scenes 2+):
   3. Screenshot immediately — confirm:
      a) Format is still 9:16 vertical — if it changed, reset it now before doing anything else
      b) Photo 1 (avatar) is still loaded in its slot
-        → If Photo 1 is missing: upload ${getDlPath()}\\${_avatarFile} using HOW TO INJECT AN IMAGE
+        → If Photo 1 is missing: upload ${getEffectiveDlPath()}\\${_avatarFile} using HOW TO INJECT AN IMAGE
         → If Photo 1 is present: leave it, do not touch it
   4. Remove Photo 2 (click its × button to clear the old scene's start frame)
   5. Upload the next scene's Photo 2 using HOW TO INJECT AN IMAGE with that scene's file path
@@ -9595,15 +9651,15 @@ ${idx === 0
 • Click "+ New prompt" in the LEFT sidebar to reset the bar
 • Open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-    ? `• Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_avatarFile}`
+    ? `• Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getEffectiveDlPath()}\\${_avatarFile}`
     : `• No avatar — skip Photo 1`}
 ${hasFrame
-    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sf}`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getEffectiveDlPath()}\\${_sf}`
     : `• No start frame — skip Photo 2`}
 • Set format: 9:16 vertical`
   : `Reuse Prompt from the previous card — App Scene ${runScenes[idx-1].i+1} (hover → expand arrow → Reuse Prompt → confirm 9:16 format → remove old Photo 2)
 ${hasFrame
-    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sf}`
+    ? `• Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getEffectiveDlPath()}\\${_sf}`
     : `• No start frame — skip Photo 2`}`}
 • Paste this prompt exactly:
 
@@ -9922,8 +9978,8 @@ BEFORE YOU START
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Use tabs_context_mcp to list open tabs — find the Flow project tab (URL contains "labs.google/fx/tools/flow/project/")
 2. The following files were downloaded to the user's computer at run start:
-${hasAvatar ? `   • ${getDlPath()}\\${_sAvatarFile}  ← Photo 1 avatar` : '   • (no avatar file)'}
-${hasStartFrame ? `   • ${getDlPath()}\\${_sFrameFile}  ← Photo 2 start frame` : '   • (no start frame file)'}
+${hasAvatar ? `   • ${getEffectiveDlPath()}\\${_sAvatarFile}  ← Photo 1 avatar` : '   • (no avatar file)'}
+${hasStartFrame ? `   • ${getEffectiveDlPath()}\\${_sFrameFile}  ← Photo 2 start frame` : '   • (no start frame file)'}
    ⚠ These filenames include a unique run ID — use them EXACTLY as shown above.
 3. Navigate to the Flow project tab
 
@@ -9941,7 +9997,7 @@ HOW TO UPLOAD A PHOTO:
      b) Click once in the "File name:" text box at the BOTTOM of the dialog
      c) Select all (Ctrl+A), DELETE existing text
      d) Type the FULL Windows path exactly from BEFORE YOU START above
-        Example: ${getDlPath()}\\${_sAvatarFile}
+        Example: ${getEffectiveDlPath()}\\${_sAvatarFile}
      e) Press Enter — upload begins automatically
      ⚠ Alternatively: use the file_upload tool directly with the full path shown above
   4. Wait ~2 seconds for the thumbnail to appear in the slot
@@ -9954,8 +10010,8 @@ HOW TO UPLOAD A PHOTO:
 STEP 1 — Nano Banana Pro
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 1. Open NB Pro: click the media icon LEFT of the bottom-bar submit arrow → "Image" → "Nano Banana Pro"
-${hasAvatar ? `2. Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sAvatarFile}` : '2. No avatar — skip Photo 1'}
-${hasStartFrame ? `3. Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getDlPath()}\\${_sFrameFile}` : '3. No start frame — skip Photo 2'}
+${hasAvatar ? `2. Upload Photo 1 (avatar): HOW TO INJECT AN IMAGE → ${getEffectiveDlPath()}\\${_sAvatarFile}` : '2. No avatar — skip Photo 1'}
+${hasStartFrame ? `3. Upload Photo 2 (start frame): HOW TO INJECT AN IMAGE → ${getEffectiveDlPath()}\\${_sFrameFile}` : '3. No start frame — skip Photo 2'}
 4. Set format: 9:16 vertical
 5. Paste this NB Pro prompt:
 
@@ -10185,7 +10241,9 @@ ${veoPrompt}
   function refreshSegmentVeo3(i) {
     const seg = segments[i];
     if (!seg) return;
-    // Sync the action field from the textarea before regenerating
+    // Sync live textarea values before regenerating
+    const scriptEl2 = document.getElementById('script-seg-' + i);
+    if (scriptEl2) seg.script = scriptEl2.value;
     const actionEl = document.getElementById('action-seg-' + i);
     if (actionEl) seg.action = actionEl.value;
     const productSel = document.getElementById('studioProduct');
@@ -11914,6 +11972,9 @@ TECHNICAL SPECS:
     loadHooks();
     loadCTALibrary();
     loadIdeas();
+    loadProducts();
+    loadPerformanceLogs();
+    loadRecycleItems();
 
     // Restore the last active tab (default to dashboard on first open)
     const savedTab = localStorage.getItem('sm_active_tab') || 'dashboard';
@@ -12711,6 +12772,52 @@ TECHNICAL SPECS:
   }
 
   // =========================================================
+  // WELCOME TOUR
+  // =========================================================
+
+  function openWelcomeTour() {
+    const ov = document.getElementById('welcomeTourOverlay');
+    if (ov) ov.classList.add('open');
+  }
+
+  function closeWelcomeTour() {
+    const ov = document.getElementById('welcomeTourOverlay');
+    if (ov) ov.classList.remove('open');
+  }
+
+  // =========================================================
+  // ONBOARDING CARD HANDLERS
+  // =========================================================
+
+  function onboardStepClick(id, tab) {
+    if (tab) switchTab(tab);
+    const m = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
+    m[id] = true;
+    localStorage.setItem('onboardingSteps', JSON.stringify(m));
+    renderDashboard();
+  }
+
+  function onboardToggleCollapse() {
+    const cur = localStorage.getItem('onboardingCollapsed') === '1';
+    localStorage.setItem('onboardingCollapsed', cur ? '' : '1');
+    renderDashboard();
+  }
+
+  function onboardDismiss() {
+    localStorage.setItem('onboardingDismissed', '1');
+    renderDashboard();
+  }
+
+  // =========================================================
+  // HASH UTILITY (used by admin password gate)
+  // =========================================================
+
+  async function hashPassword(str) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+
+  // =========================================================
   // ADMIN PANEL
   // =========================================================
 
@@ -12873,14 +12980,20 @@ TECHNICAL SPECS:
   }
 
   // ---- Backup / Restore ----
-  function admExport() {
+  async function admExport() {
+    const [accounts, competitors, viralScripts, studio] = await Promise.all([
+      DB.get('sm_accounts'),
+      DB.get('sm_competitors'),
+      DB.get('sm_viral_scripts'),
+      DB.get('sm_studio_library'),
+    ]);
     const payload = {
       _exported: new Date().toISOString(),
       adminSettings: getAdminSettings(),
-      accounts: JSON.parse(localStorage.getItem('sm_accounts') || '[]'),
-      competitors: JSON.parse(localStorage.getItem('sm_competitors') || '[]'),
-      viralScripts: JSON.parse(localStorage.getItem('sm_viral_scripts') || '[]'),
-      studio: JSON.parse(localStorage.getItem('sm_studio_library') || '[]'),
+      accounts:     accounts     || [],
+      competitors:  competitors  || [],
+      viralScripts: viralScripts || [],
+      studio:       studio       || [],
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -12896,12 +13009,12 @@ TECHNICAL SPECS:
     reader.onload = ev => {
       try {
         const data = JSON.parse(ev.target.result);
-        showConfirm('This will overwrite current data. Continue?', () => {
+        showConfirm('This will overwrite current data. Continue?', async () => {
           if (data.adminSettings) saveAdminSettings(data.adminSettings);
-          if (data.accounts) localStorage.setItem('sm_accounts', JSON.stringify(data.accounts));
-          if (data.competitors) localStorage.setItem('sm_competitors', JSON.stringify(data.competitors));
-          if (data.viralScripts) localStorage.setItem('sm_viral_scripts', JSON.stringify(data.viralScripts));
-          if (data.studio) localStorage.setItem('sm_studio_library', JSON.stringify(data.studio));
+          if (data.accounts)     await DB.set('sm_accounts',       data.accounts);
+          if (data.competitors)  await DB.set('sm_competitors',     data.competitors);
+          if (data.viralScripts) await DB.set('sm_viral_scripts',   data.viralScripts);
+          if (data.studio)       await DB.set('sm_studio_library',  data.studio);
           showToast('Import complete. Reload the page to see changes.', 'success');
         });
       } catch(err) { showToast('Invalid backup file.', 'error'); }
@@ -12912,8 +13025,14 @@ TECHNICAL SPECS:
 
   function admReset() {
     showConfirm('⚠ Reset ALL app data? This cannot be undone.', () => {
-      showConfirm('Are you sure? Everything will be cleared.', () => {
-        ['sm_accounts','sm_competitors','sm_viral_scripts','sm_studio_library','sm_admin_settings'].forEach(k => localStorage.removeItem(k));
+      showConfirm('Are you sure? Everything will be cleared.', async () => {
+        await Promise.all([
+          DB.remove('sm_accounts'),
+          DB.remove('sm_competitors'),
+          DB.remove('sm_viral_scripts'),
+          DB.remove('sm_studio_library'),
+        ]);
+        localStorage.removeItem('sm_admin_settings');
         showToast('Data cleared. The page will now reload.', 'success');
         setTimeout(() => location.reload(), 1200);
       });
@@ -13985,7 +14104,7 @@ TECHNICAL SPECS:
         <div class="uset-section-title" style="margin-top:24px;">Sessions</div>
         <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;">
           <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">You are currently signed in on this device.</div>
-          <button onclick="closeUserSettings();document.getElementById('signOutBtn')?.click();" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign Out</button>
+          <button onclick="closeUserSettings();doLogout();" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign Out</button>
         </div>
       </div>
 
