@@ -25,3 +25,4 @@
 
 [functions.openai-chat]
   node_version = "18"
+  timeout = 26

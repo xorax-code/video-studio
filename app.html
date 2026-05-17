@@ -6164,22 +6164,32 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           model: 'gpt-4o',
-          max_tokens: 320,
+          max_tokens: 200,
           messages: [{ role: 'user', content: [
             { type: 'text', text: promptText },
-            { type: 'image_url', image_url: { url: sendUrl, detail: 'high' } }
+            { type: 'image_url', image_url: { url: sendUrl, detail: 'low' } }
           ]}]
         })
       });
-      const data = await res.json();
+      let data;
+      try { data = await res.json(); } catch(_) { data = {}; }
       if (data.error) {
-        if (status) status.textContent = '⚠ ' + (data.error.code || data.error.type || 'error') + ' — fill in manually';
+        const msg = data.error.message || data.error.code || data.error.type || 'unknown error';
+        console.error('[AvatarInventory] API error:', data.error);
+        if (status) status.textContent = '⚠ ' + msg.slice(0, 60);
+        showToast('Avatar analysis failed: ' + msg.slice(0, 80), 'error');
         if (retryBtn) retryBtn.style.display = '';
+        if (field && field.style.display === 'none') {
+          field.style.display = '';
+          const arr = document.querySelector('.inv-arrow');
+          if (arr) arr.style.transform = 'rotate(0deg)';
+        }
         return;
       }
       const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
       if (!text) {
         if (status) status.textContent = '⚠ no result — fill in manually';
+        showToast('Avatar analysis returned no result — fill in the Appearance Inventory manually', 'warning');
         if (retryBtn) retryBtn.style.display = '';
         return;
       }
@@ -6206,8 +6216,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
         setTimeout(() => { if (status) status.textContent = ''; }, 6000);
       }
     } catch (e) {
+      const msg = e && e.message ? e.message : 'network error';
       console.error('[AvatarInventory]', e);
-      if (status) status.textContent = '⚠ ' + (e && e.message ? e.message.slice(0, 40) : 'failed') + ' — fill in manually';
+      if (status) status.textContent = '⚠ ' + msg.slice(0, 60);
+      showToast('Avatar analysis failed: ' + msg.slice(0, 80), 'error');
       if (retryBtn) retryBtn.style.display = '';
       // Auto-expand on error too so the Retry button context is visible
       if (field && field.style.display === 'none') {
