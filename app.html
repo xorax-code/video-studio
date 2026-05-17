@@ -9392,6 +9392,23 @@ COMPOSITE HANDOFF (Phase 1 → Phase 2):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO INJECT AN IMAGE INTO FLOW
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⛔ STOP — READ THIS FIRST:
+STEP A → STEP B → STEP C is the ONLY approved method for image transfer. It is a
+proven, working protocol. Do NOT:
+  • explore "alternative data transfer methods"
+  • try window.opener, postMessage, SharedWorker, BroadcastChannel, or any other API
+  • try to encode the image differently or compress it
+  • use file_upload tool for frame images
+  • click any upload button in the Flow UI
+  • search for other approaches — they will not work and waste time
+
+If STEP A/B/C fails, the fix is always one of these three things:
+  1. Wrong KEY name → re-run STEP A and check Object.keys(window.__vsFrames||{})
+  2. Data URL truncated in STEP B → re-paste the full string (150k–400k chars is normal)
+  3. File input not in DOM yet → click the photo slot first, then immediately run STEP C
+
+There is no fourth option. Do not invent one. Run STEP A → B → C.
+
 Use these 3 steps every time you need to put a frame image into Flow's prompt bar.
 KEY = 'avatar' for Photo 1, or 'scene0' / 'scene1' / etc. for Photo 2.
 APP_TAB_ID = the tabId of the app tab. FLOW_TAB_ID = the tabId of the Flow tab.
