@@ -34,6 +34,10 @@ exports.handler = async (event) => {
   if (!customerId) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing customerId.' }) };
   }
+  // Validate Stripe customer ID format to prevent arbitrary string injection
+  if (!/^cus_[A-Za-z0-9]+$/.test(customerId)) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid customerId format.' }) };
+  }
 
   const formBody = qs.stringify({
     customer:   customerId,

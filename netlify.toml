@@ -22,6 +22,7 @@
 
 [functions.openai-transcribe]
   node_version = "18"
+  timeout = 26
 
 [functions.openai-chat]
   node_version = "18"

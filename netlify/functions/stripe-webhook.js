@@ -25,8 +25,12 @@ const qs     = require('querystring');
 // ── Signature verification ──────────────────────────────────────────────────
 function verifyStripeSignature(rawBody, sigHeader, secret) {
   const parts = {};
-  sigHeader.split(',').forEach(p => { const [k, v] = p.split('='); parts[k] = v; });
+  sigHeader.split(',').forEach(p => { const [k, ...rest] = p.split('='); parts[k] = rest.join('='); });
   if (!parts.t || !parts.v1) return false;
+  // Replay attack protection: reject webhooks older than 5 minutes
+  const tolerance = 300;
+  const ts = parseInt(parts.t, 10);
+  if (isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > tolerance) return false;
   const payload  = `${parts.t}.${rawBody}`;
   const expected = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest('hex');
   try {
@@ -123,7 +127,7 @@ async function findUserByCustomerId(customerId) {
   while (true) {
     const result = await fetchPage(page);
     if (!result) return null;
-    const users = result.users || [];
+    const users = Array.isArray(result?.users) ? result.users : [];
     const found = users.find(u => u.app_metadata?.stripe_customer_id === customerId);
     if (found) return found.id;
     // If fewer than 1000 returned, we've exhausted all pages
@@ -193,7 +197,9 @@ exports.handler = async (event) => {
         const sub        = stripeEvent.data.object;
         const customerId = sub.customer;
         const priceId    = sub.items?.data?.[0]?.price?.id;
-        const tier       = sub.status === 'active' ? tierFromPriceId(priceId) : 'free';
+        // Keep users on paid tier while past_due or trialing — only downgrade on terminal states
+        const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
+        const tier = PAID_STATUSES.has(sub.status) ? (tierFromPriceId(priceId) || 'free') : 'free';
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {

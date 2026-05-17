@@ -53,14 +53,16 @@ exports.handler = async (event) => {
     const audioBuffer = Buffer.from(audioBase64, 'base64');
 
     // Map file extension → MIME type (Whisper accepts audio + video containers)
-    const ext = (fileName || 'audio.mp4').split('.').pop().toLowerCase();
+    // Sanitize filename: strip special chars to prevent Content-Disposition header injection
+    const rawName = fileName || 'audio.mp4';
+    const safeFileName = rawName.replace(/[^\w.\-]/g, '_').slice(0, 100) || 'audio.mp4';
+    const ext = safeFileName.includes('.') ? safeFileName.split('.').pop().toLowerCase() : 'mp4';
     const mimeMap = {
       mp4: 'video/mp4', mov: 'video/quicktime', webm: 'audio/webm',
       mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/m4a',
       ogg: 'audio/ogg', flac: 'audio/flac', mpeg: 'audio/mpeg',
     };
     const mimeType = mimeMap[ext] || 'video/mp4';
-    const safeFileName = fileName || `audio.${ext}`;
 
     // Build multipart/form-data manually — avoids Blob/FormData Node.js quirks
     const boundary = '----OpenAIBoundary' + Date.now().toString(36) + Math.random().toString(36).slice(2);

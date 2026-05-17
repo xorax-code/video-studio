@@ -60,6 +60,18 @@ exports.handler = async (event) => {
   if (!priceId || !userId) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing priceId or userId.' }) };
   }
+  // Whitelist valid price IDs — prevents clients from passing arbitrary Stripe prices
+  const VALID_PRICES = new Set([
+    process.env.STRIPE_PRICE_STARTER,
+    process.env.STRIPE_PRICE_PRO,
+    process.env.STRIPE_PRICE_AGENCY,
+  ].filter(Boolean));
+  if (!VALID_PRICES.has(priceId)) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid priceId.' }) };
+  }
+  if (typeof userId !== 'string' || userId.length > 500) {
+    return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid userId.' }) };
+  }
 
   const params = {
     'mode':                      'subscription',

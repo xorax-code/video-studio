@@ -1528,8 +1528,10 @@
           </div>
         </div>`;
 
-      document.getElementById('navAuthArea').innerHTML = chipHTML;
-      document.getElementById('mobileAuthArea').innerHTML = `<a href="/app.html" class="mob-cta">Open App</a>`;
+      const _navAuthArea    = document.getElementById('navAuthArea');
+      const _mobileAuthArea = document.getElementById('mobileAuthArea');
+      if (_navAuthArea)    _navAuthArea.innerHTML    = chipHTML;
+      if (_mobileAuthArea) _mobileAuthArea.innerHTML = `<a href="/app.html" class="mob-cta">Open App</a>`;
 
       // Toggle dropdown
       document.getElementById('navUserChip').addEventListener('click', (e) => {

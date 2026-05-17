@@ -4286,11 +4286,12 @@
     t.style.cssText = 'pointer-events:auto;min-width:300px;max-width:420px;gap:10px;flex-wrap:wrap;align-items:flex-start;';
     t.innerHTML = `
       <span class="toast-icon"><i class="ti ti-alert-triangle"></i></span>
-      <span class="toast-msg" style="flex:1;line-height:1.5;">${message}</span>
+      <span class="toast-msg" style="flex:1;line-height:1.5;"></span>
       <div style="display:flex;gap:6px;flex-shrink:0;margin-top:2px;">
         <button class="sc-yes" style="padding:3px 12px;background:var(--danger);border:none;border-radius:5px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">Yes</button>
         <button class="sc-no"  style="padding:3px 10px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-2);font-size:11px;cursor:pointer;font-family:inherit;">No</button>
       </div>`;
+    t.querySelector('.toast-msg').textContent = message;
     container.appendChild(t);
     requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
     const dismiss = () => { t.classList.add('hiding'); setTimeout(() => t.remove(), 300); };
@@ -5121,6 +5122,7 @@
     };
     if (editingId) {
       const idx = accounts.findIndex(a => a.id === editingId);
+      if (idx === -1) { showToast('Account not found — please close and reopen.', 'error'); return; }
       accounts[idx] = { ...accounts[idx], ...data, userEdited: true };
     } else {
       accounts.push({ id: Date.now().toString(), ...data });
@@ -5247,6 +5249,7 @@
     };
     if (editingCompId) {
       const idx = competitors.findIndex(c => c.id === editingCompId);
+      if (idx === -1) { showToast('Competitor not found — please close and reopen.', 'error'); return; }
       competitors[idx] = { ...competitors[idx], ...data };
     } else {
       competitors.push({ id: Date.now().toString(), ...data });
@@ -5636,6 +5639,7 @@
     };
     if (editingScriptId) {
       const idx = viralScripts.findIndex(s => s.id === editingScriptId);
+      if (idx === -1) { showToast('Script not found — please close and reopen.', 'error'); return; }
       viralScripts[idx] = { ...viralScripts[idx], ...data };
     } else {
       viralScripts.push({ id: Date.now().toString(), dateAdded: new Date().toLocaleDateString(), ...data });
@@ -8111,9 +8115,8 @@ RULES — read carefully:
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
-        if (!res.ok) { const _e = await res.json().catch(() => ({})); throw new Error(_e.error?.message || 'API error ' + res.status); }
-
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { throw new Error(data?.error?.message || 'API error ' + res.status); }
 
         if (data.error) {
           btn.disabled = false;
@@ -9003,6 +9006,8 @@ No markdown. Return only the JSON object.`
     if (!lb || !img) return;
     img.src = src;
     lb.classList.add('open');
+    // Remove first to prevent stacking if called multiple times
+    document.removeEventListener('keydown', _lbKeyClose);
     document.addEventListener('keydown', _lbKeyClose);
   }
   function closeLightbox() {
@@ -9073,6 +9078,7 @@ No markdown. Return only the JSON object.`
 
   // ── One-click Redo Scene (copies single-scene instruction) ────────────────
   function redoScene(i) {
+    if (i < 0 || i >= segments.length || !segments[i]) return;
     segments[i].done = false;
     debounceSave();
     renderSegments();
@@ -10799,10 +10805,9 @@ TECHNICAL SPECS:
     const img = document.getElementById('avatarImgEl');
     const placeholder = document.getElementById('avatarImgPlaceholder');
     const clearBtn = document.getElementById('clearAvatarImgBtn');
-    img.src = acct.avatar;
-    img.style.display = 'block';
-    placeholder.style.display = 'none';
-    clearBtn.style.display = 'block';
+    if (img)         { img.src = acct.avatar; img.style.display = 'block'; }
+    if (placeholder) placeholder.style.display = 'none';
+    if (clearBtn)    clearBtn.style.display = 'block';
     // Keep the in-memory avatar in sync so generation steps pick it up immediately
     avatarImageDataUrl = acct.avatar;
     // Persist it so it survives save (must match the key loadAvatarImage() reads: sm_avatar_img)
@@ -11095,7 +11100,7 @@ TECHNICAL SPECS:
     } else {
       DB.get('sm_studio_mode').then(saved => {
         switchStudioMode(saved || 'replicator');
-      });
+      }).catch(() => switchStudioMode('replicator'));
     }
   }
 
@@ -11514,7 +11519,7 @@ TECHNICAL SPECS:
     const prod   = parseInt(document.getElementById('planProductPerDay').value)  || 0;
     const growth = parseInt(document.getElementById('planGrowthPerDay').value)   || 0;
     if (prod === 0 && growth === 0) { showToast('Set at least one video type count above 0.', 'warning'); return; }
-    const days = Array.from(document.querySelectorAll('#planDaysBtns .plan-day-btn.active')).map(b => parseInt(b.dataset.day));
+    const days = Array.from(document.querySelectorAll('#planDaysBtns .plan-day-btn.active')).map(b => parseInt(b.dataset.day)).filter(d => !isNaN(d));
     if (days.length === 0) { showToast('Select at least one posting day.', 'warning'); return; }
     const scope = document.getElementById('planScopeSpecific').checked ? 'specific' : 'all';
     const accountIds = scope === 'specific'
@@ -11878,10 +11883,14 @@ TECHNICAL SPECS:
     } else {
       // Marking done: open the post-link confirmation modal
       _markDoneItemId = id;
-      document.getElementById('markDonePostLink').value = item.inspoUrl || '';
-      document.getElementById('markDoneLinkError').style.display = 'none';
-      document.getElementById('markDoneModalOverlay').style.display = 'flex';
-      setTimeout(() => document.getElementById('markDonePostLink').focus(), 80);
+      const _mdOverlay  = document.getElementById('markDoneModalOverlay');
+      const _mdPostLink = document.getElementById('markDonePostLink');
+      const _mdLinkErr  = document.getElementById('markDoneLinkError');
+      if (!_mdOverlay) return;
+      if (_mdPostLink) _mdPostLink.value = item.inspoUrl || '';
+      if (_mdLinkErr)  _mdLinkErr.style.display = 'none';
+      _mdOverlay.style.display = 'flex';
+      setTimeout(() => _mdPostLink?.focus(), 80);
     }
   }
 
@@ -11891,13 +11900,18 @@ TECHNICAL SPECS:
   }
 
   function confirmMarkDone() {
-    const link = document.getElementById('markDonePostLink').value.trim();
-    const errEl = document.getElementById('markDoneLinkError');
+    const linkEl = document.getElementById('markDonePostLink');
+    const errEl  = document.getElementById('markDoneLinkError');
+    const link   = linkEl ? linkEl.value.trim() : '';
     if (!link) {
-      errEl.style.display = 'block';
-      document.getElementById('markDonePostLink').focus();
+      if (errEl)  errEl.style.display = 'block';
+      if (linkEl) linkEl.focus();
       return;
     }
+    // Block javascript: and data: URIs
+    try { const _u = new URL(link); if (!['http:','https:'].includes(_u.protocol)) throw new Error(); }
+    catch { if (errEl) { errEl.textContent = 'Please enter a valid URL (https://...)'; errEl.style.display = 'block'; } return; }
+    if (errEl) errEl.textContent = '';
     errEl.style.display = 'none';
     const item = dailyItems.find(i => i.id === _markDoneItemId);
     if (!item) { closeMarkDoneModal(); return; }
@@ -12089,9 +12103,12 @@ TECHNICAL SPECS:
 
   function switchAuthTab(tab) {
     document.querySelectorAll('.auth-tab').forEach(t => t.classList.remove('active'));
-    document.getElementById('authTab_' + tab).classList.add('active');
-    document.getElementById('authFormLogin').style.display = tab === 'login' ? 'flex' : 'none';
-    document.getElementById('authFormSignup').style.display = tab === 'signup' ? 'flex' : 'none';
+    const tabEl = document.getElementById('authTab_' + tab);
+    if (tabEl) tabEl.classList.add('active');
+    const loginForm  = document.getElementById('authFormLogin');
+    const signupForm = document.getElementById('authFormSignup');
+    if (loginForm)  loginForm.style.display  = tab === 'login'  ? 'flex' : 'none';
+    if (signupForm) signupForm.style.display = tab === 'signup' ? 'flex' : 'none';
     const fl = document.getElementById('authFooterLogin');
     const fs = document.getElementById('authFooterSignup');
     if (fl) fl.style.display = tab === 'login' ? '' : 'none';
@@ -12165,12 +12182,16 @@ TECHNICAL SPECS:
         const _img = document.createElement('img');
         _img.src = avatarUrl;
         _img.alt = 'Profile';
-        _img.onerror = function() { this.parentElement.textContent = safe[0].toUpperCase(); this.parentElement.style.background = ''; };
+        _img.onerror = function() {
+          if (!this.parentElement) return;
+          this.parentElement.textContent = ([...safe][0] || '?').toUpperCase();
+          this.parentElement.style.background = '';
+        };
         initial.innerHTML = '';
         initial.appendChild(_img);
         initial.style.background = 'transparent';
       } else {
-        initial.innerHTML = safe[0].toUpperCase();
+        initial.textContent = ([...safe][0] || '?').toUpperCase();
         initial.style.background = '';
       }
     }
@@ -12195,14 +12216,17 @@ TECHNICAL SPECS:
   }
   function openAdminKeyModal() {
     const modal = document.getElementById('adminKeyModal');
+    if (!modal) return;
     modal.style.display = 'flex';
     // Always start at the password gate
-    document.getElementById('adminGateScreen').style.display = 'block';
-    document.getElementById('adminKeyScreen').style.display = 'none';
-    document.getElementById('adminGateError').style.display = 'none';
-    const gateInput = document.getElementById('adminGateInput');
-    gateInput.value = '';
-    gateInput.focus();
+    const gateScreen = document.getElementById('adminGateScreen');
+    const keyScreen  = document.getElementById('adminKeyScreen');
+    const gateError  = document.getElementById('adminGateError');
+    const gateInput  = document.getElementById('adminGateInput');
+    if (gateScreen) gateScreen.style.display = 'block';
+    if (keyScreen)  keyScreen.style.display  = 'none';
+    if (gateError)  gateError.style.display  = 'none';
+    if (gateInput)  { gateInput.value = ''; gateInput.focus(); }
   }
   async function checkAdminPassword() {
     const entered = document.getElementById('adminGateInput').value;
@@ -12258,7 +12282,15 @@ TECHNICAL SPECS:
       if (wall) wall.classList.add('visible');
       return;
     }
-    const { data: { session } } = await _sb.auth.getSession();
+    let session;
+    try {
+      const { data } = await _sb.auth.getSession();
+      session = data?.session;
+    } catch (err) {
+      console.error('Auth boot error:', err);
+      showToast('Could not reach authentication service — please refresh.', 'error');
+      return;
+    }
     if (session) {
       DB.setUser(session.user.id);
       // Read Stripe tier from app_metadata (written by webhook)
@@ -13029,33 +13061,35 @@ TECHNICAL SPECS:
 
   // ---- Backup / Restore ----
   async function admExport() {
-    const [rawAccounts, rawCompetitors, rawScripts, rawStudio,
-           rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas] = await Promise.all([
-      DB.get('sm_accounts'),      DB.get('sm_competitors'),
-      DB.get('sm_viral_scripts'), DB.get('sm_studio_library'),
-      DB.get('sm_products'),      DB.get('sm_hooks'),
-      DB.get('sm_ctas'),          DB.get('sm_performance'),
-      DB.get('sm_recycle'),       DB.get('sm_ideas'),
-    ]);
-    const payload = {
-      _exported:    new Date().toISOString(),
-      adminSettings: getAdminSettings(),
-      accounts:     _safeJSON(rawAccounts,    []),
-      competitors:  _safeJSON(rawCompetitors, []),
-      viralScripts: _safeJSON(rawScripts,     []),
-      studio:       _safeJSON(rawStudio,      []),
-      products:     _safeJSON(rawProducts,    []),
-      hooks:        _safeJSON(rawHooks,       []),
-      ctas:         _safeJSON(rawCtas,        []),
-      performance:  _safeJSON(rawPerf,        []),
-      recycle:      _safeJSON(rawRecycle,     []),
-      ideas:        _safeJSON(rawIdeas,       []),
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = `socialos-backup-${new Date().toISOString().slice(0,10)}.json`;
-    a.click();
+    try {
+      const [rawAccounts, rawCompetitors, rawScripts, rawStudio,
+             rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas] = await Promise.all([
+        DB.get('sm_accounts'),      DB.get('sm_competitors'),
+        DB.get('sm_viral_scripts'), DB.get('sm_studio_library'),
+        DB.get('sm_products'),      DB.get('sm_hooks'),
+        DB.get('sm_ctas'),          DB.get('sm_performance'),
+        DB.get('sm_recycle'),       DB.get('sm_ideas'),
+      ]);
+      const payload = {
+        _exported:    new Date().toISOString(),
+        adminSettings: getAdminSettings(),
+        accounts:     _safeJSON(rawAccounts,    []),
+        competitors:  _safeJSON(rawCompetitors, []),
+        viralScripts: _safeJSON(rawScripts,     []),
+        studio:       _safeJSON(rawStudio,      []),
+        products:     _safeJSON(rawProducts,    []),
+        hooks:        _safeJSON(rawHooks,       []),
+        ctas:         _safeJSON(rawCtas,        []),
+        performance:  _safeJSON(rawPerf,        []),
+        recycle:      _safeJSON(rawRecycle,     []),
+        ideas:        _safeJSON(rawIdeas,       []),
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `socialos-backup-${new Date().toISOString().slice(0,10)}.json`;
+      a.click();
+    } catch (err) { showToast('Export failed: ' + err.message, 'error'); }
   }
 
   function admImport(e) {
@@ -13066,23 +13100,44 @@ TECHNICAL SPECS:
       try {
         const data = JSON.parse(ev.target.result);
         showConfirm('This will overwrite current data. Continue?', async () => {
-          if (data.adminSettings) saveAdminSettings(data.adminSettings);
-          if (data.accounts)     await DB.set('sm_accounts',      JSON.stringify(data.accounts));
-          if (data.competitors)  await DB.set('sm_competitors',   JSON.stringify(data.competitors));
-          if (data.viralScripts) await DB.set('sm_viral_scripts', JSON.stringify(data.viralScripts));
-          if (data.studio)       await DB.set('sm_studio_library',JSON.stringify(data.studio));
-          if (data.products)     await DB.set('sm_products',      JSON.stringify(data.products));
-          if (data.hooks)        await DB.set('sm_hooks',         JSON.stringify(data.hooks));
-          if (data.ctas)         await DB.set('sm_ctas',          JSON.stringify(data.ctas));
-          if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
-          if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
-          if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
-          showToast('Import complete. Reload the page to see changes.', 'success');
+          try {
+            if (data.adminSettings) saveAdminSettings(data.adminSettings);
+            if (data.accounts)     await DB.set('sm_accounts',      JSON.stringify(data.accounts));
+            if (data.competitors)  await DB.set('sm_competitors',   JSON.stringify(data.competitors));
+            if (data.viralScripts) await DB.set('sm_viral_scripts', JSON.stringify(data.viralScripts));
+            if (data.studio)       await DB.set('sm_studio_library',JSON.stringify(data.studio));
+            if (data.products)     await DB.set('sm_products',      JSON.stringify(data.products));
+            if (data.hooks)        await DB.set('sm_hooks',         JSON.stringify(data.hooks));
+            if (data.ctas)         await DB.set('sm_ctas',          JSON.stringify(data.ctas));
+            if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
+            if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
+            if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
+            showToast('Import complete. Reload the page to see changes.', 'success');
+          } catch (err2) { showToast('Import failed: ' + err2.message, 'error'); }
         });
       } catch(err) { showToast('Invalid backup file.', 'error'); }
     };
     reader.readAsText(file);
     e.target.value = '';
+  }
+
+  async function clearAllLocalData() {
+    showConfirm('Clear all local data? This cannot be undone.', async () => {
+      try {
+        await Promise.all([
+          'sm_accounts','sm_competitors','sm_viral_scripts',
+          'sm_projects','sm_replicator_projects','sm_producer_projects',
+          'sm_studio_library','sm_replicator_studio_library','sm_producer_studio_library',
+          'sm_video_log','sm_post_plans','sm_daily_items',
+          'sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments'
+        ].map(k => DB.remove(k)));
+        try { if (_sb) await _sb.auth.signOut(); } catch(_) {}
+        localStorage.clear();
+        location.reload();
+      } catch (err) {
+        showToast('Clear failed: ' + err.message, 'error');
+      }
+    });
   }
 
   function admReset() {
@@ -14213,7 +14268,7 @@ TECHNICAL SPECS:
         <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
         <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
           <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Clear all local data. This removes your accounts, scripts, and settings from this browser. Your Supabase account stays intact.</div>
-          <button onclick="showConfirm('Clear all local data? This cannot be undone.', async () => { await Promise.all(['sm_accounts','sm_competitors','sm_viral_scripts','sm_projects','sm_replicator_projects','sm_producer_projects','sm_studio_library','sm_replicator_studio_library','sm_producer_studio_library','sm_video_log','sm_post_plans','sm_daily_items','sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments'].map(k => DB.remove(k))); localStorage.clear(); location.reload(); })" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
+          <button onclick="clearAllLocalData()" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
         </div>
       </div>
 
