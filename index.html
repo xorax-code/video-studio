@@ -1493,7 +1493,7 @@
   // ── Auth state on landing page ──
   (async function() {
     try {
-      if (typeof supabase === 'undefined' || typeof SUPABASE_URL === 'undefined') return;
+      if (typeof supabase === 'undefined' || typeof SUPABASE_URL === 'undefined' || typeof SUPABASE_ANON === 'undefined') return;
       const _sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
       const { data: { session } } = await _sb.auth.getSession();
       if (!session) return;
@@ -1511,16 +1511,17 @@
       const name = displayName || email.split('@')[0];
       const initial = (name[0] || '?').toUpperCase();
 
-      // Build chip HTML
+      // Build chip using DOM API to avoid XSS from user-supplied name/email
+      const _esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
       const chipHTML = `
         <div class="nav-user-chip" id="navUserChip">
-          <div class="nav-user-avatar">${initial}</div>
-          <span class="nav-user-name">${name}</span>
+          <div class="nav-user-avatar">${_esc(initial)}</div>
+          <span class="nav-user-name">${_esc(name)}</span>
           <i class="ti ti-chevron-down" style="font-size:0.75rem;color:var(--text-muted);margin-left:2px;"></i>
           <div class="nav-user-dropdown" id="navDropdown">
             <div class="nav-user-dropdown-header">
-              <div class="nav-user-dropdown-name">${name}</div>
-              <div class="nav-user-dropdown-email">${email}</div>
+              <div class="nav-user-dropdown-name">${_esc(name)}</div>
+              <div class="nav-user-dropdown-email">${_esc(email)}</div>
             </div>
             <a href="/app.html" class="nav-dropdown-btn"><i class="ti ti-layout-dashboard"></i> Open App</a>
             <button class="nav-dropdown-btn danger" id="landingSignOut"><i class="ti ti-logout"></i> Sign out</button>
@@ -1584,7 +1585,7 @@
   // ── Agency notify ──
   async function submitAgencyNotify(btn) {
     const input = document.getElementById('agencyEmailInput');
-    if (!input || !input.value || !input.value.includes('@')) { if (input) input.focus(); return; }
+    if (!input || !input.value || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.value.trim())) { if (input) { input.focus(); input.style.borderColor = '#f87171'; setTimeout(() => { input.style.borderColor = ''; }, 2000); } return; }
     const email = input.value.trim();
     const origText = btn.textContent;
 

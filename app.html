@@ -4309,7 +4309,8 @@
     const icons = { success: 'ti-circle-check', error: 'ti-alert-circle', warning: 'ti-alert-triangle', info: 'ti-info-circle' };
     const t = document.createElement('div');
     t.className = `toast toast-${type}`;
-    t.innerHTML = `<span class="toast-icon"><i class="ti ${icons[type] || icons.info}"></i></span><span class="toast-msg">${msg}</span><button class="toast-close" onclick="this.parentElement.classList.add('hiding');setTimeout(()=>this.parentElement.remove(),300);">✕</button>`;
+    t.innerHTML = `<span class="toast-icon"><i class="ti ${icons[type] || icons.info}"></i></span><span class="toast-msg"></span><button class="toast-close" onclick="this.parentElement.classList.add('hiding');setTimeout(()=>this.parentElement.remove(),300);">✕</button>`;
+    t.querySelector('.toast-msg').textContent = msg;
     container.appendChild(t);
     requestAnimationFrame(() => { requestAnimationFrame(() => { t.classList.add('show'); }); });
     setTimeout(() => { t.classList.add('hiding'); setTimeout(() => t.remove(), 300); }, duration);
@@ -4493,7 +4494,7 @@
     // ── Onboarding checklist (shown until dismissed) ──
     const onboardDismissed = localStorage.getItem('onboardingDismissed') === '1';
     const onboardCollapsed = localStorage.getItem('onboardingCollapsed') === '1';
-    const onboardStepsRaw  = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
+    let onboardStepsRaw = {}; try { onboardStepsRaw = JSON.parse(localStorage.getItem('onboardingSteps') || '{}'); } catch(e) {}
 
     const onboardStepDefs = [
       { id: 'accounts',   label: 'Add your first account',          tab: 'my-accounts',    done: accounts.length > 0 },
@@ -4960,7 +4961,7 @@
 
     let filtered = accounts.filter(a => {
       const matchSearch = !search ||
-        a.username.toLowerCase().includes(search) ||
+        (a.username||'').toLowerCase().includes(search) ||
         (a.email||'').toLowerCase().includes(search) ||
         (a.tags||'').toLowerCase().includes(search) ||
         (a.notes||'').toLowerCase().includes(search);
@@ -5082,8 +5083,8 @@
       document.getElementById('fBrandColor').value = a.brandColor || defaultColor;
       updateBrandColorPreview();
     } else {
-      ['fPlatform','fStatus','fUsername','fEmail','fPassword','fUrl','fTags','fNotes'].forEach(id => {
-        const el = document.getElementById(id);
+      ['fPlatform','fStatus','fUsername','fEmail','fPassword','fUrl','fTags','fNotes'].forEach(fieldId => {
+        const el = document.getElementById(fieldId);
         if (el.tagName === 'SELECT') el.selectedIndex = 0;
         else el.value = '';
       });
@@ -5120,7 +5121,7 @@
     };
     if (editingId) {
       const idx = accounts.findIndex(a => a.id === editingId);
-      accounts[idx] = { ...accounts[idx], ...data };
+      accounts[idx] = { ...accounts[idx], ...data, userEdited: true };
     } else {
       accounts.push({ id: Date.now().toString(), ...data });
     }
@@ -5553,7 +5554,7 @@
       btn.textContent = '✅ Copied!';
       btn.classList.add('copied');
       setTimeout(() => { btn.textContent = '📋 Copy'; btn.classList.remove('copied'); }, 2000);
-    });
+    }).catch(() => showToast('Copy failed — please try again.', 'error'));
   }
 
   function _loadScriptIntoStudio(id, mode) {
@@ -5928,12 +5929,12 @@
       if (idx === -1) {
         accounts.push(seed);
         changed = true;
-      } else {
-        // always sync username, url, tags, notes from seed so updates take effect
+      } else if (!accounts[idx].userEdited) {
+        // Only sync seed fields if the user has not manually edited this account
         accounts[idx].username = seed.username;
-        accounts[idx].url = seed.url;
-        accounts[idx].tags = seed.tags;
-        accounts[idx].notes = seed.notes;
+        accounts[idx].url      = seed.url;
+        accounts[idx].tags     = seed.tags;
+        accounts[idx].notes    = seed.notes;
         changed = true;
       }
     });
@@ -7413,7 +7414,7 @@ RULES — read carefully:
     navigator.clipboard.writeText(prompts.join('\n\n')).then(() => {
       if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; btn.style.color = '#4ade80'; setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800); }
       showToast(`${prompts.length} Veo 3 prompt${prompts.length !== 1 ? 's' : ''} copied to clipboard`, 'success');
-    });
+    }).catch(() => showToast('Copy failed — please try again.', 'error'));
   }
 
   // --- Download frame as image file ---
@@ -7997,6 +7998,24 @@ RULES — read carefully:
     return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
+  // --- Strip left/right directional language from action descriptions ---
+  // Veo 3 interprets left/right from the viewer's POV; GPT-4o describes from
+  // the subject's POV — they always come out mirrored. Safer to use neutral terms.
+  function sanitizeDirections(text) {
+    if (!text) return text;
+    return text
+      .replace(/\bright\s+hand\b/gi, 'one hand')
+      .replace(/\bleft\s+hand\b/gi, 'the other hand')
+      .replace(/\bright\s+arm\b/gi, 'one arm')
+      .replace(/\bleft\s+arm\b/gi, 'the other arm')
+      .replace(/\btheir\s+right\b/gi, 'one side')
+      .replace(/\btheir\s+left\b/gi, 'the other side')
+      .replace(/\bin\s+(?:the\s+)?right\b/gi, 'in one hand')
+      .replace(/\bin\s+(?:the\s+)?left\b/gi, 'in the other hand')
+      .replace(/\bto\s+(?:the\s+)?right\b/gi, 'to the side')
+      .replace(/\bto\s+(?:the\s+)?left\b/gi, 'to the other side');
+  }
+
   // --- Read the voice style set by the user ---
   function getVoiceStyle() {
     return (document.getElementById('studioVoice')?.value || localStorage.getItem('vs_voice_style') || '').trim();
@@ -8005,7 +8024,7 @@ RULES — read carefully:
   // --- Build Veo 3 prompt for one segment ---
   function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
     const seg = segments[i];
-    const analyzedAction = seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures';
+    const analyzedAction = sanitizeDirections(seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures');
     const bgNote = bgDataUrl
       ? 'Match the background/environment from the reference background image provided. Keep it consistent and realistic.'
       : (setting || 'clean neutral background or lifestyle environment');
@@ -8081,7 +8100,7 @@ RULES — read carefully:
         const content = [
           {
             type: 'text',
-            text: `Analyze the physical actions and movements visible in these video frames. Describe ONLY the body movements, hand gestures, and object interactions shown — not who is doing them, not their appearance, not the background. Write in short action sentences using "${pronoun}" as the subject. Examples: "${pronoun} lifts a bottle with both hands and tilts it forward slowly." "${pronoun} reaches across and picks up an item." "${pronoun} holds an object up toward the camera." Focus on: hand and arm movements, what objects are picked up or put down, body positioning changes, and the final action state. Return only the movement description — no intro, no identity, no appearance, no environment.`
+            text: `Analyze the physical actions and movements visible in these video frames. Describe ONLY the body movements, hand gestures, and object interactions shown — not who is doing them, not their appearance, not the background. Write in short action sentences using "${pronoun}" as the subject. Examples: "${pronoun} lifts a bottle with both hands and tilts it forward slowly." "${pronoun} reaches across and picks up an item." "${pronoun} holds an object up toward the camera." Focus on: hand and arm movements, what objects are picked up or put down, body positioning changes, and the final action state. IMPORTANT: Do NOT use the words "left" or "right" to describe hand or body position — use "one hand", "the other hand", "both hands", or describe position relative to the camera instead (e.g. "closer to camera", "held up toward camera"). Return only the movement description — no intro, no identity, no appearance, no environment.`
           },
           ...imageContent
         ];
@@ -8092,6 +8111,7 @@ RULES — read carefully:
           headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
+        if (!res.ok) { const _e = await res.json().catch(() => ({})); throw new Error(_e.error?.message || 'API error ' + res.status); }
 
         const data = await res.json();
 
@@ -8108,7 +8128,7 @@ RULES — read carefully:
         const isRefusal = !description || /i('m| am) sorry|can't assist|cannot assist|I apologize|unable to (help|assist)/i.test(description);
         if (isRefusal && frameList.length > 1) {
           const retryContent = [
-            { type: 'text', text: `Describe the physical movements and actions visible in this image using "${pronoun}" as the subject. Short action sentences only — focus on what hands and arms are doing, what objects are being held or moved. No identity, no appearance, no background.` },
+            { type: 'text', text: `Describe the physical movements and actions visible in this image using "${pronoun}" as the subject. Short action sentences only — focus on what hands and arms are doing, what objects are being held or moved. Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms instead. No identity, no appearance, no background.` },
             { type: 'image_url', image_url: { url: frameList[0], detail: 'low' } }
           ];
           const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -8116,12 +8136,13 @@ RULES — read carefully:
             headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: 'gpt-4o', max_tokens: 200, messages: [{ role: 'user', content: retryContent }] })
           });
+          if (!retryRes.ok) throw new Error('Retry failed: ' + retryRes.status);
           const retryData = await retryRes.json();
           description = retryData.choices?.[0]?.message?.content?.trim() || '';
         }
 
         if (!description || /i('m| am) sorry|can't assist|cannot assist/i.test(description)) { skipped++; continue; }
-        seg.action = description;
+        seg.action = sanitizeDirections(description);
 
         // Update the textarea value immediately (use .value, not .textContent, for textareas)
         const actionEl = document.getElementById('action-seg-' + i);
@@ -8846,7 +8867,7 @@ Script the person says (word for word): "${script}"
 ${action ? 'Presenter action: ' + action : ''}
 
 Return ONLY a valid JSON object with these fields:
-- action: describe the presenter's natural talking movements — gestures, expressions, eye contact — that match the emotional tone of the script. Reference what you actually see in the starting frame (their pose, what's on the surface in front of them, the setting) and animate from there. Be specific.
+- action: describe the presenter's natural talking movements — gestures, expressions, eye contact — that match the emotional tone of the script. Reference what you actually see in the starting frame (their pose, what's on the surface in front of them, the setting) and animate from there. Be specific. Do NOT use "left" or "right" to describe hands or body position — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera", "placed on the surface in front of them").
 - speech: the exact script text, verbatim
 - starting_frame: describe what you see in the attached image — the person's position, what props/objects are on the surface in front of them, the background setting, the lighting — so Veo 3 knows exactly what frame to start from
 - background: describe the background/setting visible in the image
@@ -8866,8 +8887,10 @@ No markdown. Return only the JSON object.`
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-      // Validate it's parseable JSON
-      JSON.parse(raw);
+      // Validate it's parseable JSON, then sanitize directional language in action field
+      const _parsed = JSON.parse(raw);
+      if (_parsed.action) _parsed.action = sanitizeDirections(_parsed.action);
+      raw = JSON.stringify(_parsed, null, 2);
       seg.veoPrompt = raw;
       // Update the textarea in place
       const ta = document.getElementById('veo-seg-' + i);
@@ -10052,7 +10075,7 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — the props reference is Photo 1 (t
    • If retry 1 also fails: do a FULL TAB REFRESH — navigate to the same Flow URL, wait 10 seconds, redo from NB Pro upload with the exact same prompts and photos
    • Keep doing tab refresh → retry until checks 1 and 4 pass — do NOT skip this scene
    • If only checks 2 or 3 fail (background/prop mismatch) after multiple attempts: proceed to Step 2 anyway, note the mismatch in your report
-   • "Unusual activity" flag: do NOT modify the prompts — wait ${_sadm.cooldownSec || 120} seconds after tab refresh, then retry identically
+   • "Unusual activity" flag: IMMEDIATELY press F5 to do a full tab refresh — do NOT modify the prompts — wait ${_sadm.cooldownSec || 120} seconds after the refresh completes, then retry the full step identically from the beginning
 
 9. Once all checks pass (or after retry): move the composite into Veo 3 —
    Click "Add to Prompt" on the NB composite (hover over it to reveal the button).
@@ -10624,7 +10647,7 @@ TECHNICAL SPECS:
     navigator.clipboard.writeText(text).then(() => {
       const btn = el.previousElementSibling?.querySelector('.btn-copy') || el.parentElement?.querySelector('.btn-copy');
       if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); }
-    });
+    }).catch(() => showToast('Copy failed.', 'error'));
   }
 
   // Copy from a textarea prompt field
@@ -10637,7 +10660,7 @@ TECHNICAL SPECS:
       const header = el.previousElementSibling;
       const btn = header ? header.querySelector('.btn-copy') : null;
       if (btn) { btn.textContent = 'Copied!'; btn.classList.add('copied'); setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000); }
-    });
+    }).catch(() => showToast('Copy failed.', 'error'));
   }
 
   function saveGeneratedToLibrary() {
@@ -10858,20 +10881,20 @@ TECHNICAL SPECS:
   async function loadProjects() {
     const raw     = await DB.get(modeKey('sm_projects'));
     const savedId = await DB.get(modeKey('sm_active_project'));
-    projects = JSON.parse(raw || '[]');
+    try { projects = JSON.parse(raw || '[]'); } catch(e) { projects = []; }
 
     if (projects.length === 0) {
       // For Replicator: try to migrate legacy un-namespaced data (one-time)
       if (studioMode === 'replicator') {
         const legacyRaw = await DB.get('sm_projects');
-        const legacyProjects = JSON.parse(legacyRaw || '[]');
+        let legacyProjects = []; try { legacyProjects = JSON.parse(legacyRaw || '[]'); } catch(e) {}
         if (legacyProjects.length > 0) {
           projects = legacyProjects;
         }
       }
       // Still empty? Create a default project
       if (projects.length === 0) {
-        const oldSegs = JSON.parse(await DB.get('sm_segments') || '[]');
+        let oldSegs = []; try { oldSegs = JSON.parse(await DB.get('sm_segments') || '[]'); } catch(e) {}
         const label = studioMode === 'producer' ? 'Producer Project 1' : 'Project 1';
         projects.push({
           id: Date.now().toString(),
@@ -11045,7 +11068,7 @@ TECHNICAL SPECS:
     // Migrate legacy unnamespaced library into Replicator on first run
     const legacyLib = (mode === 'replicator' && !libRaw)
       ? await DB.get('sm_studio_library') : null;
-    studioLibrary = JSON.parse(libRaw || legacyLib || '[]');
+    try { studioLibrary = JSON.parse(libRaw || legacyLib || '[]'); } catch(e) { studioLibrary = []; }
     renderStudioLibrary();
 
     // ── 4. Load new mode's projects + segments ────────────────────────────────
@@ -11945,20 +11968,23 @@ TECHNICAL SPECS:
     renderCalendar();
   }
 
+  // Safely parse a JSON string from DB/localStorage — returns fallback on any error
+  function _safeJSON(raw, fallback) { try { return JSON.parse(raw || JSON.stringify(fallback)); } catch(e) { return fallback; } }
+
   // ===== ASYNC INIT =====
   async function initApp() {
     // Migrate any old localStorage data first
     await DB.migrateLocalStorage();
 
-    // Load all data from IndexedDB
-    accounts      = JSON.parse(await DB.get('sm_accounts')       || '[]');
-    competitors   = JSON.parse(await DB.get('sm_competitors')    || '[]');
-    viralScripts  = JSON.parse(await DB.get('sm_viral_scripts')  || '[]');
+    // Load all data from IndexedDB — wrap each parse so one corrupt value can't blank the whole app
+    accounts      = _safeJSON(await DB.get('sm_accounts'),       []);
+    competitors   = _safeJSON(await DB.get('sm_competitors'),    []);
+    viralScripts  = _safeJSON(await DB.get('sm_viral_scripts'),  []);
     // Studio library is mode-specific — loaded properly when studio opens
     studioLibrary = [];
-    videoLog      = JSON.parse(await DB.get('sm_video_log')      || '[]');
-    postPlans           = JSON.parse(await DB.get('sm_post_plans')              || '[]');
-    dailyItems          = JSON.parse(await DB.get('sm_daily_items')             || '[]');
+    videoLog      = _safeJSON(await DB.get('sm_video_log'),      []);
+    postPlans     = _safeJSON(await DB.get('sm_post_plans'),      []);
+    dailyItems    = _safeJSON(await DB.get('sm_daily_items'),     []);
     // sm_weekly_content_types was replaced by the merged postPlans system — no load needed
     _cachedApiKey = await DB.get('sm_openai_key') || '';
     // Load the shared admin key (not user-scoped — same for all users on this device)
@@ -12082,8 +12108,7 @@ TECHNICAL SPECS:
     if (!email || !password) { showAuthError('Please fill in all fields.'); return; }
     const { data, error } = await _sb.auth.signInWithPassword({ email, password });
     if (error) { showAuthError(error.message); return; }
-    DB.setUser(data.user.id);
-    onAuthSuccess(data.user.email);
+    onAuthSuccess(data.user.email, data.user.id);
   }
 
   async function doSignup(e) {
@@ -12102,10 +12127,9 @@ TECHNICAL SPECS:
     // After email confirmation the SIGNED_IN event fires and calls onAuthSuccess automatically
   }
 
-  function onAuthSuccess(username) {
+  function onAuthSuccess(username, userId) {
     // Scope all DB reads/writes to this user
-    const session = getSession();
-    if (session) DB.setUser(session.userId);
+    if (userId) DB.setUser(userId);
     // Hide auth wall
     const wall = document.getElementById('authWall');
     if (wall) wall.classList.remove('visible');
@@ -12138,7 +12162,12 @@ TECHNICAL SPECS:
     if (initial) {
       const avatarUrl = getUserSettings()?.avatarDataUrl;
       if (avatarUrl) {
-        initial.innerHTML = `<img src="${avatarUrl}" alt="Profile" onerror="this.parentElement.innerHTML='${safe[0].toUpperCase()}'">`;
+        const _img = document.createElement('img');
+        _img.src = avatarUrl;
+        _img.alt = 'Profile';
+        _img.onerror = function() { this.parentElement.textContent = safe[0].toUpperCase(); this.parentElement.style.background = ''; };
+        initial.innerHTML = '';
+        initial.appendChild(_img);
         initial.style.background = 'transparent';
       } else {
         initial.innerHTML = safe[0].toUpperCase();
@@ -12359,7 +12388,18 @@ TECHNICAL SPECS:
 
   function applyUiZoom(scale) {
     const zoom = scale / 100;
-    document.body.style.zoom = zoom;
+    // `zoom` CSS property is Chrome/Edge only — use `transform: scale()` for Firefox compatibility
+    const isFirefox = navigator.userAgent.includes('Firefox');
+    if (isFirefox) {
+      document.body.style.zoom      = '';
+      document.body.style.transform = `scale(${zoom})`;
+      document.body.style.transformOrigin = 'top left';
+      document.body.style.width     = zoom !== 1 ? `${(100 / zoom).toFixed(4)}%` : '';
+    } else {
+      document.body.style.transform = '';
+      document.body.style.width     = '';
+      document.body.style.zoom      = zoom;
+    }
     const topnav   = document.querySelector('.topnav');
     const mainArea = document.querySelector('.main-area');
     if (zoom > 1) {
@@ -12460,6 +12500,14 @@ TECHNICAL SPECS:
       document.getElementById('uset-newPassword').value = '';
       document.getElementById('uset-confirmPassword').value = '';
     }
+  }
+
+  function saveNotificationsTab() {
+    const s = getUserSettings();
+    s.reminderEnabled = document.getElementById('uset-reminderEnabled').checked;
+    s.reminderTime    = document.getElementById('uset-reminderTime').value || '09:00';
+    saveUserSettings(s);
+    _showUsetSaved();
   }
 
   function saveGoalsTab() {
@@ -12791,7 +12839,7 @@ TECHNICAL SPECS:
 
   function onboardStepClick(id, tab) {
     if (tab) switchTab(tab);
-    const m = JSON.parse(localStorage.getItem('onboardingSteps') || '{}');
+    let m = {}; try { m = JSON.parse(localStorage.getItem('onboardingSteps') || '{}'); } catch(e) {}
     m[id] = true;
     localStorage.setItem('onboardingSteps', JSON.stringify(m));
     renderDashboard();
@@ -12921,12 +12969,12 @@ TECHNICAL SPECS:
     }
     list.innerHTML = accs.map((a, idx) => `
       <div class="adm-acc-card">
-        <span class="adm-acc-platform">${a.platform || 'Other'}</span>
+        <span class="adm-acc-platform">${escHtml(a.platform || 'Other')}</span>
         <div>
-          <div class="adm-acc-handle">${a.handle || ''}</div>
-          ${a.name ? `<div class="adm-acc-name">${a.name}</div>` : ''}
-          ${a.url ? `<div style="font-size:10px;color:var(--accent-2);">${a.url}</div>` : ''}
-          ${a.notes ? `<div style="font-size:10px;color:var(--text-3);">${a.notes}</div>` : ''}
+          <div class="adm-acc-handle">${escHtml(a.handle || '')}</div>
+          ${a.name  ? `<div class="adm-acc-name">${escHtml(a.name)}</div>` : ''}
+          ${a.url   ? `<div style="font-size:10px;color:var(--accent-2);">${escHtml(a.url)}</div>` : ''}
+          ${a.notes ? `<div style="font-size:10px;color:var(--text-3);">${escHtml(a.notes)}</div>` : ''}
         </div>
         <button class="adm-acc-del" onclick="deleteAdmAccount(${idx})" title="Remove">✕</button>
       </div>`).join('');
@@ -12981,19 +13029,27 @@ TECHNICAL SPECS:
 
   // ---- Backup / Restore ----
   async function admExport() {
-    const [accounts, competitors, viralScripts, studio] = await Promise.all([
-      DB.get('sm_accounts'),
-      DB.get('sm_competitors'),
-      DB.get('sm_viral_scripts'),
-      DB.get('sm_studio_library'),
+    const [rawAccounts, rawCompetitors, rawScripts, rawStudio,
+           rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas] = await Promise.all([
+      DB.get('sm_accounts'),      DB.get('sm_competitors'),
+      DB.get('sm_viral_scripts'), DB.get('sm_studio_library'),
+      DB.get('sm_products'),      DB.get('sm_hooks'),
+      DB.get('sm_ctas'),          DB.get('sm_performance'),
+      DB.get('sm_recycle'),       DB.get('sm_ideas'),
     ]);
     const payload = {
-      _exported: new Date().toISOString(),
+      _exported:    new Date().toISOString(),
       adminSettings: getAdminSettings(),
-      accounts:     accounts     || [],
-      competitors:  competitors  || [],
-      viralScripts: viralScripts || [],
-      studio:       studio       || [],
+      accounts:     _safeJSON(rawAccounts,    []),
+      competitors:  _safeJSON(rawCompetitors, []),
+      viralScripts: _safeJSON(rawScripts,     []),
+      studio:       _safeJSON(rawStudio,      []),
+      products:     _safeJSON(rawProducts,    []),
+      hooks:        _safeJSON(rawHooks,       []),
+      ctas:         _safeJSON(rawCtas,        []),
+      performance:  _safeJSON(rawPerf,        []),
+      recycle:      _safeJSON(rawRecycle,     []),
+      ideas:        _safeJSON(rawIdeas,       []),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
@@ -13011,10 +13067,16 @@ TECHNICAL SPECS:
         const data = JSON.parse(ev.target.result);
         showConfirm('This will overwrite current data. Continue?', async () => {
           if (data.adminSettings) saveAdminSettings(data.adminSettings);
-          if (data.accounts)     await DB.set('sm_accounts',       data.accounts);
-          if (data.competitors)  await DB.set('sm_competitors',     data.competitors);
-          if (data.viralScripts) await DB.set('sm_viral_scripts',   data.viralScripts);
-          if (data.studio)       await DB.set('sm_studio_library',  data.studio);
+          if (data.accounts)     await DB.set('sm_accounts',      JSON.stringify(data.accounts));
+          if (data.competitors)  await DB.set('sm_competitors',   JSON.stringify(data.competitors));
+          if (data.viralScripts) await DB.set('sm_viral_scripts', JSON.stringify(data.viralScripts));
+          if (data.studio)       await DB.set('sm_studio_library',JSON.stringify(data.studio));
+          if (data.products)     await DB.set('sm_products',      JSON.stringify(data.products));
+          if (data.hooks)        await DB.set('sm_hooks',         JSON.stringify(data.hooks));
+          if (data.ctas)         await DB.set('sm_ctas',          JSON.stringify(data.ctas));
+          if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
+          if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
+          if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
           showToast('Import complete. Reload the page to see changes.', 'success');
         });
       } catch(err) { showToast('Invalid backup file.', 'error'); }
@@ -13027,10 +13089,11 @@ TECHNICAL SPECS:
     showConfirm('⚠ Reset ALL app data? This cannot be undone.', () => {
       showConfirm('Are you sure? Everything will be cleared.', async () => {
         await Promise.all([
-          DB.remove('sm_accounts'),
-          DB.remove('sm_competitors'),
-          DB.remove('sm_viral_scripts'),
-          DB.remove('sm_studio_library'),
+          DB.remove('sm_accounts'),   DB.remove('sm_competitors'),
+          DB.remove('sm_viral_scripts'), DB.remove('sm_studio_library'),
+          DB.remove('sm_products'),   DB.remove('sm_hooks'),
+          DB.remove('sm_ctas'),       DB.remove('sm_performance'),
+          DB.remove('sm_recycle'),    DB.remove('sm_ideas'),
         ]);
         localStorage.removeItem('sm_admin_settings');
         showToast('Data cleared. The page will now reload.', 'success');
@@ -13059,7 +13122,7 @@ TECHNICAL SPECS:
   let products = [];
 
   async function loadProducts() {
-    products = JSON.parse(await DB.get('sm_products') || '[]');
+    products = _safeJSON(await DB.get('sm_products'), []);
     renderProductVault();
     // Hook/CTA product dropdowns are built from the products list — refresh them
     // in case products finished loading after those sections first rendered.
@@ -13208,7 +13271,7 @@ TECHNICAL SPECS:
   let hooks = [];
 
   async function loadHooks() {
-    hooks = JSON.parse(await DB.get('sm_hooks') || '[]');
+    hooks = _safeJSON(await DB.get('sm_hooks'), []);
     // Purge any pre-seeded sample entries
     const before = hooks.length;
     hooks = hooks.filter(h => h.source !== 'Sample');
@@ -13362,7 +13425,7 @@ TECHNICAL SPECS:
       renderCTALibrary();
       return;
     }
-    ctas = JSON.parse(await DB.get('sm_ctas') || '[]');
+    ctas = _safeJSON(await DB.get('sm_ctas'), []);
     ctas = ctas.filter(c => c.source !== 'Sample');
     renderCTALibrary();
   }
@@ -13494,7 +13557,7 @@ TECHNICAL SPECS:
   let performanceLogs = [];
 
   async function loadPerformanceLogs() {
-    performanceLogs = JSON.parse(await DB.get('sm_performance') || '[]');
+    performanceLogs = _safeJSON(await DB.get('sm_performance'), []);
     renderPerformanceLog();
   }
 
@@ -13618,7 +13681,7 @@ TECHNICAL SPECS:
   let recycleItems = [];
 
   async function loadRecycleItems() {
-    recycleItems = JSON.parse(await DB.get('sm_recycle') || '[]');
+    recycleItems = _safeJSON(await DB.get('sm_recycle'), []);
     renderContentRecycler();
   }
 
@@ -13733,7 +13796,7 @@ TECHNICAL SPECS:
   let ideas = [];
 
   async function loadIdeas() {
-    ideas = JSON.parse(await DB.get('sm_ideas') || '[]');
+    ideas = _safeJSON(await DB.get('sm_ideas'), []);
     renderIdeasInbox();
   }
 
@@ -13965,7 +14028,7 @@ TECHNICAL SPECS:
           <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">Email notifications are coming in a future update. You'll be able to receive weekly performance summaries and goal alerts to your inbox.</div>
           <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;background:rgba(124,106,247,0.12);color:var(--accent-2);letter-spacing:.05em;">COMING SOON</span>
         </div>
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveGoalsTab()">Save Notifications</button></div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveNotificationsTab()">Save Notifications</button></div>
       </div>
 
       <!-- MY SETUP -->
@@ -14145,12 +14208,12 @@ TECHNICAL SPECS:
         <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
         <div class="uset-save-row" style="margin-bottom:24px;">
           <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
-          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(event)">
+          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(this)">
         </div>
         <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
         <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
           <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Clear all local data. This removes your accounts, scripts, and settings from this browser. Your Supabase account stays intact.</div>
-          <button onclick="showConfirm('Clear all local data? This cannot be undone.', () => { localStorage.clear(); location.reload(); })" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
+          <button onclick="showConfirm('Clear all local data? This cannot be undone.', async () => { await Promise.all(['sm_accounts','sm_competitors','sm_viral_scripts','sm_projects','sm_replicator_projects','sm_producer_projects','sm_studio_library','sm_replicator_studio_library','sm_producer_studio_library','sm_video_log','sm_post_plans','sm_daily_items','sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments'].map(k => DB.remove(k))); localStorage.clear(); location.reload(); })" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
         </div>
       </div>
 

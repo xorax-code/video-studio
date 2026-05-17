@@ -54,7 +54,9 @@ exports.handler = async (event) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
-        const data = JSON.parse(Buffer.concat(chunks).toString());
+        let data;
+        try { data = JSON.parse(Buffer.concat(chunks).toString()); }
+        catch (e) { resolve({ statusCode: 502, headers, body: JSON.stringify({ error: 'Invalid response from Stripe.' }) }); return; }
         if (data.error) {
           resolve({ statusCode: 400, headers, body: JSON.stringify({ error: data.error.message }) });
         } else {

@@ -26,3 +26,15 @@
 [functions.openai-chat]
   node_version = "18"
   timeout = 26
+
+[functions.create-checkout-session]
+  node_version = "18"
+  timeout = 26
+
+[functions.create-portal-session]
+  node_version = "18"
+  timeout = 26
+
+[functions.stripe-webhook]
+  node_version = "18"
+  timeout = 26

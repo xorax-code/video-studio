@@ -90,33 +90,46 @@ async function updateUserMeta(userId, meta) {
 }
 
 // ── Supabase: find userId by stripe_customer_id in app_metadata ─────────────
+// Paginates through all users (1000 per page) so no one is missed.
 async function findUserByCustomerId(customerId) {
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const url    = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users?per_page=1000`);
+  const baseUrl = process.env.SUPABASE_URL;
 
-  return new Promise((resolve) => {
-    const req = https.request({
-      hostname: url.hostname,
-      path:     url.pathname + url.search,
-      method:   'GET',
-      headers: {
-        'Authorization': `Bearer ${svcKey}`,
-        'apikey':        svcKey,
-      },
-    }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        try {
-          const { users = [] } = JSON.parse(Buffer.concat(chunks).toString());
-          const found = users.find(u => u.app_metadata?.stripe_customer_id === customerId);
-          resolve(found?.id || null);
-        } catch { resolve(null); }
+  function fetchPage(page) {
+    return new Promise((resolve) => {
+      const url = new URL(`${baseUrl}/auth/v1/admin/users?per_page=1000&page=${page}`);
+      const req = https.request({
+        hostname: url.hostname,
+        path:     url.pathname + url.search,
+        method:   'GET',
+        headers: {
+          'Authorization': `Bearer ${svcKey}`,
+          'apikey':        svcKey,
+        },
+      }, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => {
+          try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+          catch { resolve(null); }
+        });
       });
+      req.on('error', () => resolve(null));
+      req.end();
     });
-    req.on('error', () => resolve(null));
-    req.end();
-  });
+  }
+
+  let page = 1;
+  while (true) {
+    const result = await fetchPage(page);
+    if (!result) return null;
+    const users = result.users || [];
+    const found = users.find(u => u.app_metadata?.stripe_customer_id === customerId);
+    if (found) return found.id;
+    // If fewer than 1000 returned, we've exhausted all pages
+    if (users.length < 1000) return null;
+    page++;
+  }
 }
 
 // ── Main handler ─────────────────────────────────────────────────────────────

@@ -365,10 +365,13 @@
       : (btnId === 'btn-login' ? 'Sign In' : btnId === 'btn-signup' ? 'Create Account' : 'Send Reset Link');
   }
 
+  const _emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
   async function doLogin() {
     const email = document.getElementById('login-email').value.trim();
     const password = document.getElementById('login-password').value;
     if (!email || !password) { showMsg('msg-login', 'Please enter your email and password.'); return; }
+    if (!_emailRe.test(email)) { showMsg('msg-login', 'Please enter a valid email address.'); return; }
     setLoading('btn-login', true);
     const { error } = await _sb.auth.signInWithPassword({ email, password });
     setLoading('btn-login', false);
@@ -381,6 +384,7 @@
     const password = document.getElementById('signup-password').value;
     const confirm  = document.getElementById('signup-confirm').value;
     if (!email || !password) { showMsg('msg-signup', 'Please fill in all fields.'); return; }
+    if (!_emailRe.test(email)) { showMsg('msg-signup', 'Please enter a valid email address.'); return; }
     if (password.length < 8)  { showMsg('msg-signup', 'Password must be at least 8 characters.'); return; }
     if (password !== confirm)  { showMsg('msg-signup', 'Passwords do not match.'); return; }
     setLoading('btn-signup', true);
@@ -394,6 +398,7 @@
   async function doReset() {
     const email = document.getElementById('reset-email').value.trim();
     if (!email) { showMsg('msg-reset', 'Please enter your email address.'); return; }
+    if (!_emailRe.test(email)) { showMsg('msg-reset', 'Please enter a valid email address.'); return; }
     setLoading('btn-reset', true);
     const { error } = await _sb.auth.resetPasswordForEmail(email, {
       redirectTo: window.location.origin + '/login.html'
