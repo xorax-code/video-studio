@@ -4519,7 +4519,7 @@
     const pct        = Math.round(doneSteps / stepsState.length * 100);
 
     function onboardStepHtml(s) {
-      return `<div class="onboard-step${s.done ? ' done' : ''}" onclick="onboardStepClick(${JSON.stringify(s.id)},${JSON.stringify(s.tab || '')})">`
+      return `<div class="onboard-step${s.done ? ' done' : ''}" onclick="onboardStepClick(${JSON.stringify(s.id)},${JSON.stringify(s.tab || '')})">
         <div class="onboard-step-check">${s.done ? '<i class="ti ti-check" style="font-size:9px;"></i>' : ''}</div>
         <span>${s.label}</span>
       </div>`;
@@ -14406,3 +14406,4 @@ TECHNICAL SPECS:
 
 </body>
 </html>
+
