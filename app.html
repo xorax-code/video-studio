@@ -1152,6 +1152,87 @@
   }
   .vs-panel-header.collapsible { cursor: pointer; user-select: none; }
   .vs-panel-header.collapsible:hover { color: var(--text-2); }
+
+  /* ── Video Studio: How it works banner ── */
+  #vsHowItWorks {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 14px; gap: 10px; flex-shrink: 0;
+    background: linear-gradient(90deg, rgba(124,106,247,0.1), rgba(167,139,250,0.06));
+    border-bottom: 1px solid rgba(124,106,247,0.2);
+    font-size: 11px; color: var(--text-2); line-height: 1.4;
+  }
+  #vsHowItWorks strong { color: var(--accent-2); }
+  #vsHowItWorks .vs-hiw-close {
+    background: none; border: none; color: var(--text-3); font-size: 13px;
+    cursor: pointer; padding: 0 4px; flex-shrink: 0; line-height: 1;
+  }
+  #vsHowItWorks .vs-hiw-close:hover { color: var(--text-1); }
+
+  /* ── Video Studio: 3-step workflow bar ── */
+  .vs-workflow-bar {
+    display: flex; align-items: center; gap: 6px;
+    padding: 8px 12px; flex-shrink: 0; flex-wrap: wrap;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent);
+  }
+  .vs-step-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: 8px; border: 1px solid var(--border-2);
+    background: var(--surface-2); color: var(--text-1);
+    font-size: 11px; font-weight: 700; font-family: inherit;
+    cursor: pointer; transition: all 0.15s; white-space: nowrap;
+  }
+  .vs-step-btn:hover { border-color: var(--accent); background: var(--surface-3); }
+  .vs-step-btn .vs-step-num {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--surface-3); border: 1px solid var(--border-2);
+    font-size: 10px; font-weight: 800; color: var(--text-2);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .vs-step-btn.step-analyze .vs-step-num { background: rgba(138,188,106,0.15); border-color: rgba(138,188,106,0.4); color: #8acc6a; }
+  .vs-step-btn.step-analyze { border-color: rgba(138,188,106,0.35); color: #8acc6a; }
+  .vs-step-btn.step-analyze:hover { background: rgba(138,188,106,0.08); }
+  .vs-step-btn.step-generate .vs-step-num { background: rgba(167,139,250,0.15); border-color: rgba(167,139,250,0.4); color: #a78bfa; }
+  .vs-step-btn.step-generate { border-color: rgba(167,139,250,0.35); color: #a78bfa; }
+  .vs-step-btn.step-generate:hover { background: rgba(167,139,250,0.08); }
+  .vs-step-btn.step-run .vs-step-num { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.5); color: #4ade80; }
+  .vs-step-btn.step-run { border-color: rgba(34,197,94,0.45); color: #4ade80; background: rgba(34,197,94,0.06); }
+  .vs-step-btn.step-run:hover { background: rgba(34,197,94,0.12); }
+  .vs-workflow-divider { color: var(--text-3); font-size: 13px; font-weight: 300; flex-shrink: 0; }
+  /* More dropdown */
+  .vs-more-wrap { position: relative; margin-left: auto; }
+  .vs-more-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 6px 12px; border-radius: 7px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-2);
+    font-size: 11px; font-weight: 600; font-family: inherit; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .vs-more-btn:hover { border-color: var(--border-2); color: var(--text-1); }
+  .vs-more-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 5px);
+    background: var(--surface); border: 1px solid var(--border-2);
+    border-radius: 9px; padding: 5px; min-width: 170px;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.5); z-index: 500;
+    flex-direction: column; gap: 1px;
+  }
+  .vs-more-menu.open { display: flex; }
+  .vs-more-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 11px; border-radius: 6px; border: none;
+    background: none; color: var(--text-2); font-size: 11px;
+    font-family: inherit; cursor: pointer; text-align: left; width: 100%;
+    transition: background 0.12s;
+  }
+  .vs-more-item:hover { background: var(--surface-2); color: var(--text-1); }
+
+  /* ── Segment card: collapsible sections ── */
+  .seg-section-toggle {
+    background: none; border: none; color: var(--text-3); font-size: 9px;
+    padding: 1px 6px; border-radius: 3px; cursor: pointer; font-family: inherit;
+    background: var(--bg); border: 1px solid var(--border); transition: color 0.12s;
+  }
+  .seg-section-toggle:hover { color: var(--text-1); }
   /* Boost readability across all panel body elements */
   .vs-panel-body select,
   .vs-panel-body textarea,
@@ -3117,9 +3198,10 @@
             <div style="display:flex;flex-direction:column;gap:3px;">
               <div style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;" onclick="const ta=document.getElementById('avatarInventory');const arr=this.querySelector('.inv-arrow');const open=ta.style.display!=='none';ta.style.display=open?'none':'';arr.style.transform=open?'rotate(-90deg)':'rotate(0deg)';">
                 <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.6px;color:var(--accent-2);">🔍 Appearance Inventory</span>
-                <div style="display:flex;align-items:center;gap:4px;">
+                <div style="display:flex;align-items:center;gap:4px;" onclick="event.stopPropagation()">
                   <span id="avatarInventoryStatus" style="font-size:9px;color:var(--text-3);"></span>
-                  <span class="inv-arrow" style="font-size:10px;color:var(--text-3);transition:transform 0.2s;transform:rotate(-90deg);">▾</span>
+                  <button id="retryInventoryBtn" title="Retry auto-fill" onclick="event.stopPropagation();if(avatarImageDataUrl){extractAvatarInventory(avatarImageDataUrl);}else{showToast('Set an avatar first','warning');}" style="display:none;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.35);border-radius:3px;color:#818cf8;font-size:9px;padding:1px 6px;cursor:pointer;white-space:nowrap;">↺ Retry</button>
+                  <span class="inv-arrow" style="font-size:10px;color:var(--text-3);transition:transform 0.2s;transform:rotate(-90deg);" onclick="event.stopPropagation();const ta=document.getElementById('avatarInventory');const open=ta.style.display!=='none';ta.style.display=open?'none':'';this.style.transform=open?'rotate(-90deg)':'rotate(0deg)';">▾</span>
                 </div>
               </div>
               <textarea id="avatarInventory" rows="6" oninput="onAvatarInventoryInput()" placeholder="Auto-fills when you set an avatar — face, hair, clothing, jewelry. Fully editable. Used to verify each generation matches." style="display:none;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:vertical;line-height:1.5;"></textarea>
@@ -3419,20 +3501,42 @@
 
         <!-- Segments panel — fills remaining height -->
         <div class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;">
-          <div class="vs-panel-header" style="flex-wrap:wrap;gap:6px;padding:7px 10px;">
-            <span style="flex-shrink:0;">Segments <span id="segmentCount" style="font-size:10px;color:var(--text-3);font-weight:400;"></span></span>
-            <div style="display:flex;gap:5px;align-items:center;flex-wrap:wrap;flex:1;justify-content:flex-end;">
-              <button class="btn replicator-only" id="analyzeFramesBtn" onclick="analyzeAllFrames()" style="padding:3px 10px;font-size:10px;border-color:#3a4a2a;color:#8acc6a;" title="Use GPT-4o Vision to detect what's happening in each segment and fill the Veo 3 action field">🔍 Analyze Video</button>
-              <button class="btn" onclick="generateAllSegmentPrompts()" style="padding:3px 12px;font-size:10px;font-weight:600;border-color:var(--border-2);color:var(--text-1);">⚡ Generate All Prompts</button>
-              <button class="btn" onclick="showPreflightModal(false)" style="padding:3px 12px;font-size:10px;font-weight:700;background:rgba(34,197,94,0.1);border-color:rgba(34,197,94,0.5);color:#4ade80;" title="Pre-flight check, then download all images and copy the run instruction">▶ Run All Scenes</button>
-              <button class="btn" onclick="showPreflightModal(true)" style="padding:3px 9px;font-size:10px;font-weight:600;background:rgba(251,191,36,0.08);border-color:rgba(251,191,36,0.4);color:var(--warning);" title="Resume — pre-flight then run, skipping scenes already marked ✅ DONE">⚡ Resume</button>
-              <button class="btn producer-only" id="hookVariationsBtn" onclick="generateHookVariations()" style="padding:3px 10px;font-size:10px;border-color:rgba(251,146,60,0.4);color:#fb923c;" title="Generate 5 alternative opening hooks for scene 1, scored by ad strength">🎣 Hook Variations</button>
-              <button class="btn producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes()" style="padding:3px 10px;font-size:10px;border-color:rgba(167,139,250,0.4);color:#a78bfa;" title="Use GPT to suggest Action and Visual Descriptions for each scene">✨ AI Describe</button>
-              <button class="btn" id="condenseAllBtn" onclick="condenseAllScripts()" style="padding:3px 10px;font-size:10px;border-color:rgba(96,165,250,0.4);color:#60a5fa;" title="Rewrite over-limit scenes to fit within 8 seconds of speech">✂ Condense</button>
-              <button class="btn producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts()" style="padding:3px 10px;font-size:10px;font-weight:700;border-color:rgba(251,191,36,0.5);color:var(--warning);" title="Build NB Pro prompts for all scenes using their visual descriptions">🍌 Gen All NB</button>
-              <button class="btn" onclick="copyAllVeoPrompts()" style="padding:3px 10px;font-size:10px;border-color:rgba(139,92,246,0.4);color:#a78bfa;" title="Copy all Veo 3 prompts to clipboard, one per line">📋 Copy All Veo</button>
-              <button class="btn" id="saveAllBtn" onclick="saveGeneratedToLibrary()" style="padding:3px 10px;font-size:10px;display:none;">Save to Library</button>
+
+          <!-- How it works banner (dismissed after first use) -->
+          <div id="vsHowItWorks">
+            <span>💡 <strong>How it works:</strong> &nbsp;① Analyze your video &nbsp;→&nbsp; ② Generate Veo 3 prompts &nbsp;→&nbsp; ③ Run all scenes in Google Flow. New to this? Start at Step 1.</span>
+            <button class="vs-hiw-close" onclick="document.getElementById('vsHowItWorks').style.display='none';localStorage.setItem('vs_hiw_dismissed','1');" title="Dismiss">✕</button>
+          </div>
+
+          <!-- 3-step workflow bar -->
+          <div class="vs-workflow-bar">
+            <button class="vs-step-btn step-analyze replicator-only" id="analyzeFramesBtn" onclick="analyzeAllFrames()" title="Use GPT-4o Vision to detect what's happening in each scene and fill the action fields">
+              <span class="vs-step-num">1</span> Analyze Video
+            </button>
+            <span class="vs-workflow-divider replicator-only">→</span>
+            <button class="vs-step-btn step-generate" onclick="generateAllSegmentPrompts()" title="Build Veo 3 JSON prompts for all scenes using your script and avatar">
+              <span class="vs-step-num">2</span> Generate Prompts
+            </button>
+            <span class="vs-workflow-divider">→</span>
+            <button class="vs-step-btn step-run" onclick="showPreflightModal(false)" title="Pre-flight check, then download images and copy the run instruction for Claude">
+              <span class="vs-step-num">3</span> Run All Scenes
+            </button>
+
+            <!-- More dropdown -->
+            <div class="vs-more-wrap">
+              <button class="vs-more-btn" onclick="toggleVsMoreMenu(this)" title="More options">⋯ More <span style="font-size:9px;">▾</span></button>
+              <div class="vs-more-menu" id="vsMoreMenu">
+                <button class="vs-more-item" onclick="showPreflightModal(true);closeVsMoreMenu()" title="Skip scenes already marked done">⚡ Resume (skip done)</button>
+                <button class="vs-more-item" id="condenseAllBtn" onclick="condenseAllScripts();closeVsMoreMenu()" title="Rewrite over-limit scenes to fit 8s">✂ Condense Scripts</button>
+                <button class="vs-more-item" onclick="copyAllVeoPrompts();closeVsMoreMenu()" title="Copy all Veo 3 prompts to clipboard">📋 Copy All Veo Prompts</button>
+                <button class="vs-more-item producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes();closeVsMoreMenu()" title="Use GPT to suggest action descriptions">✨ AI Describe Scenes</button>
+                <button class="vs-more-item producer-only" id="hookVariationsBtn" onclick="generateHookVariations();closeVsMoreMenu()" title="Generate 5 alternative hooks for scene 1">🎣 Hook Variations</button>
+                <button class="vs-more-item producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts();closeVsMoreMenu()" title="Build NB Pro prompts for all scenes">🍌 Gen All NB Prompts</button>
+                <button class="vs-more-item" id="saveAllBtn" onclick="saveGeneratedToLibrary();closeVsMoreMenu()" style="display:none;">💾 Save to Library</button>
+              </div>
             </div>
+
+            <span style="margin-left:4px;font-size:10px;color:var(--text-3);">Segments: <span id="segmentCount" style="font-weight:600;color:var(--text-2);"></span></span>
           </div>
           <div id="segmentTimeline" style="display:none;padding:6px 10px 5px;border-bottom:1px solid var(--border);flex-shrink:0;" title="Segment timeline — block width = scene length, color = script fit. Click a block to jump to it."></div>
           <!-- Scroll nav arrows -->
@@ -5818,12 +5922,48 @@
     avatarInventory = '';
     if (field) field.value = '';
     DB.remove('sm_avatar_inventory');
+    const retryBtn = document.getElementById('retryInventoryBtn');
+    if (retryBtn) retryBtn.style.display = 'none';
+    // file:// protocol blocks outbound fetch to external APIs (CORS null-origin)
+    if (location.protocol === 'file:') {
+      if (status) status.textContent = 'open on Netlify to auto-fill — or type manually';
+      return;
+    }
     const apiKey = getApiKey();
     if (!apiKey) {
       if (status) status.textContent = 'no API key — fill in manually';
+      if (retryBtn) retryBtn.style.display = '';
       return;
     }
     if (status) status.textContent = '⏳ analyzing avatar…';
+
+    // Compress the image to ≤512px JPEG before sending — large base64 payloads
+    // cause fetch to throw a "Failed to fetch" TypeError before reaching the API.
+    let sendUrl = dataUrl;
+    try {
+      sendUrl = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+          const MAX = 512;
+          let w = img.naturalWidth || 512, h = img.naturalHeight || 512;
+          if (w > MAX || h > MAX) {
+            if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+            else       { w = Math.round(w * MAX / h); h = MAX; }
+          }
+          const c = document.createElement('canvas');
+          c.width = w; c.height = h;
+          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const compressed = c.toDataURL('image/jpeg', 0.78);
+          console.log('[AvatarInventory] compressed to', Math.round(compressed.length / 1024), 'KB');
+          resolve(compressed);
+        };
+        img.onerror = (e) => { console.warn('[AvatarInventory] img load failed, using original', e); reject(e); };
+        img.src = dataUrl;
+      });
+    } catch (_) {
+      console.warn('[AvatarInventory] resize failed, using original dataUrl (may be large)');
+    }
+
     const promptText = `You are cataloguing the appearance of a person in a reference photo so it can later be used to verify AI-generated images of the SAME person. List ONLY what is clearly visible — never guess or invent. Be specific and concrete. Use exactly this structure, one short line each:
 
 FACE & HAIR: hair color, length and style; skin tone; any notable facial features.
@@ -5841,23 +5981,26 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
           max_tokens: 320,
           messages: [{ role: 'user', content: [
             { type: 'text', text: promptText },
-            { type: 'image_url', image_url: { url: dataUrl, detail: 'high' } }
+            { type: 'image_url', image_url: { url: sendUrl, detail: 'high' } }
           ]}]
         })
       });
       const data = await res.json();
       if (data.error) {
         if (status) status.textContent = '⚠ ' + (data.error.code || data.error.type || 'error') + ' — fill in manually';
+        if (retryBtn) retryBtn.style.display = '';
         return;
       }
       const text = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || '').trim();
       if (!text) {
         if (status) status.textContent = '⚠ no result — fill in manually';
+        if (retryBtn) retryBtn.style.display = '';
         return;
       }
       // Guard: if the model refused the image, don't write the refusal text in
       if (/i('m| am) sorry|can'?t (assist|help)|cannot (assist|help)|i apologi|unable to (help|assist)/i.test(text)) {
         if (status) status.textContent = '⚠ could not read photo — fill in manually';
+        if (retryBtn) retryBtn.style.display = '';
         return;
       }
       // Guard: discard if a newer avatar was set while this request was in flight
@@ -5865,12 +6008,15 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
       avatarInventory = text;
       if (field) field.value = text;
       DB.set('sm_avatar_inventory', text);
+      if (retryBtn) retryBtn.style.display = 'none';
       if (status) {
         status.textContent = '✓ auto-filled — edit if needed';
         setTimeout(() => { if (status) status.textContent = ''; }, 6000);
       }
     } catch (e) {
-      if (status) status.textContent = '⚠ failed — fill in manually';
+      console.error('[AvatarInventory]', e);
+      if (status) status.textContent = '⚠ ' + (e && e.message ? e.message.slice(0, 40) : 'failed') + ' — fill in manually';
+      if (retryBtn) retryBtn.style.display = '';
     }
   }
 
@@ -7346,7 +7492,7 @@ RULES — read carefully:
       const tip = `Seg ${i+1} · ${fmt(seg.startTime||0)}–${fmt(seg.endTime||0)} · ${h.wc}w ~${h.estSec.toFixed(1)}s` + (h.level==='over'?' · too long':h.level==='long'?' · slightly long':h.level==='short'?' · too short':'');
       return `<div onclick="(function(){var c=document.getElementById('seg-card-${i}');if(c)c.scrollIntoView({behavior:'smooth',block:'center'});})()"
         title="${escHtml(tip)}"
-        style="flex:${len.toFixed(2)};min-width:14px;height:18px;background:${bg};border:1px solid ${bd};border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--text-1);overflow:hidden;">${i+1}</div>`;
+        style="flex:${len.toFixed(2)};min-width:24px;height:18px;background:${bg};border:1px solid ${bd};border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:var(--text-1);overflow:hidden;white-space:nowrap;padding:0 2px;">Sc ${i+1}</div>`;
     }).join('');
     strip.innerHTML = `<div style="display:flex;gap:2px;align-items:center;">${blocks}</div>`;
   }
@@ -7415,17 +7561,22 @@ RULES — read carefully:
           >${escHtml(seg.script || '')}</textarea>
         </div>
 
-        <!-- Scene Action -->
+        <!-- Scene Action (collapsed by default) -->
         <div class="seg-field-action">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="(function(){var ta=document.getElementById('action-wrap-${i}');var open=ta.style.display!=='none';ta.style.display=open?'none':'';this.querySelector('.action-toggle').textContent=open?'▸ Show':'▾ Hide';}).call(this)">
             <span class="seg-action-label" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">🎬 Scene Action</span>
-            <button onclick="refreshSegmentVeo3(${i})" title="Regenerate Veo 3" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Veo 3</button>
+            <div style="display:flex;gap:4px;align-items:center;">
+              <button onclick="event.stopPropagation();refreshSegmentVeo3(${i})" title="Regenerate Veo 3" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Veo 3</button>
+              <span class="action-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">▸ Show</span>
+            </div>
           </div>
-          <textarea id="action-seg-${i}"
-            oninput="segments[${i}].action=this.value;autoGrow(this);debounceSave()"
-            class="seg-ta-base seg-ta-action"
-            placeholder="Describe what the person is doing — posture, gestures, expression, energy…"
-          >${escHtml(seg.action || '')}</textarea>
+          <div id="action-wrap-${i}" style="display:none;">
+            <textarea id="action-seg-${i}"
+              oninput="segments[${i}].action=this.value;autoGrow(this);debounceSave()"
+              class="seg-ta-base seg-ta-action"
+              placeholder="Describe what the person is doing — posture, gestures, expression, energy…"
+            >${escHtml(seg.action || '')}</textarea>
+          </div>
         </div>
 
         <!-- NB Pro prompt — collapsed by default -->
@@ -7475,13 +7626,16 @@ RULES — read carefully:
               ${seg.done ? `<button onclick="redoScene(${i})" title="Redo this scene" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">🔄 Redo</button>` : ''}
               <button onclick="copyClaudeInstruction(${i})" title="Copy Claude Browser instruction" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.4);border-radius:2px;color:#a78bfa;font-size:9px;padding:1px 6px;cursor:pointer;">🤖</button>
               <button class="btn-copy" onclick="copyPromptTA('veo-seg-${i}')">Copy</button>
+              <button id="veo-toggle-${i}" onclick="toggleVeoPrompt(${i})" title="Show prompt" style="background:var(--surface-3);border:1px solid var(--border);border-radius:2px;color:var(--text-3);font-size:9px;padding:1px 5px;cursor:pointer;display:flex;align-items:center;"><i class="ti ti-eye"></i></button>
             </div>
           </div>
-          <textarea id="veo-seg-${i}"
-            oninput="segments[${i}].veoPrompt=this.value;autoGrow(this);debounceSave()"
-            class="seg-ta-base seg-ta-prompt"
-            placeholder="Describe the video clip — action, speech, camera, background, audio…"
-          >${escHtml(seg.veoPrompt || '')}</textarea>
+          <div id="veo-wrap-${i}" style="display:none;">
+            <textarea id="veo-seg-${i}"
+              oninput="segments[${i}].veoPrompt=this.value;autoGrow(this);debounceSave()"
+              class="seg-ta-base seg-ta-prompt"
+              placeholder="Describe the video clip — action, speech, camera, background, audio…"
+            >${escHtml(seg.veoPrompt || '')}</textarea>
+          </div>
         </div>
 
       </div>`).join('');
@@ -8260,13 +8414,17 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
     if (tab) { tab.blur(); window.focus(); }
   }
 
-  function downloadFrameAsFile(dataUrl, filename) {
-    const a = document.createElement('a');
-    a.href = dataUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+  function downloadFrameAsFile(dataUrl, filename, delayMs) {
+    const _go = () => {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => document.body.removeChild(a), 200);
+    };
+    if (delayMs) setTimeout(_go, delayMs);
+    else _go();
   }
 
   function getVeoDuration(script) {
@@ -8447,6 +8605,44 @@ No markdown. Return only the JSON object.`
     segments[i].nbPreviewDataUrl = null;
     debounceSave();
     renderSegments();
+  }
+
+  // ── Toggle Veo 3 prompt visibility ───────────────────────────────────────
+  function toggleVeoPrompt(i) {
+    const wrap = document.getElementById('veo-wrap-' + i);
+    const btn  = document.getElementById('veo-toggle-' + i);
+    if (!wrap) return;
+    const hidden = wrap.style.display === 'none';
+    wrap.style.display = hidden ? '' : 'none';
+    if (btn) btn.innerHTML = hidden
+      ? '<i class="ti ti-eye-off"></i>'
+      : '<i class="ti ti-eye"></i>';
+    if (btn) btn.title = hidden ? 'Hide prompt' : 'Show prompt';
+  }
+
+  // ── More-menu open / close ────────────────────────────────────────────────
+  function toggleVsMoreMenu(btn) {
+    const menu = document.getElementById('vsMoreMenu');
+    if (!menu) return;
+    const isOpen = menu.classList.contains('open');
+    if (isOpen) {
+      menu.classList.remove('open');
+    } else {
+      menu.classList.add('open');
+      // Close on outside click
+      setTimeout(() => {
+        document.addEventListener('click', function _close(e) {
+          if (!menu.contains(e.target) && e.target !== btn) {
+            menu.classList.remove('open');
+            document.removeEventListener('click', _close);
+          }
+        });
+      }, 0);
+    }
+  }
+  function closeVsMoreMenu() {
+    const menu = document.getElementById('vsMoreMenu');
+    if (menu) menu.classList.remove('open');
   }
 
   // ── One-click Redo Scene (copies single-scene instruction) ────────────────
@@ -8631,8 +8827,10 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
       const avatarFile = `all_scenes_photo1_avatar.jpg`;
       let sheet = `ALL SCENES — MANUAL PROMPT SHEET\nGenerated: ${new Date().toLocaleString()}\n`;
       sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+      let dlIdx = 0;
       if (avatarImageDataUrl) {
-        downloadFrameAsFile(avatarImageDataUrl, avatarFile);
+        downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIdx * 300);
+        dlIdx++;
         sheet += `📁 Files saved to Downloads:\n• ${avatarFile}  ← Avatar (Photo 1 — reuse every scene)\n`;
       }
       segments.forEach((seg, gi) => {
@@ -8640,7 +8838,8 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
         if (skipDone && seg.done) return;
         if (seg.frameDataUrl) {
           const fn = `scene${gi+1}_photo2_startframe.jpg`;
-          downloadFrameAsFile(seg.frameDataUrl, fn);
+          downloadFrameAsFile(seg.frameDataUrl, fn, dlIdx * 300);
+          dlIdx++;
           sheet += `• ${fn}  ← Scene ${gi+1} start frame (Photo 2)\n`;
         }
       });
@@ -8814,10 +9013,13 @@ IMAGE FILES IN DOWNLOADS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 `;
 
-    // Download all images upfront
+    // Download all images upfront — staggered 300ms apart to avoid Chrome's
+    // automatic-download blocker which cuts off after ~10 simultaneous triggers
     const avatarFile = `all_scenes_photo1_avatar.jpg`;
+    let dlIndex = 0;
     if (avatarImageDataUrl) {
-      downloadFrameAsFile(avatarImageDataUrl, avatarFile);
+      downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIndex * 300);
+      dlIndex++;
       instruction += `• ${avatarFile}  ← Avatar (Photo 1, reuse for every scene)\n`;
     }
 
@@ -8827,7 +9029,8 @@ IMAGE FILES IN DOWNLOADS:
       if (skipDone && seg.done) return;
       if (seg.frameDataUrl) {
         const fname = `scene${globalI+1}_photo2_startframe.jpg`;
-        downloadFrameAsFile(seg.frameDataUrl, fname);
+        downloadFrameAsFile(seg.frameDataUrl, fname, dlIndex * 300);
+        dlIndex++;
         instruction += `• ${fname}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
       }
     });
@@ -11074,6 +11277,12 @@ TECHNICAL SPECS:
     const savedTab = localStorage.getItem('sm_active_tab') || 'dashboard';
     switchTab(savedTab);
 
+    // Hide "How it works" banner if user already dismissed it
+    if (localStorage.getItem('vs_hiw_dismissed')) {
+      const hiw = document.getElementById('vsHowItWorks');
+      if (hiw) hiw.style.display = 'none';
+    }
+
     // Warn before closing tab if there's unsaved segment work in progress
     window.addEventListener('beforeunload', e => {
       if (segments && segments.length > 0 && segments.some(s => s.veoPrompt || s.nbPrompt || s.script)) {
@@ -13025,5 +13234,194 @@ TECHNICAL SPECS:
               <div style="font-size:11px;color:var(--text-2);margin-top:3px;" id="uset-modeDesc">Claude in Chrome handles everything — file uploads, prompt pasting, generation, and downloading.</div>
             </div>
           </div>
-          <div id="uset-modeDetail" style="font-size:11px;color:var(--text-3);line-height:1.6;border-top:1px solid var(--border);padding-top:10px;">
-            <strong style="color:var(--text-2);">ON (Automated):</strong> You paste the instruction into Claude — it opens Flow, uploads your images, pastes all prompts, generates every scene, and marks them d                                                                                                                                                                                                                                                                                                                                                  
+          <div id="uset-modeDetail" style="font-size:11px;color:var(--text-3);line-height:1.6;border-top:1px solid var(--border);padding-top:10px;"></div>
+        </div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveUserSettingsTab()">Save Setup</button></div>
+      </div>
+
+      <!-- APPEARANCE -->
+      <div id="uset-tab-appearance" class="uset-tab-content">
+        <div class="uset-section-title">Color Theme</div>
+        <div style="display:flex;gap:8px;margin-bottom:20px;">
+          <button id="uset-theme-system" class="uset-theme-btn active" onclick="selectUsetTheme('system')">System</button>
+          <button id="uset-theme-dark"   class="uset-theme-btn"        onclick="selectUsetTheme('dark')">Dark</button>
+          <button id="uset-theme-light"  class="uset-theme-btn"        onclick="selectUsetTheme('light')">Light</button>
+        </div>
+
+        <div class="uset-section-title">Accent Color</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px;">
+          <button class="uset-accent-swatch selected" data-color="purple" onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#7c6af7,#a78bfa);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Purple"></button>
+          <button class="uset-accent-swatch" data-color="blue"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#3b82f6,#60a5fa);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Blue"></button>
+          <button class="uset-accent-swatch" data-color="teal"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#14b8a6,#2dd4bf);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Teal"></button>
+          <button class="uset-accent-swatch" data-color="green"  onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#22c55e,#4ade80);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Green"></button>
+          <button class="uset-accent-swatch" data-color="rose"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f43f5e,#fb7185);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Rose"></button>
+          <button class="uset-accent-swatch" data-color="orange" onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f97316,#fb923c);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Orange"></button>
+          <button class="uset-accent-swatch" data-color="amber"  onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Amber"></button>
+          <button class="uset-accent-swatch" data-color="pink"   onclick="_selectAccentSwatch(this)" style="background:linear-gradient(135deg,#ec4899,#f472b6);width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;" title="Pink"></button>
+        </div>
+
+        <div class="uset-section-title">Background Theme</div>
+        <div class="bg-theme-grid">
+          <button class="bg-theme-btn" data-bg="midnight" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#0d1117,#161b22);"></div>
+            <span class="bg-theme-label">Midnight</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e,#0c1830);"></div>
+            <span class="bg-theme-label">Abyss</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000,#181818);"></div>
+            <span class="bg-theme-label">Carbon</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12,#181e2c);"></div>
+            <span class="bg-theme-label">Slate</span>
+          </button>
+        </div>
+
+        <div class="uset-section-title">UI Scale</div>
+        <div class="uset-row" style="margin-bottom:4px;">
+          <label class="uset-label">Zoom</label>
+          <input id="uset-scale-slider" type="range" min="80" max="130" step="5" value="100" oninput="previewUsetScale(this.value)" style="flex:1;accent-color:var(--accent);">
+          <span id="uset-scale-display" style="font-size:12px;font-weight:600;color:var(--text-1);min-width:36px;">100%</span>
+        </div>
+
+        <div class="uset-section-title" style="margin-top:18px;">Accessibility</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:12px;">
+          <div class="uset-row">
+            <label class="uset-toggle">
+              <input type="checkbox" id="uset-hc-toggle" onchange="toggleHighContrast(this.checked)">
+              <div class="uset-toggle-track"></div>
+              <div class="uset-toggle-thumb"></div>
+            </label>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">High Contrast</div>
+              <div style="font-size:11px;color:var(--text-3);">Increases border and text contrast for readability.</div>
+            </div>
+          </div>
+          <div class="uset-row">
+            <label class="uset-toggle">
+              <input type="checkbox" id="uset-rm-toggle" onchange="toggleReduceMotion(this.checked)">
+              <div class="uset-toggle-track"></div>
+              <div class="uset-toggle-thumb"></div>
+            </label>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">Reduce Motion</div>
+              <div style="font-size:11px;color:var(--text-3);">Disables animations and transitions throughout the app.</div>
+            </div>
+          </div>
+        </div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
+      </div>
+
+      <!-- BILLING -->
+      <div id="uset-tab-billing" class="uset-tab-content">
+        <div id="billingTabContent">
+          <div style="display:flex;align-items:center;gap:10px;padding:40px 0;justify-content:center;color:var(--text-3);font-size:13px;">
+            <i class="ti ti-loader-2" style="font-size:18px;"></i> Loading billing info…
+          </div>
+        </div>
+      </div>
+
+      <!-- SECURITY -->
+      <div id="uset-tab-security" class="uset-tab-content">
+        <div class="uset-section-title">Change Password</div>
+        <div class="uset-desc">Update the password for your account. Must be at least 8 characters.</div>
+        <div class="uset-row">
+          <label class="uset-label">New Password</label>
+          <input id="uset-newPassword" class="uset-input" type="password" placeholder="New password (min 8 chars)">
+        </div>
+        <div class="uset-row">
+          <label class="uset-label">Confirm</label>
+          <input id="uset-confirmPassword" class="uset-input" type="password" placeholder="Confirm new password">
+        </div>
+        <div id="uset-pwError"   style="display:none;font-size:11px;color:#f87171;margin-bottom:10px;"></div>
+        <div id="uset-pwSuccess" style="display:none;font-size:11px;color:#4ade80;margin-bottom:10px;">Password updated successfully.</div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveNewPassword()">Update Password</button></div>
+
+        <div class="uset-section-title" style="margin-top:24px;">Sessions</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">You are currently signed in on this device.</div>
+          <button onclick="closeUserSettings();document.getElementById('signOutBtn')?.click();" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign Out</button>
+        </div>
+      </div>
+
+      <!-- HELP -->
+      <div id="uset-tab-help" class="uset-tab-content">
+        <div class="uset-section-title">Getting Started</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">1. Add your accounts</div>
+            <div style="font-size:11px;color:var(--text-3);">Go to Accounts tab and add each social profile you manage. Include the username, platform, niche, and target audience.</div>
+          </div>
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">2. Load a viral script</div>
+            <div style="font-size:11px;color:var(--text-3);">Open Viral Scripts, pick a script, and click Use Script to load it into the Video Studio.</div>
+          </div>
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">3. Generate your Veo 3 prompts</div>
+            <div style="font-size:11px;color:var(--text-3);">In Video Studio, split your script into scenes and use AI Describe or Generate All to build prompts. Then copy to Google Flow.</div>
+          </div>
+        </div>
+        <div class="uset-section-title">Support</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Have a question or found a bug? Reach out and we'll get back to you.</div>
+          <a href="mailto:support@affiliateos.app" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;background:var(--grad-accent);color:#fff;font-size:12px;font-weight:600;text-decoration:none;">
+            <i class="ti ti-mail"></i> support@affiliateos.app
+          </a>
+        </div>
+      </div>
+
+      <!-- DATA -->
+      <div id="uset-tab-data" class="uset-tab-content">
+        <div class="uset-section-title">Export Data</div>
+        <div class="uset-desc">Download a copy of your accounts, scripts, and settings as a JSON file.</div>
+        <div class="uset-save-row" style="margin-bottom:24px;">
+          <button class="uset-btn-save" onclick="exportProjectJSON()">Export All Data</button>
+        </div>
+        <div class="uset-section-title">Import Data</div>
+        <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
+        <div class="uset-save-row" style="margin-bottom:24px;">
+          <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
+          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(event)">
+        </div>
+        <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
+        <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Clear all local data. This removes your accounts, scripts, and settings from this browser. Your Supabase account stays intact.</div>
+          <button onclick="showConfirm('Clear all local data? This cannot be undone.', () => { localStorage.clear(); location.reload(); })" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
+        </div>
+      </div>
+
+      <!-- ABOUT -->
+      <div id="uset-tab-about" class="uset-tab-content">
+        <div style="text-align:center;padding:30px 0 20px;">
+          <div style="font-size:28px;margin-bottom:8px;">⚡</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text-1);margin-bottom:4px;">AffiliateOS</div>
+          <div style="font-size:11px;color:var(--text-3);">AI-powered video content engine for affiliate marketers</div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
+          <div class="uset-row" style="margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text-3);">Version</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">1.0.0</span>
+          </div>
+          <div class="uset-row" style="margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text-3);">Platform</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Web App (Netlify)</span>
+          </div>
+          <div class="uset-row">
+            <span style="font-size:11px;color:var(--text-3);">AI Engine</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Veo 3 · GPT-4o · Claude</span>
+          </div>
+        </div>
+        <div style="text-align:center;padding-top:16px;">
+          <a href="https://affiliateos.app" target="_blank" style="font-size:11px;color:var(--accent-2);text-decoration:none;">affiliateos.app</a>
+        </div>
+      </div>
+
+    </div><!-- end content scroll -->
+  </div><!-- end userSettingsPanel -->
+</div><!-- end userSettingsOverlay -->
+
+</body>
+</html>
