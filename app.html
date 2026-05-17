@@ -9301,7 +9301,7 @@ STEP B — Store on Flow tab:
     window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
     return 'stored';
 
-STEP C — Inject into file input:
+STEP C — Inject into file input (React-compatible):
   javascript_tool, tabId=FLOW_TAB_ID:
     (async () => {
       try {
@@ -9320,16 +9320,32 @@ STEP C — Inject into file input:
         }
         const input = findInput(document.body);
         if (!input) return 'ERROR: no file input found';
+        // Set files via DataTransfer
         input.files = dt.files;
+        // React fiber approach — bypasses synthetic event system
+        const fKey = Object.keys(input).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+        if (fKey) {
+          let fiber = input[fKey];
+          while (fiber) {
+            if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
+              fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
+              window.__pendingImg = null;
+              return 'SUCCESS_REACT';
+            }
+            fiber = fiber.return;
+          }
+        }
+        // Fallback: DOM events
         input.dispatchEvent(new Event('change',{bubbles:true}));
         input.dispatchEvent(new Event('input',{bubbles:true}));
         window.__pendingImg = null;
-        return 'SUCCESS';
+        return 'SUCCESS_DOM';
       } catch(e) { return 'ERROR: '+e.message; }
     })()
 
-After Step C: screenshot to confirm thumbnail appeared.
-If no thumbnail after 2 attempts, move on — do not get stuck.
+After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
+If result says SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
+If no thumbnail after 2 attempts, try STEP C again once more before moving on.
 ⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9744,7 +9760,7 @@ STEP B — Store on Flow tab:
     window.__pendingImg = 'PASTE_FULL_DATA_URL_FROM_STEP_A';
     return 'stored';
 
-STEP C — Inject into file input:
+STEP C — Inject into file input (React-compatible):
   javascript_tool, tabId=FLOW_TAB_ID:
     (async () => {
       try {
@@ -9763,16 +9779,32 @@ STEP C — Inject into file input:
         }
         const input = findInput(document.body);
         if (!input) return 'ERROR: no file input found';
+        // Set files via DataTransfer
         input.files = dt.files;
+        // React fiber approach — bypasses synthetic event system
+        const fKey = Object.keys(input).find(k => k.startsWith('__reactFiber') || k.startsWith('__reactInternalInstance'));
+        if (fKey) {
+          let fiber = input[fKey];
+          while (fiber) {
+            if (fiber.memoizedProps && typeof fiber.memoizedProps.onChange === 'function') {
+              fiber.memoizedProps.onChange({ target: input, currentTarget: input, bubbles: true, preventDefault:()=>{}, stopPropagation:()=>{} });
+              window.__pendingImg = null;
+              return 'SUCCESS_REACT';
+            }
+            fiber = fiber.return;
+          }
+        }
+        // Fallback: DOM events
         input.dispatchEvent(new Event('change',{bubbles:true}));
         input.dispatchEvent(new Event('input',{bubbles:true}));
         window.__pendingImg = null;
-        return 'SUCCESS';
+        return 'SUCCESS_DOM';
       } catch(e) { return 'ERROR: '+e.message; }
     })()
 
-After Step C: screenshot to confirm thumbnail appeared.
-If no thumbnail after 2 attempts, move on — do not get stuck.
+After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
+If result says SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
+If no thumbnail after 2 attempts, try STEP C again once more before moving on.
 ⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
