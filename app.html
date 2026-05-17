@@ -9274,7 +9274,10 @@ FIND TOOL PRIORITY (fastest to slowest — stop at the first one that works):
   1. Click media button  →  a popup appears with "Image" and "Video" options
   2. Click "Image"       →  find text="Image"
   3. A model list appears; click "Nano Banana Pro"  →  find text="Nano Banana Pro"
-  4. NB Pro panel expands above the bar with Photo 1, Photo 2, prompt area
+  4. ⚠ CRITICAL: After selecting Nano Banana Pro, the photo slots do NOT appear automatically.
+     You MUST click inside the text input field ("What do you want to create?") to trigger
+     the NB Pro panel to expand and reveal the Photo 1 and Photo 2 upload slots.
+     → find role="textbox" and click it → the panel expands above the bar
 
 ── SWITCHING TO VIDEO MODE (Veo 3) ──
   1. Click media button  →  popup appears
@@ -9289,6 +9292,11 @@ FIND TOOL PRIORITY (fastest to slowest — stop at the first one that works):
 ── NB PRO PANEL ELEMENTS ──
   • Photo 1 slot:   first upload area in the NB Pro panel (SLOT=0 for injection)
   • Photo 2 slot:   second upload area (SLOT=1 for injection)
+  ⚠ HOW TO INJECT INTO A PHOTO SLOT:
+    1. Click the Photo slot → asset library panel opens ("No results found" + "Upload image" button)
+    2. DO NOT click "Upload image". DO NOT close the panel.
+    3. Immediately run STEP A → STEP B → STEP C while the panel is open — the file input is live now.
+    4. STEP C injects the image and the panel closes automatically.
   • Remove Photo 2: click the × on the Photo 2 thumbnail  →  find aria-label containing "Remove" near Photo 2
   • Prompt field:   the large textarea inside the NB Pro panel (NOT the bottom bar input)
                     find role="textbox" inside the NB Pro panel, or click the visible prompt area
@@ -9368,7 +9376,7 @@ You must switch the bar between these modes yourself — it does not switch auto
 
 HOW TO OPEN NB PRO (Image mode):
   Follow "SWITCHING TO IMAGE MODE (NB Pro)" in the FLOW UI REFERENCE above.
-  Short form: click media button → Image → Nano Banana Pro → set 9:16 → inject photos → paste prompt → Generate.
+  Short form: click media button → Image → Nano Banana Pro → click text input field (triggers panel to open) → set 9:16 → inject photos → paste prompt → Generate.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW THIS RUN WORKS — TWO PHASES (do them in order)
@@ -9475,15 +9483,20 @@ STEP C — Inject into file input (React-compatible, SLOT-aware):
 
   Photo 1 (avatar): run STEP C with SLOT=0
   Photo 2 (start frame): run STEP C with SLOT=1
-⚠ TIMING: The file input only exists in the DOM when the NB Pro panel is open AND a photo
-  slot is in its "ready to receive" state. If STEP C returns 'ERROR: no file input found':
-    1. Click directly on the Photo 1 or Photo 2 upload area/slot in the NB Pro panel
-    2. Immediately run STEP C again (the input appears briefly when the slot is active)
+⚠ TIMING: The file input only exists in the DOM when a photo slot is in "active/open" state.
+  Clicking a photo slot opens the asset library panel ("No results found" + "Upload image" button).
+  THIS IS NORMAL AND EXPECTED — do not close it, do not click "Upload image".
+  The file input IS NOW ACTIVE in the DOM. Run STEP C immediately while the panel is open.
+  STEP C will inject the image directly and the panel will close on its own.
 
-After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
-If SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
-If no thumbnail after 2 attempts, try clicking the slot again then run STEP C once more.
-⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
+  If STEP C returns 'ERROR: no file input found' while the asset library is open:
+    → The panel may not have fully rendered yet. Wait 1 second, then run STEP C again.
+    → Do NOT click "Upload image". Do NOT use file_upload tool. Just run STEP C.
+
+After Step C succeeds: take a screenshot to confirm the thumbnail appeared in the photo slot.
+  If SUCCESS_REACT — React accepted it, thumbnail should be visible.
+  If SUCCESS_DOM — check thumbnail carefully; if missing, click the slot and re-run STEP C.
+⚠ Do NOT use file_upload tool for frame images. Do NOT click "Upload image" in the asset library.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 HOW TO ADD A COMPOSITE TO THE NEXT PROMPT
@@ -10018,15 +10031,20 @@ STEP C — Inject into file input (React-compatible, SLOT-aware):
 
   Photo 1 (avatar): run STEP C with SLOT=0
   Photo 2 (start frame): run STEP C with SLOT=1
-⚠ TIMING: The file input only exists in the DOM when the NB Pro panel is open AND a photo
-  slot is in its "ready to receive" state. If STEP C returns 'ERROR: no file input found':
-    1. Click directly on the Photo 1 or Photo 2 upload area/slot in the NB Pro panel
-    2. Immediately run STEP C again (the input appears briefly when the slot is active)
+⚠ TIMING: The file input only exists in the DOM when a photo slot is in "active/open" state.
+  Clicking a photo slot opens the asset library panel ("No results found" + "Upload image" button).
+  THIS IS NORMAL AND EXPECTED — do not close it, do not click "Upload image".
+  The file input IS NOW ACTIVE in the DOM. Run STEP C immediately while the panel is open.
+  STEP C will inject the image directly and the panel will close on its own.
 
-After Step C: screenshot to confirm thumbnail appeared. Look for new image in photo slot.
-If SUCCESS_REACT — React accepted it. If SUCCESS_DOM — check thumbnail carefully.
-If no thumbnail after 2 attempts, try clicking the slot again then run STEP C once more.
-⚠ Do NOT use file_upload tool for frame images. Do NOT click any upload button.
+  If STEP C returns 'ERROR: no file input found' while the asset library is open:
+    → The panel may not have fully rendered yet. Wait 1 second, then run STEP C again.
+    → Do NOT click "Upload image". Do NOT use file_upload tool. Just run STEP C.
+
+After Step C succeeds: take a screenshot to confirm the thumbnail appeared in the photo slot.
+  If SUCCESS_REACT — React accepted it, thumbnail should be visible.
+  If SUCCESS_DOM — check thumbnail carefully; if missing, click the slot and re-run STEP C.
+⚠ Do NOT use file_upload tool for frame images. Do NOT click "Upload image" in the asset library.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 STEP 1 — Nano Banana Pro
