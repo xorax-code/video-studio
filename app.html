@@ -268,9 +268,28 @@
   }
   /* Segment card — frame image border */
   .seg-frame-img {
-    width:100%; height:auto; max-height:130px; object-fit:cover;
+    width:100%; height:auto; max-height:200px; object-fit:contain;
     border-radius:6px; border:1px solid var(--border-2); display:block;
+    cursor:zoom-in; background: var(--bg);
   }
+  /* Frame lightbox */
+  #frameLightbox {
+    display:none; position:fixed; inset:0; z-index:99999;
+    background:rgba(0,0,0,0.88); align-items:center; justify-content:center;
+    cursor:zoom-out;
+  }
+  #frameLightbox.open { display:flex; }
+  #frameLightbox img {
+    max-width:92vw; max-height:92vh; object-fit:contain;
+    border-radius:8px; border:1px solid rgba(255,255,255,0.08);
+    box-shadow:0 8px 60px rgba(0,0,0,0.8);
+    pointer-events:none;
+  }
+  #frameLightbox .lb-close {
+    position:fixed; top:18px; right:22px; font-size:24px; color:rgba(255,255,255,0.7);
+    cursor:pointer; background:none; border:none; line-height:1;
+  }
+  #frameLightbox .lb-close:hover { color:#fff; }
   /* Download frame button */
   .seg-dl-btn {
     margin-top:4px; width:100%; font-size:9px; padding:2px 0; border-radius:3px; cursor:pointer;
@@ -1152,6 +1171,23 @@
   }
   .vs-panel-header.collapsible { cursor: pointer; user-select: none; }
   .vs-panel-header.collapsible:hover { color: var(--text-2); }
+
+  /* ── Left column collapse toggle ── */
+  #vsLeftCol { transition: width 0.22s ease, min-width 0.22s ease; overflow: hidden; }
+  #vsLayout.left-collapsed #vsLeftCol  { width: 0 !important; min-width: 0 !important; flex-shrink: 1 !important; }
+  #vsLayout.left-collapsed #vsColDivider { display: none !important; }
+  #leftColToggleBtn {
+    position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+    z-index: 20; width: 18px; height: 48px;
+    background: var(--surface-2); border: 1px solid var(--border-2);
+    border-left: none; border-radius: 0 6px 6px 0;
+    color: var(--text-3); font-size: 10px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: color 0.15s, background 0.15s;
+    writing-mode: horizontal-tb;
+  }
+  #leftColToggleBtn:hover { color: var(--text-1); background: var(--surface-3); }
+  #vsRightCol { position: relative; }
 
   /* ── Video player mini / expanded toggle ── */
   #vsPanelRefVideo { transition: none; }
@@ -2543,7 +2579,7 @@
     <button class="cmd-k-badge" onclick="openCmdPalette()" title="Command palette (⌘K)">
       <i class="ti ti-search" style="font-size:13px;"></i>
       Search&hellip;
-      <kbd id="cmdKHint">⌘K</kbd>
+      <kbd id="cmdKHint">Ctrl+K</kbd>
     </button>
     <button class="topnav-settings-btn topnav-icon-btn" onclick="openUserSettings()" title="Settings"><i class="ti ti-settings"></i></button>
     <button onclick="toggleAppTheme()" id="themeToggleBtn" title="Toggle light/dark mode" style="width:38px;height:21px;border-radius:11px;background:var(--surface-3);border:1px solid var(--border-2);cursor:pointer;position:relative;padding:0;transition:background 0.22s,border-color 0.22s;flex-shrink:0;">
@@ -3226,43 +3262,6 @@
           <div class="vs-panel-resize-handle" onmousedown="vsStartPanelResize(event,'vsPanelAvatar')"></div>
         </div>
 
-        <!-- Video Downloader — replicator only -->
-        <div id="vsPanelDownloader" class="vs-panel replicator-only" style="flex-shrink:0;position:relative;">
-          <div class="vs-panel-header" style="padding:5px 10px;cursor:pointer;" onclick="const b=this.nextElementSibling;const arr=this.querySelector('.dl-arrow');const h=this.parentElement.querySelector('.vs-panel-resize-handle');b.style.display=b.style.display==='none'?'flex':'none';arr.style.transform=b.style.display==='none'?'rotate(-90deg)':'rotate(0deg)';if(h)h.style.display=b.style.display==='none'?'none':'block';">
-            <span>📥 Video Downloader</span>
-            <span class="dl-arrow" style="font-size:10px;color:var(--text-3);transition:transform 0.2s;transform:rotate(-90deg);">▾</span>
-          </div>
-          <div style="padding:7px 10px;display:none;flex-direction:column;gap:6px;">
-            <div style="display:flex;flex-direction:column;gap:5px;">
-              <div class="dl-service-row" title="snapsave.app" onclick="openDownloader('snapsave')"
-                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:5px;cursor:pointer;gap:8px;">
-                <div>
-                  <div style="font-size:11px;font-weight:700;color:var(--accent-2);">⬇ SnapSave</div>
-                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">Facebook · TikTok · Instagram · YouTube · Twitter</div>
-                </div>
-                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">snapsave.app</div>
-              </div>
-              <div class="dl-service-row" title="ssstik.io" onclick="openDownloader('ssstik')"
-                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
-                <div>
-                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ SSSTik</div>
-                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">TikTok (no watermark) · Facebook · Instagram</div>
-                </div>
-                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">ssstik.io</div>
-              </div>
-              <div class="dl-service-row" title="fdown.net" onclick="openDownloader('fdown')"
-                style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
-                <div>
-                  <div style="font-size:11px;font-weight:700;color:var(--text-1);">⬇ FDown.net</div>
-                  <div style="font-size:9px;color:var(--text-3);margin-top:1px;">Facebook only — HD &amp; SD quality options</div>
-                </div>
-                <div style="font-size:9px;color:var(--text-3);opacity:0.6;flex-shrink:0;">fdown.net</div>
-              </div>
-            </div>
-            <div style="font-size:9px;color:var(--text-3);line-height:1.5;margin-top:2px;">Click a service to open it in a new tab.</div>
-          </div>
-          <div class="vs-panel-resize-handle" style="display:none;" onmousedown="vsStartPanelResize(event,'vsPanelDownloader')"></div>
-        </div>
 
         <!-- Background — producer only -->
         <div class="vs-panel producer-only" style="flex-shrink:0;">
@@ -3375,6 +3374,10 @@
               <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Setting / Location</div>
               <input type="text" id="studioSetting" placeholder="e.g. modern kitchen, gym, outdoor park…" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;">
             </div>
+            <div>
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-3);text-transform:uppercase;margin-bottom:3px;">Voice Style <span class="help-tip tip-below" data-tip="Describe the narrator's voice tone. This is injected into every Veo 3 prompt's audio field to keep the voice consistent across all scenes.\n\nExamples: warm and conversational · energetic and upbeat · calm and authoritative · hushed and intimate">?</span></div>
+              <input type="text" id="studioVoice" placeholder="e.g. warm and conversational, energetic, calm…" style="width:100%;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;" oninput="localStorage.setItem('vs_voice_style', this.value)">
+            </div>
           </div>
         </div>
 
@@ -3418,20 +3421,6 @@
           </div>
         </div>
 
-        <!-- Saved Library -->
-        <div id="vsPanelSaved" class="vs-panel" style="flex:1;overflow:hidden;min-height:0;display:flex;flex-direction:column;position:relative;">
-          <div class="vs-panel-header collapsible" style="padding:5px 10px;" onclick="vsPanelToggle(this)">
-            <span>Saved</span>
-            <div style="display:flex;gap:6px;align-items:center;">
-              <span id="libCount" style="font-size:10px;color:var(--text-3);"></span>
-              <span class="vsp-arrow">▾</span>
-            </div>
-          </div>
-          <div id="studioLibrary" style="flex:1;overflow-y:auto;padding:6px 10px;">
-            <div style="font-size:11px;color:var(--text-3);text-align:center;padding:10px 0;">No saved recreations yet</div>
-          </div>
-          <div class="vs-panel-resize-handle" onmousedown="vsStartPanelResize(event,'vsPanelSaved')"></div>
-        </div>
 
       </div>
 
@@ -3444,6 +3433,8 @@
 
       <!-- ===== RIGHT COLUMN ===== -->
       <div id="vsRightCol" style="display:flex;flex-direction:column;gap:8px;overflow-x:hidden;overflow-y:hidden;min-height:0;flex:1;min-width:0;">
+        <!-- Left column collapse handle — sits on the left edge of the right col -->
+        <button id="leftColToggleBtn" onclick="toggleLeftCol()" title="Hide left panel">‹</button>
 
         <!-- Step flow strip — replicator only -->
         <div id="repFlowStrip" class="replicator-only" style="display:flex;align-items:center;flex-wrap:wrap;gap:2px 0;flex-shrink:0;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:10.5px;color:var(--text-3);overflow:hidden;min-height:0;">
@@ -3486,7 +3477,7 @@
           <div class="video-panel-body">
             <div style="display:grid;grid-template-columns:1fr auto;gap:6px;align-items:stretch;flex:1;min-height:0;">
               <div style="display:flex;flex-direction:column;min-height:0;overflow:hidden;">
-                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:160px;max-height:160px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <div id="videoUploadZone" onclick="document.getElementById('refVideoInput').click()" style="border:1px dashed var(--border-2);border-radius:3px;cursor:pointer;background:var(--bg);height:120px;max-height:120px;overflow:hidden;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
                   <div id="videoUploadPlaceholder" style="text-align:center;">
                     <div style="font-size:16px;opacity:0.25;margin-bottom:2px;">🎬</div>
                     <div style="font-size:10px;color:var(--text-3);">Click to upload MP4</div>
@@ -3494,6 +3485,31 @@
                   <video id="refVideoEl" controls style="display:none;width:100%;height:100%;object-fit:contain;border-radius:2px;" ontimeupdate="updateTimestamp()"></video>
                 </div>
                 <input type="file" id="refVideoInput" accept="video/mp4,video/*" style="display:none;" onchange="onVideoFileChange(event)">
+                <!-- Inline downloader — collapsed by default -->
+                <div style="margin-top:5px;">
+                  <button onclick="const d=document.getElementById('inlineDlPanel');const arr=document.getElementById('inlineDlArrow');const open=d.style.display!=='none';d.style.display=open?'none':'flex';arr.style.transform=open?'rotate(-90deg)':'rotate(0deg)';"
+                    style="width:100%;display:flex;align-items:center;justify-content:between;gap:5px;background:none;border:none;color:var(--text-3);font-size:9.5px;cursor:pointer;padding:2px 0;font-family:inherit;text-align:left;">
+                    <span style="flex:1;">📥 Need to download a video first?</span>
+                    <span id="inlineDlArrow" style="font-size:9px;transition:transform 0.18s;transform:rotate(-90deg);">▾</span>
+                  </button>
+                  <div id="inlineDlPanel" style="display:none;flex-direction:column;gap:4px;margin-top:4px;">
+                    <div class="dl-service-row" title="snapsave.app" onclick="openDownloader('snapsave')"
+                      style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:5px;cursor:pointer;gap:8px;">
+                      <div style="font-size:10px;font-weight:700;color:var(--accent-2);">⬇ SnapSave <span style="font-weight:400;opacity:0.7;font-size:9px;">FB · TikTok · IG · YT</span></div>
+                      <span style="font-size:9px;color:var(--text-3);opacity:0.6;">snapsave.app</span>
+                    </div>
+                    <div class="dl-service-row" title="ssstik.io" onclick="openDownloader('ssstik')"
+                      style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
+                      <div style="font-size:10px;font-weight:700;color:var(--text-1);">⬇ SSSTik <span style="font-weight:400;opacity:0.7;font-size:9px;">TikTok · FB · IG</span></div>
+                      <span style="font-size:9px;color:var(--text-3);opacity:0.6;">ssstik.io</span>
+                    </div>
+                    <div class="dl-service-row" title="fdown.net" onclick="openDownloader('fdown')"
+                      style="display:flex;align-items:center;justify-content:space-between;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:5px;cursor:pointer;gap:8px;">
+                      <div style="font-size:10px;font-weight:700;color:var(--text-1);">⬇ FDown.net <span style="font-weight:400;opacity:0.7;font-size:9px;">Facebook HD/SD</span></div>
+                      <span style="font-size:9px;color:var(--text-3);opacity:0.6;">fdown.net</span>
+                    </div>
+                  </div>
+                </div>
               </div>
               <!-- Scene buttons — hidden in mini mode -->
               <div class="video-scene-btns" style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;align-self:flex-start;padding-top:2px;">
@@ -3549,6 +3565,7 @@
                 <button class="vs-more-item producer-only" id="hookVariationsBtn" onclick="generateHookVariations();closeVsMoreMenu()" title="Generate 5 alternative hooks for scene 1">🎣 Hook Variations</button>
                 <button class="vs-more-item producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts();closeVsMoreMenu()" title="Build NB Pro prompts for all scenes">🍌 Gen All NB Prompts</button>
                 <button class="vs-more-item" id="saveAllBtn" onclick="saveGeneratedToLibrary();closeVsMoreMenu()" style="display:none;">💾 Save to Library</button>
+                <button class="vs-more-item" onclick="openSavedLibraryModal();closeVsMoreMenu()">📚 View Saved <span id="libCount" style="font-size:9px;color:var(--text-3);margin-left:3px;"></span></button>
               </div>
             </div>
 
@@ -4087,7 +4104,43 @@
   </div>
 </div>
 
+<!-- ===== COMMAND PALETTE ===== -->
+<div id="cmdPalette" onclick="if(event.target===this)closeCmdPalette()">
+  <div class="cmd-box" role="dialog" aria-label="Command palette">
+    <div class="cmd-search-row">
+      <i class="ti ti-search"></i>
+      <input id="cmdInput" type="text" placeholder="Search commands or jump to tab…" autocomplete="off" spellcheck="false"
+        oninput="filterCmdList(this.value)"
+        onkeydown="cmdKeyNav(event)">
+      <kbd class="cmd-esc-hint" onclick="closeCmdPalette()" title="Close" style="cursor:pointer;">Esc</kbd>
+    </div>
+    <div id="cmdList"></div>
+  </div>
+</div>
+
 <!-- ===== REFERENCE VIDEO LIBRARY MODAL ===== -->
+<!-- Frame lightbox — click any segment frame thumbnail to expand -->
+<div id="frameLightbox" onclick="closeLightbox()">
+  <button class="lb-close" onclick="closeLightbox()">✕</button>
+  <img id="frameLightboxImg" src="" alt="Frame">
+</div>
+
+<div id="savedLibraryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;align-items:center;justify-content:center;" onclick="if(event.target===this)closeSavedLibraryModal()">
+  <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:20px;width:480px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:18px;">💾</span>
+        <span style="font-size:14px;font-weight:700;color:var(--text-1);">Saved Recreations</span>
+        <span id="libCountModal" style="font-size:10px;color:var(--text-3);"></span>
+      </div>
+      <button class="btn" onclick="closeSavedLibraryModal()" style="padding:2px 8px;font-size:12px;">✕</button>
+    </div>
+    <div id="studioLibrary" style="flex:1;overflow-y:auto;min-height:80px;">
+      <div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet</div>
+    </div>
+  </div>
+</div>
+
 <div id="videoLibraryModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9998;align-items:center;justify-content:center;" onclick="if(event.target===this)closeVideoLibrary()">
   <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:20px;width:480px;max-width:92vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
@@ -5544,10 +5597,115 @@
     });
   }
 
+  // ===== COMMAND PALETTE =====
+  const CMD_ITEMS = [
+    { group: 'Navigate', label: 'Dashboard',         icon: 'ti-layout-dashboard',  action: () => switchTab('dashboard') },
+    { group: 'Navigate', label: 'Video Studio',      icon: 'ti-video',             action: () => switchTab('studio') },
+    { group: 'Navigate', label: 'Viral Scripts',     icon: 'ti-script',            action: () => switchTab('scripts') },
+    { group: 'Navigate', label: 'Accounts',          icon: 'ti-users',             action: () => switchTab('accounts') },
+    { group: 'Navigate', label: 'Analytics',         icon: 'ti-chart-bar',         action: () => switchTab('analytics') },
+    { group: 'Navigate', label: 'Settings',          icon: 'ti-settings',          action: () => openUserSettings() },
+    { group: 'Studio',   label: 'Detect Cuts',       icon: 'ti-scissors',          action: () => { switchTab('studio'); setTimeout(autoSegmentBySceneChange, 200); } },
+    { group: 'Studio',   label: 'Process Everything',icon: 'ti-bolt',              action: () => { switchTab('studio'); setTimeout(processEverything, 200); } },
+    { group: 'Studio',   label: 'Generate Prompts',  icon: 'ti-wand',              action: () => { switchTab('studio'); setTimeout(generateAllSegmentPrompts, 200); } },
+    { group: 'Studio',   label: 'Run All Scenes',    icon: 'ti-player-play',       action: () => { switchTab('studio'); setTimeout(() => showPreflightModal(false), 200); } },
+    { group: 'Studio',   label: 'Copy All Veo Prompts', icon: 'ti-clipboard',     action: () => copyAllVeoPrompts() },
+    { group: 'Studio',   label: 'Clear Segments',    icon: 'ti-trash',             action: () => clearSegments() },
+    { group: 'Studio',   label: 'Open Video Library',icon: 'ti-books',             action: () => openVideoLibrary() },
+    { group: 'Studio',   label: 'Save to Library',   icon: 'ti-device-floppy',     action: () => saveGeneratedToLibrary() },
+    { group: 'App',      label: 'Toggle Dark/Light', icon: 'ti-sun',               action: () => toggleAppTheme() },
+    { group: 'App',      label: 'Sign Out',           icon: 'ti-logout',           action: () => doLogout() },
+  ];
+
+  let _cmdActive = -1;
+
+  function openCmdPalette() {
+    const pal = document.getElementById('cmdPalette');
+    const inp = document.getElementById('cmdInput');
+    if (!pal) return;
+    pal.classList.add('open');
+    _cmdActive = -1;
+    filterCmdList('');
+    setTimeout(() => inp && inp.focus(), 30);
+    // Failsafe: close on Escape even if input doesn't have focus
+    pal._escHandler = (ev) => { if (ev.key === 'Escape') { ev.preventDefault(); closeCmdPalette(); } };
+    document.addEventListener('keydown', pal._escHandler, true); // capture phase
+  }
+
+  function closeCmdPalette() {
+    const pal = document.getElementById('cmdPalette');
+    if (!pal) return;
+    pal.classList.remove('open');
+    // Remove the capture-phase Escape listener
+    if (pal._escHandler) { document.removeEventListener('keydown', pal._escHandler, true); pal._escHandler = null; }
+    const inp = document.getElementById('cmdInput');
+    if (inp) inp.value = '';
+  }
+
+  function filterCmdList(query) {
+    const list = document.getElementById('cmdList');
+    if (!list) return;
+    _cmdActive = -1;
+    const q = query.trim().toLowerCase();
+    const filtered = q ? CMD_ITEMS.filter(c => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)) : CMD_ITEMS;
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="cmd-empty">No commands found</div>';
+      return;
+    }
+    const groups = [...new Set(filtered.map(c => c.group))];
+    list.innerHTML = groups.map(g => {
+      const items = filtered.filter(c => c.group === g);
+      return `<div class="cmd-group-label">${g}</div>` +
+        items.map((c, _i) => {
+          const idx = filtered.indexOf(c);
+          return `<div class="cmd-item" data-idx="${idx}" onmousedown="event.preventDefault();_cmdRunIdx(${idx})">
+            <i class="ti ${c.icon}"></i>
+            <span>${c.label}</span>
+          </div>`;
+        }).join('');
+    }).join('');
+  }
+
+  function _cmdRunIdx(idx) {
+    const filtered = _getCmdFiltered();
+    if (filtered[idx]) { filtered[idx].action(); closeCmdPalette(); }
+  }
+
+  function _getCmdFiltered() {
+    const inp = document.getElementById('cmdInput');
+    const q = (inp ? inp.value : '').trim().toLowerCase();
+    return q ? CMD_ITEMS.filter(c => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)) : CMD_ITEMS;
+  }
+
+  function cmdKeyNav(e) {
+    const list = document.getElementById('cmdList');
+    const items = list ? list.querySelectorAll('.cmd-item') : [];
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      _cmdActive = Math.min(_cmdActive + 1, items.length - 1);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      _cmdActive = Math.max(_cmdActive - 1, 0);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (_cmdActive >= 0 && items[_cmdActive]) {
+        const idx = parseInt(items[_cmdActive].dataset.idx);
+        _cmdRunIdx(idx);
+      }
+      return;
+    } else if (e.key === 'Escape') {
+      e.preventDefault(); e.stopPropagation(); closeCmdPalette(); return;
+    }
+    items.forEach((el, i) => el.classList.toggle('active', i === _cmdActive));
+    if (items[_cmdActive]) items[_cmdActive].scrollIntoView({ block: 'nearest' });
+  }
+
   // Keyboard
   let _admSeq = 0, _admTimer = null;
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeModal(); closeCompModal(); closeScriptModal(); closeAdminOverlay(); closeUserSettings(); }
+    if (e.key === 'Escape') { closeModal(); closeCompModal(); closeScriptModal(); closeAdminOverlay(); closeUserSettings(); closeCmdPalette(); }
+    // Ctrl+K — open command palette
+    if (e.ctrlKey && e.key === 'k') { e.preventDefault(); openCmdPalette(); return; }
     // Admin shortcut: Ctrl+Shift+1 then Ctrl+Shift+2 within 1.5s
     if (e.ctrlKey && e.shiftKey && (e.key === '1' || e.key === '!')) {
       _admSeq = 1; clearTimeout(_admTimer); _admTimer = setTimeout(()=>{ _admSeq=0; }, 1500);
@@ -5827,7 +5985,17 @@
     const w = localStorage.getItem('affiliateos_leftColW')
            || localStorage.getItem('socialos_leftColW'); // migrate old key
     if (w) { const c = document.getElementById('vsLeftCol'); if (c) c.style.width = w; }
-    ['vsPanelAvatar','vsPanelScript','vsPanelDownloader','vsPanelSaved','vsPanelRefVideo'].forEach(id => {
+    // Restore voice style
+    const savedVoice = localStorage.getItem('vs_voice_style');
+    if (savedVoice) { const vEl = document.getElementById('studioVoice'); if (vEl) vEl.value = savedVoice; }
+    // Restore left column collapsed state
+    if (localStorage.getItem('vs_leftcol_collapsed') === '1') {
+      const layout = document.getElementById('vsLayout');
+      const btn    = document.getElementById('leftColToggleBtn');
+      if (layout) layout.classList.add('left-collapsed');
+      if (btn)    { btn.textContent = '›'; btn.title = 'Show left panel'; }
+    }
+    ['vsPanelAvatar','vsPanelScript','vsPanelRefVideo'].forEach(id => {
       const h = localStorage.getItem('affiliateos_panel_' + id)
              || localStorage.getItem('socialos_panel_' + id); // migrate old key
       if (!h) return;
@@ -5984,11 +6152,12 @@
     const promptText = `You are cataloguing the appearance of a person in a reference photo so it can later be used to verify AI-generated images of the SAME person. List ONLY what is clearly visible — never guess or invent. Be specific and concrete. Use exactly this structure, one short line each:
 
 FACE & HAIR: hair color, length and style; skin tone; any notable facial features.
+EYE COLOR: exact eye color if clearly visible (e.g. dark brown, light blue, green, hazel). Write "unknown" if not clearly visible.
 CLOTHING: each visible garment with its color and style.
 JEWELRY: every visible piece — earrings, necklaces, rings, bracelets, watches — with type and color. Write "none visible" if there is none.
 OTHER: glasses, visible nail color, hat, or anything else notable. Write "none" if nothing.
 
-Keep it under 120 words total. No intro, no commentary — just the four labelled lines.`;
+Keep it under 140 words total. No intro, no commentary — just the five labelled lines.`;
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -6235,6 +6404,7 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
     if (document.getElementById('videoFileName')) document.getElementById('videoFileName').textContent = file.name;
     document.getElementById('videoUploadZone').onclick = null;
     showVideoMiniBtn(true);
+    setTimeout(() => updateStepProgress?.(), 80);
   }
 
   function clearVideo() {
@@ -6310,6 +6480,17 @@ Keep it under 120 words total. No intro, no commentary — just the four labelle
     } catch (e) {
       showToast('Could not save video to library: ' + ((e && e.message) || e), 'error');
     }
+  }
+
+  function openSavedLibraryModal() {
+    const modal = document.getElementById('savedLibraryModal');
+    if (!modal) return;
+    renderStudioLibrary();
+    modal.style.display = 'flex';
+  }
+  function closeSavedLibraryModal() {
+    const modal = document.getElementById('savedLibraryModal');
+    if (modal) modal.style.display = 'none';
   }
 
   async function openVideoLibrary() {
@@ -6861,6 +7042,7 @@ RULES — read carefully:
       document.getElementById('originalScript').value = (data.text || '').trim();
       const tsNote = whisperSegments.length > 0 ? ` (${whisperSegments.length} timed chunks)` : '';
       status.textContent = '✓ Transcribed' + tsNote;
+      setTimeout(() => updateStepProgress?.(), 80);
       status.style.color = '#5a8a5a';
       setTimeout(() => status.style.display = 'none', 3000);
     } catch (err) {
@@ -7563,7 +7745,7 @@ RULES — read carefully:
         ` : `
         <div>
           ${seg.frameDataUrl
-            ? `<img src="${seg.frameDataUrl}" class="seg-frame-img">`
+            ? `<img src="${seg.frameDataUrl}" class="seg-frame-img" onclick="openLightbox(this.src)" title="Click to view full frame">`
             : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
           ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" class="seg-dl-btn">⬇ Download Frame</button>` : ''}
         </div>
@@ -7681,17 +7863,21 @@ RULES — read carefully:
     const inv = (document.getElementById('avatarInventory')?.value || avatarInventory || '').trim();
     if (!inv) return '';
     let clothing = '';
+    let eyeColor = '';
     const accessories = [];
     inv.split(/\r?\n/).forEach(line => {
-      const m = line.match(/^\s*(CLOTHING|JEWELRY|OTHER)\s*:\s*(.+)$/i);
+      const m = line.match(/^\s*(CLOTHING|JEWELRY|OTHER|EYE COLOR)\s*:\s*(.+)$/i);
       if (!m) return;
-      const key = m[1].toUpperCase();
+      const key = m[1].toUpperCase().trim();
       const val = m[2].trim().replace(/\.+$/, '');
-      if (!val || /^(none|none visible|n\/?a)$/i.test(val)) return;
+      if (!val || /^(none|none visible|n\/?a|unknown)$/i.test(val)) return;
       if (key === 'CLOTHING') { clothing = val; }
+      else if (key === 'EYE COLOR') { eyeColor = val; }
       else { accessories.push(val); }
     });
     let note = '';
+    // Eye color — injected first so Veo 3 locks it early in the prompt
+    if (eyeColor) note += ` The person has ${eyeColor} eyes — keep this eye color exactly consistent across every scene.`;
     // Clothing gets a hard "must wear exactly" instruction — NB Pro tends to change outfits
     if (clothing) note += ` The person must be wearing exactly this outfit as shown in reference photo 1: ${clothing}. Do not change any part of the clothing.`;
     // Jewelry/accessories get a "keep visible" instruction
@@ -7731,6 +7917,11 @@ RULES — read carefully:
     return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
   }
 
+  // --- Read the voice style set by the user ---
+  function getVoiceStyle() {
+    return (document.getElementById('studioVoice')?.value || localStorage.getItem('vs_voice_style') || '').trim();
+  }
+
   // --- Build Veo 3 prompt for one segment ---
   function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
     const seg = segments[i];
@@ -7741,10 +7932,14 @@ RULES — read carefully:
     const actionWithSpeech = scriptSlice
       ? `${analyzedAction}. They say: "${scriptSlice}"`
       : analyzedAction;
+    const voiceStyle = getVoiceStyle();
+    const audioDesc = voiceStyle
+      ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
+      : 'natural ambient sound, clear voice, no background music';
     const obj = {
       action: actionWithSpeech,
       speech: scriptSlice || '',
-      audio: 'natural ambient sound, clear voice, no background music',
+      audio: audioDesc,
       negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
@@ -8577,7 +8772,7 @@ Return ONLY a valid JSON object with these fields:
 - background: describe the background/setting visible in the image
 - foreground_props: list any objects visible on the surface in front of the presenter
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
-- audio: "clear natural voice, slight ambient room tone, no music"
+- audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
 - negative_prompt: "cuts, transitions, text overlays, subtitles, watermarks, jump cuts, multiple people, AI artifacts"
 
 No markdown. Return only the JSON object.`
@@ -8647,6 +8842,81 @@ No markdown. Return only the JSON object.`
       ? '<i class="ti ti-eye-off"></i>'
       : '<i class="ti ti-eye"></i>';
     if (btn) btn.title = hidden ? 'Hide prompt' : 'Show prompt';
+  }
+
+  // ── Step progress strip ───────────────────────────────────────────────────
+  function updateStepProgress() {
+    const DONE   = '#4ade80'; // green — step complete
+    const ACTIVE = 'var(--accent-2)'; // purple — current step (next to do)
+    const DIM    = 'var(--text-3)'; // grey — not yet reached
+
+    if (studioMode === 'replicator') {
+      const hasVideo    = !!(refVideoFile || (document.getElementById('refVideoEl')?.src || '').length > 10);
+      const hasCuts     = segments.length > 0;
+      const hasTranscript = whisperSegments && whisperSegments.length > 0;
+      const hasPrompts  = hasCuts && segments.some(s => s.veoPrompt && s.veoPrompt.trim());
+
+      const s = (id, done, active) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.color = done ? DONE : active ? ACTIVE : DIM;
+        // prepend ✓ on done, remove it on not-done
+        const label = el.textContent.replace(/^✓\s*/, '');
+        el.textContent = done ? '✓ ' + label : label;
+      };
+
+      s('rep-step-1', hasVideo,      !hasVideo);
+      s('rep-step-2', hasCuts,       hasVideo && !hasCuts);
+      s('rep-step-3', hasTranscript, hasCuts && !hasTranscript);
+      s('rep-step-4', hasPrompts,    hasCuts && !hasPrompts);
+
+    } else if (studioMode === 'producer') {
+      const hasScript   = !!(document.getElementById('originalScript')?.value.trim());
+      const hasCuts     = segments.length > 0;
+      const hasDesc     = hasCuts && segments.some(s => s.action && s.action.trim());
+      const hasNB       = hasCuts && segments.some(s => s.nbPrompt && s.nbPrompt.trim());
+      const hasPrompts  = hasCuts && segments.some(s => s.veoPrompt && s.veoPrompt.trim());
+
+      const s = (id, done, active) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.style.color = done ? DONE : active ? ACTIVE : DIM;
+        const label = el.textContent.replace(/^✓\s*/, '');
+        el.textContent = done ? '✓ ' + label : label;
+      };
+
+      s('pro-step-1', hasScript,  !hasScript);
+      s('pro-step-2', hasCuts,    hasScript && !hasCuts);
+      s('pro-step-3', hasDesc,    hasCuts && !hasDesc);
+      s('pro-step-4', hasNB,      hasDesc && !hasNB);
+      s('pro-step-5', hasPrompts, hasNB && !hasPrompts);
+    }
+  }
+
+  // ── Frame lightbox ────────────────────────────────────────────────────────
+  function openLightbox(src) {
+    const lb  = document.getElementById('frameLightbox');
+    const img = document.getElementById('frameLightboxImg');
+    if (!lb || !img) return;
+    img.src = src;
+    lb.classList.add('open');
+    document.addEventListener('keydown', _lbKeyClose);
+  }
+  function closeLightbox() {
+    const lb = document.getElementById('frameLightbox');
+    if (lb) lb.classList.remove('open');
+    document.removeEventListener('keydown', _lbKeyClose);
+  }
+  function _lbKeyClose(e) { if (e.key === 'Escape') closeLightbox(); }
+
+  // ── Left column collapse / expand ────────────────────────────────────────
+  function toggleLeftCol() {
+    const layout = document.getElementById('vsLayout');
+    const btn    = document.getElementById('leftColToggleBtn');
+    if (!layout) return;
+    const collapsed = layout.classList.toggle('left-collapsed');
+    localStorage.setItem('vs_leftcol_collapsed', collapsed ? '1' : '');
+    if (btn) { btn.textContent = collapsed ? '›' : '‹'; btn.title = collapsed ? 'Show left panel' : 'Hide left panel'; }
   }
 
   // ── Video player mini / expand toggle ────────────────────────────────────
@@ -9062,8 +9332,12 @@ UNUSUAL ACTIVITY / POLICY FLAG specifically:
   • If it persists for more than 5 tab-refresh attempts in a row, pause and report to the user that manual intervention is needed on the Flow account before continuing
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-IMAGE FILES IN DOWNLOADS:
+IMAGE FILES IN DOWNLOADS — UPLOAD ALL AT ONCE:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+All images below have been downloaded to ${dlPath}\\
+FIRST THING: upload ALL of them to the Flow project in one go using file_upload with all paths
+at once. Once uploaded, Flow holds them in the project permanently — you will NOT need to
+upload them again. For each scene you will use "Add to Prompt" to attach the right image.
 `;
 
     // Download all images upfront — staggered 300ms apart to avoid Chrome's
@@ -9073,7 +9347,7 @@ IMAGE FILES IN DOWNLOADS:
     if (avatarImageDataUrl) {
       downloadFrameAsFile(avatarImageDataUrl, avatarFile, dlIndex * 300);
       dlIndex++;
-      instruction += `• ${avatarFile}  ← Avatar (Photo 1, reuse for every scene)\n`;
+      instruction += `• ${avatarFile}  ← Avatar (Photo 1 — reuse every scene)\n`;
     }
 
     // Use the real segment index (globalI) for filenames/markSceneDone
@@ -9084,12 +9358,14 @@ IMAGE FILES IN DOWNLOADS:
         const fname = `scene${globalI+1}_photo2_startframe.jpg`;
         downloadFrameAsFile(seg.frameDataUrl, fname, dlIndex * 300);
         dlIndex++;
-        instruction += `• ${fname}  ← Scene ${globalI+1} start frame (Photo 2)\n`;
+        instruction += `• ${fname}  ← Scene ${globalI+1} start frame\n`;
       }
     });
 
-
-
+    instruction += `
+⬆ Upload ALL of the above files now using file_upload with all paths at once.
+Wait for thumbnails to confirm they are in the project before continuing.
+`;
 
     // Build two-phase instructions: ALL Nano Banana composites, then ALL Veo videos
     const runScenes = [];
@@ -9106,78 +9382,87 @@ IMAGE FILES IN DOWNLOADS:
 ╔══════════════════════════════════════════════╗
 ║   PHASE 1 — ALL NANO BANANA COMPOSITES         ║
 ╚══════════════════════════════════════════════╝
-Generate, verify, and DOWNLOAD the NB Pro composite for EVERY scene below BEFORE you
-touch Veo 3 at all. Track which downloaded file belongs to which scene.
+All images are already uploaded to the project. For each scene use "Add to Prompt"
+to attach the right image — no file uploads needed from here on.
+BATCH MODE: queue all generations without waiting, then verify + download in one pass.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 1A — QUEUE ALL NB PRO GENERATIONS (do NOT wait between scenes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Scene 1 is a full setup. Scenes 2+ use REUSE PROMPT — hover over the previous
+generating card (arrow appears even while generating) → Reuse Prompt → remove old
+Photo 2 → "Add to Prompt" the next scene's frame → clear prompt → paste new prompt.
+
+REUSE PROMPT STEPS (scenes 2+):
+  1. Hover over the previous scene's generating card — the expand arrow (▶) appears even while generating
+  2. Click the arrow → click "Reuse Prompt" — Photo 1 (avatar) and NB Pro mode reload automatically
+  3. Remove Photo 2 (click its × button)
+  4. Click "Add to Prompt" → select the next scene's frame from the project (already uploaded)
+  5. Clear the prompt field, paste the new scene's prompt
+  6. Click Generate — move immediately to the next scene without waiting
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const nbPrompt  = seg.nbPrompt || '(no NB Pro prompt)';
       const frameFile = `scene${i+1}_photo2_startframe.jpg`;
       const hasFrame  = !!seg.frameDataUrl && !bgFromAvatar;
       instruction += `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 1 · SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) — NB PRO
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
+━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
 ${idx === 0
-  ? `The Flow project is already open. Open NB Pro using "HOW TO OPEN NB PRO" above (bottom bar → media icon → Image → Nano Banana Pro).`
-  : `Click the "+ New prompt" button at the TOP of the LEFT sidebar to start a fresh generation, then open NB Pro again via the bottom bar (media icon → Image → Nano Banana Pro). IMPORTANT: "+ New prompt" may NOT reset the bar's mode — always verify the bar is in Image / Nano Banana Pro mode before uploading photos; if it is still in Video mode, switch it back manually.`
-}
-
-━ NB PRO STEP:
+  ? `Full setup — open NB Pro: bottom bar → media icon → Image → Nano Banana Pro
 ${avatarImageDataUrl
-  ? `1. Upload Photo 1 (avatar) using the HOW TO UPLOAD sequence above — slot index 0, file: ${dlPath}\\${avatarFile}`
-  : `1. No avatar — skip Photo 1`}
+    ? `• Click "Add to Prompt" → select avatar from project: ${avatarFile} (Photo 1)`
+    : `• No avatar — skip Photo 1`}
 ${hasFrame
-  ? `2. Upload Photo 2 (start frame) using the HOW TO UPLOAD sequence above — slot index 1, file: ${dlPath}\\${frameFile}`
-  : `2. No start frame — skip Photo 2`}
-3. Set format to 9:16 vertical
-4. Click the NB Pro prompt field and paste this exactly:
+    ? `• Click "Add to Prompt" → select scene frame from project: ${frameFile} (Photo 2)`
+    : `• No start frame — skip Photo 2`}
+• Set format: 9:16 vertical`
+  : `Reuse Prompt from Scene ${idx} (hover → expand arrow → Reuse Prompt → remove old Photo 2)
+${hasFrame
+    ? `• Click "Add to Prompt" → select from project: ${frameFile} (Photo 2)`
+    : `• No start frame — skip Photo 2`}`}
+• Paste this prompt exactly:
 
 ${nbPrompt}
 
-5. Click Generate — wait until the image appears (up to ${nbWaitSec} seconds)
-6. Take a screenshot of the generated NB Pro image
-7. VERIFY the image passes ALL of the following checks:
-
-   ✅ CHECK 1 — Avatar present & matches inventory
-      The person from Photo 1 (the avatar) must be clearly visible in the image.
-      Their face, body, and clothing should be recognisable and unchanged from Photo 1.
-      FAIL if: the person looks like a completely different person, or there is no person at all.${inventoryBlock}
-
-   ✅ CHECK 2 — Background is correct
-${bgFromAvatar ? `      ⚠ AVATAR BG MODE IS ON — Photo 1 is being used as BOTH the person AND the background source.
-      The background in the generated image must match the background visible in Photo 1 (the avatar photo itself).
-      Look at the environment behind the person in Photo 1 — the composite must preserve that same background.
-      FAIL if: the background has been replaced with something different from what was behind the avatar in Photo 1, or if it is a plain/blank background not present in Photo 1.`
-: hasFrame ? `      The background environment in the generated image must match the scene/location from Photo 2 (the start frame).
-      If Photo 2 shows a kitchen → the background should show a kitchen.
-      If Photo 2 shows an outdoor setting → the background should be outdoors.
-      Compare the generated image directly to Photo 2 — the setting, colours, and key objects in the background should match.
-      FAIL if: the background is a plain colour, entirely different location, or generic blur with no resemblance to Photo 2.`
-: `      No start frame or avatar background was provided — skip this check.`}
-
-   ✅ CHECK 3 — Items in hand / props match the source photo
-${bgFromAvatar ? `      ⚠ AVATAR BG MODE — props check is against Photo 1 (the avatar photo).
-      If Photo 1 shows the person holding or interacting with any object (bottle, fruit, product, tool, food, etc.), that same object must appear in approximately the same position in the generated image.
-      FAIL if: Photo 1 shows a visible prop/object but the generated image shows empty hands or a completely different unrelated object.`
-: hasFrame ? `      If Photo 2 shows the person holding an object (bottle, fruit, product, tool, food, etc.), that same object or a visually similar one must appear in the generated image in approximately the same position (hand, table, etc.).
-      FAIL if: Photo 2 shows a clearly visible prop but the generated image shows empty hands, or a completely different unrelated object.`
-: `      No reference frame provided — skip this check.`}
-
-   ✅ CHECK 4 — Image is not corrupted
-      The image must be a clean, realistic photo-quality composite.
-      FAIL if: the image is blank, heavily distorted, shows a cartoon/illustration, shows duplicated limbs, or has a face that is clearly melted/distorted.
-
-   IF ANY CHECK FAILS — FOLLOW THE RETRY RULES (see IF GENERATION FAILS section above):
-   • Retry 1: Click Generate again with the EXACT same prompt and photos, wait up to ${nbWaitSec}s, re-run all 4 checks
-   • If retry 1 also fails: do a FULL TAB REFRESH, redo from NB Pro upload with the exact same prompts
-   • Keep retrying (tab refresh each time) until NB Pro passes checks 1 and 4 — never skip a scene
-   • If only checks 2 or 3 fail (background or prop mismatch) after multiple attempts: proceed anyway, note "Scene ${i+1} NB Pro — background/prop mismatch" in final report
-
-8. Once ALL checks pass: DOWNLOAD the composite (hover over it → ⬇ download button). It saves
-   to ${dlPath}\\ — remember its exact filename as "SCENE ${i+1} COMPOSITE". You upload it
-   in Phase 2. Do NOT start Veo 3 yet.
+• Click Generate — DO NOT WAIT. Move immediately to the next scene.
 `;
+    });
+
+    // ── PHASE 1B — verify + download all composites ──
+    instruction += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 1B — VERIFY AND DOWNLOAD ALL COMPOSITES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+All ${totalRunScenes} NB Pro generations are now queued and running in parallel. Go through the Flow
+sidebar from top to bottom (Scene 1 = first entry, Scene 2 = second, etc.) and for each one:
+
+  1. Wait for it to finish if still generating (up to ${nbWaitSec} seconds)
+  2. Take a screenshot of the result
+  3. VERIFY it passes ALL checks:
+
+     ✅ CHECK 1 — Avatar present & recognisable (face + clothing match Photo 1)
+        FAIL if: completely different person, or no person visible.${inventoryBlock}
+
+     ✅ CHECK 2 — Background correct
+${bgFromAvatar
+  ? `        Avatar BG mode — background must match the environment behind the person in Photo 1.`
+  : `        Background must match the scene/location from Photo 2 (the start frame for that scene).`}
+
+     ✅ CHECK 3 — Props/items in hand match source photo (if any)
+
+     ✅ CHECK 4 — Image not corrupted (not blank, distorted, illustrated, or melted)
+
+  4. If ALL checks pass: DOWNLOAD the composite (hover → ⬇). Note its filename as "SCENE N COMPOSITE".
+  5. If ANY check fails: FLAG this scene as needing a regen — note the scene number and continue checking the rest.
+
+After checking all ${totalRunScenes}:
+  • For each FLAGGED scene: redo it individually — click "+ New prompt", set up NB Pro from scratch
+    with the exact same photos and prompt, generate, verify, download.
+  • Keep retrying flagged scenes (tab refresh between each attempt) until they pass.
+  • Do NOT start Phase 2 until every scene has a downloaded composite.
+`;
+    runScenes.forEach(({ seg, i }, idx) => {
+      // intentionally empty — order tracking only, sidebar order matches queue order
     });
 
     // ── PHASE 2 — every Veo 3 video ──
@@ -9186,32 +9471,66 @@ ${bgFromAvatar ? `      ⚠ AVATAR BG MODE — props check is against Photo 1 (t
 ╔══════════════════════════════════════════════╗
 ║      PHASE 2 — ALL VEO 3 VIDEOS                ║
 ╚══════════════════════════════════════════════╝
-Now generate the Veo 3 video for every scene, using the composites you downloaded and
-tracked in Phase 1. For each scene: switch the bar to VIDEO mode, upload that scene's
-composite as the start frame, paste the Veo 3 prompt, generate, download.
+BATCH MODE: Queue ALL Veo 3 generations first without waiting. Then go back and verify,
+download, and mark done each one in order. Each scene gets its own unique prompt and start frame.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2A — QUEUE ALL VEO 3 GENERATIONS (do NOT wait between scenes)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For each scene: click "+ New prompt", switch to VIDEO mode, upload the composite, set model + duration, paste the prompt, click Generate — then immediately move to the next scene WITHOUT waiting.
 `;
     runScenes.forEach(({ seg, i }, idx) => {
       const veoPrompt = seg.veoPrompt || '(no Veo 3 prompt)';
       const duration  = getVeoDuration(seg.script);
       const wordCount = (seg.script||'').trim().split(/\s+/).filter(Boolean).length;
       instruction += `
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2 · SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) — VEO 3
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-1. Click "+ New prompt" at the TOP of the LEFT sidebar, then switch the bottom bar to VIDEO mode (media icon left of the submit arrow → Video)
-2. Upload "SCENE ${i+1} COMPOSITE" (the file you downloaded in Phase 1) as the Veo 3 START FRAME, using the HOW TO UPLOAD sequence above
-3. Select model: ${defaultModel}
-4. Set duration: ${duration} seconds  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
-5. Click the Veo 3 prompt field and paste this exactly:
+━━ QUEUE SCENE ${idx+1} of ${totalRunScenes} (App Scene ${i+1}) ━━
+1. Click "+ New prompt" at the TOP of the LEFT sidebar → switch bottom bar to VIDEO mode (media icon → Video)
+2. Click "Add to Prompt" → select "SCENE ${i+1} COMPOSITE" from the project (already uploaded)
+3. Model: ${defaultModel} · Duration: ${duration}s  (${wordCount} words ≈ ${Math.round(wordCount/2.3)}s speech)
+4. Paste this prompt exactly:
 
 ${veoPrompt}
 
-6. Click Generate — wait for video to fully render (up to ${veoWaitMin} minutes — do not interrupt)
-7. Download video using HOW TO DOWNLOAD A VIDEO above (no renaming needed)
-8. Mark done: find tab ${appUrl} → javascript_tool → window.markSceneDone(${i})
+5. Click Generate — DO NOT WAIT. Move immediately to the next scene.
 `;
     });
+
+    instruction += `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2B — VERIFY AND DOWNLOAD ALL VEO 3 VIDEOS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+All ${totalRunScenes} Veo 3 videos are generating in parallel. Go through the Flow sidebar top to
+bottom (Scene 1 = first entry, in order). For each one that has finished:
+
+  1. Play or scrub through the video
+  2. Apply this quality check — the ONLY thing that matters is the speech:
+
+     ✅ KEEP — download and mark done — if:
+        • The person speaks the script words clearly and audibly
+        • Their mouth movements match the speech throughout
+        • The person stays visible for the duration of the speech
+        Minor glitches are fine: background weirdness, objects teleporting, props changing,
+        unrealistic movement in the background, brief visual artifacts at the start or end.
+        These can all be cut in editing. If the speech is clean, the scene is good.
+
+     ❌ FLAG for regen — if:
+        • The video failed to render (blank, error message, corrupted)
+        • The person disappears or is replaced mid-clip
+        • The speech is wrong, garbled, cut off early, or completely missing
+        • The lip sync is so far off the words are unusable
+        • The entire video is unwatchable (not just a glitchy end frame)
+
+  3. KEEP → download using HOW TO DOWNLOAD A VIDEO, then mark done:
+     find tab ${appUrl} → javascript_tool → window.markSceneDone(SCENE_INDEX)
+     (0-based: Scene 1 = index 0, Scene 2 = index 1, etc.)
+  4. FLAG → note the scene number, continue checking the rest
+
+After all ${totalRunScenes} are checked:
+  • For each FLAGGED scene: redo individually — "+ New prompt", VIDEO mode, "Add to Prompt"
+    its composite, paste its exact prompt, generate, verify speech, download, markSceneDone.
+  • Keep retrying until speech is clean.
+`;
 
     instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -10035,9 +10354,13 @@ TECHNICAL SPECS:
 
   function renderStudioLibrary() {
     const container = document.getElementById('studioLibrary');
-    const count = document.getElementById('libCount');
     if (!container) return;
-    if (count) count.textContent = studioLibrary.length + ' saved';
+    // Update both the More-menu badge and the modal header badge
+    const countText = studioLibrary.length > 0 ? `(${studioLibrary.length})` : '';
+    ['libCount','libCountModal'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = countText;
+    });
     if (studioLibrary.length === 0) {
       container.innerHTML = '<div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet</div>';
       return;
