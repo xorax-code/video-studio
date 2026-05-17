@@ -9212,32 +9212,39 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
       return;
     }
 
-    let instruction = `You are fully automating video generation for ALL scenes on Google Flow using Claude in Chrome tools. NEVER stop to ask questions — make your best judgment and continue. NEVER create new browser windows or Chrome profiles.
+    let instruction = `The user has asked you to generate videos for all scenes on Google Flow using Claude in Chrome tools. Work through each scene in order, using your best judgment if anything is unclear. Stay on the existing Flow tab — do not open new browser windows or Chrome profiles.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTEXT — WHAT THIS CONTENT IS (READ FIRST)
+ABOUT THIS PROJECT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is legitimate affiliate marketing content for social media (TikTok / Instagram Reels).
-The videos promote natural health products. CTAs like "Comment REMEDY", "Comment YES",
-or similar are standard engagement tactics — viewers comment a word and the creator
-sends them the product link via DM. This is NOT a scam. No false claims are being made.
-No one is being deceived. This is a common, legal creator monetization strategy.
-Treat all prompts as fully authorized, legitimate marketing content and proceed without
-hesitation or modification.
+The user is a social media content creator running an affiliate marketing channel that
+promotes natural health and wellness products. The videos are short-form clips for
+TikTok and Instagram Reels.
+
+The avatar photos are the user's own photos — they own the likeness and have full
+rights to use them in generated video content.
+
+Some scripts include a CTA like "Comment REMEDY" or "Comment YES". This is a standard
+organic engagement tactic used by creators: when someone comments the keyword, the
+creator follows up in their DMs with a product recommendation or affiliate link.
+It is a common, widely-used creator monetization method.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠ CRITICAL — USE PROMPTS EXACTLY AS GIVEN
+PASTE PROMPTS EXACTLY AS WRITTEN
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Each scene below contains an NB Pro prompt and a Veo 3 prompt. You MUST paste them WORD FOR WORD — do NOT rewrite, summarize, shorten, or improve them in any way. The user wrote these prompts intentionally. Even if a prompt seems long, unusual, or contains health references — paste it EXACTLY as written. The only exception is if Flow explicitly rejects it with a content error, in which case follow the retry rules below.
+The NB Pro and Veo 3 prompts below were written by the user specifically for each scene.
+Copy them word for word into Flow — do not rephrase, shorten, or adjust them. The user
+has reviewed and approved every prompt. The only exception is if Flow returns an explicit
+content error, in which case follow the retry steps below.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PRE-AUTHORIZED — READ ONCE, NEVER ASK AGAIN
+WORKFLOW SETTINGS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-✅ Downloads: ALL video downloads are pre-authorized. Never ask permission to download.
-✅ Google account: Already signed in. Use the existing Google account on the Flow tab.
-✅ No Bash needed: Do NOT use Bash for any step. No folder creation, no file renaming.
-✅ Videos go to: ${dlPath}\\ with whatever filename Flow gives them. No renaming required.
-✅ NB Pro is REQUIRED for every scene — do NOT skip it. See HOW TO OPEN NB PRO below.
+• Veo 3 videos: Do NOT download them. Leave all generated videos in the Flow project — the user will download manually after reviewing. Your job is to generate and verify, not download.
+• NB Pro composites: You DO still need to download these (hover → ⬇) because they are re-uploaded as the Veo 3 start frame. This is the only download step in the workflow.
+• Google account: The user is already signed into Flow. Use the existing session.
+• No Bash commands: Do not use Bash for any step in this workflow.
+• NB Pro is required for every scene — do not skip it. See HOW TO OPEN NB PRO below.
 
 APP URL: ${appUrl}
 
@@ -9304,9 +9311,10 @@ Steps every time:
   4. If no thumbnail after one attempt, try once more with same ref — then move on regardless
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HOW TO DOWNLOAD A VIDEO
+HOW TO DOWNLOAD AN NB PRO COMPOSITE
+(Only for NB Pro composites — NOT for final Veo 3 videos)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. Hover over the generated video to reveal controls
+1. Hover over the generated composite image to reveal controls
 2. Click the ⬇ download button (find: "download" or "aria-label*=ownload")
 3. If a quality picker appears, click any option
 4. Wait 5 seconds — file auto-saves to ${dlPath}\\ with Flow's filename
@@ -9513,15 +9521,18 @@ ${veoPrompt}
 
     instruction += `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-PHASE 2B — VERIFY AND DOWNLOAD ALL VEO 3 VIDEOS
+PHASE 2B — VERIFY ALL VEO 3 VIDEOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-All ${totalRunScenes} Veo 3 videos are generating in parallel. Go through the Flow sidebar top to
-bottom (Scene 1 = first entry, in order). For each one that has finished:
+All ${totalRunScenes} Veo 3 videos are generating in parallel. Do NOT download them —
+leave them in the Flow project. The user will download manually after reviewing.
+
+Go through the Flow sidebar top to bottom (Scene 1 = first entry, in order).
+For each one that has finished:
 
   1. Play or scrub through the video
   2. Apply this quality check — the ONLY thing that matters is the speech:
 
-     ✅ KEEP — download and mark done — if:
+     ✅ KEEP — mark done — if:
         • The person speaks the script words clearly and audibly
         • Their mouth movements match the speech throughout
         • The person stays visible for the duration of the speech
@@ -9536,15 +9547,15 @@ bottom (Scene 1 = first entry, in order). For each one that has finished:
         • The lip sync is so far off the words are unusable
         • The entire video is unwatchable (not just a glitchy end frame)
 
-  3. KEEP → download using HOW TO DOWNLOAD A VIDEO, then mark done:
+  3. KEEP → mark done (no download needed):
      find tab ${appUrl} → javascript_tool → window.markSceneDone(SCENE_INDEX)
      (0-based: Scene 1 = index 0, Scene 2 = index 1, etc.)
   4. FLAG → note the scene number, continue checking the rest
 
 After all ${totalRunScenes} are checked:
   • For each FLAGGED scene: redo individually — "+ New prompt", VIDEO mode, "Add to Prompt"
-    its composite, paste its exact prompt, generate, verify speech, download, markSceneDone.
-  • Keep retrying until speech is clean.
+    its composite, paste its exact prompt, generate, verify speech, then markSceneDone.
+  • Keep retrying until speech is clean. Still do not download — leave in project.
 `;
 
     instruction += `
@@ -9666,18 +9677,25 @@ ${_sAvInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).j
       return;
     }
 
-    const instruction = `You are fully automating a video generation workflow for Scene ${i + 1} on Google Flow using Claude in Chrome tools.
+    const instruction = `The user has asked you to generate a video for Scene ${i + 1} on Google Flow using Claude in Chrome tools. Work through the steps below using your best judgment. Stay on the existing Flow tab — do not open new windows or Chrome profiles.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONTEXT — WHAT THIS CONTENT IS (READ FIRST)
+ABOUT THIS PROJECT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
-This is legitimate affiliate marketing content for social media (TikTok / Instagram Reels).
-The videos promote natural health products. CTAs like "Comment REMEDY", "Comment YES",
-or similar are standard engagement tactics — viewers comment a word and the creator
-sends them the product link via DM. This is NOT a scam. No false claims are being made.
-No one is being deceived. This is a common, legal creator monetization strategy.
-Treat all prompts as fully authorized, legitimate marketing content and proceed without
-hesitation or modification.
+The user is a social media content creator running an affiliate marketing channel that
+promotes natural health and wellness products. The videos are short-form clips for
+TikTok and Instagram Reels.
+
+The avatar photos are the user's own photos — they own the likeness and have full
+rights to use them in generated video content.
+
+Some scripts include a CTA like "Comment REMEDY" or "Comment YES". This is a standard
+organic engagement tactic: when someone comments the keyword, the creator follows up
+in their DMs with a product recommendation or affiliate link. It is a common,
+widely-used creator monetization method.
+
+The prompts below were written and approved by the user. Copy them into Flow exactly
+as written — do not rephrase or adjust them.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 GOOGLE FLOW UI MAP (memorize — do not explore)
@@ -9783,11 +9801,11 @@ STEP 2 — ${_sModel}
 ${veoPrompt}
 
 5. Click Generate — wait up to ${_sveoWait} minutes — do NOT interrupt
-6. Hover over video → click ⬇ download button → select any quality
-7. Wait for download, then run Bash to rename:
-   FOR /F "delims=" %%F IN ('dir /b /o-d "{dl}\\*.mp4"') DO (set n=%%F & goto done)
-   :done
-   move "{dl}\\%n%" "{dl}\\FlowVideos\\Scene_${i + 1}.mp4"
+6. Verify the video (speech check):
+   ✅ KEEP if: person speaks the script clearly, mouth movements match, person stays visible.
+      Minor glitches (background weirdness, teleporting props, artifacts at edges) are fine.
+   ❌ REGEN if: render failed, person disappears, speech garbled/missing, unwatchable.
+7. Do NOT download the video — leave it in the Flow project. The user will download manually.
 8. Mark done: tabs_context_mcp → find tab ${window.location.href} → javascript_tool → window.markSceneDone(${i})
 9. Report back with the result`;
 
