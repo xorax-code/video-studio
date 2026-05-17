@@ -9206,6 +9206,26 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
       navigator.clipboard.writeText(sheet).catch(() => {
         try { const ta=document.createElement('textarea');ta.value=sheet;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta); } catch(e){}
       });
+
+      // Download all frame images so user can upload them manually to Flow
+      let dlDelay = 0;
+      const dlInterval = 400; // stagger to avoid browser throttling
+      let dlCount = 0;
+      if (avatarImageDataUrl) {
+        downloadFrameAsFile(avatarImageDataUrl, 'avatar_photo.jpg', dlDelay);
+        dlDelay += dlInterval;
+        dlCount++;
+      }
+      segments.forEach((seg, i) => {
+        if (!seg.veoPrompt?.trim()) return;
+        if (skipDone && seg.done) return;
+        if (seg.frameDataUrl && !bgFromAvatar) {
+          downloadFrameAsFile(seg.frameDataUrl, `frame_scene_${i+1}.jpg`, dlDelay);
+          dlDelay += dlInterval;
+          dlCount++;
+        }
+      });
+
       const mm = document.createElement('div');
       mm.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
       mm.innerHTML=`<div style="background:var(--surface);border:1px solid rgba(251,191,36,0.4);border-radius:12px;padding:24px;width:430px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;">
@@ -9214,7 +9234,7 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
           <div style="font-size:11px;color:var(--text-3);">Paste into a text editor or directly into Flow</div>
         </div></div>
         <div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:10px 12px;font-size:11px;color:var(--text-2);margin-bottom:14px;">
-          📁 Image files downloaded to your Downloads folder<br>
+          ${dlCount > 0 ? `📁 ${dlCount} image file${dlCount>1?'s':''} downloading to your Downloads folder<br>` : ''}
           📋 All NB Pro + Veo 3 prompts copied to clipboard<br>
           ✋ Paste each prompt manually into Flow at your own pace
         </div>
