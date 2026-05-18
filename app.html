@@ -3984,7 +3984,144 @@
     <button onclick="verifyAdminPin()" style="width:100%;padding:9px;background:var(--grad-accent);border:none;border-radius:8px;color:#fff;font-weight:700;cursor:pointer;font-size:13px;font-family:inherit;">Unlock</button>
     <button onclick="closeAdminOverlay()" style="width:100%;padding:7px;background:none;border:none;color:var(--text-3);font-size:11px;cursor:pointer;font-family:inherit;margin-top:6px;">Cancel</button>
   </div>
-  <div id="adminPanel"></div>
+  <div id="adminPanel">
+    <!-- Tab bar -->
+    <div style="display:flex;align-items:center;gap:0;padding:0 16px;border-bottom:1px solid var(--border);flex-shrink:0;">
+      <button class="adm-tab active" data-tab="general"  onclick="switchAdminTab('general')">General</button>
+      <button class="adm-tab"        data-tab="workflow" onclick="switchAdminTab('workflow')">Workflow</button>
+      <button class="adm-tab"        data-tab="prompts"  onclick="switchAdminTab('prompts')">Prompts</button>
+      <button class="adm-tab"        data-tab="accounts" onclick="switchAdminTab('accounts')">Accounts</button>
+      <button class="adm-tab"        data-tab="backup"   onclick="switchAdminTab('backup')">Backup</button>
+      <button onclick="closeAdminOverlay()" style="margin-left:auto;background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:0 4px;line-height:1;">&#x2715;</button>
+    </div>
+    <!-- Tab content wrapper -->
+    <div style="flex:1;overflow-y:auto;padding:18px 20px;">
+
+      <!-- GENERAL -->
+      <div id="adm-tab-general" class="adm-tab-content active">
+        <div class="adm-section-title">General</div>
+        <div class="adm-row">
+          <span class="adm-label">Downloads folder path</span>
+          <input class="adm-input" id="adm-dlPath" type="text" placeholder="C:\Users\x\Downloads">
+          <span class="adm-hint">Where NightCafe / Google Flow saves files on your machine.</span>
+        </div>
+        <div class="adm-save-row" style="display:flex;align-items:center;gap:10px;">
+          <button class="adm-btn-save" onclick="saveAdminTab('general')">Save General</button>
+          <span id="admSaveStatus" style="display:none;font-size:11px;color:var(--success);">&#x2713; Saved</span>
+        </div>
+      </div>
+
+      <!-- WORKFLOW -->
+      <div id="adm-tab-workflow" class="adm-tab-content">
+        <div class="adm-section-title">Automation Workflow</div>
+        <div class="adm-row">
+          <span class="adm-label">NightCafe wait (seconds)</span>
+          <input class="adm-input adm-input-short" id="adm-nbWait" type="number" min="30" max="600" placeholder="180">
+        </div>
+        <div class="adm-row">
+          <span class="adm-label">Veo generation wait (minutes)</span>
+          <input class="adm-input adm-input-short" id="adm-veoWait" type="number" min="1" max="30" placeholder="6">
+        </div>
+        <div class="adm-row">
+          <span class="adm-label">Max tab refreshes per scene</span>
+          <input class="adm-input adm-input-short" id="adm-maxRetry" type="number" min="0" max="10" placeholder="0">
+          <span class="adm-hint">0 = unlimited retries</span>
+        </div>
+        <div class="adm-row">
+          <span class="adm-label">Cooldown between scenes (seconds)</span>
+          <input class="adm-input adm-input-short" id="adm-cooldown" type="number" min="0" max="600" placeholder="120">
+        </div>
+        <div class="adm-row">
+          <span class="adm-label">Default AI model</span>
+          <select class="adm-input" id="adm-model">
+            <option value="Veo 3.1 Fast">Veo 3.1 Fast</option>
+            <option value="Veo 3">Veo 3</option>
+            <option value="Veo 2">Veo 2</option>
+          </select>
+        </div>
+        <div class="adm-row">
+          <span class="adm-label">Monthly credit budget ($)</span>
+          <input class="adm-input adm-input-short" id="adm-creditBudget" type="number" min="0" placeholder="0">
+          <span class="adm-hint">0 = no limit</span>
+        </div>
+        <div class="adm-save-row">
+          <button class="adm-btn-save" onclick="saveAdminTab('workflow')">Save Workflow</button>
+        </div>
+      </div>
+
+      <!-- PROMPTS -->
+      <div id="adm-tab-prompts" class="adm-tab-content">
+        <div class="adm-section-title">Default Prompts</div>
+        <div class="adm-desc">These are prepended / used as fallbacks when no per-scene prompt exists.</div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px;">NightCafe default suffix</div>
+          <textarea class="adm-textarea" id="adm-nbDefault" placeholder="e.g. cinematic lighting, ultra detailed, 8k&hellip;"></textarea>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:11px;font-weight:600;color:var(--text-2);margin-bottom:4px;">Veo 3 default suffix</div>
+          <textarea class="adm-textarea" id="adm-veoDefault" placeholder="e.g. photorealistic, smooth camera motion&hellip;"></textarea>
+        </div>
+        <div class="adm-save-row">
+          <button class="adm-btn-save" onclick="saveAdminTab('prompts')">Save Prompts</button>
+        </div>
+      </div>
+
+      <!-- ACCOUNTS -->
+      <div id="adm-tab-accounts" class="adm-tab-content">
+        <div class="adm-section-title">Managed Accounts</div>
+        <div class="adm-desc">Accounts visible to the automation runner.</div>
+        <div id="admAccountList" style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px;"></div>
+        <button class="adm-btn-add" onclick="openAdmAddAccount()">+ Add Account</button>
+        <!-- Inline add/edit form -->
+        <div id="admAccountForm" style="display:none;margin-top:12px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;padding:14px;">
+          <div id="admAccFormTitle" style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:10px;">New Account</div>
+          <div class="adm-row">
+            <span class="adm-label" style="min-width:100px;">Platform</span>
+            <select class="adm-input" id="adm-acc-platform">
+              <option>TikTok</option><option>Instagram</option><option>Facebook</option>
+              <option>YouTube</option><option>Other</option>
+            </select>
+          </div>
+          <div class="adm-row">
+            <span class="adm-label" style="min-width:100px;">Handle *</span>
+            <input class="adm-input" id="adm-acc-handle" type="text" placeholder="@username">
+          </div>
+          <div class="adm-row">
+            <span class="adm-label" style="min-width:100px;">Display name</span>
+            <input class="adm-input" id="adm-acc-name" type="text" placeholder="Optional">
+          </div>
+          <div class="adm-row">
+            <span class="adm-label" style="min-width:100px;">Profile URL</span>
+            <input class="adm-input" id="adm-acc-url" type="url" placeholder="https://&hellip;">
+          </div>
+          <div class="adm-row">
+            <span class="adm-label" style="min-width:100px;">Notes</span>
+            <input class="adm-input" id="adm-acc-notes" type="text" placeholder="Optional">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:8px;">
+            <button class="adm-btn-save" onclick="saveAdmAccount()">Save</button>
+            <button class="btn-secondary" onclick="document.getElementById('admAccountForm').style.display='none'" style="padding:8px 16px;font-size:12px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- BACKUP -->
+      <div id="adm-tab-backup" class="adm-tab-content">
+        <div class="adm-section-title">Backup &amp; Restore</div>
+        <div class="adm-desc">Export all app data to a JSON file, or restore from a previous backup.</div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px;">
+          <button class="adm-btn-save" onclick="admExport()">&#x2B07; Export All Data</button>
+          <label style="padding:9px 20px;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">
+            &#x2B06; Import Backup
+            <input type="file" accept=".json" style="display:none;" onchange="admImport(event)">
+          </label>
+        </div>
+        <div class="adm-section-title" style="color:var(--danger);margin-top:16px;">Danger Zone</div>
+        <button onclick="clearAllLocalData()" style="padding:9px 20px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.3);border-radius:7px;color:var(--danger);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">&#x1F5D1; Clear All Local Data</button>
+      </div>
+
+    </div><!-- /padding wrapper -->
+  </div><!-- /adminPanel -->
 </div>
 
 <!-- ===== MY ACCOUNTS MODAL ===== -->
@@ -4015,7 +4152,7 @@
       <div class="form-group">
         <label>Platform</label>
         <select id="fPlatform">
-          <option>Instagram</option><option>Facebook</option><option>Other</option>
+          <option>TikTok</option><option>Instagram</option><option>Facebook</option><option>YouTube</option><option>Other</option>
         </select>
       </div>
       <div class="form-group">
@@ -4226,6 +4363,7 @@
         req.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
         req.onsuccess  = e => { _db = e.target.result; resolve(_db); };
         req.onerror    = e => reject(e.target.error);
+        req.onblocked  = () => console.warn('IndexedDB blocked');
       });
     }
 
@@ -5126,7 +5264,7 @@
       if (idx === -1) { showToast('Account not found — please close and reopen.', 'error'); return; }
       accounts[idx] = { ...accounts[idx], ...data, userEdited: true };
     } else {
-      accounts.push({ id: Date.now().toString(), ...data });
+      accounts.push({ id: _uid(), ...data });
     }
     saveAccounts(); closeModal(); renderTable();
   }
@@ -5254,7 +5392,7 @@
       if (idx === -1) { showToast('Competitor not found — please close and reopen.', 'error'); return; }
       competitors[idx] = { ...competitors[idx], ...data };
     } else {
-      competitors.push({ id: Date.now().toString(), ...data });
+      competitors.push({ id: _uid(), ...data });
     }
     saveCompetitors(); closeCompModal(); renderCompetitors();
   }
@@ -5656,7 +5794,7 @@
       if (idx === -1) { showToast('Script not found — please close and reopen.', 'error'); return; }
       viralScripts[idx] = { ...viralScripts[idx], ...data };
     } else {
-      viralScripts.push({ id: Date.now().toString(), dateAdded: new Date().toLocaleDateString(), ...data });
+      viralScripts.push({ id: _uid(), dateAdded: new Date().toLocaleDateString(), ...data });
     }
     saveScriptsStore(); closeScriptModal(); renderScripts();
   }
@@ -6190,7 +6328,7 @@
     // load, so this won't wipe edits unexpectedly.)
     avatarInventory = '';
     if (field) field.value = '';
-    DB.remove('sm_avatar_inventory');
+    DB.remove('sm_avatar_inventory').catch(e => console.warn('extractAvatarInventory remove error:', e));
     const retryBtn = document.getElementById('retryInventoryBtn');
     if (retryBtn) retryBtn.style.display = 'none';
     // file:// protocol blocks outbound fetch to external APIs (CORS null-origin)
@@ -6372,9 +6510,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     reader.onload = function(ev) {
       try {
         bgFromAvatar = false;
-        DB.remove('sm_bg_from_avatar');
+        DB.remove('sm_bg_from_avatar').catch(e => console.warn('onBgImageChange remove error:', e));
         _applyBgToUI(ev.target.result);
-        DB.set('sm_bg_image', bgImageDataUrl);
+        DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('onBgImageChange set error:', e));
         const note = document.getElementById('bgSavedNote');
         if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
       } catch (err) {
@@ -6402,8 +6540,8 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     }
     bgFromAvatar = true;
     _applyBgToUI(avatarImageDataUrl);
-    DB.set('sm_bg_image', bgImageDataUrl);
-    DB.set('sm_bg_from_avatar', '1');
+    DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('useAvatarAsBg bg error:', e));
+    DB.set('sm_bg_from_avatar', '1').catch(e => console.warn('useAvatarAsBg flag error:', e));
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'block';
     const note = document.getElementById('bgSavedNote');
@@ -6426,7 +6564,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function saveBrandKit() {
     clearTimeout(_bkSaveTimer);
     _bkSaveTimer = setTimeout(() => {
-      DB.set('sm_brand_kit', JSON.stringify(getBrandKit()));
+      DB.set('sm_brand_kit', JSON.stringify(getBrandKit())).catch(e => console.warn('saveBrandKit error:', e));
       const note = document.getElementById('bkSavedNote');
       if (note) { note.style.display = 'block'; setTimeout(() => note.style.display = 'none', 1800); }
     }, 600);
@@ -6502,7 +6640,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (saved) _applyBgToUI(saved);
       const badge = document.getElementById('bgAvatarBadge');
       if (badge) badge.style.display = bgFromAvatar && saved ? 'block' : 'none';
-    });
+    }).catch(e => console.warn('loadBgImage error:', e));
   }
 
   // --- Reference video ---
@@ -7044,6 +7182,10 @@ RULES — read carefully:
   function clearTranscript() {
     const ta = document.getElementById('originalScript');
     if (ta) { ta.value = ''; saveSegments(); }
+    // Clear stale Whisper timestamps — leaving them causes distributeScript()
+    // to assign words to wrong positions when the user transcribes a new video.
+    whisperSegments = [];
+    saveCurrentProjectData();
     const status = document.getElementById('transcribeStatus');
     if (status) { status.textContent = ''; status.style.display = 'none'; }
   }
@@ -7061,9 +7203,11 @@ RULES — read carefully:
     let audioBuffer;
     try {
       audioBuffer = await tempCtx.decodeAudioData(arrayBuffer);
-    } finally {
-      await tempCtx.close();
+    } catch (decodeErr) {
+      try { await tempCtx.close(); } catch(_) {}
+      throw new Error('Could not decode audio — the video may have no audio track or an unsupported codec.');
     }
+    try { await tempCtx.close(); } catch(_) {}
 
     // Resample to 16 kHz mono using OfflineAudioContext (ideal for speech)
     const targetRate = 16000;
@@ -7129,6 +7273,12 @@ RULES — read carefully:
           });
           // Rename so the function picks the right MIME type
           fileToSend = new File([fileToSend], 'audio.wav', { type: 'audio/wav' });
+          // Netlify Lambda payload cap is 6 MB; base64 overhead is ~4/3×
+          if (fileToSend.size > 4 * 1024 * 1024) {
+            status.textContent = '⚠️ Audio is too long to transcribe (max ~2 min). Trim the video and try again.';
+            btn.disabled = false;
+            return;
+          }
         } catch (extractErr) {
           console.warn('Audio extraction failed, falling back to raw file:', extractErr);
           fileToSend = refVideoFile; // fall back — may fail if too large, but worth trying
@@ -7157,8 +7307,12 @@ RULES — read carefully:
         end: s.end,
         text: s.text.trim()
       }));
-      saveCurrentProjectData();
       document.getElementById('originalScript').value = (data.text || '').trim();
+      const origScriptEl = document.getElementById('originalScript');
+      if (origScriptEl && typeof onMasterScriptInput === 'function') {
+        onMasterScriptInput(origScriptEl);
+      }
+      saveCurrentProjectData();
       const tsNote = whisperSegments.length > 0 ? ` (${whisperSegments.length} timed chunks)` : '';
       status.textContent = '✓ Transcribed' + tsNote;
       setTimeout(() => updateStepProgress?.(), 80);
@@ -7462,6 +7616,8 @@ RULES — read carefully:
   function copyAllVeoPrompts() {
     const prompts = segments.map((s, i) => `[Seg ${i+1} — ${Math.floor(s.startTime/60)}:${String(Math.floor(s.startTime%60)).padStart(2,'0')}–${Math.floor(s.endTime/60)}:${String(Math.floor(s.endTime%60)).padStart(2,'0')}]\n${s.veoPrompt || '(empty)'}`);
     if (!prompts.length) { showToast('No segments yet.', 'warning'); return; }
+    const nonEmpty = segments.filter(s => (s.veoPrompt || '').trim()).length;
+    if (!nonEmpty) { showToast('No Veo 3 prompts generated yet — click ⚡ Generate Prompts first.', 'warning'); return; }
     const btn = (typeof event !== 'undefined' && event?.currentTarget) || document.querySelector('[onclick*="copyAllVeoPrompts"]');
     navigator.clipboard.writeText(prompts.join('\n\n')).then(() => {
       if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copied!'; btn.style.color = '#4ade80'; setTimeout(() => { btn.textContent = orig; btn.style.color = '#a78bfa'; }, 1800); }
@@ -7671,6 +7827,9 @@ RULES — read carefully:
       if (distributeScriptFromTimestamps()) return;
     }
 
+    // ── Skip if every segment already has a script — preserves manual edits ──
+    if (segments.length > 0 && segments.every(s => (s.script || '').trim())) return;
+
     // ── 2. Time-proportional word slice — driven by VIDEO scene boundaries ───
     // Split points come from the video segment start/end times, NOT from
     // punctuation or line breaks. A new unit is only created where there is
@@ -7726,6 +7885,7 @@ RULES — read carefully:
 
   // --- Auto-grow a textarea to fit its content ---
   function autoGrow(el) {
+    if (!el || el.offsetParent === null) return;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 300) + 'px';
   }
@@ -8206,7 +8366,7 @@ RULES — read carefully:
           setTimeout(() => { if (actionEl) actionEl.style.borderColor = ''; }, 1200);
         }
       } catch (e) {
-        if (btn) { btn.disabled = false; btn.textContent = '❌ Error'; }
+        if (btn) { btn.disabled = false; btn.textContent = '🔍 Analyze Video'; }
         showToast('Segment ' + (i+1) + ' failed: ' + (e.message || String(e)), 'error');
         saveSegments();
         return;
@@ -8809,12 +8969,27 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
 
   function downloadFrameAsFile(dataUrl, filename, delayMs) {
     const _go = () => {
-      const a = document.createElement('a');
-      a.href = dataUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      setTimeout(() => document.body.removeChild(a), 200);
+      // Convert data: URL → Blob URL so Safari honours the download attribute.
+      // Safari silently ignores <a download> on data: URLs.
+      try {
+        const [meta, b64] = dataUrl.split(',');
+        const mime = (meta.match(/:(.*?);/) || [])[1] || 'image/jpeg';
+        const bytes = atob(b64);
+        const arr = new Uint8Array(bytes.length);
+        for (let j = 0; j < bytes.length; j++) arr[j] = bytes.charCodeAt(j);
+        const blob = new Blob([arr], { type: mime });
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl; a.download = filename;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(blobUrl); }, 300);
+      } catch (_) {
+        // Fallback for browsers where atob/Blob fails (rare)
+        const a = document.createElement('a');
+        a.href = dataUrl; a.download = filename;
+        document.body.appendChild(a); a.click();
+        setTimeout(() => document.body.removeChild(a), 200);
+      }
     };
     if (delayMs) setTimeout(_go, delayMs);
     else _go();
@@ -8976,6 +9151,7 @@ No markdown. Return only the JSON object.`
     const reader = new FileReader();
     reader.onload = async ev => {
       try {
+        if (i >= segments.length) return;
         segments[i].nbPreviewDataUrl = ev.target.result;
         debounceSave();
         const zone = document.getElementById('nbpreview-zone-' + i);
@@ -9974,7 +10150,7 @@ Report back: how many scenes completed successfully, and note any that had issue
         </div>
         <div style="display:flex;gap:8px;">
           <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
-          ${doneCount > 0 && !skipDone ? `<button onclick="this.closest('div[style*=fixed]').remove();runAllScenes(true)" style="padding:8px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:6px;color:var(--warning);font-weight:600;cursor:pointer;font-size:12px;">⚡ Resume (skip done)</button>` : ''}
+          ${doneCount > 0 && !skipDone ? `<button onclick="this.closest('div[style*=fixed]').remove();runAllScenes(true, true)" style="padding:8px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:6px;color:var(--warning);font-weight:600;cursor:pointer;font-size:12px;">⚡ Resume (skip done)</button>` : ''}
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -10471,13 +10647,20 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       if (!Array.isArray(parsed)) throw new Error('Unexpected response format.');
 
       let updated = 0;
+      const setting = document.getElementById('studioSetting')?.value.trim() || '';
+      const productSel = document.getElementById('studioProduct');
+      const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || '') : '';
       parsed.forEach(item => {
         const seg = segments[item.i];
         if (!seg || !item.script) return;
         seg.script = item.script.trim();
-        // Update the textarea in place
+        // Rebuild veoPrompt so speech field reflects the new condensed script
+        seg.veoPrompt = buildSegmentVeo3Prompt(item.i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
+        // Update the textareas in place
         const el = document.getElementById('script-seg-' + item.i);
         if (el) { el.value = seg.script; autoGrow(el); el.style.borderColor = '#60a5fa'; setTimeout(() => { if(el) el.style.borderColor = ''; }, 900); }
+        const veoEl = document.getElementById('veo-seg-' + item.i);
+        if (veoEl) { veoEl.value = seg.veoPrompt; autoGrow(veoEl); }
         updated++;
       });
 
@@ -10661,7 +10844,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
 
     // Store current generation for saving
     window._lastGeneration = {
-      id: Date.now().toString(),
+      id: _uid(),
       title: productName + (videoUrl ? ' — ' + videoUrl.substring(0, 40) + '...' : ''),
       videoUrl,
       product: productName,
@@ -10779,7 +10962,7 @@ TECHNICAL SPECS:
     const settingVal = document.getElementById('studioSetting')?.value.trim() || '';
     const avatarDescVal = document.getElementById('avatarDesc')?.value.trim() || '';
     const item = {
-      id: Date.now().toString(),
+      id: _uid(),
       product: productName,
       setting: settingVal,
       avatarDesc: avatarDescVal,
@@ -10794,6 +10977,7 @@ TECHNICAL SPECS:
         script: s.script, action: s.action || '',
         nbPrompt: s.nbPrompt,
         nbEndPrompt: s.nbEndPrompt || '',
+        nbPreviewDataUrl: s.nbPreviewDataUrl || null,
         veoPrompt: s.veoPrompt,
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
@@ -10873,9 +11057,9 @@ TECHNICAL SPECS:
 
     // Persist everything
     saveCurrentProjectData();
-    if (item.avatarImageDataUrl) DB.set('sm_avatar_img', item.avatarImageDataUrl);
-    if (item.bgImageDataUrl) DB.set('sm_bg_image', item.bgImageDataUrl);
-    if (avatarDescEl) DB.set('sm_avatar_profile', avatarDescEl.value);
+    if (item.avatarImageDataUrl) DB.set('sm_avatar_img', item.avatarImageDataUrl).catch(e => console.warn('loadLibraryItem avatar error:', e));
+    if (item.bgImageDataUrl) DB.set('sm_bg_image', item.bgImageDataUrl).catch(e => console.warn('loadLibraryItem bg error:', e));
+    if (avatarDescEl) DB.set('sm_avatar_profile', avatarDescEl.value).catch(e => console.warn('loadLibraryItem profile error:', e));
   }
 
   function deleteLibraryItem(i) {
@@ -11008,7 +11192,7 @@ TECHNICAL SPECS:
         let oldSegs = []; try { oldSegs = JSON.parse(await DB.get('sm_segments') || '[]'); } catch(e) {}
         const label = studioMode === 'producer' ? 'Producer Project 1' : 'Project 1';
         projects.push({
-          id: Date.now().toString(),
+          id: _uid(),
           name: label,
           segments: studioMode === 'replicator' ? oldSegs : [],
           originalScript: '',
@@ -11034,7 +11218,7 @@ TECHNICAL SPECS:
       : `Project ${projects.length + 1}`;
     const name = prompt('Project name:', defaultName);
     if (!name) return;
-    const p = { id: Date.now().toString(), name, segments: [], originalScript: '', whisperSegments: [] };
+    const p = { id: _uid(), name, segments: [], originalScript: '', whisperSegments: [] };
     projects.push(p);
     activeProjectId = p.id;
     DB.set(modeKey('sm_projects'), JSON.stringify(projects)).catch(e => console.warn('newProject save error:', e));
@@ -11090,6 +11274,9 @@ TECHNICAL SPECS:
       setting: document.getElementById('studioSetting')?.value || '',
       product: document.getElementById('studioProduct')?.value || '',
       format: document.getElementById('studioFormat')?.value || '',
+      // Include images so the project is fully self-contained on import
+      avatarImageDataUrl: avatarImageDataUrl || null,
+      bgImageDataUrl: bgImageDataUrl || null,
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -11110,7 +11297,7 @@ TECHNICAL SPECS:
         const data = JSON.parse(ev.target.result);
         if (!data._app || !data.project) throw new Error('Not a valid AffiliateOS project file');
         const imported = data.project;
-        imported.id   = Date.now().toString();
+        imported.id   = _uid();
         imported.name = (imported.name || 'Imported') + ' (imported)';
         projects.push(imported);
         activeProjectId = imported.id;
@@ -11123,6 +11310,21 @@ TECHNICAL SPECS:
         if (data.product && document.getElementById('studioProduct')) document.getElementById('studioProduct').value = data.product;
         if (data.format  && document.getElementById('studioFormat'))  document.getElementById('studioFormat').value  = data.format;
         if (data.avatarDesc && document.getElementById('avatarDesc')) document.getElementById('avatarDesc').value = data.avatarDesc;
+        // Restore avatar and background images (included in v1+ exports)
+        if (data.avatarImageDataUrl) {
+          avatarImageDataUrl = data.avatarImageDataUrl;
+          const img = document.getElementById('avatarImgEl');
+          if (img) { img.src = avatarImageDataUrl; img.style.display = 'block'; }
+          const ph = document.getElementById('avatarImgPlaceholder');
+          if (ph) ph.style.display = 'none';
+          const cb = document.getElementById('clearAvatarImgBtn');
+          if (cb) cb.style.display = 'block';
+          DB.set('sm_avatar_img', avatarImageDataUrl).catch(() => {});
+        }
+        if (data.bgImageDataUrl) {
+          _applyBgToUI(data.bgImageDataUrl);
+          DB.set('sm_bg_image', data.bgImageDataUrl).catch(() => {});
+        }
         showToast(`Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`, 'success');
       } catch (e) {
         showToast('Import failed: ' + e.message, 'error');
@@ -11166,9 +11368,7 @@ TECHNICAL SPECS:
       saveCurrentProjectData();
       await DB.set(modeKey('sm_active_project'), activeProjectId);
     }
-    if (studioLibrary.length > 0) {
-      saveStudioLibrary();
-    }
+    saveStudioLibrary();
 
     // ── 2. Switch mode ────────────────────────────────────────────────────────
     studioMode = mode;
@@ -12079,13 +12279,14 @@ TECHNICAL SPECS:
       inspoUrl: document.getElementById('dailyItemInspo').value.trim(),
       script:   document.getElementById('dailyItemScript').value.trim(),
       date:     dailyDate,
-      done:     false,
+      // NOTE: do NOT include done here — when editing we preserve the existing
+      // done state via the spread below so editing a completed item doesn't reset it.
     };
     if (editingDailyId) {
       const idx = dailyItems.findIndex(i => i.id === editingDailyId);
       if (idx > -1) dailyItems[idx] = { ...dailyItems[idx], ...data };
     } else {
-      dailyItems.push({ id: _uid(), ...data });
+      dailyItems.push({ id: _uid(), ...data, done: false });
     }
     saveDailyItems();
     closeDailyItemModal();
@@ -12149,6 +12350,12 @@ TECHNICAL SPECS:
 
     // Warn before closing tab if there's unsaved segment work in progress
     window.addEventListener('beforeunload', e => {
+      // Flush any pending debounced save immediately so data isn't lost
+      if (window._segSaveTimer) {
+        clearTimeout(window._segSaveTimer);
+        window._segSaveTimer = null;
+        saveSegments();
+      }
       if (segments && segments.length > 0 && segments.some(s => s.veoPrompt || s.nbPrompt || s.script)) {
         e.preventDefault();
         e.returnValue = '';
@@ -12379,9 +12586,9 @@ TECHNICAL SPECS:
   async function saveAdminKey() {
     const key = document.getElementById('adminKeyInput').value.trim();
     if (!key) return;
-    _adminApiKey = key;
     try {
       await DB.set('admin_openai_key', key, true); // unscoped — shared for all users
+      _adminApiKey = key;
     } catch(e) { showToast('Failed to save API key — please try again.', 'error'); return; }
     document.getElementById('adminKeyStatus').style.display = 'block';
     setTimeout(() => closeAdminKeyModal(), 2000);
@@ -13127,7 +13334,7 @@ TECHNICAL SPECS:
       list.innerHTML = '<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No accounts yet. Add your first one below.</div>';
       return;
     }
-    list.innerHTML = accs.map((a, idx) => `
+    list.innerHTML = accs.map((a) => `
       <div class="adm-acc-card">
         <span class="adm-acc-platform">${escHtml(a.platform || 'Other')}</span>
         <div>
@@ -13136,19 +13343,18 @@ TECHNICAL SPECS:
           ${a.url   ? `<div style="font-size:10px;color:var(--accent-2);">${escHtml(a.url)}</div>` : ''}
           ${a.notes ? `<div style="font-size:10px;color:var(--text-3);">${escHtml(a.notes)}</div>` : ''}
         </div>
-        <button class="adm-acc-del" onclick="deleteAdmAccount(${idx})" title="Remove">✕</button>
+        <button class="adm-acc-del" onclick="deleteAdmAccount(${JSON.stringify(a.id || a.handle)})" title="Remove">✕</button>
       </div>`).join('');
   }
 
-  function openAdmAddAccount(idx) {
-    // Store the account's handle (unique identifier) instead of array index
-    // to prevent saving to the wrong slot if accounts are deleted mid-edit
-    _admEditAccId = (idx !== undefined) ? idx : null;
+  function openAdmAddAccount(accId) {
+    // Store the account's id (not array index) to prevent stale-index overwrites
+    _admEditAccId = (accId !== undefined) ? accId : null;
     const s = getAdminSettings();
     const form = document.getElementById('admAccountForm');
     document.getElementById('admAccFormTitle').textContent = _admEditAccId !== null ? 'Edit Account' : 'New Account';
     if (_admEditAccId !== null) {
-      const a = (s.admAccounts || [])[_admEditAccId] || {};
+      const a = (s.admAccounts || []).find(a => a.id === _admEditAccId) || {};
       document.getElementById('adm-acc-platform').value = a.platform || 'TikTok';
       document.getElementById('adm-acc-handle').value = a.handle || '';
       document.getElementById('adm-acc-name').value = a.name || '';
@@ -13174,22 +13380,26 @@ TECHNICAL SPECS:
     };
     if (!acc.handle) { showToast('Handle is required.', 'warning'); return; }
     if (_admEditAccId !== null) {
-      // Re-find by index at save time; if the list shrank, fall back to push
-      if (_admEditAccId < s.admAccounts.length) {
-        s.admAccounts[_admEditAccId] = acc;
+      // Find by ID rather than index to prevent stale-index overwrites
+      const existingIdx = s.admAccounts.findIndex(a => a.id === _admEditAccId);
+      if (existingIdx !== -1) {
+        acc.id = _admEditAccId;
+        s.admAccounts[existingIdx] = acc;
       } else {
+        acc.id = _uid();
         s.admAccounts.push(acc);
       }
-    } else { s.admAccounts.push(acc); }
+    } else { acc.id = _uid(); s.admAccounts.push(acc); }
     saveAdminSettings(s);
     document.getElementById('admAccountForm').style.display = 'none';
     renderAdmAccounts();
   }
 
-  function deleteAdmAccount(idx) {
+  function deleteAdmAccount(accId) {
     showConfirm('Remove this account?', () => {
       const s = getAdminSettings();
-      s.admAccounts = (s.admAccounts || []).filter((_, i) => i !== idx);
+      // Find by id; fall back to handle for legacy entries that predate id field
+      s.admAccounts = (s.admAccounts || []).filter(a => (a.id || a.handle) !== accId);
       saveAdminSettings(s);
       renderAdmAccounts();
     });
@@ -13613,11 +13823,18 @@ TECHNICAL SPECS:
 
   async function loadCTALibrary() {
     try {
-      // One-time wipe of seeded sample data — set flag only after DB.set succeeds
+      // One-time wipe of seeded sample data.
+      // Write the localStorage flag AFTER DB.set succeeds but in its own try/catch
+      // so a quota error on localStorage doesn't leave the flag unset and trigger
+      // a repeat wipe on the next load (which would erase user-added CTAs).
       if (!localStorage.getItem('aos_ctas_cleared_v1')) {
-        await DB.set('sm_ctas', '[]');
-        localStorage.setItem('aos_ctas_cleared_v1', '1');
-        ctas = [];
+        const existing = _safeJSON(await DB.get('sm_ctas'), []);
+        const filtered = existing.filter(c => c.source !== 'Sample');
+        if (filtered.length !== existing.length) {
+          await DB.set('sm_ctas', JSON.stringify(filtered));
+        }
+        try { localStorage.setItem('aos_ctas_cleared_v1', '1'); } catch(_) {}
+        ctas = filtered;
         renderCTALibrary();
         return;
       }
