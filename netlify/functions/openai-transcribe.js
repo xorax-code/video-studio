@@ -55,14 +55,23 @@ exports.handler = async (event) => {
     // Map file extension → MIME type (Whisper accepts audio + video containers)
     // Sanitize filename: strip special chars to prevent Content-Disposition header injection
     const rawName = fileName || 'audio.mp4';
-    const safeFileName = rawName.replace(/[^\w.\-]/g, '_').slice(0, 100) || 'audio.mp4';
-    const ext = safeFileName.includes('.') ? safeFileName.split('.').pop().toLowerCase() : 'mp4';
+    const sanitized = rawName.replace(/[^\w.\-]/g, '_').slice(0, 100) || 'audio.mp4';
     const mimeMap = {
       mp4: 'video/mp4', mov: 'video/quicktime', webm: 'audio/webm',
       mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/m4a',
       ogg: 'audio/ogg', flac: 'audio/flac', mpeg: 'audio/mpeg',
     };
-    const mimeType = mimeMap[ext] || 'video/mp4';
+    // Extract extension; if missing or unrecognised, default to mp4.
+    // Whisper determines format from the filename extension in the multipart
+    // Content-Disposition — a missing or unknown extension causes the
+    // "UNRECOGNIZED FILE FORMAT" error even when the bytes are valid MP4.
+    const rawExt = sanitized.includes('.') ? sanitized.split('.').pop().toLowerCase() : '';
+    const ext = (rawExt && mimeMap[rawExt]) ? rawExt : 'mp4';
+    // Ensure the filename that reaches Whisper always carries a known extension.
+    const safeFileName = (rawExt && mimeMap[rawExt])
+      ? sanitized
+      : sanitized.replace(/\.[^.]*$/, '') + '.' + ext || ('audio.' + ext);
+    const mimeType = mimeMap[ext];
 
     // Build multipart/form-data manually — avoids Blob/FormData Node.js quirks
     const boundary = '----OpenAIBoundary' + Date.now().toString(36) + Math.random().toString(36).slice(2);
