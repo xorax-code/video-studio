@@ -1626,7 +1626,6 @@
 
     /* Container padding */
     .container { padding: 12px 14px; }
-    .page-body { padding-top: 50px; } /* match topnav height */
 
     /* ── Dashboard ── */
     .db-stats { grid-template-columns: 1fr 1fr; gap: 10px; }
@@ -2457,7 +2456,7 @@
       flex: 1;
     }
     /* Remove fixed min-widths that can break flex on small screens */
-    .search-box { min-width: 0 !important; min-width: 120px; }
+    .search-box { min-width: 120px; }
     .adm-label  { min-width: 0 !important; }
     /* Make the whole VS tab scrollable so nothing clips */
     #tab-video-studio {
@@ -4500,6 +4499,7 @@
       if (tab === 'competitors') renderCompetitors();
       if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); renderIdeasInbox(); }
       if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
+      if (tab === 'my-accounts') renderTable();
     }
   }
 
@@ -4912,13 +4912,20 @@
     if (_vsCalSelectedDate) {
       // Navigate to Calendar tab with that date selected
       switchTab('calendar');
-      setTimeout(() => {
-        if (typeof jumpToDate === 'function') jumpToDate(_vsCalSelectedDate);
-        if (typeof openDailyItemModal === 'function') openDailyItemModal();
-      }, 200);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (typeof jumpToDate === 'function' && _vsCalSelectedDate) jumpToDate(_vsCalSelectedDate);
+          if (typeof openDailyItemModal === 'function') openDailyItemModal();
+        });
+      });
     } else {
       switchTab('calendar');
-      setTimeout(() => { if (typeof openDailyItemModal === 'function') openDailyItemModal(); }, 200);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if (typeof jumpToDate === 'function' && _vsCalSelectedDate) jumpToDate(_vsCalSelectedDate);
+          if (typeof openDailyItemModal === 'function') openDailyItemModal();
+        });
+      });
     }
   }
 
@@ -4942,7 +4949,7 @@
     dlPath: '',
     claudeBrowserMode: true,   // true = full automation, false = manual copy-paste
     themeMode: 'system',       // 'dark' | 'light' | 'system'
-    uiScale: 130,              // percentage: 80–150
+    uiScale: 100,              // percentage: 80–150
     // Profile
     displayName: '',
     tagline: '',
@@ -5041,6 +5048,7 @@
         const canvas = document.createElement('canvas');
         canvas.width = SIZE; canvas.height = SIZE;
         const ctx = canvas.getContext('2d');
+        if (!ctx) { showToast('Could not process avatar image.', 'error'); return; }
         // crop to square from center
         const min = Math.min(img.width, img.height);
         const sx = (img.width - min) / 2;
@@ -5051,6 +5059,7 @@
       };
       img.src = ev.target.result;
     };
+    reader.onerror = () => showToast('Could not read avatar image — please try again.', 'error');
     reader.readAsDataURL(file);
     e.target.value = '';
   }
@@ -7274,7 +7283,7 @@ RULES — read carefully:
           // Rename so the function picks the right MIME type
           fileToSend = new File([fileToSend], 'audio.wav', { type: 'audio/wav' });
           // Netlify Lambda payload cap is 6 MB; base64 overhead is ~4/3×
-          if (fileToSend.size > 4 * 1024 * 1024) {
+          if (fileToSend.size > 4.5 * 1024 * 1024) {
             status.textContent = '⚠️ Audio is too long to transcribe (max ~2 min). Trim the video and try again.';
             btn.disabled = false;
             return;
@@ -8240,9 +8249,7 @@ RULES — read carefully:
     const bgNote = bgDataUrl
       ? 'Match the background/environment from the reference background image provided. Keep it consistent and realistic.'
       : (setting || 'clean neutral background or lifestyle environment');
-    const actionWithSpeech = scriptSlice
-      ? `${analyzedAction}. They say: "${scriptSlice}"`
-      : analyzedAction;
+    const actionWithSpeech = analyzedAction;
     const voiceStyle = getVoiceStyle();
     const audioDesc = voiceStyle
       ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
@@ -8296,6 +8303,7 @@ RULES — read carefully:
       try {
         // Try to capture fresh frames from the video; fall back to saved frames if video not loaded
         let liveFrames = await captureSegmentFrames(seg, 4);
+        if (!segments[i]) continue;
         const startFrame = (liveFrames.length > 0 ? liveFrames[0] : null) || seg.frameDataUrl || null;
 
         // Build image list: use live frames if available, otherwise just the saved start frame
@@ -8351,6 +8359,7 @@ RULES — read carefully:
         }
 
         if (!description || /i('m| am) sorry|can't assist|cannot assist/i.test(description)) { skipped++; continue; }
+        if (!segments[i]) continue;
         seg.action = sanitizeDirections(description);
 
         // Update the textarea value immediately (use .value, not .textContent, for textareas)
@@ -8807,6 +8816,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
           const veoTa = document.getElementById('veo-seg-' + i);
           if (veoTa) veoTa.value = '⏳ Building from NB image…';
           const _nbOk = await buildVeo3FromNBImage(i);
+          if (!segments[i]) continue;
           if (!_nbOk && veoTa && veoTa.value.startsWith('⏳')) {
             // Vision call failed — fall back to template so the textarea isn't stuck on the spinner
             const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
@@ -8963,6 +8973,7 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const tab  = window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
     // Keep focus on the current tab — images open silently in the background
     if (tab) { tab.blur(); window.focus(); }
   }
@@ -9133,6 +9144,9 @@ No markdown. Return only the JSON object.`
       // Validate it's parseable JSON, then sanitize directional language in action field
       const _parsed = JSON.parse(raw);
       if (_parsed.action) _parsed.action = sanitizeDirections(_parsed.action);
+      if (!_parsed.speech || !String(_parsed.speech).trim()) {
+        _parsed.speech = seg.script || '';
+      }
       raw = JSON.stringify(_parsed, null, 2);
       seg.veoPrompt = raw;
       // Update the textarea in place
@@ -9364,7 +9378,7 @@ No markdown. Return only the JSON object.`
       // In avatar-background mode there is no Photo 2 start frame, so its
       // absence is not a problem.
       const hasFrame = !!seg.frameDataUrl || !!seg._scriptOnly || bgFromAvatar;
-      const sceneCredits = getVeoDuration(seg.script) * 2 + 1;
+      const sceneCredits = seg.script?.trim() ? getVeoDuration(seg.script) * 2 + 1 : 0;
       const blockers = [];
       if (sh.level === 'empty' || sh.level === 'short' || sh.level === 'over') blockers.push('script ' + sh.level);
       if (!lint.ok) blockers.push('Veo JSON: ' + lint.errors.join(', '));
@@ -9482,7 +9496,7 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
 
     // ── Confirm gates (run before the main logic, now that all vars are declared) ──
     if (!preflightDone) {
-      const unready = segments.filter(s => !s.veoPrompt?.trim());
+      const unready = segments.filter(s => !s.veoPrompt?.trim() && !(skipDone && s.done));
       if (unready.length && !skipDone) {
         showConfirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`, () => {
           runAllScenes(skipDone, true);
@@ -10981,6 +10995,7 @@ TECHNICAL SPECS:
         veoPrompt: s.veoPrompt,
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
+        done: s.done || false,
       }))
     };
     studioLibrary.unshift(item);
@@ -11277,6 +11292,7 @@ TECHNICAL SPECS:
       // Include images so the project is fully self-contained on import
       avatarImageDataUrl: avatarImageDataUrl || null,
       bgImageDataUrl: bgImageDataUrl || null,
+      bgFromAvatar: bgFromAvatar,
     };
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url  = URL.createObjectURL(blob);
@@ -11324,6 +11340,10 @@ TECHNICAL SPECS:
         if (data.bgImageDataUrl) {
           _applyBgToUI(data.bgImageDataUrl);
           DB.set('sm_bg_image', data.bgImageDataUrl).catch(() => {});
+        }
+        if (data.bgFromAvatar !== undefined) {
+          bgFromAvatar = data.bgFromAvatar;
+          DB.set('sm_bg_from_avatar', bgFromAvatar ? '1' : '').catch(() => {});
         }
         showToast(`Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`, 'success');
       } catch (e) {
@@ -11957,7 +11977,7 @@ TECHNICAL SPECS:
   let dailyDate  = new Date().toISOString().slice(0,10);
   let editingDailyId = null;
 
-  function saveDailyItems() { DB.set('sm_daily_items', JSON.stringify(dailyItems)).catch(e => console.warn('saveDailyItems error:', e)); }
+  function saveDailyItems() { DB.set('sm_daily_items', JSON.stringify(dailyItems)).catch(e => { console.warn('saveDailyItems error:', e); showToast('Could not save calendar — changes may be lost.', 'warning'); }); }
 
   function copyItemUrl(id, btn) {
     const item = dailyItems.find(i => i.id === id);
@@ -13496,6 +13516,10 @@ TECHNICAL SPECS:
             DB.remove('sm_products'),   DB.remove('sm_hooks'),
             DB.remove('sm_ctas'),       DB.remove('sm_performance'),
             DB.remove('sm_recycle'),    DB.remove('sm_ideas'),
+            DB.remove('sm_post_plans'),
+            DB.remove('sm_daily_items'),
+            DB.remove('sm_video_log'),
+            DB.remove('sm_user_settings'),
           ]);
           localStorage.removeItem('sm_admin_settings');
           showToast('Data cleared. The page will now reload.', 'success');
@@ -13809,11 +13833,12 @@ TECHNICAL SPECS:
   function copyHook(id, btn) {
     const h = hooks.find(x => x.id === id);
     if (!h) return;
-    navigator.clipboard.writeText(h.text).catch(() => {});
-    h.copyCount = (h.copyCount || 0) + 1;
-    saveHooks();
-    _showCopied(btn, '✅ Copied!');
-    setTimeout(() => renderHookBank(), 2100);
+    navigator.clipboard.writeText(h.text).then(() => {
+      h.copyCount = (h.copyCount || 0) + 1;
+      saveHooks();
+      _showCopied(btn, '✅ Copied!');
+      setTimeout(() => renderHookBank(), 2100);
+    }).catch(() => showToast('Copy failed — check browser permissions.', 'warning'));
   }
 
   // ============================================================
@@ -13839,7 +13864,9 @@ TECHNICAL SPECS:
         return;
       }
       ctas = _safeJSON(await DB.get('sm_ctas'), []);
+      const _beforeLen = ctas.length;
       ctas = ctas.filter(c => c.source !== 'Sample');
+      if (ctas.length !== _beforeLen) saveCTALibrary();
     } catch(e) { ctas = []; showToast('Could not load CTA Library.', 'error'); }
     renderCTALibrary();
   }
@@ -13958,11 +13985,12 @@ TECHNICAL SPECS:
   function copyCTA(id, btn) {
     const c = ctas.find(x => x.id === id);
     if (!c) return;
-    navigator.clipboard.writeText(c.text).catch(() => {});
-    c.copyCount = (c.copyCount || 0) + 1;
-    saveCTALibrary();
-    _showCopied(btn, '✅ Copied!');
-    setTimeout(() => renderCTALibrary(), 2100);
+    navigator.clipboard.writeText(c.text).then(() => {
+      c.copyCount = (c.copyCount || 0) + 1;
+      saveCTALibrary();
+      _showCopied(btn, '✅ Copied!');
+      setTimeout(() => renderCTALibrary(), 2100);
+    }).catch(() => showToast('Copy failed — check browser permissions.', 'warning'));
   }
 
   // ============================================================
@@ -14654,15 +14682,4 @@ TECHNICAL SPECS:
             <span style="font-size:11px;font-weight:600;color:var(--text-2);">Veo 3 · GPT-4o · Claude</span>
           </div>
         </div>
-        <div style="text-align:center;padding-top:16px;">
-          <a href="https://affiliateos.app" target="_blank" style="font-size:11px;color:var(--accent-2);text-decoration:none;">affiliateos.app</a>
-        </div>
-      </div>
-
-    </div><!-- end content scroll -->
-  </div><!-- end userSettingsPanel -->
-</div><!-- end userSettingsOverlay -->
-
-</body>
-</html>
-
+        <div style="text-align:ce
