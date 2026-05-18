@@ -4616,7 +4616,7 @@
       const color  = _safeCssColor(acct?.brandColor) || '#7c6af7';
       const preview = item.script ? escHtml(item.script.slice(0, 72)) + (item.script.length > 72 ? '…' : '') : 'No script added';
       return `<div class="db-today-item ${item.done ? 'done' : ''}">
-        <div class="db-today-check ${item.done ? 'checked' : ''}">${item.done ? '<i class="ti ti-check" style="font-size:8px;color:#fff;"></i>' : ''}</div>
+        <div class="db-today-check ${item.done ? 'checked' : ''}" onclick="toggleDailyDone(${JSON.stringify(item.id)})" style="cursor:pointer;" title="${item.done ? 'Mark undone' : 'Mark done'}">${item.done ? '<i class="ti ti-check" style="font-size:8px;color:#fff;"></i>' : ''}</div>
         <div style="width:7px;height:7px;border-radius:50%;background:${color};flex-shrink:0;box-shadow:0 0 6px ${color}88;"></div>
         <div class="db-today-acct">${name}</div>
         <div class="db-today-script">${preview}</div>
@@ -4687,7 +4687,7 @@
     // "Start Here" card — only shown the first few times (before user has processed any video)
     const hideStartCard = localStorage.getItem('hideStartCard') === '1' || segments.length > 0;
     const startCardHtml = hideStartCard ? '' : `
-      <div style="background:linear-gradient(135deg,rgba(124,106,247,0.12),rgba(16,185,129,0.08));border:1px solid rgba(124,106,247,0.35);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden;margin-bottom:2px;">
+      <div id="startCardBanner" style="background:linear-gradient(135deg,rgba(124,106,247,0.12),rgba(16,185,129,0.08));border:1px solid rgba(124,106,247,0.35);border-radius:14px;padding:18px 20px;display:flex;align-items:center;gap:16px;position:relative;overflow:hidden;margin-bottom:2px;">
         <div style="position:absolute;inset:0;background:radial-gradient(ellipse at 30% 50%,rgba(124,106,247,0.08) 0%,transparent 70%);pointer-events:none;"></div>
         <div style="font-size:36px;flex-shrink:0;">🎬</div>
         <div style="flex:1;min-width:0;">
@@ -4696,7 +4696,7 @@
         </div>
         <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0;">
           <button onclick="switchTab('video-replicator');localStorage.setItem('hideStartCard','1');" style="padding:9px 18px;font-size:12px;font-weight:700;background:var(--grad-accent);border:none;border-radius:8px;color:#fff;cursor:pointer;font-family:inherit;white-space:nowrap;">Open Replicator →</button>
-          <button onclick="this.closest('div[style]').remove();localStorage.setItem('hideStartCard','1')" style="background:none;border:none;font-size:11px;color:var(--text-3);cursor:pointer;font-family:inherit;text-align:center;">Dismiss</button>
+          <button onclick="document.getElementById('startCardBanner').remove();localStorage.setItem('hideStartCard','1')" style="background:none;border:none;font-size:11px;color:var(--text-3);cursor:pointer;font-family:inherit;text-align:center;">Dismiss</button>
         </div>
       </div>`;
 
@@ -4880,7 +4880,7 @@
     }
     items.innerHTML = dayItems.map(item => {
       const acct = (accounts || []).find(a => a.id === item.accountId);
-      const acctName = acct ? (acct.name || acct.platform || 'Account') : 'Unknown account';
+      const acctName = acct ? (acct.username || acct.platform || 'Account') : 'Unknown account';
       const preview = (item.script || '').slice(0, 80) + ((item.script || '').length > 80 ? '…' : '');
       const doneStyle = item.done ? 'opacity:0.5;text-decoration:line-through;' : '';
       return `<div style="display:flex;align-items:flex-start;gap:10px;padding:8px 10px;background:var(--surface);border:1px solid var(--border);border-radius:7px;${doneStyle}">
@@ -4920,12 +4920,7 @@
       });
     } else {
       switchTab('calendar');
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          if (typeof jumpToDate === 'function' && _vsCalSelectedDate) jumpToDate(_vsCalSelectedDate);
-          if (typeof openDailyItemModal === 'function') openDailyItemModal();
-        });
-      });
+      showToast('Select a day on the calendar first.', 'warning');
     }
   }
 
@@ -5006,12 +5001,12 @@
     const u = getUserSettings();
     if (u.dlPath && u.dlPath.trim()) return u.dlPath.trim();
     const a = getAdminSettings();
-    return (a.dlPath && a.dlPath.trim()) ? a.dlPath.trim() : 'C:\\Users\\x\\Downloads';
+    return (a.dlPath && a.dlPath.trim()) ? a.dlPath.trim() : '';
   }
 
   // ===== ADMIN SETTINGS =====
   const ADMIN_DEFAULTS = {
-    dlPath: 'C:\\Users\\x\\Downloads',
+    dlPath: '',
     nbWaitSec: 180,
     veoWaitMin: 6,
     maxTabRefresh: 0,
@@ -5719,7 +5714,6 @@
       if (ta) {
         ta.value = text;
         ta.dispatchEvent(new Event('input'));
-        saveSegments();
         ta.style.borderColor = 'var(--accent)';
         setTimeout(() => ta.style.borderColor = '', 1400);
       }
@@ -6435,7 +6429,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (avatarImageDataUrl !== dataUrl) return;
       avatarInventory = text;
       if (field) field.value = text;
-      DB.set('sm_avatar_inventory', text);
+      DB.set('sm_avatar_inventory', text).catch(e => console.warn('DB avatar inventory save error:', e));
       if (retryBtn) retryBtn.style.display = 'none';
       // Auto-expand the section so the user can see the filled result
       if (field && field.style.display === 'none') {
@@ -6599,6 +6593,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     const url = document.getElementById('bkProductUrl')?.value.trim();
     if (!url) { showToast('Paste a product URL first.', 'warning'); return; }
     const btn = document.getElementById('bkScrapeBtn');
+    const origLabel = btn ? btn.textContent : '';
     if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
     try {
       const key = getApiKey();
@@ -6639,7 +6634,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     } catch(e) {
       showToast('Could not fetch product info: ' + e.message, 'error');
     } finally {
-      if (btn) { btn.textContent = '🔍'; btn.disabled = false; }
+      if (btn) { btn.textContent = origLabel; btn.disabled = false; }
     }
   }
 
@@ -6677,6 +6672,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     showConfirm('Clear the reference video? This will also clear all segments.', () => {
       if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
       refVideoFile = null;
+      _activeLibraryVideoId = null;
       // Clear timestamps and segments — they belong to the old video
       whisperSegments = [];
       segments = [];
@@ -6702,6 +6698,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function _resetVideoUI() {
     if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
     refVideoFile = null;
+    _activeLibraryVideoId = null;
     const videoEl = document.getElementById('refVideoEl');
     if (videoEl) { videoEl.removeAttribute('src'); videoEl.load(); videoEl.style.display = 'none'; }
     const placeholder = document.getElementById('videoUploadPlaceholder');
@@ -6864,10 +6861,11 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
         try { lib = JSON.parse((await DB.get('sm_refvideo_lib')) || '[]'); } catch (e) { lib = []; }
         lib = lib.filter(v => v.id !== id);
         await DB.set('sm_refvideo_lib', JSON.stringify(lib));
+        openVideoLibrary();
       } catch (e) {
         showToast('Could not delete: ' + ((e && e.message) || e), 'error');
+        openVideoLibrary();
       }
-      openVideoLibrary();
     });
   }
 
@@ -7055,16 +7053,19 @@ RULES — read carefully:
         let cursor = 0;
         segments.forEach((seg, idx) => {
           const isLast = idx === segments.length - 1;
-          const count = isLast ? newWords.length - cursor : segCounts[idx];
+          const count = isLast
+            ? Math.max(0, newWords.length - cursor)
+            : Math.min(segCounts[idx], Math.max(0, newWords.length - cursor));
           seg.script = newWords.slice(cursor, cursor + count).join(' ');
           cursor += count;
         });
+        const emptied = segments.filter(s => !(s.script || '').trim()).length;
+        if (emptied > 0) showToast(`${emptied} segment(s) ended up empty — the rewrite may be too short.`, 'warning');
       } else {
         if (typeof distributeScript === 'function') distributeScript();
       }
     }
 
-    saveCurrentProjectData();
     if (typeof renderSegments === 'function') renderSegments();
     if (typeof saveSegments === 'function') saveSegments();
   }
@@ -7263,6 +7264,7 @@ RULES — read carefully:
       return;
     }
     const btn = document.getElementById('transcribeBtn');
+    if (!btn) return;
     const status = document.getElementById('transcribeStatus');
     btn.disabled = true;
     btn.innerHTML = '<i class="ti ti-loader-2"></i>';
@@ -7338,8 +7340,7 @@ RULES — read carefully:
         status.style.color = '#cc6060';
       }
     } finally {
-      btn.disabled = false;
-      btn.innerHTML = '<i class="ti ti-microphone"></i>';
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-microphone"></i>'; }
     }
   }
 
@@ -7372,7 +7373,12 @@ RULES — read carefully:
         doCapture();
       } else {
         videoEl.currentTime = time;
-        videoEl.addEventListener('seeked', doCapture, { once: true });
+        const seekTimeout = setTimeout(() => {
+          videoEl.removeEventListener('seeked', onSeeked);
+          resolve(null);
+        }, 8000);
+        const onSeeked = () => { clearTimeout(seekTimeout); doCapture(); };
+        videoEl.addEventListener('seeked', onSeeked, { once: true });
       }
     });
   }
@@ -7477,7 +7483,9 @@ RULES — read carefully:
       await new Promise(resolve => {
         if (Math.abs(videoEl.currentTime - t) < 0.04) { resolve(); return; }
         videoEl.currentTime = t;
-        videoEl.addEventListener('seeked', resolve, { once: true });
+        const _seekTo = setTimeout(() => { videoEl.removeEventListener('seeked', _onSeeked); resolve(); }, 8000);
+        const _onSeeked = () => { clearTimeout(_seekTo); resolve(); };
+        videoEl.addEventListener('seeked', _onSeeked, { once: true });
       });
 
       ctx.drawImage(videoEl, 0, 0, thumbW, thumbH);
@@ -8304,6 +8312,8 @@ RULES — read carefully:
         // Try to capture fresh frames from the video; fall back to saved frames if video not loaded
         let liveFrames = await captureSegmentFrames(seg, 4);
         if (!segments[i]) continue;
+        // If a segment was deleted/shifted during the await, skip the DOM update (data already on correct object)
+        if (seg !== segments[i]) continue;
         const startFrame = (liveFrames.length > 0 ? liveFrames[0] : null) || seg.frameDataUrl || null;
 
         // Build image list: use live frames if available, otherwise just the saved start frame
@@ -8331,14 +8341,8 @@ RULES — read carefully:
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
         const data = await res.json().catch(() => ({}));
+        if (data.error) { showToast('Frame analysis error: ' + (data.error.message || data.error), 'error'); continue; }
         if (!res.ok) { throw new Error(data?.error?.message || 'API error ' + res.status); }
-
-        if (data.error) {
-          if (btn) { btn.disabled = false; btn.textContent = '🔍 Analyze Video'; }
-          showToast('OpenAI error on segment ' + (i+1) + ': ' + data.error.message, 'error');
-          saveSegments();
-          return;
-        }
         let description = data.choices?.[0]?.message?.content?.trim() || '';
 
         // If OpenAI refused the image, retry with only the start frame (no end frame)
@@ -8919,6 +8923,7 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
           model: 'gpt-4o',
           messages: [{ role: 'system', content: systemPrompt }, userMessage],
           temperature: 0.75,
+          max_tokens: Math.max(1000, segments.length * 150),
         })
       });
       if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || 'API error ' + res.status); }
@@ -8950,7 +8955,7 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
         if (frameDescEl) { frameDescEl.value = desc.visual || ''; autoGrow(frameDescEl); }
       });
       saveSegments();
-      if (btn) { btn.textContent = '✅ Done!'; setTimeout(() => { btn.textContent = '✨ AI Describe'; btn.disabled = false; }, 2500); }
+      if (btn) { btn.textContent = '✅ Done!'; setTimeout(() => { const b = document.getElementById('aiDescribeBtn'); if (b) { b.textContent = '✨ AI Describe'; b.disabled = false; } }, 2500); }
       showToast(`AI descriptions applied to ${parsed.length} scene${parsed.length !== 1 ? 's' : ''}`, 'success');
     } catch(err) {
       showToast('AI Describe failed: ' + err.message, 'error', 5000);
@@ -9153,9 +9158,7 @@ No markdown. Return only the JSON object.`
       const ta = document.getElementById('veo-seg-' + i);
       if (ta) { ta.value = raw; autoGrow(ta); }
       return true;
-    } catch(e) {
-      return false;
-    }
+    } catch(e) { console.warn('buildVeo3FromNBImage failed:', e); return false; }
   }
 
   // ── NB Pro preview upload / clear ────────────────────────────────────────
@@ -9190,6 +9193,11 @@ No markdown. Return only the JSON object.`
         if (veoTa && veoTa.value.startsWith('⏳')) veoTa.value = '';
         showToast('Image processing failed — please try uploading again.', 'error');
       }
+    };
+    reader.onerror = () => {
+      const veoTa = document.getElementById('veo-seg-' + i);
+      if (veoTa && veoTa.value.startsWith('⏳')) veoTa.value = '';
+      showToast('Could not read image file — please try again.', 'error');
     };
     reader.readAsDataURL(file);
   }
@@ -10164,7 +10172,6 @@ Report back: how many scenes completed successfully, and note any that had issue
         </div>
         <div style="display:flex;gap:8px;">
           <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
-          ${doneCount > 0 && !skipDone ? `<button onclick="this.closest('div[style*=fixed]').remove();runAllScenes(true, true)" style="padding:8px 14px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.4);border-radius:6px;color:var(--warning);font-weight:600;cursor:pointer;font-size:12px;">⚡ Resume (skip done)</button>` : ''}
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -10679,7 +10686,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       });
 
       saveSegments();
-      if (btn) { btn.textContent = `✅ ${updated} condensed`; setTimeout(() => { btn.textContent = '✂ Condense'; btn.disabled = false; }, 2500); }
+      if (btn) { btn.textContent = `✅ ${updated} condensed`; setTimeout(() => { const b = document.getElementById('condenseAllBtn'); if (b) { b.textContent = '✂ Condense'; b.disabled = false; } }, 2500); }
     } catch(err) {
       showToast('Condense failed: ' + err.message, 'error');
       if (btn) { btn.textContent = '✂ Condense'; btn.disabled = false; }
@@ -10822,7 +10829,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
     output.innerHTML = '';
 
     // Avatar + video reference row at top
-    if (avatarImageDataUrl || document.getElementById('refVideoUrl').value) {
+    if (avatarImageDataUrl || document.getElementById('refVideoUrl')?.value) {
       const refRow = document.createElement('div');
       refRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:10px;padding:8px;background:#0d0d0d;border:1px solid #1e1e1e;border-radius:2px;';
       refRow.innerHTML = (avatarImageDataUrl ? `<img src="${avatarImageDataUrl}" style="width:40px;height:40px;object-fit:cover;border-radius:2px;border:1px solid #2a2a2a;flex-shrink:0;">` : '') +
@@ -11000,6 +11007,7 @@ TECHNICAL SPECS:
     };
     studioLibrary.unshift(item);
     saveStudioLibrary();
+    DB.set('sm_bg_from_avatar', bgFromAvatar ? '1' : '').catch(() => {});
     renderStudioLibrary();
     const btn = document.getElementById('saveAllBtn');
     if (btn) { btn.textContent = 'Project Saved'; setTimeout(() => btn.textContent = 'Save to Library', 2000); }
@@ -11035,6 +11043,9 @@ TECHNICAL SPECS:
     const item = studioLibrary[i];
     if (!item) return;
 
+    // Preserve current project before loading library item
+    saveCurrentProjectData();
+
     // Restore segments
     if (item.segments && item.segments.length > 0) {
       segments = item.segments.map(s => ({ ...s }));
@@ -11061,6 +11072,12 @@ TECHNICAL SPECS:
       if (placeholder) placeholder.style.display = 'none';
       const clearBtn = document.getElementById('clearAvatarImgBtn');
       if (clearBtn) clearBtn.style.display = 'block';
+      // Clear stale inventory so old avatar details aren't sent to Claude
+      avatarInventory = '';
+      const _invTa = document.getElementById('avatarInventory');
+      if (_invTa) _invTa.value = '';
+      // Re-extract inventory for the restored avatar
+      if (typeof extractAvatarInventory === 'function') extractAvatarInventory(avatarImageDataUrl);
     }
 
     // Restore background image + flag
@@ -11336,13 +11353,17 @@ TECHNICAL SPECS:
           const cb = document.getElementById('clearAvatarImgBtn');
           if (cb) cb.style.display = 'block';
           DB.set('sm_avatar_img', avatarImageDataUrl).catch(() => {});
+          // Clear stale inventory so old avatar details aren't sent to Claude
+          avatarInventory = '';
+          const _invTa = document.getElementById('avatarInventory');
+          if (_invTa) _invTa.value = '';
+          // Re-extract inventory for the restored avatar
+          if (typeof extractAvatarInventory === 'function') extractAvatarInventory(avatarImageDataUrl);
         }
         if (data.bgImageDataUrl) {
           _applyBgToUI(data.bgImageDataUrl);
           DB.set('sm_bg_image', data.bgImageDataUrl).catch(() => {});
-        }
-        if (data.bgFromAvatar !== undefined) {
-          bgFromAvatar = data.bgFromAvatar;
+          bgFromAvatar = data.bgFromAvatar ?? false;
           DB.set('sm_bg_from_avatar', bgFromAvatar ? '1' : '').catch(() => {});
         }
         showToast(`Imported "${imported.name}" — ${(imported.segments||[]).length} scene(s) loaded.`, 'success');
@@ -12276,6 +12297,10 @@ TECHNICAL SPECS:
   }
 
   function openDailyItemModal(id) {
+    if (!accounts || accounts.length === 0) {
+      showToast('Add an account first before planning a post.', 'warning');
+      return;
+    }
     editingDailyId = id || null;
     const item = id ? dailyItems.find(i => i.id === id) : null;
     document.getElementById('dailyItemModalTitle').textContent = item ? 'Edit Post' : 'Plan a Post';
@@ -12419,6 +12444,7 @@ TECHNICAL SPECS:
 
   // ===== AUTH SYSTEM =====
   // ── SUPABASE CLIENT ──────────────────────────────────────────
+  let _pendingSignupName = ''; // bridge display name from doSignup → onAuthSuccess
   const _sb = (() => {
     try { return supabase.createClient(SUPABASE_URL, SUPABASE_ANON); }
     catch(e) { console.warn('Supabase not configured yet:', e.message); return null; }
@@ -12489,12 +12515,8 @@ TECHNICAL SPECS:
     if (password !== confirm) { showAuthError('Passwords do not match.'); return; }
     const { error } = await _sb.auth.signUp({ email, password });
     if (error) { showAuthError(error.message); return; }
-    // Save the username the user typed as their display name so the chip shows it correctly
-    if (username) {
-      const s = getUserSettings();
-      s.displayName = username;
-      saveUserSettings(s);
-    }
+    // Stash the display name; it will be saved in onAuthSuccess after DB.setUser scopes the key
+    if (username) _pendingSignupName = username;
     showAuthError('✓ Account created! Check your email to confirm, then sign in.');
     // After email confirmation the SIGNED_IN event fires and calls onAuthSuccess automatically
   }
@@ -12502,6 +12524,14 @@ TECHNICAL SPECS:
   function onAuthSuccess(username, userId) {
     // Scope all DB reads/writes to this user
     if (userId) DB.setUser(userId);
+    // If signup just set a pending display name, persist it now that the DB key is scoped
+    if (_pendingSignupName) {
+      const _ps = getUserSettings();
+      _ps.displayName = _pendingSignupName;
+      saveUserSettings(_ps);
+      updateUserChip(_pendingSignupName);
+      _pendingSignupName = '';
+    }
     // Hide auth wall
     const wall = document.getElementById('authWall');
     if (wall) wall.classList.remove('visible');
@@ -12835,7 +12865,8 @@ TECHNICAL SPECS:
 
   function saveAccessibilitySettings() {
     const s = getUserSettings();
-    s.themeMode = _usetThemeChoice;
+    const _activeThemeBtn = document.querySelector('.uset-theme-btn.active');
+    s.themeMode = (_activeThemeBtn?.id || '').replace('uset-theme-', '') || _usetThemeChoice;
     s.uiScale   = parseInt(document.getElementById('uset-scale-slider').value) || 100;
     // Accent color
     const chosen = document.querySelector('.uset-accent-swatch.selected');
@@ -12906,8 +12937,6 @@ TECHNICAL SPECS:
   function saveGoalsTab() {
     const s = getUserSettings();
     s.weeklyGoal = parseInt(document.getElementById('uset-weeklyGoal').value) || 7;
-    s.reminderEnabled = document.getElementById('uset-reminderEnabled').checked;
-    s.reminderTime = document.getElementById('uset-reminderTime').value || '09:00';
     // Per-platform goals
     s.goalsPerPlatform = {};
     document.querySelectorAll('.uset-platform-goal').forEach(inp => {
@@ -12915,7 +12944,6 @@ TECHNICAL SPECS:
       if (val > 0) s.goalsPerPlatform[inp.dataset.platform] = val;
     });
     saveUserSettings(s);
-    if (s.reminderEnabled) _scheduleReminder(s.reminderTime);
     _showUsetSaved();
   }
 
@@ -13437,12 +13465,15 @@ TECHNICAL SPECS:
   async function admExport() {
     try {
       const [rawAccounts, rawCompetitors, rawScripts, rawStudio,
-             rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas] = await Promise.all([
+             rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas,
+             rawPostPlans, rawDailyItems, rawVideoLog] = await Promise.all([
         DB.get('sm_accounts'),      DB.get('sm_competitors'),
         DB.get('sm_viral_scripts'), DB.get('sm_studio_library'),
         DB.get('sm_products'),      DB.get('sm_hooks'),
         DB.get('sm_ctas'),          DB.get('sm_performance'),
         DB.get('sm_recycle'),       DB.get('sm_ideas'),
+        DB.get('sm_post_plans'),    DB.get('sm_daily_items'),
+        DB.get('sm_video_log'),
       ]);
       const payload = {
         _exported:    new Date().toISOString(),
@@ -13457,6 +13488,9 @@ TECHNICAL SPECS:
         performance:  _safeJSON(rawPerf,        []),
         recycle:      _safeJSON(rawRecycle,     []),
         ideas:        _safeJSON(rawIdeas,       []),
+        postPlans:    _safeJSON(rawPostPlans,   []),
+        dailyItems:   _safeJSON(rawDailyItems,  []),
+        videoLog:     _safeJSON(rawVideoLog,    []),
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -13486,7 +13520,11 @@ TECHNICAL SPECS:
             if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
             if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
             if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
-            showToast('Import complete. Reload the page to see changes.', 'success');
+            await DB.set('sm_post_plans',  JSON.stringify(data.postPlans  || []));
+            await DB.set('sm_daily_items', JSON.stringify(data.dailyItems || []));
+            await DB.set('sm_video_log',   JSON.stringify(data.videoLog   || []));
+            showToast('Import successful — reloading…', 'success');
+            setTimeout(() => location.reload(), 1200);
           } catch (err2) { showToast('Import failed: ' + err2.message, 'error'); }
         });
       } catch(err) { showToast('Invalid backup file.', 'error'); }
@@ -14235,11 +14273,12 @@ TECHNICAL SPECS:
   function useRecycleItem(id, btn) {
     const r = recycleItems.find(x => x.id === id);
     if (!r) return;
-    navigator.clipboard.writeText(r.content).catch(() => {});
-    r.timesUsed = (r.timesUsed || 0) + 1;
-    saveRecycleItems();
-    _showCopied(btn, '✅ Copied!');
-    setTimeout(() => renderContentRecycler(), 2100);
+    navigator.clipboard.writeText(r.content).then(() => {
+      r.timesUsed = (r.timesUsed || 0) + 1;
+      saveRecycleItems();
+      renderContentRecycler();
+      _showCopied(btn, '✅ Copied!');
+    }).catch(() => showToast('Copy failed — check browser permissions.', 'warning'));
   }
 
   // ============================================================
@@ -14371,6 +14410,12 @@ TECHNICAL SPECS:
   function cycleIdeaStatus(id) {
     const i = ideas.find(x => x.id === id);
     if (!i) return;
+    if (!['inbox', 'in-progress', 'done'].includes(i.status)) {
+      i.status = 'inbox';
+      saveIdeas();
+      renderIdeasInbox();
+      return;
+    }
     const order = ['inbox', 'in-progress', 'done'];
     const cur = order.indexOf(i.status);
     i.status = order[(cur + 1) % order.length];
@@ -14654,13 +14699,13 @@ TECHNICAL SPECS:
         <div class="uset-section-title">Export Data</div>
         <div class="uset-desc">Download a copy of your accounts, scripts, and settings as a JSON file.</div>
         <div class="uset-save-row" style="margin-bottom:24px;">
-          <button class="uset-btn-save" onclick="exportProjectJSON()">Export All Data</button>
+          <button class="uset-btn-save" onclick="admExport()">Export All Data</button>
         </div>
         <div class="uset-section-title">Import Data</div>
         <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
         <div class="uset-save-row" style="margin-bottom:24px;">
           <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
-          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(this)">
+          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="admImport(event)">
         </div>
         <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
         <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
