@@ -2966,7 +2966,7 @@
           <button class="btn btn-secondary" onclick="dailyPrevDay()" style="padding:3px 9px;" aria-label="Previous day">‹</button>
           <span id="dailyDateLabel" style="font-size:12px;font-weight:600;color:var(--text-1);flex:1;text-align:center;min-width:120px;"></span>
           <button class="btn btn-secondary" onclick="dailyNextDay()" style="padding:3px 9px;" aria-label="Next day">›</button>
-          <input type="date" id="dailyDatePicker" onchange="jumpToDate(this.value)" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;cursor:pointer;color-scheme:dark;">
+          <input type="date" id="dailyDatePicker" onchange="jumpToDate(this.value)" style="padding:3px 7px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:11px;outline:none;cursor:pointer;">
           <button class="btn btn-secondary" onclick="goToToday()" style="padding:3px 8px;font-size:10px;">Today</button>
           <button class="btn btn-secondary" onclick="goToTomorrow()" style="padding:3px 8px;font-size:10px;">Tomorrow</button>
         </div>
@@ -3110,7 +3110,7 @@
       <!-- Start date -->
       <div class="form-group" style="margin-bottom:12px;">
         <label class="form-label">Active from <span style="font-weight:400;color:var(--text-3);">(daily items appear on & after this date)</span></label>
-        <input type="date" id="planStartDate" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;color-scheme:dark;">
+        <input type="date" id="planStartDate" style="width:100%;padding:6px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--radius-sm);color:var(--text-1);font-family:inherit;font-size:12px;outline:none;">
       </div>
 
       <!-- Account scope -->
@@ -6111,7 +6111,7 @@
         if (placeholder) placeholder.style.display = 'none';
         const clearBtn = document.getElementById('clearAvatarImgBtn');
         if (clearBtn) clearBtn.style.display = 'block';
-        DB.set('sm_avatar_img', avatarImageDataUrl);
+        DB.set('sm_avatar_img', avatarImageDataUrl).catch(e => console.warn('saveAvatarImg error:', e));
         // Auto-extract the appearance inventory from the new avatar photo
         extractAvatarInventory(avatarImageDataUrl);
       } catch (err) {
@@ -6132,14 +6132,14 @@
     if (_ap) _ap.style.display = 'block';
     if (_ac) _ac.style.display = 'none';
     if (_ainput) _ainput.value = '';
-    DB.remove('sm_avatar_img');
+    DB.remove('sm_avatar_img').catch(e => console.warn('clearAvatarImg error:', e));
     // The inventory belonged to the cleared avatar — clear it too
     avatarInventory = '';
     const invEl = document.getElementById('avatarInventory');
     if (invEl) invEl.value = '';
     const invStatus = document.getElementById('avatarInventoryStatus');
     if (invStatus) invStatus.textContent = '';
-    DB.remove('sm_avatar_inventory');
+    DB.remove('sm_avatar_inventory').catch(e => console.warn('clearAvatarInventory error:', e));
   }
 
   function loadAvatarImage() {
@@ -6164,7 +6164,7 @@
     const el = document.getElementById('avatarInventory');
     if (!el) return;
     avatarInventory = el.value;
-    DB.set('sm_avatar_inventory', avatarInventory);
+    DB.set('sm_avatar_inventory', avatarInventory).catch(e => console.warn('saveAvatarInventory error:', e));
   }
 
   function loadAvatarInventory() {
@@ -6174,7 +6174,7 @@
         const el = document.getElementById('avatarInventory');
         if (el) el.value = saved;
       }
-    });
+    }).catch(e => console.warn('loadAvatarInventory error:', e));
   }
 
   // Extract a structured appearance inventory from the avatar photo via GPT-4o
@@ -6198,12 +6198,12 @@
       if (status) status.textContent = 'open on Netlify to auto-fill — or type manually';
       return;
     }
+    // In production on Netlify the proxy supplies the API key server-side —
+    // no client-side key is needed, so we only block if we somehow have no key
+    // AND we're in a non-proxied context (file:// already returned above).
     const apiKey = getApiKey();
-    if (!apiKey) {
-      if (status) status.textContent = 'no API key — fill in manually';
-      if (retryBtn) retryBtn.style.display = '';
-      return;
-    }
+    // Allow empty key on Netlify — the fetch interceptor will strip the header
+    // and the server-side function provides its own OPENAI_API_KEY.
     if (status) status.textContent = '⏳ analyzing avatar…';
 
     // Compress the image to ≤512px JPEG before sending — large base64 payloads
@@ -6387,10 +6387,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
 
   function clearBgImage() {
     bgFromAvatar = false;
-    DB.remove('sm_bg_from_avatar');
+    DB.remove('sm_bg_from_avatar').catch(e => console.warn('clearBgFromAvatar error:', e));
     _applyBgToUI(null);
     document.getElementById('bgImgInput').value = '';
-    DB.remove('sm_bg_image');
+    DB.remove('sm_bg_image').catch(e => console.warn('clearBgImage error:', e));
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'none';
   }
@@ -6444,8 +6444,8 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
         set('bkCta',           kit.cta);
         const toneEl = document.getElementById('bkTone');
         if (toneEl && kit.tone) toneEl.value = kit.tone;
-      } catch(e) {}
-    });
+      } catch(e) { console.warn('loadBrandKit parse error:', e); }
+    }).catch(e => console.warn('loadBrandKit DB error:', e));
   }
 
   async function scrapeProductUrl() {
@@ -6993,7 +6993,7 @@ RULES — read carefully:
         fileName: file.name,
         model: 'whisper-1',
         response_format: 'verbose_json',
-        timestamp_granularities: 'segment'
+        timestamp_granularities: ['segment']
       })
     });
   }
@@ -8166,7 +8166,7 @@ RULES — read carefully:
         if (!res.ok) { throw new Error(data?.error?.message || 'API error ' + res.status); }
 
         if (data.error) {
-          if (btn) { btn.disabled = false; btn.textContent = '❌ ' + (data.error.code || data.error.type || 'Error'); }
+          if (btn) { btn.disabled = false; btn.textContent = '🔍 Analyze Video'; }
           showToast('OpenAI error on segment ' + (i+1) + ': ' + data.error.message, 'error');
           saveSegments();
           return;
@@ -8196,7 +8196,10 @@ RULES — read carefully:
         // Update the textarea value immediately (use .value, not .textContent, for textareas)
         const actionEl = document.getElementById('action-seg-' + i);
         if (actionEl) {
-          actionEl.value = description;
+          // Use the already-sanitized value so the textarea and seg.action stay in sync.
+          // Using raw `description` here would let un-sanitized text overwrite seg.action
+          // the moment the user edits the field (its oninput handler writes ta.value → seg.action).
+          actionEl.value = seg.action;
           autoGrow(actionEl);
           // Brief green flash to signal the field was just AI-filled
           actionEl.style.borderColor = 'rgba(74,222,128,0.6)';
@@ -8631,21 +8634,32 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     saveSegments();
     renderSegments();
 
-    // For segments that have an NB preview image, build vision-based Veo 3 prompts asynchronously
+    // For segments that have an NB preview image, build vision-based Veo 3 prompts asynchronously.
+    // Return the promise so callers (e.g. processEverything) can await full completion before
+    // opening the pre-flight modal — otherwise segments with NB images show as ❌ "no Veo 3 prompt".
     const withPreviews = segments.filter(s => s.nbPreviewDataUrl);
+    const saveAllBtn = document.getElementById('saveAllBtn');
+    if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
     if (withPreviews.length > 0) {
-      (async () => {
+      return (async () => {
         for (let i = 0; i < segments.length; i++) {
           if (!segments[i].nbPreviewDataUrl) continue;
           const veoTa = document.getElementById('veo-seg-' + i);
           if (veoTa) veoTa.value = '⏳ Building from NB image…';
-          await buildVeo3FromNBImage(i);
+          const _nbOk = await buildVeo3FromNBImage(i);
+          if (!_nbOk && veoTa && veoTa.value.startsWith('⏳')) {
+            // Vision call failed — fall back to template so the textarea isn't stuck on the spinner
+            const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
+            const _ps2 = document.getElementById('studioProduct');
+            const _pn2 = _ps2 ? (_ps2.options[_ps2.selectedIndex]?.text || 'the product') : 'the product';
+            segments[i].veoPrompt = buildSegmentVeo3Prompt(i, segments[i].startTime, segments[i].endTime, segments[i].script, _s2, _pn2, bgImageDataUrl);
+            veoTa.value = segments[i].veoPrompt; autoGrow(veoTa);
+          }
         }
         saveSegments();
       })().catch(e => showToast('Error building Veo 3 prompts from NB images: ' + e.message, 'error'));
     }
-    const saveAllBtn = document.getElementById('saveAllBtn');
-    if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
+    return Promise.resolve();
   }
 
   // --- AI Describe Scenes (Producer mode) ---
@@ -8940,7 +8954,7 @@ No markdown. Return only the JSON object.`
       if (!res.ok) return false;
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
-      raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
       // Validate it's parseable JSON, then sanitize directional language in action field
       const _parsed = JSON.parse(raw);
       if (_parsed.action) _parsed.action = sanitizeDirections(_parsed.action);
@@ -9243,17 +9257,18 @@ No markdown. Return only the JSON object.`
       if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
       // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
       try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
-      // Step 2 — generate all prompts
+      // Step 2 — generate all prompts (await so NB-image async Veo 3 building finishes
+      // before pre-flight runs — otherwise those segments incorrectly show as missing prompts)
       if (btn) btn.textContent = '⏳ Generating prompts…';
       try {
-        generateAllSegmentPrompts();
+        await generateAllSegmentPrompts();
       } catch (e) {
         if (btn) { btn.disabled = false; btn.textContent = origText; }
         showToast('Could not generate prompts: ' + ((e && e.message) || e), 'error');
         return;
       }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
-      // Step 3 — pre-flight gate
+      // Step 3 — pre-flight gate (all prompts including vision-based ones are now ready)
       showPreflightModal(false);
     });
   }
@@ -10327,7 +10342,7 @@ ${veoPrompt}
   }
 
   // --- Refresh Veo 3 prompt for a single segment after script/action edit ---
-  function refreshSegmentVeo3(i) {
+  async function refreshSegmentVeo3(i) {
     const seg = segments[i];
     if (!seg) return;
     // Sync live textarea values before regenerating
@@ -10335,13 +10350,34 @@ ${veoPrompt}
     if (scriptEl2) seg.script = scriptEl2.value;
     const actionEl = document.getElementById('action-seg-' + i);
     if (actionEl) seg.action = actionEl.value;
+
+    const veoEl = document.getElementById('veo-seg-' + i);
+
+    // If this segment has an NB preview image, use the vision path so the
+    // richer starting_frame / foreground_props fields are preserved/updated.
+    if (seg.nbPreviewDataUrl) {
+      if (veoEl) veoEl.value = '⏳ Rebuilding Veo 3 from image…';
+      let ok = false;
+      try { ok = await buildVeo3FromNBImage(i); } catch (_) {}
+      if (!ok) {
+        // Vision call failed — fall back to template builder
+        const productSel = document.getElementById('studioProduct');
+        const productName = productSel && productSel.selectedIndex >= 0 ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
+        const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
+        seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
+        if (veoEl) { veoEl.value = seg.veoPrompt; autoGrow(veoEl); }
+      }
+      saveSegments();
+      return;
+    }
+
+    // No NB image — use the fast template builder
     const productSel = document.getElementById('studioProduct');
     const productName = productSel && productSel.selectedIndex >= 0 ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
     const setting = document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '';
     seg.veoPrompt = buildSegmentVeo3Prompt(i, seg.startTime, seg.endTime, seg.script, setting, productName, bgImageDataUrl);
     saveSegments();
     // Update the textarea in place without full re-render
-    const veoEl = document.getElementById('veo-seg-' + i);
     if (veoEl) {
       veoEl.value = seg.veoPrompt;
       autoGrow(veoEl);
@@ -10679,7 +10715,7 @@ TECHNICAL SPECS:
 
   function buildVeo3Prompts(avatar, scenes, script, setting, format, productName, productDetails) {
     const prompts = [];
-    const baseAvatar = avatar.split(',')[0] || 'person';
+    const baseAvatar = (avatar || '').split(',')[0] || 'person';
 
     // Hook scene
     prompts.push({
@@ -10757,6 +10793,7 @@ TECHNICAL SPECS:
         frameDataUrl: s.frameDataUrl || null,
         script: s.script, action: s.action || '',
         nbPrompt: s.nbPrompt,
+        nbEndPrompt: s.nbEndPrompt || '',
         veoPrompt: s.veoPrompt,
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
@@ -10913,6 +10950,7 @@ TECHNICAL SPECS:
       frameDataUrl: s.frameDataUrl || null,
       script: s.script || '', action: s.action || '',
       nbPrompt: s.nbPrompt || '',
+      nbEndPrompt: s.nbEndPrompt || '',
       nbPreviewDataUrl: s.nbPreviewDataUrl || null,
       veoPrompt: s.veoPrompt || '',
       frameDesc: s.frameDesc || '',
@@ -11076,8 +11114,8 @@ TECHNICAL SPECS:
         imported.name = (imported.name || 'Imported') + ' (imported)';
         projects.push(imported);
         activeProjectId = imported.id;
-        DB.set(modeKey('sm_projects'), JSON.stringify(projects));
-        DB.set(modeKey('sm_active_project'), activeProjectId);
+        DB.set(modeKey('sm_projects'), JSON.stringify(projects)).catch(e => console.warn('importProjectJSON save error:', e));
+        DB.set(modeKey('sm_active_project'), activeProjectId).catch(e => console.warn('importProjectJSON active save error:', e));
         loadProjectData();
         renderProjectBar();
         // Restore settings
@@ -12089,13 +12127,15 @@ TECHNICAL SPECS:
     renderTable();
     await loadSegments();
 
-    // Load feature panel data
-    loadHooks();
-    loadCTALibrary();
-    loadIdeas();
-    loadProducts();
-    loadPerformanceLogs();
-    loadRecycleItems();
+    // Load feature panel data — await all so data is ready before the tab renders
+    await Promise.all([
+      loadHooks(),
+      loadCTALibrary(),
+      loadIdeas(),
+      loadProducts(),
+      loadPerformanceLogs(),
+      loadRecycleItems(),
+    ]);
 
     // Restore the last active tab (default to dashboard on first open)
     const savedTab = localStorage.getItem('sm_active_tab') || 'dashboard';
@@ -12331,16 +12371,18 @@ TECHNICAL SPECS:
     }
   }
   function closeAdminKeyModal() {
-    document.getElementById('adminKeyModal').style.display = 'none';
-    document.getElementById('adminGateInput').value = '';
-    document.getElementById('adminGateError').style.display = 'none';
-    document.getElementById('adminKeyStatus').style.display = 'none';
+    const m = document.getElementById('adminKeyModal'); if (m) m.style.display = 'none';
+    const gi = document.getElementById('adminGateInput'); if (gi) gi.value = '';
+    const ge = document.getElementById('adminGateError'); if (ge) ge.style.display = 'none';
+    const ks = document.getElementById('adminKeyStatus'); if (ks) ks.style.display = 'none';
   }
   async function saveAdminKey() {
     const key = document.getElementById('adminKeyInput').value.trim();
     if (!key) return;
     _adminApiKey = key;
-    await DB.set('admin_openai_key', key, true); // unscoped — shared for all users
+    try {
+      await DB.set('admin_openai_key', key, true); // unscoped — shared for all users
+    } catch(e) { showToast('Failed to save API key — please try again.', 'error'); return; }
     document.getElementById('adminKeyStatus').style.display = 'block';
     setTimeout(() => closeAdminKeyModal(), 2000);
   }
@@ -12813,7 +12855,7 @@ TECHNICAL SPECS:
       const isCurrent  = planKey === tier;
       const isUpgrade  = idx > tierIdx;
       const isAgency   = planKey === 'agency';
-      const border     = isCurrent ? '1px solid var(--border-accent)' : '1px solid var(--border)';
+      const border     = isCurrent ? '1px solid var(--accent)' : '1px solid var(--border)';
       const bg         = isCurrent ? 'rgba(124,106,247,0.07)' : 'var(--surface-2)';
 
       let actionHtml = '';
