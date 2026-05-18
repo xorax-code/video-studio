@@ -12480,6 +12480,7 @@ TECHNICAL SPECS:
     e && e.preventDefault();
     hideAuthError();
     if (!_sb) { showAuthError('Supabase not configured. Add your keys to supabase-config.js.'); return; }
+    const username  = document.getElementById('signupUsername').value.trim();
     const email    = document.getElementById('signupEmail').value.trim().toLowerCase();
     const password = document.getElementById('signupPassword').value;
     const confirm  = document.getElementById('signupConfirm').value;
@@ -12488,6 +12489,12 @@ TECHNICAL SPECS:
     if (password !== confirm) { showAuthError('Passwords do not match.'); return; }
     const { error } = await _sb.auth.signUp({ email, password });
     if (error) { showAuthError(error.message); return; }
+    // Save the username the user typed as their display name so the chip shows it correctly
+    if (username) {
+      const s = getUserSettings();
+      s.displayName = username;
+      saveUserSettings(s);
+    }
     showAuthError('✓ Account created! Check your email to confirm, then sign in.');
     // After email confirmation the SIGNED_IN event fires and calls onAuthSuccess automatically
   }
@@ -12498,8 +12505,9 @@ TECHNICAL SPECS:
     // Hide auth wall
     const wall = document.getElementById('authWall');
     if (wall) wall.classList.remove('visible');
-    // Update topnav user chip
-    updateUserChip(username);
+    // Update topnav user chip — prefer saved display name over raw email
+    const _onAuthS = getUserSettings();
+    updateUserChip(_onAuthS.displayName || username);
     // Boot the app
     initApp();
     // On very first login, default to Dashboard and show the welcome tour
