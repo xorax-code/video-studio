@@ -7576,7 +7576,11 @@ RULES — read carefully:
     canvas.height = videoEl.videoHeight || 640;
 
     for (let i = 0; i < segments.length; i++) {
-      segments[i].frameDataUrl = await captureFrame(segments[i].startTime);
+      // For non-first segments, seek 0.3s past the cut point to land after
+      // any crossfade/transition completes — avoids ghosted double-exposure frames.
+      const frameOffset = i > 0 ? 0.3 : 0;
+      const frameTime = Math.min(segments[i].startTime + frameOffset, segments[i].endTime - 0.05);
+      segments[i].frameDataUrl = await captureFrame(frameTime);
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = (i + 1) + '/' + segments.length;
     }
