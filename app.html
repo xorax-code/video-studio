@@ -3487,7 +3487,7 @@
                 <!-- Inline downloader — collapsed by default -->
                 <div style="margin-top:5px;">
                   <button onclick="const d=document.getElementById('inlineDlPanel');const arr=document.getElementById('inlineDlArrow');const open=d.style.display!=='none';d.style.display=open?'none':'flex';arr.style.transform=open?'rotate(-90deg)':'rotate(0deg)';"
-                    style="width:100%;display:flex;align-items:center;justify-content:between;gap:5px;background:none;border:none;color:var(--text-3);font-size:9.5px;cursor:pointer;padding:2px 0;font-family:inherit;text-align:left;">
+                    style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:5px;background:none;border:none;color:var(--text-3);font-size:9.5px;cursor:pointer;padding:2px 0;font-family:inherit;text-align:left;">
                     <span style="flex:1;">📥 Need to download a video first?</span>
                     <span id="inlineDlArrow" style="font-size:9px;transition:transform 0.18s;transform:rotate(-90deg);">▾</span>
                   </button>
@@ -3578,7 +3578,7 @@
             <button onclick="document.getElementById('segmentsContainer').scrollBy({left:350,behavior:'smooth'})" style="padding:2px 10px;font-size:13px;background:var(--surface);border:1px solid var(--border-2);border-radius:5px;color:var(--text-2);cursor:pointer;line-height:1;" title="Scroll right">›</button>
             <span id="segScrollHint" style="font-size:9px;color:var(--text-3);opacity:0.7;">scroll or use arrows to see all segments</span>
           </div>
-          <div id="segmentsContainer" style="flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent;">
+          <div id="segmentsContainer" style="flex:1;min-height:0;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent;">
             <div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
               Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
             </div>
@@ -5369,7 +5369,7 @@
       document.getElementById('cInspiration').value = c.inspiration || '';
       document.getElementById('cTags').value = c.tags || '';
     } else {
-      ['cNiche','cName','cHandle','cFollowers','cUrl','cInspiration','cTags'].forEach(id => document.getElementById(id).value = '');
+      ['cNiche','cName','cHandle','cFollowers','cUrl','cInspiration','cTags'].forEach(fieldId => document.getElementById(fieldId).value = '');
       document.getElementById('cPlatform').selectedIndex = 0;
     }
     document.getElementById('compModalOverlay').style.display = 'flex';
@@ -8166,8 +8166,8 @@ RULES — read carefully:
           <!-- Subject selector (for frames with two people) -->
           <div style="display:flex;align-items:center;gap:4px;margin-top:5px;">
             <span style="font-size:9px;color:var(--text-3);flex-shrink:0;">Subject:</span>
-            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='left'?null:'left';debounceSave();renderSegments()" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='left'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='left'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='left'?'#60a5fa':'var(--text-3)'};">← Left</button>
-            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='right'?null:'right';debounceSave();renderSegments()" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='right'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='right'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='right'?'#60a5fa':'var(--text-3)'};">Right →</button>
+            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='left'?null:'left';debounceSave();renderSegments()" title="Target person nearest the left edge of the screen" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='left'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='left'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='left'?'#60a5fa':'var(--text-3)'};">◀ Left edge</button>
+            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='right'?null:'right';debounceSave();renderSegments()" title="Target person nearest the right edge of the screen" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='right'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='right'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='right'?'#60a5fa':'var(--text-3)'};">Right edge ▶</button>
           </div>
         </div>
         `}
@@ -8206,9 +8206,9 @@ RULES — read carefully:
         <!-- NB Pro prompt — collapsed by default -->
         <div class="seg-field-nb">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="const ta=document.getElementById('nb-seg-${i}');const pre=document.getElementById('nbpreview-wrap-${i}');const open=ta.style.display!=='none';ta.style.display=open?'none':'';if(pre)pre.style.display=open?'none':'flex';this.querySelector('.nb-toggle').textContent=open?'▸ Show':'▾ Hide';">
-            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">${seg._scriptOnly ? '🎨 NB Pro — Starting Frame' : '🍌 NB Pro'}</span>
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">${seg._scriptOnly ? '🎨 NB Pro — Starting Frame' : '🍌 NB Pro'}${seg.nbPrompt ? ' <span style="color:#4ade80;font-weight:900;font-size:10px;">✓</span>' : ''}</span>
             <div style="display:flex;gap:4px;align-items:center;">
-              ${seg._scriptOnly ? `<button onclick="event.stopPropagation();refreshSegmentNB(${i})" title="Regenerate NB Pro prompt" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen</button>` : ''}
+              <button data-nb-regen="${i}" onclick="event.stopPropagation();refreshSegmentNB(${i})" title="Regenerate NB Pro prompt" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen NB</button>
               <button class="btn-copy" onclick="event.stopPropagation();copyPromptTA('nb-seg-${i}')">Copy</button>
               <span class="nb-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;cursor:pointer;">▸ Show</span>
             </div>
@@ -8219,7 +8219,8 @@ RULES — read carefully:
             style="display:none;"
             placeholder="Describe the scene for NB Pro…"
           >${escHtml(seg.nbPrompt || '')}</textarea>
-          <!-- Photo 2 background reminder + NB composite upload -->
+          <!-- NB composite upload — producer mode only (replicator uses the segment frame directly) -->
+          ${seg._scriptOnly ? `
           <div id="nbpreview-wrap-${i}" style="display:none;margin-top:5px;flex-direction:column;gap:4px;">
             ${!bgFromAvatar ? `<div data-nb-bg-row style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:rgba(251,191,36,0.05);border:1px solid rgba(251,191,36,0.2);border-radius:4px;">
               <div onclick="document.getElementById('bgImgInput').click()" title="Click to upload background"
@@ -8239,7 +8240,7 @@ RULES — read carefully:
               ${seg.nbPreviewDataUrl ? `<button onclick="clearNbPreview(${i})" style="margin-left:auto;font-size:9px;padding:1px 5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:2px;color:var(--danger);cursor:pointer;">✕</button>` : ''}
               <input type="file" id="nbpreview-input-${i}" accept="image/*" style="display:none;" onchange="onNbPreviewChange(${i}, this)">
             </div>
-          </div>
+          </div>` : ''}
         </div>
 
         <!-- Veo 3 prompt -->
@@ -8368,7 +8369,7 @@ RULES — read carefully:
             content: [
               {
                 type: 'text',
-                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person on the LEFT side of the frame. Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person on the RIGHT side of the frame. Do NOT move, alter, or replace any other person.' : ''}
+                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the RIGHT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : ''}
 
 Carefully analyze the attached frame image and follow ALL of these rules:
 
@@ -8437,12 +8438,18 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
           }]
         })
       });
-      if (!res.ok) return false;
+      if (!res.ok) {
+        if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
+        return false;
+      }
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
       const parsed = JSON.parse(raw);
-      if (!parsed.instruction) return false;
+      if (!parsed.instruction) {
+        if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
+        return false;
+      }
       // Merge with no_text field
       const result = { instruction: parsed.instruction, no_text: true, negative_prompt: parsed.negative_prompt || '' };
       // Append avatar accessory note
@@ -8452,6 +8459,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       return true;
     } catch(e) {
       console.warn('buildNBPromptFromImage failed:', e);
+      if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
       return false;
     }
   }
@@ -10829,11 +10837,34 @@ ${veoPrompt}
     }
   }
 
-  // --- Refresh NB Pro prompt for a single script-only segment after visual description / ref photo edit ---
-  function refreshSegmentNB(i) {
+  // --- Refresh NB Pro prompt for a single segment ---
+  // Handles both replicator mode (vision-based) and producer mode (template-based)
+  async function refreshSegmentNB(i) {
     const seg = segments[i];
     if (!seg) return;
-    // Sync live textarea values before rebuilding
+
+    // Replicator mode — use GPT-4o vision on the captured frame
+    if (!seg._scriptOnly && seg.frameDataUrl) {
+      const nbEl = document.getElementById('nb-seg-' + i);
+      const btn = document.querySelector(`[data-nb-regen="${i}"]`);
+      if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+      try {
+        const ok = await buildNBPromptFromImage(i);
+        if (!ok && nbEl) {
+          // Restore previous value if vision call failed (buildNBPromptFromImage already
+          // clears the spinner, but seg.nbPrompt holds the last good value)
+          nbEl.value = seg.nbPrompt || '';
+          autoGrow(nbEl);
+          showToast('NB prompt rebuild failed — previous prompt kept.', 'warning');
+        }
+        saveSegments();
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '↻ Regen NB'; }
+      }
+      return;
+    }
+
+    // Producer mode — use template builder with visual description
     const frameDescEl = document.getElementById('framedesc-seg-' + i);
     if (frameDescEl) seg.frameDesc = frameDescEl.value;
     const scriptEl = document.getElementById('script-seg-' + i);
@@ -10842,12 +10873,10 @@ ${veoPrompt}
     const avatarDesc = document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '';
     seg.nbPrompt = buildScriptOnlyNBPrompt(i, seg.script, setting, avatarDesc, bgImageDataUrl, seg.frameDesc || '');
     saveSegments();
-    // Update textarea in-place without full re-render
     const nbEl = document.getElementById('nb-seg-' + i);
     if (nbEl) {
       nbEl.value = seg.nbPrompt;
       autoGrow(nbEl);
-      // Flash the border amber to confirm update
       nbEl.style.borderColor = 'var(--warning)';
       setTimeout(() => nbEl.style.borderColor = '', 800);
     }
@@ -14831,5 +14860,160 @@ TECHNICAL SPECS:
 
         <div class="uset-section-title">Background Theme</div>
         <div class="bg-theme-grid">
-          <button class="bg-theme-btn" data-bg="midnight" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="backg
+          <button class="bg-theme-btn active" data-bg="midnight" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#0d0d1a,#13131f);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
+            <span style="font-size:10px;color:var(--text-2);">Midnight</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e,#0c1830);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
+            <span style="font-size:10px;color:var(--text-2);">Abyss</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000,#101010);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
+            <span style="font-size:10px;color:var(--text-2);">Carbon</span>
+          </button>
+          <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12,#101520);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
+            <span style="font-size:10px;color:var(--text-2);">Slate</span>
+          </button>
+        </div>
+
+        <div class="uset-section-title">HUD Scaling</div>
+        <div class="uset-scale-row">
+          <input type="range" id="uset-scale-slider" min="70" max="130" value="100" step="5"
+            oninput="document.getElementById('uset-scale-display').textContent=this.value+'%';applyUiZoom(parseInt(this.value))">
+          <span class="uset-scale-val" id="uset-scale-display">100%</span>
+        </div>
+        <div style="font-size:10px;color:var(--text-3);margin-bottom:20px;">Scales the entire app UI. Useful if text feels too small or too large on your display.</div>
+
+        <div class="uset-section-title">Accessibility</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <div class="uset-toggle"><input type="checkbox" id="uset-hc-toggle" onchange="toggleHighContrast(this.checked)"><span class="uset-toggle-track"></span><span class="uset-toggle-thumb"></span></div>
+            <span style="font-size:12px;color:var(--text-1);">High contrast mode</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
+            <div class="uset-toggle"><input type="checkbox" id="uset-rm-toggle" onchange="toggleReduceMotion(this.checked)"><span class="uset-toggle-track"></span><span class="uset-toggle-thumb"></span></div>
+            <span style="font-size:12px;color:var(--text-1);">Reduce motion</span>
+          </label>
+        </div>
+
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
+      </div>
+
+      <!-- BILLING -->
+      <div id="uset-tab-billing" class="uset-tab-content">
+        <div id="billingTabContent">
+          <div style="text-align:center;padding:32px;color:var(--text-3);font-size:12px;">Loading billing info…</div>
+        </div>
+      </div>
+
+      <!-- SECURITY -->
+      <div id="uset-tab-security" class="uset-tab-content">
+        <div class="uset-section-title">Change Password</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;max-width:340px;">
+          <div class="uset-field-wrap">
+            <label class="uset-label">New Password</label>
+            <div style="position:relative;">
+              <input type="password" id="uset-newPassword" class="uset-input" placeholder="Min 8 characters" autocomplete="new-password">
+            </div>
+          </div>
+          <div class="uset-field-wrap">
+            <label class="uset-label">Confirm Password</label>
+            <input type="password" id="uset-confirmPassword" class="uset-input" placeholder="Re-enter new password" autocomplete="new-password">
+          </div>
+          <div id="uset-pwError"   style="display:none;font-size:11px;color:var(--danger);padding:6px 10px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:6px;"></div>
+          <div id="uset-pwSuccess" style="display:none;font-size:11px;color:#4ade80;padding:6px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;">✅ Password updated successfully.</div>
+          <button class="uset-btn-save" onclick="saveNewPassword()" style="align-self:flex-start;">Update Password</button>
+        </div>
+
+        <div class="uset-section-title" style="color:var(--danger);margin-top:10px;">Danger Zone</div>
+        <div style="padding:14px;background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.15);border-radius:8px;margin-bottom:20px;">
+          <div style="font-size:12px;color:var(--text-1);font-weight:600;margin-bottom:6px;">Sign out of all sessions</div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">This will log you out on all devices.</div>
+          <button onclick="doLogout()" style="padding:6px 14px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:inherit;">Sign Out Everywhere</button>
+        </div>
+      </div>
+
+      <!-- HELP -->
+      <div id="uset-tab-help" class="uset-tab-content">
+        <div class="uset-section-title">Getting Started</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
+          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">📹 Video Replicator</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Upload a reference video, detect cuts, transcribe the script, then swap your avatar in using NB Pro and generate Veo 3 clips for each scene.</div>
+          </div>
+          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">✏️ Video Producer</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Paste your script, split it into 8-second scenes, generate NB Pro starting frames and Veo 3 prompts for each scene without a reference video.</div>
+          </div>
+          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">🔥 Viral Scripts</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Browse proven viral script frameworks, customize them to your niche and product, then send them directly to the Video Producer.</div>
+          </div>
+        </div>
+        <div class="uset-section-title">Support</div>
+        <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
+          For help, reach out at <span style="color:var(--accent-2);">support@aiscaling.co</span> or visit the community Discord.
+        </div>
+      </div>
+
+      <!-- DATA -->
+      <div id="uset-tab-data" class="uset-tab-content">
+        <div class="uset-section-title">Export &amp; Import</div>
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
+          <div style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">Export All Data</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Download a full backup of your accounts, scripts, plans, and settings as a JSON file.</div>
+            <button onclick="admExport()" style="padding:6px 16px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:6px;color:var(--accent-2);font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;">⬇ Export Backup</button>
+          </div>
+          <div style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">Import Data</div>
+            <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Restore from a previously exported backup file. This will overwrite your current data.</div>
+            <label style="padding:6px 16px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:6px;color:var(--warning);font-size:11px;cursor:pointer;font-weight:600;">
+              ⬆ Import Backup
+              <input type="file" accept=".json" style="display:none;" onchange="admImport(event)">
+            </label>
+          </div>
+        </div>
+        <div class="uset-section-title" style="color:var(--danger);">Reset</div>
+        <div style="padding:14px;background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.15);border-radius:8px;">
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Permanently clear all local data and reset the app to its default state. This cannot be undone.</div>
+          <button onclick="admReset()" style="padding:6px 14px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:inherit;">🗑 Reset All Data</button>
+        </div>
+
+      <!-- ABOUT -->
+      <div id="uset-tab-about" class="uset-tab-content">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0;text-align:center;">
+          <svg width="48" height="48" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="border-radius:10px;">
+            <rect width="26" height="26" rx="6" fill="var(--surface-2)"/>
+            <circle cx="13" cy="13" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
+            <line x1="13" y1="7" x2="13" y2="5" stroke="var(--accent-2)" stroke-width="1.2"/>
+            <line x1="13" y1="21" x2="13" y2="19" stroke="var(--accent-2)" stroke-width="1.2"/>
+            <line x1="7" y1="13" x2="5" y2="13" stroke="var(--accent-2)" stroke-width="1.2"/>
+            <line x1="21" y1="13" x2="19" y2="13" stroke="var(--accent-2)" stroke-width="1.2"/>
+          </svg>
+          <div>
+            <div style="font-size:18px;font-weight:800;color:var(--text-1);letter-spacing:-0.4px;">AffiliateOS</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:2px;">AI-Powered Affiliate Marketing Platform</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:260px;">
+            <div style="display:flex;justify-content:space-between;font-size:11px;padding:6px 12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);">
+              <span style="color:var(--text-3);">Version</span>
+              <span class="uset-cl-version">1.0.0</span>
+            </div>
+            <div style="display:flex;justify-content:space-between;font-size:11px;padding:6px 12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);">
+              <span style="color:var(--text-3);">Platform</span>
+              <span style="color:var(--text-1);">Web App</span>
+            </div>
+          </div>
+          <div style="font-size:10px;color:var(--text-3);margin-top:8px;">&#169; 2025 AffiliateOS &middot; All rights reserved</div>
+        </div>
+      </div>
+
+    </div><!-- end settings content scroll -->
+  </div><!-- end settings modal -->
+
+</div><!-- end app wrapper -->
+</body>
+</html>
