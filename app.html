@@ -8163,6 +8163,12 @@ RULES — read carefully:
             ? `<img src="${seg.frameDataUrl}" class="seg-frame-img" onclick="openLightbox(this.src)" title="Click to view full frame">`
             : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
           ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" class="seg-dl-btn">⬇ Download Frame</button>` : ''}
+          <!-- Subject selector (for frames with two people) -->
+          <div style="display:flex;align-items:center;gap:4px;margin-top:5px;">
+            <span style="font-size:9px;color:var(--text-3);flex-shrink:0;">Subject:</span>
+            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='left'?null:'left';debounceSave();renderSegments()" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='left'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='left'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='left'?'#60a5fa':'var(--text-3)'};">← Left</button>
+            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='right'?null:'right';debounceSave();renderSegments()" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='right'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='right'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='right'?'#60a5fa':'var(--text-3)'};">Right →</button>
+          </div>
         </div>
         `}
 
@@ -8362,7 +8368,7 @@ RULES — read carefully:
             content: [
               {
                 type: 'text',
-                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).
+                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person on the LEFT side of the frame. Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person on the RIGHT side of the frame. Do NOT move, alter, or replace any other person.' : ''}
 
 Carefully analyze the attached frame image and follow ALL of these rules:
 
