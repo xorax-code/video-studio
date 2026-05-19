@@ -7705,6 +7705,27 @@ RULES — read carefully:
     a.click();
   }
 
+  // --- Click-to-target pin: click on thumbnail to mark which person to swap ---
+  function setTargetPin(i, e) {
+    const img = e.currentTarget;
+    const rect = img.getBoundingClientRect();
+    const xPct = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+    const yPct = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+    segments[i].targetX = xPct;
+    segments[i].targetY = yPct;
+    // Keep legacy targetPerson in sync for any other callers
+    segments[i].targetPerson = xPct < 50 ? 'left' : 'right';
+    debounceSave();
+    renderSegments();
+  }
+
+  function clearTargetPin(i) {
+    segments[i].targetX = null;
+    segments[i].targetY = null;
+    segments[i].targetPerson = null;
+    debounceSave();
+    renderSegments();
+  }
 
   // --- Remove a single segment ---
   function removeSegment(i) {
@@ -8159,16 +8180,22 @@ RULES — read carefully:
         </div>
         ` : `
         <div>
-          ${seg.frameDataUrl
-            ? `<img src="${seg.frameDataUrl}" class="seg-frame-img" onclick="openLightbox(this.src)" title="Click to view full frame">`
-            : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
-          ${seg.frameDataUrl ? `<button onclick="downloadFrame(${i})" class="seg-dl-btn">⬇ Download Frame</button>` : ''}
-          <!-- Subject selector (for frames with two people) -->
-          <div style="display:flex;align-items:center;gap:4px;margin-top:5px;">
-            <span style="font-size:9px;color:var(--text-3);flex-shrink:0;">Subject:</span>
-            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='left'?null:'left';debounceSave();renderSegments()" title="Target person nearest the left edge of the screen" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='left'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='left'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='left'?'#60a5fa':'var(--text-3)'};">◀ Left edge</button>
-            <button onclick="segments[${i}].targetPerson=segments[${i}].targetPerson==='right'?null:'right';debounceSave();renderSegments()" title="Target person nearest the right edge of the screen" style="font-size:9px;padding:2px 8px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetPerson==='right'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetPerson==='right'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetPerson==='right'?'#60a5fa':'var(--text-3)'};">Right edge ▶</button>
+          ${seg.frameDataUrl ? `
+          <!-- Click-to-target thumbnail: click directly on the person to pin them -->
+          <div style="position:relative;display:block;">
+            <img src="${seg.frameDataUrl}" class="seg-frame-img"
+              style="cursor:crosshair;"
+              onclick="setTargetPin(${i}, event)"
+              title="Click on a person to mark them as the NB swap target">
+            ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
           </div>
+          <div style="display:flex;gap:3px;margin-top:4px;align-items:center;">
+            <button onclick="downloadFrame(${i})" class="seg-dl-btn" style="flex:1;margin-top:0;">⬇ Frame</button>
+            <button onclick="openLightbox(segments[${i}].frameDataUrl)" title="View full frame" style="font-size:9px;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text-3);cursor:pointer;">🔍</button>
+            ${seg.targetX != null
+              ? `<button onclick="clearTargetPin(${i})" title="Clear target pin" style="font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);color:var(--danger);cursor:pointer;">✕ Pin</button>`
+              : `<span style="font-size:8px;color:var(--text-3);opacity:0.45;padding:2px 3px;white-space:nowrap;line-height:1.2;">click to<br>target</span>`}
+          </div>` : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
         </div>
         `}
 
@@ -8369,7 +8396,7 @@ RULES — read carefully:
             content: [
               {
                 type: 'text',
-                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the RIGHT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : ''}
+                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetX != null ? `\n\nIMPORTANT: There are multiple people in this frame. TARGET ONLY the person whose face/body is located at approximately ${seg.targetX}% from the left edge and ${seg.targetY != null ? seg.targetY : 50}% from the top of the frame. Do NOT move, alter, or replace any other person in the scene.` : seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the RIGHT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : ''}
 
 Carefully analyze the attached frame image and follow ALL of these rules:
 
@@ -14994,26 +15021,30 @@ TECHNICAL SPECS:
             <line x1="21" y1="13" x2="19" y2="13" stroke="var(--accent-2)" stroke-width="1.2"/>
           </svg>
           <div>
-            <div style="font-size:18px;font-weight:800;color:var(--text-1);letter-spacing:-0.4px;">AffiliateOS</div>
-            <div style="font-size:11px;color:var(--text-3);margin-top:2px;">AI-Powered Affiliate Marketing Platform</div>
-          </div>
-          <div style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:260px;">
-            <div style="display:flex;justify-content:space-between;font-size:11px;padding:6px 12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);">
-              <span style="color:var(--text-3);">Version</span>
-              <span class="uset-cl-version">1.0.0</span>
-            </div>
-            <div style="display:flex;justify-content:space-between;font-size:11px;padding:6px 12px;background:var(--surface-2);border-radius:6px;border:1px solid var(--border);">
-              <span style="color:var(--text-3);">Platform</span>
-              <span style="color:var(--text-1);">Web App</span>
+            <div style="font-size:18px;font-weight:800;color:var(--text-1);letter-spacing:-0.4px;">AffiliateOS VideoStudio</div>
+            <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;">
+              <span style="font-size:10px;font-weight:700;color:var(--accent-2);background:rgba(124,106,247,0.12);padding:2px 10px;border-radius:4px;">v1.0</span>
+              <span style="font-size:10px;color:var(--text-3);">by aiscaling.co</span>
             </div>
           </div>
-          <div style="font-size:10px;color:var(--text-3);margin-top:8px;">&#169; 2025 AffiliateOS &middot; All rights reserved</div>
+          <div style="font-size:12px;color:var(--text-3);line-height:1.7;max-width:320px;text-align:center;">
+            AI-powered affiliate video production — detect scenes, generate NB Pro starting frames, and build Veo 3 prompts at scale.
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:280px;">
+            <div style="padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-3);line-height:1.6;text-align:left;">
+              <span style="font-weight:600;color:var(--text-2);">Support:</span> <span style="color:var(--accent-2);">support@aiscaling.co</span>
+            </div>
+            <div style="padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-3);line-height:1.6;text-align:left;">
+              <span style="font-weight:600;color:var(--text-2);">Site:</span> <span style="color:var(--accent-2);">aiscaling.co</span>
+            </div>
+          </div>
         </div>
-      </div>
+      </div><!-- end uset-tab-about -->
 
-    </div><!-- end settings content scroll -->
-  </div><!-- end settings modal -->
+      </div><!-- end uset-tab-data (closed here for proper nesting) -->
+    </div><!-- end settings content area -->
+  </div><!-- end userSettingsPanel -->
+</div><!-- end userSettingsOverlay -->
 
-</div><!-- end app wrapper -->
 </body>
 </html>
