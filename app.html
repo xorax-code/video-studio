@@ -7723,6 +7723,14 @@ RULES — read carefully:
     segments[i].targetX = null;
     segments[i].targetY = null;
     segments[i].targetPerson = null;
+    segments[i].targetGender = null;
+    debounceSave();
+    renderSegments();
+  }
+
+  function setTargetGender(i, gender) {
+    // Toggle: clicking the same gender again clears it
+    segments[i].targetGender = segments[i].targetGender === gender ? null : gender;
     debounceSave();
     renderSegments();
   }
@@ -8195,7 +8203,13 @@ RULES — read carefully:
             ${seg.targetX != null
               ? `<button onclick="clearTargetPin(${i})" title="Clear target pin" style="font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);color:var(--danger);cursor:pointer;">✕ Pin</button>`
               : `<span style="font-size:8px;color:var(--text-3);opacity:0.45;padding:2px 3px;white-space:nowrap;line-height:1.2;">click to<br>target</span>`}
-          </div>` : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
+          </div>
+          ${seg.targetX != null ? `
+          <div style="display:flex;gap:3px;margin-top:3px;align-items:center;">
+            <span style="font-size:8px;color:var(--text-3);opacity:0.6;flex-shrink:0;">Gender:</span>
+            <button onclick="setTargetGender(${i},'woman')" title="Target is a woman" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='woman'?'rgba(244,114,182,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='woman'?'rgba(244,114,182,0.12)':'transparent'};color:${seg.targetGender==='woman'?'#f472b6':'var(--text-3)'};">👩 Woman</button>
+            <button onclick="setTargetGender(${i},'man')" title="Target is a man" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='man'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='man'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetGender==='man'?'#60a5fa':'var(--text-3)'};">👨 Man</button>
+          </div>` : ''}` : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
         </div>
         `}
 
@@ -8396,7 +8410,7 @@ RULES — read carefully:
             content: [
               {
                 type: 'text',
-                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetX != null ? `\n\nIMPORTANT: There are multiple people in this frame. TARGET ONLY the person whose face/body is located at approximately ${seg.targetX}% from the left edge and ${seg.targetY != null ? seg.targetY : 50}% from the top of the frame. Do NOT move, alter, or replace any other person in the scene.` : seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the RIGHT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : ''}
+                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).${seg.targetX != null ? `\n\n⚠️ TWO-PERSON SCENE — READ CAREFULLY:\nThis frame contains MULTIPLE people. You MUST:\n1. Replace ONLY the ${seg.targetGender === 'woman' ? 'WOMAN' : seg.targetGender === 'man' ? 'MAN' : 'PERSON'} at approximately ${seg.targetX}% from the left, ${seg.targetY != null ? seg.targetY : 50}% from the top.\n2. The OTHER person must remain 100% UNCHANGED — same face, body, skin, clothing, hair, pose, and position as in photo 2.\n3. Your instruction MUST explicitly state which person to preserve.\n4. Your negative_prompt MUST include: missing person, removed person, only one person, disappeared person, merged people` : seg.targetPerson === 'left' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : seg.targetPerson === 'right' ? '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the RIGHT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.' : ''}
 
 Carefully analyze the attached frame image and follow ALL of these rules:
 
@@ -8408,6 +8422,7 @@ Classify the shot type:
 - HANDS/ARMS ONLY: no face in frame — only hands, forearms, arms (possibly holding/interacting with products)
 - CHIN/NECK CROPPED: person visible from chest down, head cut off above frame top edge
 - CLOSE-UP FACE: tight shot, mainly face and neck
+- TWO-PERSON: two people visible in the same frame — identify the targeted person vs the one to preserve
 
 Also identify:
 - Exact products/props visible on the table or in hands (brand names, colors, sizes)
@@ -8419,6 +8434,12 @@ Also identify:
 STEP 2 — WRITE THE INSTRUCTION
 ───────────────────────────────
 Write a precise instruction using THESE EXACT RULES based on shot type:
+
+FOR TWO-PERSON shots (when a specific person is targeted — indicated above):
+- Begin: "This scene contains TWO people. Replace ONLY the [man/woman] on the [left/right side]. The other person — the [man/woman] on the [left/right] — must remain COMPLETELY UNCHANGED: preserve their exact face, body, clothing, skin tone, hair, and position exactly as they appear in photo 2."
+- Then: "Place the person from reference photo 1 in place of the targeted [man/woman] only. Match their pose, framing, scale, and camera angle."
+- Describe both people's positions (e.g. "the woman is on the left, the man is on the right") so the model understands the full scene layout.
+- Specify camera angle and all background elements as usual.
 
 FOR FULL PERSON shots:
 - "Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, framing, and camera angle precisely. Keep the person's face, clothing, hair, and accessories exactly as shown in photo 1."
@@ -8443,6 +8464,7 @@ FOR BACKGROUND:
 STEP 3 — WRITE THE NEGATIVE PROMPT
 ───────────────────────────────
 Always include these based on what could go wrong:
+- If TWO-PERSON shot: ALWAYS add "missing person, removed person, only one person, disappeared person, merged people, both people replaced, wrong person swapped"
 - If head is cropped: ALWAYS add "headless, missing head, decapitated, head removed"
 - If hands shot: add "face fully visible, wide shot showing full person"
 - Always add: "changed clothing, changed skin tone, changed face, text overlays, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face"
@@ -12991,6 +13013,8 @@ TECHNICAL SPECS:
       // Read Stripe tier from app_metadata (written by webhook)
       window._stripeCustomerId = session.user.app_metadata?.stripe_customer_id || null;
       window._stripeTier = session.user.app_metadata?.stripe_tier || 'free';
+      window._stripeBaseTier = window._stripeTier; // keep original for promo removal
+      applyPromoOverride();
       // Prefer display name from settings, fall back to email
       const _s = getUserSettings() || {};
       updateUserChip(_s.displayName || session.user.email);
@@ -13395,6 +13419,75 @@ TECHNICAL SPECS:
     agency:  'price_1TXVeGJEBUETI2v8pMkY16DK',
   };
 
+  // ── Promo codes ──────────────────────────────────────────────
+  // type:'unlock'   → unlocks `tier` immediately, no payment needed
+  // type:'discount' → stores a % off applied at Stripe checkout
+  // Add / remove codes here freely. Codes are case-insensitive.
+  const PROMO_CODES = {
+    'MAXACCESS':  { type:'unlock',   tier:'agency',  label:'Full Access — All Features Unlocked' },
+    'VIPBETA':    { type:'unlock',   tier:'pro',     label:'Pro Access — VIP Beta' },
+    'EARLYBIRD':  { type:'unlock',   tier:'agency',  label:'Early Bird — Full Access' },
+    'FRIEND50':   { type:'discount', pct:50,         label:'50% Off Any Plan' },
+    'LAUNCH30':   { type:'discount', pct:30,         label:'30% Off — Launch Special' },
+    'SAVE20':     { type:'discount', pct:20,         label:'20% Off' },
+  };
+
+  const PROMO_STORAGE_KEY = 'affiliateos_promo_v1';
+
+  function loadSavedPromo() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PROMO_STORAGE_KEY) || 'null');
+      if (!saved || !saved.code) return null;
+      const def = PROMO_CODES[saved.code.toUpperCase()];
+      if (!def) { localStorage.removeItem(PROMO_STORAGE_KEY); return null; }
+      return { code: saved.code.toUpperCase(), ...def };
+    } catch { return null; }
+  }
+
+  function applyPromoOverride() {
+    const promo = loadSavedPromo();
+    if (!promo) return;
+    if (promo.type === 'unlock') {
+      // Unlock tier overrides Stripe tier unless Stripe has a higher tier
+      const order = ['free','starter','pro','agency'];
+      const stripeIdx = order.indexOf(window._stripeTier || 'free');
+      const promoIdx  = order.indexOf(promo.tier);
+      if (promoIdx > stripeIdx) window._stripeTier = promo.tier;
+    }
+    window._activePromo = promo;
+  }
+
+  function submitPromoCode() {
+    const input = document.getElementById('promoCodeInput');
+    if (!input) return;
+    const code = (input.value || '').trim().toUpperCase();
+    if (!code) { showToast('Enter a promo code first.', 'warning'); return; }
+    const def = PROMO_CODES[code];
+    if (!def) { showToast('Invalid promo code — please check and try again.', 'error'); return; }
+    // Save to localStorage
+    localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code }));
+    window._activePromo = { code, ...def };
+    if (def.type === 'unlock') {
+      const order = ['free','starter','pro','agency'];
+      const stripeIdx = order.indexOf(window._stripeTier || 'free');
+      const promoIdx  = order.indexOf(def.tier);
+      if (promoIdx > stripeIdx) window._stripeTier = def.tier;
+      showToast('🎉 ' + def.label + ' — activated!', 'success', 5000);
+    } else {
+      showToast('✅ ' + def.label + ' — saved! Discount applies at checkout.', 'success', 5000);
+    }
+    renderBillingTab();
+  }
+
+  function removePromoCode() {
+    localStorage.removeItem(PROMO_STORAGE_KEY);
+    window._activePromo = null;
+    // Restore Stripe tier
+    window._stripeTier = window._stripeBaseTier || 'free';
+    showToast('Promo code removed.', 'info');
+    renderBillingTab();
+  }
+
   const PLAN_INFO = {
     free:    { label: 'Free',    price: '$0/mo',   desc: '3 accounts · Dashboard · Viral Scripts · Daily Plan' },
     starter: { label: 'Starter', price: '$19/mo',  desc: '5 accounts · Video Replicator · Competitor tracking · Script rewriter' },
@@ -13408,6 +13501,7 @@ TECHNICAL SPECS:
     const container = document.getElementById('billingTabContent');
     if (!container) return;
 
+    const activePromo = window._activePromo || null;
     const tier       = window._stripeTier || 'free';
     const customerId = window._stripeCustomerId || null;
     const planInfo   = PLAN_INFO[tier] || PLAN_INFO.free;
@@ -13467,6 +13561,41 @@ TECHNICAL SPECS:
       <div class="uset-section-title">Subscription Plans</div>
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
         ${plansHtml}
+      </div>
+
+      ${activePromo && activePromo.type === 'discount' ? `
+      <div style="background:rgba(251,191,36,0.07);border:1px solid rgba(251,191,36,0.3);border-radius:9px;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:18px;">🏷</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:var(--warning);">${activePromo.label}</div>
+            <div style="font-size:10px;color:var(--text-3);margin-top:2px;">Code <strong>${activePromo.code}</strong> active — discount applies at checkout</div>
+          </div>
+        </div>
+        <button onclick="removePromoCode()" style="font-size:10px;padding:3px 8px;border-radius:5px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);color:var(--danger);cursor:pointer;">Remove</button>
+      </div>` : ''}
+
+      <!-- Promo code entry -->
+      <div class="uset-section-title">Promo Code</div>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px;">
+        ${activePromo ? `
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:15px;">${activePromo.type === 'unlock' ? '🔓' : '🏷'}</span>
+            <div>
+              <div style="font-size:12px;font-weight:700;color:#4ade80;">${activePromo.label}</div>
+              <div style="font-size:10px;color:var(--text-3);margin-top:1px;">Code: <strong style="color:var(--text-2);">${activePromo.code}</strong></div>
+            </div>
+          </div>
+          <button onclick="removePromoCode()" style="font-size:10px;padding:4px 10px;border-radius:6px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);color:var(--danger);cursor:pointer;white-space:nowrap;">✕ Remove</button>
+        </div>` : `
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Have a promo code? Enter it below to unlock features or apply a discount.</div>
+        <div style="display:flex;gap:8px;">
+          <input id="promoCodeInput" type="text" placeholder="e.g. MAXACCESS"
+            style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:12px;font-family:inherit;letter-spacing:0.5px;text-transform:uppercase;outline:none;"
+            onkeydown="if(event.key==='Enter')submitPromoCode()">
+          <button onclick="submitPromoCode()" style="padding:8px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
+        </div>`}
       </div>
 
       <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:12px 16px;display:flex;align-items:center;gap:10px;">
@@ -14971,7 +15100,7 @@ TECHNICAL SPECS:
             <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Upload a reference video, detect cuts, transcribe the script, then swap your avatar in using NB Pro and generate Veo 3 clips for each scene.</div>
           </div>
           <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">✏️ Video Producer</div>
+            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">🎬 Video Producer</div>
             <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Paste your script, split it into 8-second scenes, generate NB Pro starting frames and Veo 3 prompts for each scene without a reference video.</div>
           </div>
           <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
