@@ -7575,11 +7575,56 @@ RULES — read carefully:
     canvas.width = videoEl.videoWidth || 360;
     canvas.height = videoEl.videoHeight || 640;
 
+    // Seek to t, draw a tiny 40×23 thumbnail, return grayscale variance.
+    // High variance = visually rich/stable frame. Low variance = fade or blended transition.
+    // captureFrame reuses the seek if videoEl.currentTime already equals t (tolerance 0.04s).
+    const _tcv = document.createElement('canvas');
+    _tcv.width = 40; _tcv.height = 23;
+    const _tcvCtx = _tcv.getContext('2d');
+    const seekAndVariance = async (t) => {
+      await new Promise(res => {
+        if (Math.abs(videoEl.currentTime - t) < 0.04) { res(); return; }
+        videoEl.currentTime = t;
+        const _to = setTimeout(() => { videoEl.removeEventListener('seeked', _fn); res(); }, 3000);
+        const _fn = () => { clearTimeout(_to); res(); };
+        videoEl.addEventListener('seeked', _fn, { once: true });
+      });
+      _tcvCtx.drawImage(videoEl, 0, 0, 40, 23);
+      const d = _tcvCtx.getImageData(0, 0, 40, 23).data;
+      let sum = 0, sumSq = 0;
+      for (let p = 0; p < d.length; p += 4) {
+        const g = d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+        sum += g; sumSq += g * g;
+      }
+      const n = d.length / 4, mean = sum / n;
+      return sumSq / n - mean * mean;
+    };
+
     for (let i = 0; i < segments.length; i++) {
-      // For non-first segments, seek 0.3s past the cut point to land after
-      // any crossfade/transition completes — avoids ghosted double-exposure frames.
-      const frameOffset = i > 0 ? 0.3 : 0;
-      const frameTime = Math.min(segments[i].startTime + frameOffset, segments[i].endTime - 0.05);
+      let frameTime = segments[i].startTime;
+      if (i > 0) {
+        const seg = segments[i];
+        const segLen = seg.endTime - seg.startTime;
+        // First probe: 0.5s in (or 40% for shorter segments, floor 0.3s)
+        const off1 = Math.max(0.3, Math.min(0.5, segLen * 0.4));
+        const t1 = Math.min(seg.startTime + off1, seg.endTime - 0.1);
+        const v1 = await seekAndVariance(t1);
+        if (v1 >= 200) {
+          frameTime = t1; // Stable frame found — done
+        } else {
+          // Low variance → frame is likely still mid-transition (fade/dissolve/wipe).
+          // Try deeper: 65% into segment or 1.0s, whichever is smaller.
+          const off2 = Math.min(1.0, segLen * 0.65);
+          const t2 = Math.min(seg.startTime + off2, seg.endTime - 0.1);
+          if (t2 > t1 + 0.1) {
+            const v2 = await seekAndVariance(t2);
+            frameTime = v2 > v1 ? t2 : t1; // Use whichever is more distinct
+          } else {
+            frameTime = t1;
+          }
+        }
+      }
+      // captureFrame skips the seek if we're already at frameTime (saves time)
       segments[i].frameDataUrl = await captureFrame(frameTime);
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = (i + 1) + '/' + segments.length;
