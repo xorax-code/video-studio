@@ -3514,6 +3514,7 @@
               <div class="video-scene-btns" style="display:flex;flex-direction:column;gap:4px;width:120px;flex-shrink:0;align-self:flex-start;padding-top:2px;">
                 <button class="btn" onclick="markSceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--border-2);color:var(--text-1);width:100%;">✂ Mark Scene</button>
                 <button class="btn" id="detectCutsBtn" onclick="autoSegmentBySceneChange()" style="font-size:10px;padding:4px 6px;border-color:var(--accent);color:var(--accent-2);width:100%;" title="Auto-detect scene cuts and object changes"><i class="ti ti-scissors"></i> Detect Cuts</button>
+                <button class="btn" onclick="autoMergeShortSegments()" style="font-size:10px;padding:4px 6px;border-color:rgba(96,165,250,0.35);color:#60a5fa;width:100%;" title="Auto-merge segments with fewer than 4 words into their neighbor">⊕ Merge Short</button>
                 <button class="btn" onclick="clearSegments()" style="font-size:10px;padding:4px 6px;color:var(--danger);border-color:rgba(248,113,113,0.2);width:100%;"><i class="ti ti-trash"></i> Clear</button>
               </div>
             </div>
@@ -7712,6 +7713,59 @@ RULES — read carefully:
     renderSegments();
   }
 
+  // --- Merge two adjacent segments (i and i+1) into one ---
+  function mergeSegments(i, j) {
+    if (i < 0 || j >= segments.length || j !== i + 1) return;
+    segments[i].endTime = segments[j].endTime;
+    segments[i].script = [segments[i].script, segments[j].script].filter(Boolean).join(' ').trim();
+    segments[i].action = [segments[i].action, segments[j].action].filter(Boolean).join(' ').trim();
+    // Keep first segment's frame/NB/Veo prompts (user can regen if needed)
+    segments.splice(j, 1);
+    renderSegments();
+    saveSegments();
+    showToast('Segments merged.', 'success');
+  }
+
+  // --- Auto-merge all segments whose script is fewer than N words ---
+  function autoMergeShortSegments() {
+    const MIN_WORDS = 4;
+    let merged = 0;
+    let i = 0;
+    while (i < segments.length) {
+      const words = (segments[i].script || '').trim().split(/\s+/).filter(Boolean).length;
+      if (words > 0 && words < MIN_WORDS) {
+        if (i > 0) {
+          // Pull short segment backward into previous
+          segments[i - 1].endTime = segments[i].endTime;
+          segments[i - 1].script = [segments[i - 1].script, segments[i].script].filter(Boolean).join(' ').trim();
+          segments[i - 1].action = [segments[i - 1].action, segments[i].action].filter(Boolean).join(' ').trim();
+          segments.splice(i, 1);
+          i--; // Re-check i-1: merged result may itself be short
+          merged++;
+        } else if (segments.length > 1) {
+          // First segment is short — push it forward into next
+          segments[1].startTime = segments[0].startTime;
+          segments[1].frameDataUrl = segments[0].frameDataUrl || segments[1].frameDataUrl;
+          segments[1].script = [segments[0].script, segments[1].script].filter(Boolean).join(' ').trim();
+          segments[1].action = [segments[0].action, segments[1].action].filter(Boolean).join(' ').trim();
+          segments.splice(0, 1);
+          merged++;
+        } else {
+          i++;
+        }
+      } else {
+        i++;
+      }
+    }
+    if (merged > 0) {
+      renderSegments();
+      saveSegments();
+      showToast(`Auto-merged ${merged} short segment${merged !== 1 ? 's' : ''}.`, 'success');
+    } else {
+      showToast('No short segments found (all have ≥ 4 words).', 'info');
+    }
+  }
+
   // --- Split script at sentence boundaries, proportional to segment durations ---
   function splitScriptIntoSegments(fullScript, segs) {
     const n = segs.length;
@@ -8202,7 +8256,14 @@ RULES — read carefully:
           </div>
         </div>
 
-      </div>`).join('');
+      </div>
+      ${i < segments.length - 1 ? `
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-start;margin-top:72px;gap:3px;">
+        <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
+        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:5px;color:#60a5fa;font-size:10px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:0.1px;">⊕</button>
+        <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
+      </div>` : ''}
+`).join('');
 
     // Auto-grow all textareas after render
     requestAnimationFrame(() => {
@@ -14765,93 +14826,4 @@ TECHNICAL SPECS:
         <div class="uset-section-title">Background Theme</div>
         <div class="bg-theme-grid">
           <button class="bg-theme-btn" data-bg="midnight" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#0d1117,#161b22);"></div>
-            <span class="bg-theme-label">Midnight</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e,#0c1830);"></div>
-            <span class="bg-theme-label">Abyss</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000,#181818);"></div>
-            <span class="bg-theme-label">Carbon</span>
-          </button>
-          <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12,#181e2c);"></div>
-            <span class="bg-theme-label">Slate</span>
-          </button>
-        </div>
-
-        <div class="uset-section-title">UI Scale</div>
-        <div class="uset-row" style="margin-bottom:4px;">
-          <label class="uset-label">Zoom</label>
-          <input id="uset-scale-slider" type="range" min="80" max="130" step="5" value="100" oninput="previewUsetScale(this.value)" style="flex:1;accent-color:var(--accent);">
-          <span id="uset-scale-display" style="font-size:12px;font-weight:600;color:var(--text-1);min-width:36px;">100%</span>
-        </div>
-
-        <div class="uset-section-title" style="margin-top:18px;">Accessibility</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:12px;">
-          <div class="uset-row">
-            <label class="uset-toggle">
-              <input type="checkbox" id="uset-hc-toggle" onchange="toggleHighContrast(this.checked)">
-              <div class="uset-toggle-track"></div>
-              <div class="uset-toggle-thumb"></div>
-            </label>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-1);">High Contrast</div>
-              <div style="font-size:11px;color:var(--text-3);">Increases border and text contrast for readability.</div>
-            </div>
-          </div>
-          <div class="uset-row">
-            <label class="uset-toggle">
-              <input type="checkbox" id="uset-rm-toggle" onchange="toggleReduceMotion(this.checked)">
-              <div class="uset-toggle-track"></div>
-              <div class="uset-toggle-thumb"></div>
-            </label>
-            <div>
-              <div style="font-size:12px;font-weight:600;color:var(--text-1);">Reduce Motion</div>
-              <div style="font-size:11px;color:var(--text-3);">Disables animations and transitions throughout the app.</div>
-            </div>
-          </div>
-        </div>
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
-      </div>
-
-      <!-- BILLING -->
-      <div id="uset-tab-billing" class="uset-tab-content">
-        <div id="billingTabContent">
-          <div style="display:flex;align-items:center;gap:10px;padding:40px 0;justify-content:center;color:var(--text-3);font-size:13px;">
-            <i class="ti ti-loader-2" style="font-size:18px;"></i> Loading billing info…
-          </div>
-        </div>
-      </div>
-
-      <!-- SECURITY -->
-      <div id="uset-tab-security" class="uset-tab-content">
-        <div class="uset-section-title">Change Password</div>
-        <div class="uset-desc">Update the password for your account. Must be at least 8 characters.</div>
-        <div class="uset-row">
-          <label class="uset-label">New Password</label>
-          <input id="uset-newPassword" class="uset-input" type="password" placeholder="New password (min 8 chars)">
-        </div>
-        <div class="uset-row">
-          <label class="uset-label">Confirm</label>
-          <input id="uset-confirmPassword" class="uset-input" type="password" placeholder="Confirm new password">
-        </div>
-        <div id="uset-pwError"   style="display:none;font-size:11px;color:#f87171;margin-bottom:10px;"></div>
-        <div id="uset-pwSuccess" style="display:none;font-size:11px;color:#4ade80;margin-bottom:10px;">Password updated successfully.</div>
-        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveNewPassword()">Update Password</button></div>
-
-        <div class="uset-section-title" style="margin-top:24px;">Sessions</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;">
-          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">You are currently signed in on this device.</div>
-          <button onclick="closeUserSettings();doLogout();" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign Out</button>
-        </div>
-      </div>
-
-      <!-- HELP -->
-      <div id="uset-tab-help" class="uset-tab-content">
-        <div class="uset-section-title">Getting Started</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-botto
+            <div class="bg-theme-preview" style="backg
