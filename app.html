@@ -8252,29 +8252,69 @@ RULES — read carefully:
             content: [
               {
                 type: 'text',
-                text: `You are writing a Nano Banana image generation instruction. Look carefully at what is visible in the attached frame image.
+                text: `You are writing a Nano Banana image generation instruction. The user has an avatar photo (Photo 1) of a real person they want to composite into this scene frame (Photo 2 = the attached image).
 
-First, identify what portion of the person is visible:
-- FULL PERSON: face and upper body clearly visible (head, shoulders, torso)
-- HANDS/ARMS ONLY: no face visible — only hands, forearms, or arms in frame (possibly holding a product)
-- CLOSE-UP FACE: tight shot showing mainly face/neck
-- PARTIAL BODY: waist-down or other partial crop
+Carefully analyze the attached frame image and follow ALL of these rules:
 
-Then write a precise JSON instruction tailored to what you actually see.
+───────────────────────────────
+STEP 1 — IDENTIFY WHAT IS VISIBLE
+───────────────────────────────
+Classify the shot type:
+- FULL PERSON: face and upper body clearly visible (head, shoulders, torso in frame)
+- HANDS/ARMS ONLY: no face in frame — only hands, forearms, arms (possibly holding/interacting with products)
+- CHIN/NECK CROPPED: person visible from chest down, head cut off above frame top edge
+- CLOSE-UP FACE: tight shot, mainly face and neck
 
-RULES:
-- If FULL PERSON or CLOSE-UP FACE: instruction should say "Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person."
-- If HANDS/ARMS ONLY: instruction should say "Preserve the hands and forearms from reference photo 1 exactly — same skin tone, nail appearance, grip, and finger positions. Do not show any face or body above the forearms. Match the background/scene from reference photo 2." Then add a sentence describing what the hands are doing (holding a product, gesturing, etc.) based on what you see.
-- Always append: "Do not alter skin tone, proportions, or body part appearance."
-- If bgFromAvatar mode is indicated (not applicable here — always use the two-photo instruction above).
+Also identify:
+- Exact products/props visible on the table or in hands (brand names, colors, sizes)
+- Background elements (wall color, any signs, plants, flags, furniture)
+- Camera angle (straight-on, low angle from below, high angle from above)
+- Lighting quality (warm, cool, soft, harsh)
 
-Return ONLY a valid JSON object with exactly these two fields:
+───────────────────────────────
+STEP 2 — WRITE THE INSTRUCTION
+───────────────────────────────
+Write a precise instruction using THESE EXACT RULES based on shot type:
+
+FOR FULL PERSON shots:
+- "Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, framing, and camera angle precisely. Keep the person's face, clothing, hair, and accessories exactly as shown in photo 1."
+- Specify the camera angle precisely (e.g. "straight-on at chest height")
+- List background elements to preserve
+
+FOR HANDS/ARMS ONLY or CHIN/NECK CROPPED shots:
+- NEVER say "face not visible" or "head not visible" — this causes the model to REMOVE the head
+- ALWAYS say: "The person's head and face exist but are cropped above the top edge of the frame — do NOT remove or erase the head"
+- Specify: "camera positioned at [low/table] level shooting upward" or whatever angle you see
+- Use hands/forearms/skin from photo 1 exactly — preserve skin tone, hand shape, nail appearance
+- Replace any clothing visible with the avatar's clothing from photo 1
+- Describe EXACTLY which hand does what action (e.g. "one hand holds a silver spoon raised above the jar, the other hand holds the Vaseline container tilted toward the jar")
+- List every product on the table with its position: left, front-left, center, center-right, right, far right
+
+FOR BACKGROUND:
+- If there is a sign/painting: specify it is "mounted on the wall at least 3 feet behind the person, slightly out of focus" — NEVER say it is near the person
+- If the user wants a plain wall: say "plain neutral wall, nothing hanging, no signs, no paintings"
+- Always specify lighting: warm/cool/soft/harsh, direction
+
+───────────────────────────────
+STEP 3 — WRITE THE NEGATIVE PROMPT
+───────────────────────────────
+Always include these based on what could go wrong:
+- If head is cropped: ALWAYS add "headless, missing head, decapitated, head removed"
+- If hands shot: add "face fully visible, wide shot showing full person"
+- Always add: "changed clothing, changed skin tone, changed face, text overlays, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face"
+- If there's a sign in the background: add "sign touching person, sign held in hand, sign in foreground"
+- If background should be plain: add "sign on wall, framed sign, painting, artwork, text on wall, any writing on wall"
+
+───────────────────────────────
+STEP 4 — OUTPUT FORMAT
+───────────────────────────────
+Return ONLY a valid JSON object:
 {
   "instruction": "...",
-  "negative_prompt": "text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted, extra limbs, duplicate people, cartoon, illustration, painting, drawing, anime, changed clothing, changed skin tone"
+  "negative_prompt": "..."
 }
 
-No markdown, no extra fields.`
+No markdown, no explanation, no extra fields. Be specific and concrete — name the actual products, colors, and positions you see. Do not use vague terms like "various items" or "some products."`
               },
               { type: 'image_url', image_url: { url: seg.frameDataUrl, detail: 'high' } }
             ]
@@ -14765,66 +14805,4 @@ TECHNICAL SPECS:
         <div class="uset-section-title">Getting Started</div>
         <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
           <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">1. Add your accounts</div>
-            <div style="font-size:11px;color:var(--text-3);">Go to Accounts tab and add each social profile you manage. Include the username, platform, niche, and target audience.</div>
-          </div>
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">2. Load a viral script</div>
-            <div style="font-size:11px;color:var(--text-3);">Open Viral Scripts, pick a script, and click Use Script to load it into the Video Studio.</div>
-          </div>
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">3. Generate your Veo 3 prompts</div>
-            <div style="font-size:11px;color:var(--text-3);">In Video Studio, split your script into scenes and use AI Describe or Generate All to build prompts. Then copy to Google Flow.</div>
-          </div>
-        </div>
-        <div class="uset-section-title">Support</div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
-          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Have a question or found a bug? Reach out and we'll get back to you.</div>
-          <a href="mailto:support@affiliateos.app" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;background:var(--grad-accent);color:#fff;font-size:12px;font-weight:600;text-decoration:none;">
-            <i class="ti ti-mail"></i> support@affiliateos.app
-          </a>
-        </div>
-      </div>
-
-      <!-- DATA -->
-      <div id="uset-tab-data" class="uset-tab-content">
-        <div class="uset-section-title">Export Data</div>
-        <div class="uset-desc">Download a copy of your accounts, scripts, and settings as a JSON file.</div>
-        <div class="uset-save-row" style="margin-bottom:24px;">
-          <button class="uset-btn-save" onclick="admExport()">Export All Data</button>
-        </div>
-        <div class="uset-section-title">Import Data</div>
-        <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
-        <div class="uset-save-row" style="margin-bottom:24px;">
-          <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
-          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="admImport(event)">
-        </div>
-        <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
-        <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
-          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Clear all local data. This removes your accounts, scripts, and settings from this browser. Your Supabase account stays intact.</div>
-          <button onclick="clearAllLocalData()" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
-        </div>
-      </div>
-
-      <!-- ABOUT -->
-      <div id="uset-tab-about" class="uset-tab-content">
-        <div style="text-align:center;padding:30px 0 20px;">
-          <div style="font-size:28px;margin-bottom:8px;">⚡</div>
-          <div style="font-size:16px;font-weight:800;color:var(--text-1);margin-bottom:4px;">AffiliateOS</div>
-          <div style="font-size:11px;color:var(--text-3);">AI-powered video content engine for affiliate marketers</div>
-        </div>
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
-          <div class="uset-row" style="margin-bottom:6px;">
-            <span style="font-size:11px;color:var(--text-3);">Version</span>
-            <span style="font-size:11px;font-weight:600;color:var(--text-2);">1.0.0</span>
-          </div>
-          <div class="uset-row" style="margin-bottom:6px;">
-            <span style="font-size:11px;color:var(--text-3);">Platform</span>
-            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Web App (Netlify)</span>
-          </div>
-          <div class="uset-row">
-            <span style="font-size:11px;color:var(--text-3);">AI Engine</span>
-            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Veo 3 · GPT-4o · Claude</span>
-          </div>
-        </div>
-        <div style="text-align:ce
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-botto
