@@ -8812,16 +8812,16 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         ? 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, other objects on surface, condiments, ingredients, bowls, utensils, props on table, text overlays, watermarks, blurry product'
         : 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product';
       const nbBase = {
-        instruction: `Photo 1 is the PRODUCT (${productDesc}). Photo 2 is the PERSON/CHARACTER. Keep the person from Photo 2 completely unchanged — same face, skin tone, clothing, hair, and body. Composite the person holding the product from Photo 1 up toward the camera at chest-to-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile.${surfaceInstruction}`,
-        photo_1_is: `PRODUCT — ${productDesc}. Do not alter or remove it.`,
-        photo_2_is: 'PERSON/CHARACTER — preserve their face, body, clothing, hair, and skin tone 100% identically. Do not change anything about them.',
-        product_placement: `${productDesc} from Photo 1 — held at chest-to-shoulder height by the person from Photo 2, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
+        instruction: `Photo 1 is the PERSON/CHARACTER — their face, body, clothing, hair, and skin tone must remain 100% identical. Photo 2 is the PRODUCT (${productDesc}). Take the product from Photo 2 and place it into the hands of the person from Photo 1. The person holds the product at chest-to-shoulder height with one hand, label or front face pointing toward the camera. The person's arm and hand naturally grip the product. The person looks directly at the camera with a confident, natural smile. Do not change anything about the person from Photo 1.${surfaceInstruction}`,
+        photo_1_is: 'PERSON — preserve face, body, clothing, hair, skin tone exactly. Do not alter.',
+        photo_2_is: `PRODUCT (${productDesc}) — place this into the person's hand. Keep label readable and facing camera.`,
+        product_placement: `${productDesc} from Photo 2 — gripped naturally in the person's hand at chest-to-shoulder height, front/label facing camera, clearly visible and in sharp focus.`,
         negative_prompt: surfaceNegPrompt,
       };
       if (clearSurface) {
-        nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character (from Photo 2) and the product (from Photo 1).';
+        nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character (from Photo 1) holding the product (from Photo 2).';
       } else {
-        nbBase.surface = 'Keep all existing props and objects from Photo 2 (the person scene) intact.';
+        nbBase.surface = 'Keep all existing props and objects from Photo 1 (the person scene) intact.';
       }
       const nbObj = nbBase;
       const nbPrompt = JSON.stringify(nbObj, null, 2);
