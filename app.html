@@ -3255,8 +3255,32 @@
             <div style="display:flex;flex-direction:column;gap:3px;">
               <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:rgba(167,139,250,0.85);text-transform:uppercase;">🎙 Voice &amp; Accent</div>
               <div style="display:flex;gap:4px;">
+                <select id="avatarVoiceGender" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— Gender —</option>
+                  <option value="female">👩 Female</option>
+                  <option value="male">👨 Male</option>
+                </select>
+                <select id="avatarVoiceAge" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— Age —</option>
+                  <option value="young adult">🌱 Young (20s)</option>
+                  <option value="young adult in their 30s">🙂 Young Adult (30s)</option>
+                  <option value="middle-aged">🧑 Middle-aged (40s–50s)</option>
+                  <option value="elderly">👴 Elderly (60s+)</option>
+                </select>
+              </div>
+              <div style="display:flex;gap:4px;">
+                <select id="avatarVoiceTone" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— Tone —</option>
+                  <option value="warm and conversational">Warm / Conversational</option>
+                  <option value="energetic and upbeat">Energetic / Upbeat</option>
+                  <option value="calm and authoritative">Calm / Authoritative</option>
+                  <option value="soft and hushed">Soft / Hushed</option>
+                  <option value="deep and confident">Deep / Confident</option>
+                  <option value="bright and enthusiastic">Bright / Enthusiastic</option>
+                  <option value="gentle and nurturing">Gentle / Nurturing</option>
+                </select>
                 <select id="avatarAccent" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
-                  <option value="">— Accent (optional) —</option>
+                  <option value="">— Accent —</option>
                   <option value="neutral American accent">🇺🇸 American</option>
                   <option value="soft Korean accent">🇰🇷 Korean</option>
                   <option value="Filipino accent">🇵🇭 Filipino</option>
@@ -3268,19 +3292,8 @@
                   <option value="Nigerian accent">🇳🇬 Nigerian</option>
                   <option value="French accent">🇫🇷 French</option>
                 </select>
-                <select id="avatarVoiceTone" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
-                  <option value="">— Tone (optional) —</option>
-                  <option value="warm and conversational female voice">👩 Warm / Female</option>
-                  <option value="warm and conversational male voice">👨 Warm / Male</option>
-                  <option value="energetic upbeat female voice">⚡ Energetic / Female</option>
-                  <option value="energetic upbeat male voice">⚡ Energetic / Male</option>
-                  <option value="calm authoritative female voice">🧘 Calm / Female</option>
-                  <option value="calm authoritative male voice">🧘 Calm / Male</option>
-                  <option value="soft hushed female voice">🤫 Hushed / Female</option>
-                  <option value="deep confident male voice">💪 Deep / Male</option>
-                </select>
               </div>
-              <input id="avatarVoiceCustom" type="text" placeholder="Custom override (e.g. raspy female, fast-paced)" oninput="saveAvatarVoice()" style="font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;width:100%;">
+              <input id="avatarVoiceCustom" type="text" placeholder="Custom override (e.g. raspy elderly woman, fast-paced)" oninput="saveAvatarVoice()" style="font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;width:100%;">
               <div id="avatarVoicePreview" style="font-size:9px;color:var(--accent-2);opacity:0.7;font-style:italic;min-height:12px;"></div>
             </div>
             <!-- Appearance Inventory — collapsible, starts closed -->
@@ -11143,9 +11156,13 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
   function buildAvatarVoiceString() {
     const custom = (document.getElementById('avatarVoiceCustom')?.value || '').trim();
     if (custom) return custom;
-    const tone   = (document.getElementById('avatarVoiceTone')?.value  || '').trim();
-    const accent = (document.getElementById('avatarAccent')?.value      || '').trim();
-    return [tone, accent].filter(Boolean).join(', ');
+    const gender = (document.getElementById('avatarVoiceGender')?.value || '').trim();
+    const age    = (document.getElementById('avatarVoiceAge')?.value    || '').trim();
+    const tone   = (document.getElementById('avatarVoiceTone')?.value   || '').trim();
+    const accent = (document.getElementById('avatarAccent')?.value       || '').trim();
+    // Build natural phrase: e.g. "middle-aged warm and conversational female voice, soft Korean accent"
+    const voiceParts = [age, tone, gender ? gender + ' voice' : ''].filter(Boolean).join(' ');
+    return [voiceParts, accent].filter(Boolean).join(', ');
   }
 
   function saveAvatarVoice() {
@@ -11162,8 +11179,10 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
     DB.set('sm_avatar_profile', desc).catch(err => showToast('Save failed: ' + err.message, 'error'));
     saveAvatarVoice();
     const voiceData = {
-      accent: document.getElementById('avatarAccent')?.value || '',
-      tone:   document.getElementById('avatarVoiceTone')?.value || '',
+      gender: document.getElementById('avatarVoiceGender')?.value || '',
+      age:    document.getElementById('avatarVoiceAge')?.value    || '',
+      tone:   document.getElementById('avatarVoiceTone')?.value   || '',
+      accent: document.getElementById('avatarAccent')?.value      || '',
       custom: document.getElementById('avatarVoiceCustom')?.value || '',
     };
     localStorage.setItem('vs_avatar_voice_config', JSON.stringify(voiceData));
@@ -11180,8 +11199,10 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
     try {
       const vc = JSON.parse(localStorage.getItem('vs_avatar_voice_config') || 'null');
       if (vc) {
-        if (document.getElementById('avatarAccent'))      document.getElementById('avatarAccent').value = vc.accent || '';
-        if (document.getElementById('avatarVoiceTone'))   document.getElementById('avatarVoiceTone').value = vc.tone || '';
+        if (document.getElementById('avatarVoiceGender')) document.getElementById('avatarVoiceGender').value = vc.gender || '';
+        if (document.getElementById('avatarVoiceAge'))    document.getElementById('avatarVoiceAge').value    = vc.age    || '';
+        if (document.getElementById('avatarVoiceTone'))   document.getElementById('avatarVoiceTone').value   = vc.tone   || '';
+        if (document.getElementById('avatarAccent'))      document.getElementById('avatarAccent').value      = vc.accent || '';
         if (document.getElementById('avatarVoiceCustom')) document.getElementById('avatarVoiceCustom').value = vc.custom || '';
         saveAvatarVoice();
       }
