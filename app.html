@@ -13360,6 +13360,8 @@ TECHNICAL SPECS:
       window._stripeCustomerId = session.user.app_metadata?.stripe_customer_id || null;
       window._stripeTier = session.user.app_metadata?.stripe_tier || 'free';
       window._stripeBaseTier = window._stripeTier; // keep original for promo removal
+      window._supabaseEmail = session.user.email || '';
+      window._supabaseUid   = session.user.id   || '';
       applyPromoOverride();
       // Prefer display name from settings, fall back to email
       const _s = getUserSettings() || {};
@@ -13762,11 +13764,18 @@ TECHNICAL SPECS:
     if (name === 'billing') renderBillingTab();
   }
 
-  // ── Stripe price IDs — fill these in after creating products in Stripe dashboard ──
+  // ── Stripe price IDs — used by legacy startCheckout() (backend flow) ──
   const STRIPE_PRICES = {
     starter: 'price_1TXVdNJEBUETI2v8Z0emWAmh',
     pro:     'price_1TXVdnJEBUETI2v8zMFyiwH4',
     agency:  'price_1TXVeGJEBUETI2v8pMkY16DK',
+  };
+
+  // ── Stripe Payment Links — no backend needed, redirects directly to Stripe ──
+  const STRIPE_PAYMENT_LINKS = {
+    starter: 'https://buy.stripe.com/eVqfZi1iT8rBgam6ny2go0q',
+    pro:     'https://buy.stripe.com/fZu5kE3r19vF1fscLW2go0r',
+    agency:  null, // coming soon
   };
 
   // ── Promo codes ──────────────────────────────────────────────
@@ -13949,9 +13958,41 @@ TECHNICAL SPECS:
   }
 
   function openUpgradeModal(planKey) {
-    const info = PLAN_INFO[planKey] || { label: planKey, price: '', desc: '' };
-    const existing = document.getElementById('upgradeModal');
+    const info        = PLAN_INFO[planKey] || { label: planKey, price: '', desc: '' };
+    const paymentLink = STRIPE_PAYMENT_LINKS[planKey] || null;
+    const existing    = document.getElementById('upgradeModal');
     if (existing) existing.remove();
+
+    // Build checkout URL — pre-fill email + attach Supabase user ID for webhook matching
+    let checkoutUrl = paymentLink;
+    if (checkoutUrl) {
+      const params = new URLSearchParams();
+      const email = window._supabaseEmail || '';
+      const uid   = window._supabaseUid  || '';
+      if (email) params.set('prefilled_email', email);
+      if (uid)   params.set('client_reference_id', uid);
+      const qs = params.toString();
+      if (qs) checkoutUrl += (checkoutUrl.includes('?') ? '&' : '?') + qs;
+    }
+
+    const checkoutHtml = checkoutUrl
+      ? `<a href="${checkoutUrl}" target="_blank" rel="noopener"
+           style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:10px;background:var(--grad-accent);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:-0.2px;box-shadow:0 4px 20px rgba(124,106,247,0.35);">
+           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+           Pay with Stripe — ${info.price}
+         </a>
+         <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:8px;">
+           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+           <span style="font-size:10px;color:var(--text-3);">Secured by Stripe · Cancel anytime</span>
+         </div>`
+      : `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+           <span style="font-size:18px;flex-shrink:0;">🚀</span>
+           <div>
+             <div style="font-size:11.5px;font-weight:700;color:var(--text-1);margin-bottom:2px;">Agency billing coming soon</div>
+             <div style="font-size:10.5px;color:var(--text-3);">Contact us for early access to the Agency plan.</div>
+           </div>
+         </div>
+         <a href="mailto:support@aiscaling.io?subject=Upgrade%20to%20Agency%20Plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
 
     const modal = document.createElement('div');
     modal.id = 'upgradeModal';
@@ -13968,27 +14009,20 @@ TECHNICAL SPECS:
           </div>
         </div>
 
-        <div style="background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
-          <div style="font-size:11px;font-weight:700;color:var(--accent-2);margin-bottom:4px;letter-spacing:0.04em;">🔓 HAVE A PROMO CODE?</div>
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Enter a code below to unlock access instantly — no payment needed.</div>
+        <div style="margin-bottom:20px;">
+          ${checkoutHtml}
+        </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:16px;">
+          <div style="font-size:11px;font-weight:700;color:var(--text-3);margin-bottom:10px;letter-spacing:0.04em;">🔓 HAVE A PROMO CODE? (skip payment)</div>
           <div style="display:flex;gap:8px;">
             <input id="upgradeModalPromoInput" type="text" placeholder="Enter promo code"
               style="flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:12px;font-family:inherit;letter-spacing:0.5px;text-transform:uppercase;outline:none;"
               onkeydown="if(event.key==='Enter')_submitUpgradePromo()">
-            <button onclick="_submitUpgradePromo()" style="padding:9px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
+            <button onclick="_submitUpgradePromo()" style="padding:9px 16px;border-radius:7px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
           </div>
           <div id="upgradeModalPromoMsg" style="font-size:11px;margin-top:8px;display:none;"></div>
         </div>
-
-        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:16px;">
-          <span style="font-size:18px;flex-shrink:0;">🚀</span>
-          <div>
-            <div style="font-size:11.5px;font-weight:700;color:var(--text-1);margin-bottom:2px;">Stripe checkout launching soon</div>
-            <div style="font-size:10.5px;color:var(--text-3);">Credit card billing is coming shortly. In the meantime, reach out for early access.</div>
-          </div>
-        </div>
-
-        <a href="mailto:support@aiscaling.io?subject=Upgrade%20to%20${encodeURIComponent(info.label)}%20Plan&body=Hi%2C%20I'd%20like%20to%20upgrade%20to%20the%20${encodeURIComponent(info.label)}%20plan%20(${encodeURIComponent(info.price)})." style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>
       </div>`;
 
     document.body.appendChild(modal);
