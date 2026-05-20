@@ -2612,19 +2612,19 @@
 
     <!-- Stats -->
     <div class="stats">
-      <div class="stat-card stat-total">
+      <div class="stat-card stat-total" style="cursor:pointer;" title="Show all accounts" onclick="document.getElementById('filterPlatform').value='';document.getElementById('filterStatus').value='';renderTable();">
         <div class="stat-num" id="statTotal">0</div>
         <div class="stat-label">Total</div>
       </div>
-      <div class="stat-card stat-tiktok">
+      <div class="stat-card stat-tiktok" style="cursor:pointer;" title="Filter TikTok accounts" onclick="document.getElementById('filterPlatform').value='TikTok';renderTable();">
         <div class="stat-num" id="statTikTok">0</div>
         <div class="stat-label">TikTok</div>
       </div>
-      <div class="stat-card stat-instagram">
+      <div class="stat-card stat-instagram" style="cursor:pointer;" title="Filter Instagram accounts" onclick="document.getElementById('filterPlatform').value='Instagram';renderTable();">
         <div class="stat-num" id="statInstagram">0</div>
         <div class="stat-label">Instagram</div>
       </div>
-      <div class="stat-card stat-facebook">
+      <div class="stat-card stat-facebook" style="cursor:pointer;" title="Filter Facebook accounts" onclick="document.getElementById('filterPlatform').value='Facebook';renderTable();">
         <div class="stat-num" id="statFacebook">0</div>
         <div class="stat-label">Facebook</div>
       </div>
@@ -2758,15 +2758,15 @@
   <div id="tab-viral-scripts" class="tab-content">
 
     <div class="stats" style="margin-bottom:20px;">
-      <div class="stat-card stat-script">
+      <div class="stat-card stat-script" style="cursor:pointer;" title="Show all scripts" onclick="document.getElementById('scriptFilterStatus').value='';renderScripts();">
         <div class="stat-num" id="statScriptTotal">0</div>
         <div class="stat-label">Total Scripts</div>
       </div>
-      <div class="stat-card stat-try">
+      <div class="stat-card stat-try" style="cursor:pointer;" title="Show scripts to try" onclick="document.getElementById('scriptFilterStatus').value='To Try';renderScripts();switchScriptSubTab('scripts');">
         <div class="stat-num" id="statScriptTry">0</div>
         <div class="stat-label">To Try</div>
       </div>
-      <div class="stat-card stat-used-s">
+      <div class="stat-card stat-used-s" style="cursor:pointer;" title="Show used scripts" onclick="document.getElementById('scriptFilterStatus').value='Used';renderScripts();switchScriptSubTab('scripts');">
         <div class="stat-num" id="statScriptUsed">0</div>
         <div class="stat-label">Used</div>
       </div>
@@ -8624,6 +8624,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         })
       });
       if (!res.ok) {
+        showToast('NB prompt build failed (API ' + res.status + '). Try again.', 'error');
         if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
         return false;
       }
@@ -8646,6 +8647,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       result.instruction += getAvatarAccessoryNote();
       seg.nbPrompt = JSON.stringify(result, null, 2);
       if (nbTa) { nbTa.value = seg.nbPrompt; autoGrow(nbTa); }
+      debounceSave();
       return true;
     } catch(e) {
       console.warn('buildNBPromptFromImage failed:', e);
@@ -8986,7 +8988,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
             headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
             body: JSON.stringify({ model: 'gpt-4o', max_tokens: 200, messages: [{ role: 'user', content: retryContent }] })
           });
-          if (!retryRes.ok) throw new Error('Retry failed: ' + retryRes.status);
+          if (!retryRes.ok) { showToast('Frame retry failed (seg ' + (i+1) + '): ' + retryRes.status, 'warning'); skipped++; continue; }
           const retryData = await retryRes.json();
           description = retryData.choices?.[0]?.message?.content?.trim() || '';
         }
@@ -9292,6 +9294,16 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       return;
     }
 
+    // Warn if any existing segments have generated prompts
+    const hasPrompts = segments.length > 0 && segments.some(s => (s.nbPrompt && s.nbPrompt.trim()) || (s.veoPrompt && s.veoPrompt.trim()));
+    if (hasPrompts) {
+      showConfirm('Re-splitting will erase all generated NB and Veo prompts. Continue?', () => _doSplit(rawSentences));
+      return;
+    }
+    _doSplit(rawSentences);
+  }
+
+  function _doSplit(rawSentences) {
     // ── Step 2: group sentences into ~8s chunks ────────────────────────────
     const sceneTexts = [];
     let bucket = [];
@@ -9357,7 +9369,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     const countEl = document.getElementById('segmentCount');
     if (countEl) countEl.textContent = `${total} scene${total !== 1 ? 's' : ''}`;
     showToast(`${total} scene${total !== 1 ? 's' : ''} created — now click ⚡ Generate All Prompts.`, 'success');
-  }
+  }  // end _doSplit
 
   // NB Pro starting-frame prompt for script-only scenes (no video frame reference)
   function buildScriptOnlyNBPrompt(sceneIndex, scriptSlice, setting, avatarDesc, bgDataUrl, frameDesc) {
@@ -9446,38 +9458,37 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     if (saveAllBtn) saveAllBtn.style.display = 'inline-block';
     if (withPreviews.length > 0 || withFrames.length > 0) {
       return (async () => {
-        // Veo3 from NB preview images
-        for (let i = 0; i < segments.length; i++) {
-          if (!segments[i].nbPreviewDataUrl) continue;
+        // Veo3 from NB preview images — run all in parallel
+        await Promise.all(segments.map(async (seg, i) => {
+          if (!seg.nbPreviewDataUrl) return;
           const veoTa = document.getElementById('veo-seg-' + i);
           if (veoTa) veoTa.value = '⏳ Building from NB image…';
           const _nbOk = await buildVeo3FromNBImage(i);
-          if (!segments[i]) continue;
+          if (!segments[i]) return;
           if (!_nbOk && veoTa && veoTa.value.startsWith('⏳')) {
             // Vision call failed — fall back to template so the textarea isn't stuck on the spinner
             const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
             const _ps2 = document.getElementById('studioProduct');
             const _pn2 = _ps2 ? (_ps2.options[_ps2.selectedIndex]?.text || 'the product') : 'the product';
             segments[i].veoPrompt = buildSegmentVeo3Prompt(i, segments[i].startTime, segments[i].endTime, segments[i].script, _s2, _pn2, bgImageDataUrl);
-            veoTa.value = segments[i].veoPrompt; autoGrow(veoTa);
+            if (veoTa) { veoTa.value = segments[i].veoPrompt; autoGrow(veoTa); }
           }
-        }
-        // Vision-based NB prompt building for segments with frame images
-        for (let i = 0; i < segments.length; i++) {
-          const s = segments[i];
-          if (s._scriptOnly || !s.frameDataUrl) continue;
+        }));
+        // Vision-based NB prompt building — run all in parallel
+        await Promise.all(segments.map(async (seg, i) => {
+          if (seg._scriptOnly || !seg.frameDataUrl) return;
           const nbTa2 = document.getElementById('nb-seg-' + i);
           const ok = await buildNBPromptFromImage(i);
-          if (!segments[i]) continue;
+          if (!segments[i]) return;
           if (!ok) {
             // Vision call failed — keep the template-built prompt already set above
             const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
             const _ps2 = document.getElementById('studioProduct');
             const _pn2 = _ps2 ? (_ps2.options[_ps2.selectedIndex]?.text || 'the product') : 'the product';
-            segments[i].nbPrompt = buildSegmentNanoBananaPrompt(i, segments[i].frameDataUrl, segments[i].script, _s2, _pn2, product);
+            segments[i].nbPrompt = buildSegmentNanoBananaPrompt(i, segments[i].frameDataUrl, segments[i].script, _s2, _pn2, _ps2 ? _ps2.value : '');
             if (nbTa2) { nbTa2.value = segments[i].nbPrompt; autoGrow(nbTa2); }
           }
-        }
+        }));
         saveSegments();
       })().catch(e => showToast('Error building prompts: ' + e.message, 'error'));
     }
@@ -10022,6 +10033,7 @@ No markdown. Return only the JSON object.`
   // one screen so problems get caught while they are still free to fix —
   // before any Veo credits are spent inside Flow.
   function showPreflightModal(skipDone) {
+    document.querySelectorAll('.preflight-modal').forEach(m => m.remove());
     if (segments.length === 0) {
       showToast('No segments yet — split a video or script into scenes first.', 'warning');
       return;
@@ -10062,6 +10074,7 @@ No markdown. Return only the JSON object.`
     const hasIssues = issueCount > 0;
     const runnable = readyCount > 0;
     const modal = document.createElement('div');
+    modal.className = 'preflight-modal';
     modal.style.cssText = 'position:fixed;inset:0;background:rgba(6,6,10,0.74);z-index:9999;display:flex;align-items:center;justify-content:center;';
     modal.innerHTML = `
       <div style="background:var(--glass);backdrop-filter:blur(24px) saturate(160%);-webkit-backdrop-filter:blur(24px) saturate(160%);border:1px solid var(--glass-border);border-radius:14px;padding:22px;width:520px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;box-shadow:var(--shadow-panel);font-family:inherit;">
@@ -10101,12 +10114,17 @@ No markdown. Return only the JSON object.`
     showConfirm('Run Process Everything? This analyzes video frames and generates all NB Pro + Veo 3 prompts. May take a minute.', async () => {
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
-      if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
+      const _setStep = (n, label) => {
+        if (btn) btn.textContent = `⏳ Step ${n}/3 — ${label}`;
+        showToast(`Step ${n} of 3: ${label}`, 'info', 2000);
+      };
+      if (btn) { btn.disabled = true; }
       // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
+      _setStep(1, 'Analyzing frames…');
       try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
       // Step 2 — generate all prompts (await so NB-image async Veo 3 building finishes
       // before pre-flight runs — otherwise those segments incorrectly show as missing prompts)
-      if (btn) btn.textContent = '⏳ Generating prompts…';
+      _setStep(2, 'Generating prompts…');
       try {
         await generateAllSegmentPrompts();
       } catch (e) {
@@ -10115,6 +10133,7 @@ No markdown. Return only the JSON object.`
         return;
       }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
+      showToast('Step 3 of 3: Pre-flight check', 'info', 1500);
       // Step 3 — pre-flight gate (all prompts including vision-based ones are now ready)
       showPreflightModal(false);
     });
@@ -11882,6 +11901,12 @@ TECHNICAL SPECS:
       frameDesc: s.frameDesc || '',
       _scriptOnly: s._scriptOnly || false,
       done: s.done || false,
+      isCTA: s.isCTA || false,
+      ctaProductName: s.ctaProductName || '',
+      targetX: s.targetX ?? null,
+      targetY: s.targetY ?? null,
+      targetPerson: s.targetPerson || '',
+      targetGender: s.targetGender || '',
     }));
     DB.set(modeKey('sm_projects'), JSON.stringify(projects)).catch(e => console.warn('saveCurrentProjectData error:', e));
   }
@@ -13645,11 +13670,17 @@ TECHNICAL SPECS:
     }
   }
 
+  let _reminderTimeout = null;
   function saveNotificationsTab() {
     const s = getUserSettings();
     s.reminderEnabled = document.getElementById('uset-reminderEnabled').checked;
     s.reminderTime    = document.getElementById('uset-reminderTime').value || '09:00';
     saveUserSettings(s);
+    if (!s.reminderEnabled) {
+      if (_reminderTimeout) { clearTimeout(_reminderTimeout); _reminderTimeout = null; }
+    } else {
+      _scheduleReminder(s.reminderTime);
+    }
     _showUsetSaved();
   }
 
@@ -13666,7 +13697,6 @@ TECHNICAL SPECS:
     _showUsetSaved();
   }
 
-  let _reminderTimeout = null;
   function _scheduleReminder(timeStr) {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'denied') return;
@@ -13728,7 +13758,7 @@ TECHNICAL SPECS:
     const mode = s.themeMode || 'system';
     if (mode === 'system') {
       const mq = window.matchMedia('(prefers-color-scheme: dark)');
-      applyTheme(mq.matches ? 'dark' : (localStorage.getItem('socialos_theme') || 'dark'));
+      applyTheme(mq.matches ? 'dark' : 'light');
       mq.addEventListener('change', e => {
         if (getUserSettings().themeMode === 'system') applyTheme(e.matches ? 'dark' : 'light');
       });
@@ -13821,14 +13851,23 @@ TECHNICAL SPECS:
   // type:'unlock'   → unlocks `tier` immediately, no payment needed
   // type:'discount' → stores a % off applied at Stripe checkout
   // Add / remove codes here freely. Codes are case-insensitive.
-  const PROMO_CODES = {
-    'MAXACCESS':  { type:'unlock',   tier:'agency',  label:'Full Access — All Features Unlocked' },
-    'VIPBETA':    { type:'unlock',   tier:'pro',     label:'Pro Access — VIP Beta' },
-    'EARLYBIRD':  { type:'unlock',   tier:'agency',  label:'Early Bird — Full Access' },
-    'FRIEND50':   { type:'discount', pct:50,         label:'50% Off Any Plan' },
-    'LAUNCH30':   { type:'discount', pct:30,         label:'30% Off — Launch Special' },
-    'SAVE20':     { type:'discount', pct:20,         label:'20% Off' },
-  };
+  // Promo codes — unlock codes are stored obfuscated (base64) to prevent casual discovery via DevTools.
+  // Discount codes (type:'discount') are intentionally visible; they only reduce price, not bypass payment.
+  // For true security, move unlock validation to a server-side endpoint before launch.
+  const _pc = (s) => atob(s); // decode helper
+  const PROMO_CODES = (() => {
+    const m = {};
+    // Unlock codes (obfuscated)
+    [[_pc('TUFYQUNDRVNT'),  'agency', 'Full Access — All Features Unlocked'],
+     [_pc('VklQQkVUQQ=='),  'pro',    'Pro Access — VIP Beta'],
+     [_pc('RUFSTFlCSVJE'), 'agency', 'Early Bird — Full Access'],
+    ].forEach(([k, tier, label]) => { m[k] = { type:'unlock', tier, label }; });
+    // Discount codes (plaintext — no payment bypass risk)
+    m['FRIEND50'] = { type:'discount', pct:50, label:'50% Off Any Plan' };
+    m['LAUNCH30'] = { type:'discount', pct:30, label:'30% Off — Launch Special' };
+    m['SAVE20']   = { type:'discount', pct:20, label:'20% Off' };
+    return m;
+  })();
 
   const PROMO_STORAGE_KEY = 'affiliateos_promo_v1';
 
@@ -14014,12 +14053,27 @@ TECHNICAL SPECS:
       if (qs) checkoutUrl += (checkoutUrl.includes('?') ? '&' : '?') + qs;
     }
 
+    // Compute display price — apply discount promo if active
+    const _promo = window._activePromo;
+    let displayPrice = info.price;
+    let promoLine = '';
+    if (_promo && _promo.type === 'discount' && info.price) {
+      const baseNum = parseFloat((info.price || '').replace(/[^0-9.]/g, ''));
+      if (!isNaN(baseNum) && baseNum > 0) {
+        const discounted = (baseNum * (1 - _promo.pct / 100)).toFixed(2);
+        const period = info.price.includes('/mo') ? '/mo' : '';
+        displayPrice = `$${discounted}${period}`;
+        promoLine = `<div style="font-size:10px;color:var(--success,#4ade80);margin-top:4px;text-align:center;">${_promo.pct}% off applied · was <s style="opacity:0.6;">${info.price}</s> · code: ${_promo.code}</div>`;
+      }
+    }
+
     const checkoutHtml = checkoutUrl
       ? `<a href="${checkoutUrl}" target="_blank" rel="noopener"
            style="display:flex;align-items:center;justify-content:center;gap:8px;padding:13px;border-radius:10px;background:var(--grad-accent);color:#fff;font-size:13px;font-weight:800;text-decoration:none;letter-spacing:-0.2px;box-shadow:0 4px 20px rgba(124,106,247,0.35);">
            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-           Pay with Stripe — ${info.price}
+           Pay with Stripe — ${displayPrice}
          </a>
+         ${promoLine}
          <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:8px;">
            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-3)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
            <span style="font-size:10px;color:var(--text-3);">Secured by Stripe · Cancel anytime</span>
@@ -14408,7 +14462,9 @@ TECHNICAL SPECS:
     try {
       const [rawAccounts, rawCompetitors, rawScripts, rawStudio,
              rawProducts, rawHooks, rawCtas, rawPerf, rawRecycle, rawIdeas,
-             rawPostPlans, rawDailyItems, rawVideoLog] = await Promise.all([
+             rawPostPlans, rawDailyItems, rawVideoLog,
+             rawProjectsR, rawProjectsP, rawActiveR, rawActiveP,
+             rawStudioR, rawStudioP] = await Promise.all([
         DB.get('sm_accounts'),      DB.get('sm_competitors'),
         DB.get('sm_viral_scripts'), DB.get('sm_studio_library'),
         DB.get('sm_products'),      DB.get('sm_hooks'),
@@ -14416,6 +14472,9 @@ TECHNICAL SPECS:
         DB.get('sm_recycle'),       DB.get('sm_ideas'),
         DB.get('sm_post_plans'),    DB.get('sm_daily_items'),
         DB.get('sm_video_log'),
+        DB.get('sm_replicator_projects'),   DB.get('sm_producer_projects'),
+        DB.get('sm_replicator_active_project'), DB.get('sm_producer_active_project'),
+        DB.get('sm_replicator_studio_library'), DB.get('sm_producer_studio_library'),
       ]);
       const payload = {
         _exported:    new Date().toISOString(),
@@ -14433,6 +14492,12 @@ TECHNICAL SPECS:
         postPlans:    _safeJSON(rawPostPlans,   []),
         dailyItems:   _safeJSON(rawDailyItems,  []),
         videoLog:     _safeJSON(rawVideoLog,    []),
+        replicatorProjects:    _safeJSON(rawProjectsR,  []),
+        producerProjects:      _safeJSON(rawProjectsP,  []),
+        replicatorActiveProject: rawActiveR || null,
+        producerActiveProject:   rawActiveP || null,
+        replicatorStudio:      _safeJSON(rawStudioR,    []),
+        producerStudio:        _safeJSON(rawStudioP,    []),
       };
       const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
       const a = document.createElement('a');
@@ -14465,6 +14530,12 @@ TECHNICAL SPECS:
             await DB.set('sm_post_plans',  JSON.stringify(data.postPlans  || []));
             await DB.set('sm_daily_items', JSON.stringify(data.dailyItems || []));
             await DB.set('sm_video_log',   JSON.stringify(data.videoLog   || []));
+            if (data.replicatorProjects)    await DB.set('sm_replicator_projects',       JSON.stringify(data.replicatorProjects));
+            if (data.producerProjects)      await DB.set('sm_producer_projects',         JSON.stringify(data.producerProjects));
+            if (data.replicatorActiveProject) await DB.set('sm_replicator_active_project', data.replicatorActiveProject);
+            if (data.producerActiveProject)   await DB.set('sm_producer_active_project',   data.producerActiveProject);
+            if (data.replicatorStudio)      await DB.set('sm_replicator_studio_library', JSON.stringify(data.replicatorStudio));
+            if (data.producerStudio)        await DB.set('sm_producer_studio_library',   JSON.stringify(data.producerStudio));
             showToast('Import successful — reloading…', 'success');
             setTimeout(() => location.reload(), 1200);
           } catch (err2) { showToast('Import failed: ' + err2.message, 'error'); }
@@ -15685,4 +15756,4 @@ TECHNICAL SPECS:
 </div><!-- end userSettingsOverlay -->
 
 </body>
-</html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+</html>                                                                                                                                                                                                                                                                                                                                                                                                                           
