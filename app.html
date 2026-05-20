@@ -4994,7 +4994,11 @@
 
   function vsCalToggleDone(id, checked) {
     const item = (dailyItems || []).find(i => i.id === id);
-    if (item) { item.done = checked; saveDailyItems(); }
+    if (item) {
+      item.done = checked;
+      saveDailyItems();
+      if (_vsCalSelectedDate) vsCalRenderDayDetail(_vsCalSelectedDate);
+    }
   }
 
   function vsCalRemoveItem(id) {
@@ -8625,7 +8629,12 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-      const parsed = JSON.parse(raw);
+      let parsed;
+      try { parsed = JSON.parse(raw); } catch(_pe) {
+        showToast('NB prompt build failed — AI returned unexpected format. Try again.', 'error');
+        if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
+        return false;
+      }
       if (!parsed.instruction) {
         if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
         return false;
@@ -8789,10 +8798,10 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         ? 'Match the background and environment from the previous scenes exactly. Same lighting, same surface, same props — all locked in place.'
         : 'clean neutral background or lifestyle environment';
       const veoStarter = JSON.stringify({
-        action: `Character holds ${productDesc} toward camera, turns it to show the label, smiles directly at camera. Relaxed, confident product reveal.`,
+        action: `Character holds ${productDesc} perfectly still toward camera with label facing forward, does not turn or rotate the product. Smiles directly at camera with a confident, natural expression.`,
         speech: ctaSpeech,
         audio: audioDesc,
-        negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, rearranged props, moved objects, changed background, inconsistent set',
+        negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, rearranged props, moved objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words, product rotating, product turning',
         camera: 'static handheld, slight natural movement, medium shot — character and product both clearly visible, vertical 9:16',
         background: bgNote,
       }, null, 2);
@@ -8848,7 +8857,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       action: actionWithSpeech,
       speech: scriptSlice || '',
       audio: audioDesc,
-      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set',
+      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
     };
@@ -8923,7 +8932,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
         const data = await res.json().catch(() => ({}));
-        if (data.error) { showToast('Frame analysis error: ' + (data.error.message || data.error), 'error'); continue; }
+        if (data.error) { showToast('Frame analysis error: ' + (data.error.message || data.error), 'error'); skipped++; continue; }
         if (!res.ok) { throw new Error(data?.error?.message || 'API error ' + res.status); }
         let description = data.choices?.[0]?.message?.content?.trim() || '';
 
@@ -9731,10 +9740,10 @@ Return ONLY a valid JSON object with these fields:
 - speech: the exact script text, verbatim
 - starting_frame: describe the person's position, clothing, and pose only — do NOT describe props or background here
 - background: describe the exact background setting visible in the image (wall color, any art/decor, distance). End with: "Background is locked — do not alter, move, or add any elements."
-- foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). End with: "All props are locked in place — do not move, add, remove, or rearrange any object."
+- foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). Note any visible product labels or text and state they must remain legible and unchanged. End with: "All props are locked in place — do not move, add, remove, or rearrange any object. All product labels and text must remain sharp, legible, and identical throughout the clip."
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
-- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts".
+- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
 - IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT. Use explicit left/right anchoring so Veo 3 does not flip the composition.
 
 No markdown. Return only the JSON object.`
@@ -11981,7 +11990,7 @@ TECHNICAL SPECS:
     a.href     = url;
     a.download = `affiliateos_${safeName}_${Date.now()}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
   }
 
   function importProjectJSON(input) {
@@ -13355,6 +13364,10 @@ TECHNICAL SPECS:
       // Prefer display name from settings, fall back to email
       const _s = getUserSettings() || {};
       updateUserChip(_s.displayName || session.user.email);
+      // Track first-login date for trial countdown (14-day free trial)
+      if (!localStorage.getItem('aff_os_first_login')) {
+        localStorage.setItem('aff_os_first_login', String(Date.now()));
+      }
       // Listen for sign-out events (e.g. token expiry)
       _sb.auth.onAuthStateChange((event, newSession) => {
         if (event === 'SIGNED_OUT' && window.location.protocol !== 'file:') {
@@ -13844,9 +13857,7 @@ TECHNICAL SPECS:
     const planInfo   = PLAN_INFO[tier] || PLAN_INFO.free;
     const tierIdx    = PLAN_ORDER.indexOf(tier);
 
-    const manageBtnHtml = customerId
-      ? `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Manage Plan</button>`
-      : `<button disabled style="padding:8px 18px;border-radius:8px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-3);font-size:12px;font-weight:600;cursor:not-allowed;font-family:inherit;">Free Plan</button>`;
+    const manageBtnHtml = `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Manage Plan</button>`;
 
     const plansHtml = PLAN_ORDER.map((planKey, idx) => {
       const info       = PLAN_INFO[planKey];
@@ -13860,7 +13871,7 @@ TECHNICAL SPECS:
       if (isCurrent) {
         actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;">CURRENT</span>`;
       } else if (isUpgrade) {
-        actionHtml = `<button onclick="openUpgradeModal(${JSON.stringify(planKey)})" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
+        actionHtml = `<button onclick="openUpgradeModal('${planKey}')" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
       }
 
       const rec = planKey === 'pro' && tier === 'free'
@@ -14033,24 +14044,52 @@ TECHNICAL SPECS:
     }
   }
 
-  async function openBillingPortal() {
-    const customerId = window._stripeCustomerId;
-    if (!customerId) { showToast('No billing account found.', 'warning'); return; }
+  function openBillingPortal() {
+    const existing = document.getElementById('billingPortalModal');
+    if (existing) existing.remove();
+    const tier = window._stripeTier || 'free';
+    const planInfo = PLAN_INFO[tier] || PLAN_INFO.free;
 
-    showToast('Opening billing portal…', 'info', 2000);
-    try {
-      const res  = await fetch('/.netlify/functions/create-portal-session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerId }),
-      });
-      if (!res.ok) throw new Error(`Server error ${res.status}`);
-      const data = await res.json();
-      if (data.url) window.open(data.url, '_blank');
-      else showToast('Portal error: ' + (data.error || 'Unknown'), 'error');
-    } catch (err) {
-      showToast('Network error: ' + err.message, 'error');
-    }
+    const modal = document.createElement('div');
+    modal.id = 'billingPortalModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);padding:20px;';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:16px;padding:28px 28px 24px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(124,106,247,0.12);position:relative;">
+        <button onclick="document.getElementById('billingPortalModal').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:5px;">✕</button>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--grad-accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">💳</div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:var(--text-1);">Manage Subscription</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:1px;">Current plan: ${planInfo.label} — ${planInfo.price}</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Change or upgrade plan</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Select a plan from the Subscription Plans list below. Paid billing via Stripe is coming — for now, use a promo code or contact us.</div>
+          </div>
+
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Cancel subscription</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;margin-bottom:10px;">To cancel, email us with your account email and we'll process it within 24 hours. No questions asked.</div>
+            <a href="mailto:support@aiscaling.io?subject=Cancel%20Subscription&body=Please%20cancel%20my%20Affiliate%20OS%20subscription.%20My%20account%20email%20is%3A%20" style="display:inline-block;padding:8px 16px;border-radius:7px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);color:#f87171;font-size:11px;font-weight:700;text-decoration:none;cursor:pointer;">✉ Email to Cancel</a>
+          </div>
+
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Billing receipts & invoices</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;margin-bottom:10px;">Receipts are sent to your account email automatically by Stripe. For copies, email support.</div>
+            <a href="mailto:support@aiscaling.io?subject=Billing%20Receipt%20Request" style="display:inline-block;padding:8px 16px;border-radius:7px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-2);font-size:11px;font-weight:700;text-decoration:none;">✉ Request Receipt</a>
+          </div>
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;">
+          <button onclick="document.getElementById('billingPortalModal').remove()" style="padding:9px 20px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
   function updateClaudeBrowserDisplay() {
@@ -15534,6 +15573,7 @@ TECHNICAL SPECS:
           <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Permanently clear all local data and reset the app to its default state. This cannot be undone.</div>
           <button onclick="admReset()" style="padding:6px 14px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:inherit;">🗑 Reset All Data</button>
         </div>
+      </div><!-- end uset-tab-data -->
 
       <!-- ABOUT -->
       <div id="uset-tab-about" class="uset-tab-content">
@@ -15567,7 +15607,6 @@ TECHNICAL SPECS:
         </div>
       </div><!-- end uset-tab-about -->
 
-      </div><!-- end uset-tab-data (closed here for proper nesting) -->
     </div><!-- end settings content area -->
   </div><!-- end userSettingsPanel -->
 </div><!-- end userSettingsOverlay -->
