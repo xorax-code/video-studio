@@ -223,13 +223,20 @@
     color: #6ee7b7;
   }
   .seg-ta-prompt {
-    font-size:11.5px; min-height:54px;
+    font-size:11.5px; min-height:54px; max-height:180px;
+    overflow-y: auto;
     background: var(--surface);
     border: 1px solid var(--border-2);
     color: #b8b8d8;
     font-family: 'JetBrains Mono','Fira Code','Cascadia Code',monospace;
     letter-spacing: 0.01em;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(124,106,247,0.35) transparent;
   }
+  .seg-ta-prompt::-webkit-scrollbar { width: 4px; }
+  .seg-ta-prompt::-webkit-scrollbar-track { background: transparent; }
+  .seg-ta-prompt::-webkit-scrollbar-thumb { background: rgba(124,106,247,0.4); border-radius: 4px; }
+  .seg-ta-prompt::-webkit-scrollbar-thumb:hover { background: rgba(124,106,247,0.65); }
   /* Light mode overrides */
   html[data-theme="light"] .seg-ta-script  { color: var(--text-1); background: var(--surface); border-color: var(--border-2); }
   html[data-theme="light"] .seg-ta-visual  { color: #4a3a08; background: rgba(180,130,0,0.05); border-color: rgba(180,130,0,0.25); }
@@ -3243,6 +3250,38 @@
                 <button class="btn" id="clearAvatarImgBtn" onclick="clearAvatarImage()" style="width:100%;margin-top:2px;font-size:9px;padding:1px 0;display:none;">Clear</button>
               </div>
               <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
+            </div>
+            <!-- Voice & Accent — injected into every Veo 3 audio field -->
+            <div style="display:flex;flex-direction:column;gap:3px;">
+              <div style="font-size:9px;font-weight:700;letter-spacing:0.8px;color:rgba(167,139,250,0.85);text-transform:uppercase;">🎙 Voice &amp; Accent</div>
+              <div style="display:flex;gap:4px;">
+                <select id="avatarAccent" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— Accent (optional) —</option>
+                  <option value="neutral American accent">🇺🇸 American</option>
+                  <option value="soft Korean accent">🇰🇷 Korean</option>
+                  <option value="Filipino accent">🇵🇭 Filipino</option>
+                  <option value="British accent">🇬🇧 British</option>
+                  <option value="Australian accent">🇦🇺 Australian</option>
+                  <option value="Latin American accent">🌎 Latin American</option>
+                  <option value="Indian accent">🇮🇳 Indian</option>
+                  <option value="Chinese accent">🇨🇳 Chinese</option>
+                  <option value="Nigerian accent">🇳🇬 Nigerian</option>
+                  <option value="French accent">🇫🇷 French</option>
+                </select>
+                <select id="avatarVoiceTone" onchange="saveAvatarVoice()" style="flex:1;font-size:10px;padding:3px 5px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;">
+                  <option value="">— Tone (optional) —</option>
+                  <option value="warm and conversational female voice">👩 Warm / Female</option>
+                  <option value="warm and conversational male voice">👨 Warm / Male</option>
+                  <option value="energetic upbeat female voice">⚡ Energetic / Female</option>
+                  <option value="energetic upbeat male voice">⚡ Energetic / Male</option>
+                  <option value="calm authoritative female voice">🧘 Calm / Female</option>
+                  <option value="calm authoritative male voice">🧘 Calm / Male</option>
+                  <option value="soft hushed female voice">🤫 Hushed / Female</option>
+                  <option value="deep confident male voice">💪 Deep / Male</option>
+                </select>
+              </div>
+              <input id="avatarVoiceCustom" type="text" placeholder="Custom override (e.g. raspy female, fast-paced)" oninput="saveAvatarVoice()" style="font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;width:100%;">
+              <div id="avatarVoicePreview" style="font-size:9px;color:var(--accent-2);opacity:0.7;font-style:italic;min-height:12px;"></div>
             </div>
             <!-- Appearance Inventory — collapsible, starts closed -->
             <div style="display:flex;flex-direction:column;gap:3px;">
@@ -8097,6 +8136,12 @@ RULES — read carefully:
     const errors = [];
     if (!obj.speech || !String(obj.speech).trim()) errors.push('speech field is empty');
     if (!obj.action || !String(obj.action).trim()) errors.push('action field is empty');
+    // Warn if "multiple people" is in negative_prompt but scene describes two people
+    const negP = String(obj.negative_prompt || '').toLowerCase();
+    const combined = (obj.action || '') + ' ' + (obj.speech || '');
+    if (negP.includes('multiple people') && detectsTwoPeople(combined)) {
+      errors.push('"multiple people" in negative_prompt will flip or drop one person — Regen to fix');
+    }
     return { ok: errors.length === 0, errors };
   }
 
@@ -8533,10 +8578,20 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
 
   // --- Read the voice style set by the user ---
   function getVoiceStyle() {
-    return (document.getElementById('studioVoice')?.value || localStorage.getItem('vs_voice_style') || '').trim();
+    // Avatar-level voice takes priority; fall back to global studio voice field
+    const avatarVoice = buildAvatarVoiceString?.() || localStorage.getItem('vs_avatar_voice') || '';
+    const studioVoice = (document.getElementById('studioVoice')?.value || localStorage.getItem('vs_voice_style') || '').trim();
+    return avatarVoice || studioVoice;
   }
 
   // --- Build Veo 3 prompt for one segment ---
+  // Detects if a script/action describes a two-person scene
+  function detectsTwoPeople(text) {
+    if (!text) return false;
+    const t = text.toLowerCase();
+    return /another person|the other person|points? (at|toward|to) (someone|a person|them|their|his|her)|standing next to|beside (them|a person|someone)|two people|both people|person on the (left|right)|the (man|woman|guy|girl) (on the|to the)|pointing (at|toward|near)|extends?.*(hand|finger).*(toward|at|near|to)|finger (near|at|toward) (their|his|her|the)/.test(t);
+  }
+
   function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
     const seg = segments[i];
     const analyzedAction = sanitizeDirections(seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures');
@@ -8548,11 +8603,17 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const audioDesc = voiceStyle
       ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
       : 'natural ambient sound, clear voice, no background music';
+    // If the script or action describes a two-person scene, remove "multiple people"
+    // from the negative_prompt — it will cause Veo 3 to flip or drop one person
+    const twoPersonScene = detectsTwoPeople(scriptSlice) || detectsTwoPeople(analyzedAction);
+    const negativePrompt = twoPersonScene
+      ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, flipped composition, mirrored subjects, solo person, disappeared person'
+      : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions';
     const obj = {
       action: actionWithSpeech,
       speech: scriptSlice || '',
       audio: audioDesc,
-      negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions',
+      negative_prompt: negativePrompt,
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
     };
@@ -9438,7 +9499,8 @@ Return ONLY a valid JSON object with these fields:
 - foreground_props: list any objects visible on the surface in front of the presenter
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
-- negative_prompt: "cuts, transitions, text overlays, subtitles, watermarks, jump cuts, multiple people, AI artifacts"
+- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts". If single person, use "multiple people, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts".
+- IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT (e.g. "the woman on the left points toward the man on the right"). Use explicit left/right anchoring so Veo 3 does not flip the composition.
 
 No markdown. Return only the JSON object.`
               },
@@ -11078,11 +11140,33 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
   }
 
 
+  function buildAvatarVoiceString() {
+    const custom = (document.getElementById('avatarVoiceCustom')?.value || '').trim();
+    if (custom) return custom;
+    const tone   = (document.getElementById('avatarVoiceTone')?.value  || '').trim();
+    const accent = (document.getElementById('avatarAccent')?.value      || '').trim();
+    return [tone, accent].filter(Boolean).join(', ');
+  }
+
+  function saveAvatarVoice() {
+    const v = buildAvatarVoiceString();
+    localStorage.setItem('vs_avatar_voice', v);
+    const preview = document.getElementById('avatarVoicePreview');
+    if (preview) preview.textContent = v ? '🎙 ' + v : '';
+  }
+
   function saveAvatarProfile() {
     const descEl = document.getElementById('avatarDesc');
     if (!descEl) return;
     const desc = descEl.value.trim();
     DB.set('sm_avatar_profile', desc).catch(err => showToast('Save failed: ' + err.message, 'error'));
+    saveAvatarVoice();
+    const voiceData = {
+      accent: document.getElementById('avatarAccent')?.value || '',
+      tone:   document.getElementById('avatarVoiceTone')?.value || '',
+      custom: document.getElementById('avatarVoiceCustom')?.value || '',
+    };
+    localStorage.setItem('vs_avatar_voice_config', JSON.stringify(voiceData));
     const note = document.getElementById('avatarSavedNote');
     if (note) { note.style.display = 'block'; setTimeout(() => note.style.display = 'none', 2500); }
   }
@@ -11092,6 +11176,16 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       const el = document.getElementById('avatarDesc');
       if (saved && el) el.value = saved;
     }).catch(err => console.error('loadAvatarProfile:', err));
+    // Restore voice config
+    try {
+      const vc = JSON.parse(localStorage.getItem('vs_avatar_voice_config') || 'null');
+      if (vc) {
+        if (document.getElementById('avatarAccent'))      document.getElementById('avatarAccent').value = vc.accent || '';
+        if (document.getElementById('avatarVoiceTone'))   document.getElementById('avatarVoiceTone').value = vc.tone || '';
+        if (document.getElementById('avatarVoiceCustom')) document.getElementById('avatarVoiceCustom').value = vc.custom || '';
+        saveAvatarVoice();
+      }
+    } catch(e) {}
   }
 
   let studioSceneCount = 0;
