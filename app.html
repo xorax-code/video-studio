@@ -8765,13 +8765,18 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       const surfaceNegPrompt = clearSurface
         ? 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, other objects on surface, condiments, ingredients, bowls, utensils, props on table, text overlays, watermarks, blurry product'
         : 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product';
-      const nbObj = {
+      const nbBase = {
         instruction: `Using the exact person from Photo 1 and the product from Photo 2 (${productDesc}): composite the person holding the product up toward the camera at chest-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile. Keep the person's exact face, skin tone, clothing, hair, and body from Photo 1 unchanged.${surfaceInstruction}`,
         person_to_preserve: 'The person in Photo 1 — face, body, clothing, hair, skin tone must remain 100% identical.',
         product_placement: `${productDesc} — held at chest-to-shoulder height, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
-        ${clearSurface ? "surface: 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character and the product.'," : "surface: 'Keep all existing props and objects from Photo 1 intact.',"}
         negative_prompt: surfaceNegPrompt,
       };
+      if (clearSurface) {
+        nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character and the product.';
+      } else {
+        nbBase.surface = 'Keep all existing props and objects from Photo 1 intact.';
+      }
+      const nbObj = nbBase;
       const nbPrompt = JSON.stringify(nbObj, null, 2);
 
       // ── Veo 3 starter prompt — will be refined via "Build Veo3 from NB image" ──
@@ -8790,7 +8795,6 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, rearranged props, moved objects, changed background, inconsistent set',
         camera: 'static handheld, slight natural movement, medium shot — character and product both clearly visible, vertical 9:16',
         background: bgNote,
-        _note: 'Run NB Pro composite first, then use "Build Veo 3 from NB image" to replace this with the real prompt.',
       }, null, 2);
 
       // Append segment
@@ -13997,7 +14001,6 @@ TECHNICAL SPECS:
     try { localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code })); } catch {}
     window._activePromo = promoData;
     if (def.type === 'unlock') {
-      window._stripeBaseTier = def.tier;
       window._stripeTier = def.tier;
       applyPromoOverride();
     }
