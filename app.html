@@ -3635,6 +3635,43 @@
               Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
             </div>
           </div>
+
+          <!-- ── Product CTA Segment builder ─────────────────────── -->
+          <div id="ctaPanel" class="replicator-only" style="flex-shrink:0;border-top:1px solid var(--border);padding:6px 10px 8px;">
+            <div style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;" onclick="_toggleCtaPanel()">
+              <span style="font-size:13px;">🛍</span>
+              <span style="font-size:11px;font-weight:700;color:var(--text-2);">Product CTA Segment</span>
+              <span style="font-size:10px;color:var(--text-3);">— closing scene with character holding your product</span>
+              <span id="ctaPanelChevron" style="margin-left:auto;font-size:11px;color:var(--text-3);transition:transform 0.2s;">▾</span>
+            </div>
+            <div id="ctaPanelBody" style="display:none;flex-direction:column;gap:8px;margin-top:8px;">
+              <div style="display:flex;gap:8px;align-items:flex-start;">
+                <div id="ctaProductPhotoArea" onclick="document.getElementById('ctaProductPhotoInput').click()"
+                  style="width:74px;height:74px;flex-shrink:0;border:1.5px dashed var(--border-2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:var(--surface-2);overflow:hidden;position:relative;"
+                  title="Upload a photo of your product">
+                  <img id="ctaProductPhotoPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:7px;">
+                  <div id="ctaProductPhotoPlaceholder" style="text-align:center;font-size:9.5px;color:var(--text-3);line-height:1.5;">
+                    <div style="font-size:20px;margin-bottom:2px;">📦</div>Product<br>photo
+                  </div>
+                </div>
+                <input id="ctaProductPhotoInput" type="file" accept="image/*" style="display:none;" onchange="_loadCtaProductPhoto(this)">
+                <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
+                  <input id="ctaProductNameInput" type="text" placeholder="Product name (e.g. HoneyGlow Serum)"
+                    style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11.5px;font-family:inherit;outline:none;"
+                    oninput="_refreshCtaPlaceholder()">
+                  <div style="font-size:9px;font-weight:700;letter-spacing:0.06em;color:var(--text-3);text-transform:uppercase;">CTA Speech</div>
+                  <textarea id="ctaSpeechInput" rows="3"
+                    style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11px;font-family:inherit;outline:none;resize:vertical;min-height:52px;max-height:110px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(124,106,247,0.35) transparent;"
+                    placeholder="If you want something easier and more affordable — try this product."></textarea>
+                </div>
+              </div>
+              <button id="ctaGenerateBtn" onclick="addCtaSegment()"
+                style="width:100%;padding:9px 0;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+                🛍 Add Product CTA Segment
+              </button>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -8226,7 +8263,7 @@ RULES — read carefully:
         <!-- Card header: seg# + time badge + done badge + remove -->
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
           <span style="font-size:12px;font-weight:800;color:${seg.done ? '#4ade80' : 'var(--accent-2)'};letter-spacing:-0.3px;">Seg ${i+1}</span>
-          <span style="font-size:10px;color:var(--text-3);font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:0.3px;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</span>
+          ${seg.isCTA ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;letter-spacing:0.04em;">🛍 CTA</span>` : `<span style="font-size:10px;color:var(--text-3);font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:0.3px;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</span>`}
           ${seg.done ? `<span class="scene-done-badge" style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>` : `<span class="scene-done-badge" style="display:none;font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>`}
           <button onclick="removeSegment(${i})" style="margin-left:auto;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">✕</button>
         </div>
@@ -8250,12 +8287,12 @@ RULES — read carefully:
           <!-- Click-to-target thumbnail: click directly on the person to pin them -->
           <div style="position:relative;display:block;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
-              style="cursor:crosshair;"
-              onclick="setTargetPin(${i}, event)"
-              title="Click on a person to mark them as the NB swap target">
+              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};"
+              ${seg.isCTA ? '' : `onclick="setTargetPin(${i}, event)"`}
+              title="${seg.isCTA ? 'Product photo' : 'Click on a person to mark them as the NB swap target'}">
             ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
           </div>
-          <div style="display:flex;gap:3px;margin-top:4px;align-items:center;">
+          ${seg.isCTA ? '' : `<div style="display:flex;gap:3px;margin-top:4px;align-items:center;">
             <button onclick="downloadFrame(${i})" class="seg-dl-btn" style="flex:1;margin-top:0;">⬇ Frame</button>
             <button onclick="openLightbox(segments[${i}].frameDataUrl)" title="View full frame" style="font-size:9px;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text-3);cursor:pointer;">🔍</button>
             ${seg.targetX != null
@@ -8267,7 +8304,7 @@ RULES — read carefully:
             <span style="font-size:8px;color:var(--text-3);opacity:0.6;flex-shrink:0;">Gender:</span>
             <button onclick="setTargetGender(${i},'woman')" title="Target is a woman" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='woman'?'rgba(244,114,182,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='woman'?'rgba(244,114,182,0.12)':'transparent'};color:${seg.targetGender==='woman'?'#f472b6':'var(--text-3)'};">👩 Woman</button>
             <button onclick="setTargetGender(${i},'man')" title="Target is a man" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='man'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='man'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetGender==='man'?'#60a5fa':'var(--text-3)'};">👨 Man</button>
-          </div>` : ''}` : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
+          </div>` : ''}`}` : `<div class="seg-empty-frame"><span style="font-size:28px;opacity:0.22;">🎞</span></div>`}
         </div>
         `}
 
@@ -8605,7 +8642,144 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     return /another person|the other person|points? (at|toward|to) (someone|a person|them|their|his|her)|standing next to|beside (them|a person|someone)|two people|both people|person on the (left|right)|the (man|woman|guy|girl) (on the|to the)|pointing (at|toward|near)|extends?.*(hand|finger).*(toward|at|near|to)|finger (near|at|toward) (their|his|her|the)/.test(t);
   }
 
-  function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
+  // ── Product CTA Segment helpers ──────────────────────────────
+
+  function _toggleCtaPanel() {
+    const body    = document.getElementById('ctaPanelBody');
+    const chevron = document.getElementById('ctaPanelChevron');
+    if (!body) return;
+    const isOpen = body.style.display === 'flex';
+    body.style.display = isOpen ? 'none' : 'flex';
+    body.style.flexDirection = 'column';
+    body.style.gap = '8px';
+    if (chevron) chevron.style.transform = isOpen ? '' : 'rotate(180deg)';
+    if (!isOpen) {
+      const nameIn = document.getElementById('ctaProductNameInput');
+      if (nameIn && !nameIn.value.trim())
+        nameIn.value = document.getElementById('bkProductName')?.value.trim() || '';
+      _refreshCtaPlaceholder();
+    }
+  }
+
+  function _refreshCtaPlaceholder() {
+    const name = (document.getElementById('ctaProductNameInput')?.value || '').trim();
+    const ta   = document.getElementById('ctaSpeechInput');
+    if (!ta) return;
+    ta.placeholder = name
+      ? `If you want something easier, more efficient, and more affordable — try ${name}.`
+      : 'If you want something easier and more affordable — try this product.';
+  }
+
+  function _loadCtaProductPhoto(input) {
+    const file = input?.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      window._ctaProductDataUrl = e.target.result;
+      const preview = document.getElementById('ctaProductPhotoPreview');
+      const ph      = document.getElementById('ctaProductPhotoPlaceholder');
+      if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+      if (ph) ph.style.display = 'none';
+    };
+    reader.readAsDataURL(file);
+  }
+
+  async function addCtaSegment() {
+    const productName    = (document.getElementById('ctaProductNameInput')?.value || '').trim()
+                        || getBrandKit()?.productName || 'the product';
+    const ctaSpeech      = (document.getElementById('ctaSpeechInput')?.value || '').trim();
+    const productDataUrl = window._ctaProductDataUrl || null;
+
+    if (!ctaSpeech) { showToast('Add a CTA speech line first.', 'warning'); return; }
+    if (!productDataUrl) { showToast('Upload a product photo first — NB needs it to composite the character holding it.', 'warning'); return; }
+
+    const btn = document.getElementById('ctaGenerateBtn');
+    if (btn) { btn.textContent = '⏳ Building NB prompt…'; btn.disabled = true; }
+
+    try {
+      // Describe product visually via GPT-4o vision (for NB instruction clarity)
+      let productDesc = productName;
+      if (getApiKey()) {
+        try {
+          const r = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getApiKey() },
+            body: JSON.stringify({
+              model: 'gpt-4o', max_tokens: 60,
+              messages: [{ role: 'user', content: [
+                { type: 'text', text: 'Describe this product in 12 words or fewer — shape, color, size, packaging only. No preamble, no punctuation.' },
+                { type: 'image_url', image_url: { url: productDataUrl, detail: 'low' } }
+              ]}]
+            })
+          });
+          if (r.ok) {
+            const d = await r.json();
+            const vis = d.choices?.[0]?.message?.content?.trim();
+            if (vis) productDesc = vis;
+          }
+        } catch { /* fallback to name */ }
+      }
+
+      // ── Build NB Pro prompt: character holds product ─────────────────────
+      // Photo 1 = character/avatar reference  |  Photo 2 = product photo
+      const nbObj = {
+        instruction: `Using the exact person from Photo 1 and the product from Photo 2 (${productDesc}): composite the person holding the product up toward the camera at chest-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile. Keep the person's exact face, skin tone, clothing, hair, and body from Photo 1 unchanged. Preserve the background, lighting, and all props from Photo 1 exactly as they appear.`,
+        person_to_preserve: 'The person in Photo 1 — face, body, clothing, hair, skin tone must remain 100% identical.',
+        product_placement: `${productDesc} — held at chest-to-shoulder height, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
+        negative_prompt: 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product',
+      };
+      const nbPrompt = JSON.stringify(nbObj, null, 2);
+
+      // ── Veo 3 starter prompt — will be refined via "Build Veo3 from NB image" ──
+      // Pre-load the CTA speech so it carries through when user regenerates from NB composite
+      const voiceStyle = getVoiceStyle();
+      const audioDesc  = voiceStyle
+        ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
+        : 'natural ambient sound, clear confident voice, no background music';
+      const bgNote = segments.length > 0
+        ? 'Match the background and environment from the previous scenes exactly. Same lighting, same surface, same props — all locked in place.'
+        : 'clean neutral background or lifestyle environment';
+      const veoStarter = JSON.stringify({
+        action: `Character holds ${productDesc} toward camera, turns it to show the label, smiles directly at camera. Relaxed, confident product reveal.`,
+        speech: ctaSpeech,
+        audio: audioDesc,
+        negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, rearranged props, moved objects, changed background, inconsistent set',
+        camera: 'static handheld, slight natural movement, medium shot — character and product both clearly visible, vertical 9:16',
+        background: bgNote,
+        _note: 'Run NB Pro composite first, then use "Build Veo 3 from NB image" to replace this with the real prompt.',
+      }, null, 2);
+
+      // Append segment
+      const lastEnd = segments.length > 0 ? (segments[segments.length - 1].endTime || 0) : 0;
+      segments.push({
+        startTime: lastEnd,
+        endTime: lastEnd + 8,
+        frameDataUrl: productDataUrl,   // product photo as placeholder thumbnail
+        script: ctaSpeech,              // CTA speech — carries into Veo3 via seg.script
+        action: `Hold ${productDesc} toward camera, display label, smile at camera.`,
+        nbPrompt,                       // NB prompt: character holds product
+        veoPrompt: veoStarter,          // starter — replaced after NB composite
+        isCTA: true,
+        ctaProductName: productName,
+        done: false,
+      });
+
+      debounceSave();
+      renderSegments();
+      setTimeout(() => {
+        const c = document.getElementById('segmentsContainer');
+        if (c) c.scrollTo({ left: c.scrollWidth, behavior: 'smooth' });
+      }, 180);
+      showToast('🛍 CTA segment added — scroll right to see it!', 'success', 4000);
+
+    } catch (err) {
+      showToast('Error building CTA: ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.textContent = '🛍 Add Product CTA Segment'; btn.disabled = false; }
+    }
+  }
+
+    function buildSegmentVeo3Prompt(i, startTime, endTime, scriptSlice, setting, productName, bgDataUrl) {
     const seg = segments[i];
     const analyzedAction = sanitizeDirections(seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures');
     const bgNote = bgDataUrl
@@ -13637,12 +13811,8 @@ TECHNICAL SPECS:
       let actionHtml = '';
       if (isCurrent) {
         actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;">CURRENT</span>`;
-      } else if (isAgency) {
-        actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(124,106,247,0.12);color:var(--accent-2);">COMING SOON</span>`;
-      } else if (isUpgrade && STRIPE_PRICES[planKey] && !STRIPE_PRICES[planKey].includes('_HERE')) {
-        actionHtml = `<button onclick="startCheckout(${JSON.stringify(planKey)})" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
       } else if (isUpgrade) {
-        actionHtml = `<button disabled title="Price ID not configured yet" style="padding:7px 16px;border-radius:7px;background:var(--surface-3);border:1px solid var(--border);color:var(--text-3);font-size:11.5px;font-weight:600;cursor:not-allowed;font-family:inherit;">Upgrade</button>`;
+        actionHtml = `<button onclick="openUpgradeModal(${JSON.stringify(planKey)})" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
       }
 
       const rec = planKey === 'pro' && tier === 'free'
@@ -13719,18 +13889,88 @@ TECHNICAL SPECS:
       </div>`;
   }
 
+  function openUpgradeModal(planKey) {
+    const info = PLAN_INFO[planKey] || { label: planKey, price: '', desc: '' };
+    const existing = document.getElementById('upgradeModal');
+    if (existing) existing.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'upgradeModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);padding:20px;';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border-2);border-radius:16px;padding:28px 28px 24px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(124,106,247,0.12);position:relative;">
+        <button onclick="document.getElementById('upgradeModal').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:5px;">✕</button>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:var(--grad-accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">⚡</div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:var(--text-1);">Upgrade to ${info.label}</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:1px;">${info.price} · ${info.desc}</div>
+          </div>
+        </div>
+
+        <div style="background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:10px;padding:14px 16px;margin-bottom:18px;">
+          <div style="font-size:11px;font-weight:700;color:var(--accent-2);margin-bottom:4px;letter-spacing:0.04em;">🔓 HAVE A PROMO CODE?</div>
+          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Enter a code below to unlock access instantly — no payment needed.</div>
+          <div style="display:flex;gap:8px;">
+            <input id="upgradeModalPromoInput" type="text" placeholder="Enter promo code"
+              style="flex:1;padding:9px 12px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:12px;font-family:inherit;letter-spacing:0.5px;text-transform:uppercase;outline:none;"
+              onkeydown="if(event.key==='Enter')_submitUpgradePromo()">
+            <button onclick="_submitUpgradePromo()" style="padding:9px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
+          </div>
+          <div id="upgradeModalPromoMsg" style="font-size:11px;margin-top:8px;display:none;"></div>
+        </div>
+
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+          <span style="font-size:18px;flex-shrink:0;">🚀</span>
+          <div>
+            <div style="font-size:11.5px;font-weight:700;color:var(--text-1);margin-bottom:2px;">Stripe checkout launching soon</div>
+            <div style="font-size:10.5px;color:var(--text-3);">Credit card billing is coming shortly. In the meantime, reach out for early access.</div>
+          </div>
+        </div>
+
+        <a href="mailto:support@aiscaling.io?subject=Upgrade%20to%20${encodeURIComponent(info.label)}%20Plan&body=Hi%2C%20I'd%20like%20to%20upgrade%20to%20the%20${encodeURIComponent(info.label)}%20plan%20(${encodeURIComponent(info.price)})." style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    setTimeout(() => document.getElementById('upgradeModalPromoInput')?.focus(), 80);
+  }
+
+  function _submitUpgradePromo() {
+    const input = document.getElementById('upgradeModalPromoInput');
+    const msg   = document.getElementById('upgradeModalPromoMsg');
+    if (!input) return;
+    const code = input.value.trim().toUpperCase();
+    if (!code) { if (msg) { msg.style.display='block'; msg.style.color='var(--warning)'; msg.textContent='Please enter a promo code.'; } return; }
+    const def = PROMO_CODES[code];
+    if (!def) {
+      if (msg) { msg.style.display='block'; msg.style.color='var(--danger)'; msg.textContent='Invalid promo code. Please try again.'; }
+      return;
+    }
+    // Apply promo
+    const promoData = { code, ...def };
+    try { localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code })); } catch {}
+    window._activePromo = promoData;
+    if (def.type === 'unlock') {
+      window._stripeBaseTier = def.tier;
+      window._stripeTier = def.tier;
+      applyPromoOverride();
+    }
+    document.getElementById('upgradeModal')?.remove();
+    showToast('🎉 ' + def.label + ' — activated!', 'success', 4000);
+    renderBillingTab();
+  }
+
   async function startCheckout(planKey) {
+    // Legacy — kept for when Stripe functions are deployed
     const priceId = STRIPE_PRICES[planKey];
     if (!priceId || priceId.includes('_HERE')) {
-      showToast('Stripe price IDs not configured yet — see STRIPE_PRICES in app.html', 'warning', 5000);
+      openUpgradeModal(planKey);
       return;
     }
     const { data: { session } } = await _sb.auth.getSession().catch(() => ({ data: { session: null } }));
     if (!session) { showToast('Please sign in first.', 'warning'); return; }
-
-    const btn = document.querySelector(`[data-plan-key="${planKey}"]`) || document.querySelector(`[onclick="startCheckout('${planKey}')"]`);
-    if (btn) { btn.textContent = 'Loading…'; btn.disabled = true; }
-
     try {
       const res  = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
@@ -13739,15 +13979,10 @@ TECHNICAL SPECS:
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        showToast('Checkout error: ' + (data.error || 'Unknown error'), 'error', 5000);
-        if (btn) { btn.textContent = 'Upgrade'; btn.disabled = false; }
-      }
+      if (data.url) { window.location.href = data.url; }
+      else { showToast('Checkout error: ' + (data.error || 'Unknown error'), 'error', 5000); }
     } catch (err) {
       showToast('Network error: ' + err.message, 'error');
-      if (btn) { btn.textContent = 'Upgrade'; btn.disabled = false; }
     }
   }
 
