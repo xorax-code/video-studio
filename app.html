@@ -3391,6 +3391,50 @@
           <div class="vs-panel-resize-handle" onmousedown="vsStartPanelResize(event,'vsPanelScript')"></div>
         </div>
 
+        <!-- Product CTA Segment — replicator only -->
+        <div id="ctaPanel" class="vs-panel replicator-only" style="flex-shrink:0;" data-collapsed="1">
+          <div class="vs-panel-header collapsible" style="padding:5px 10px;" onclick="vsPanelToggle(this); _onCtaPanelToggle(this)">
+            <span>🛍 Product CTA Segment</span>
+            <span class="vsp-arrow" style="transform:rotate(-90deg)">▾</span>
+          </div>
+          <div id="ctaPanelBody" class="vs-panel-body" style="padding:8px;gap:8px;display:none;">
+            <div style="font-size:10px;color:var(--text-3);line-height:1.5;">Closing scene — character holds your product. Builds an NB Pro composite first, then use it as the Veo 3 start frame.</div>
+            <div style="display:flex;gap:8px;align-items:flex-start;">
+              <div id="ctaProductPhotoArea" onclick="document.getElementById('ctaProductPhotoInput').click()"
+                style="width:74px;height:74px;flex-shrink:0;border:1.5px dashed var(--border-2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:var(--surface-2);overflow:hidden;position:relative;"
+                title="Upload a photo of your product">
+                <img id="ctaProductPhotoPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:7px;">
+                <div id="ctaProductPhotoPlaceholder" style="text-align:center;font-size:9.5px;color:var(--text-3);line-height:1.5;">
+                  <div style="font-size:20px;margin-bottom:2px;">📦</div>Product<br>photo
+                </div>
+              </div>
+              <input id="ctaProductPhotoInput" type="file" accept="image/*" style="display:none;" onchange="_loadCtaProductPhoto(this)">
+              <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
+                <input id="ctaProductNameInput" type="text" placeholder="Product name (e.g. HoneyGlow Serum)"
+                  style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11.5px;font-family:inherit;outline:none;"
+                  oninput="_refreshCtaPlaceholder(); _saveCtaState()">
+                <div style="font-size:9px;font-weight:700;letter-spacing:0.06em;color:var(--text-3);text-transform:uppercase;">CTA Speech</div>
+                <textarea id="ctaSpeechInput" rows="3"
+                  style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11px;font-family:inherit;outline:none;resize:vertical;min-height:52px;max-height:110px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(124,106,247,0.35) transparent;"
+                  placeholder="If you want something easier and more affordable — try this product."
+                  oninput="_saveCtaState()"></textarea>
+              </div>
+            </div>
+            <!-- Clear surface option -->
+            <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+              <input type="checkbox" id="ctaClearSurface" style="margin-top:2px;accent-color:var(--accent);flex-shrink:0;">
+              <div>
+                <div style="font-size:11.5px;font-weight:700;color:var(--text-2);">🧹 Clear the surface</div>
+                <div style="font-size:10.5px;color:var(--text-3);margin-top:2px;line-height:1.5;">Remove all props and objects from the surface so only the character and product are shown.</div>
+              </div>
+            </label>
+            <button id="ctaGenerateBtn" onclick="addCtaSegment()"
+              style="width:100%;padding:9px 0;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
+              🛍 Add Product CTA Segment
+            </button>
+          </div>
+        </div>
+
         <!-- Video Settings — producer only -->
         <div class="vs-panel producer-only" style="flex-shrink:0;">
           <div class="vs-panel-header collapsible" onclick="vsPanelToggle(this)">
@@ -3636,49 +3680,6 @@
             </div>
           </div>
 
-          <!-- ── Product CTA Segment builder ─────────────────────── -->
-          <div id="ctaPanel" class="replicator-only" style="flex-shrink:0;border-top:1px solid var(--border);padding:6px 10px 8px;">
-            <div style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;" onclick="_toggleCtaPanel()">
-              <span style="font-size:13px;">🛍</span>
-              <span style="font-size:11px;font-weight:700;color:var(--text-2);">Product CTA Segment</span>
-              <span style="font-size:10px;color:var(--text-3);">— closing scene with character holding your product</span>
-              <span id="ctaPanelChevron" style="margin-left:auto;font-size:11px;color:var(--text-3);transition:transform 0.2s;">▾</span>
-            </div>
-            <div id="ctaPanelBody" style="display:none;flex-direction:column;gap:8px;margin-top:8px;">
-              <div style="display:flex;gap:8px;align-items:flex-start;">
-                <div id="ctaProductPhotoArea" onclick="document.getElementById('ctaProductPhotoInput').click()"
-                  style="width:74px;height:74px;flex-shrink:0;border:1.5px dashed var(--border-2);border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:var(--surface-2);overflow:hidden;position:relative;"
-                  title="Upload a photo of your product">
-                  <img id="ctaProductPhotoPreview" style="display:none;width:100%;height:100%;object-fit:cover;border-radius:7px;">
-                  <div id="ctaProductPhotoPlaceholder" style="text-align:center;font-size:9.5px;color:var(--text-3);line-height:1.5;">
-                    <div style="font-size:20px;margin-bottom:2px;">📦</div>Product<br>photo
-                  </div>
-                </div>
-                <input id="ctaProductPhotoInput" type="file" accept="image/*" style="display:none;" onchange="_loadCtaProductPhoto(this)">
-                <div style="flex:1;display:flex;flex-direction:column;gap:5px;">
-                  <input id="ctaProductNameInput" type="text" placeholder="Product name (e.g. HoneyGlow Serum)"
-                    style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11.5px;font-family:inherit;outline:none;"
-                    oninput="_refreshCtaPlaceholder()">
-                  <div style="font-size:9px;font-weight:700;letter-spacing:0.06em;color:var(--text-3);text-transform:uppercase;">CTA Speech</div>
-                  <textarea id="ctaSpeechInput" rows="3"
-                    style="width:100%;box-sizing:border-box;padding:7px 10px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:11px;font-family:inherit;outline:none;resize:vertical;min-height:52px;max-height:110px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(124,106,247,0.35) transparent;"
-                    placeholder="If you want something easier and more affordable — try this product."></textarea>
-                </div>
-              </div>
-              <!-- Clear surface option -->
-              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-                <input type="checkbox" id="ctaClearSurface" style="margin-top:2px;accent-color:var(--accent);flex-shrink:0;">
-                <div>
-                  <div style="font-size:11.5px;font-weight:700;color:var(--text-2);">🧹 Clear the surface</div>
-                  <div style="font-size:10.5px;color:var(--text-3);margin-top:2px;line-height:1.5;">Remove all other objects from the table or surface (condiments, ingredients, props, bowls, etc.) so only the character and product are shown.</div>
-                </div>
-              </label>
-              <button id="ctaGenerateBtn" onclick="addCtaSegment()"
-                style="width:100%;padding:9px 0;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
-                🛍 Add Product CTA Segment
-              </button>
-            </div>
-          </div>
 
         </div>
 
@@ -8720,13 +8721,49 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     if (!file) return;
     const reader = new FileReader();
     reader.onload = e => {
-      window._ctaProductDataUrl = e.target.result;
+      const dataUrl = e.target.result;
+      window._ctaProductDataUrl = dataUrl;
       const preview = document.getElementById('ctaProductPhotoPreview');
       const ph      = document.getElementById('ctaProductPhotoPlaceholder');
-      if (preview) { preview.src = e.target.result; preview.style.display = 'block'; }
+      if (preview) { preview.src = dataUrl; preview.style.display = 'block'; }
       if (ph) ph.style.display = 'none';
+      // Save photo to localStorage (only if under 1.5MB base64)
+      try {
+        if (dataUrl.length < 1572864) localStorage.setItem('cta_product_photo', dataUrl);
+        else localStorage.removeItem('cta_product_photo'); // too large — skip
+      } catch {}
+      _saveCtaState();
     };
     reader.readAsDataURL(file);
+  }
+
+  function _saveCtaState() {
+    try {
+      const name   = document.getElementById('ctaProductNameInput')?.value || '';
+      const speech = document.getElementById('ctaSpeechInput')?.value || '';
+      localStorage.setItem('cta_product_name', name);
+      localStorage.setItem('cta_speech', speech);
+    } catch {}
+  }
+
+  function _restoreCtaState() {
+    try {
+      const name   = localStorage.getItem('cta_product_name') || '';
+      const speech = localStorage.getItem('cta_speech') || '';
+      const photo  = localStorage.getItem('cta_product_photo') || '';
+      const nameEl   = document.getElementById('ctaProductNameInput');
+      const speechEl = document.getElementById('ctaSpeechInput');
+      const preview  = document.getElementById('ctaProductPhotoPreview');
+      const ph       = document.getElementById('ctaProductPhotoPlaceholder');
+      if (nameEl && name)   nameEl.value = name;
+      if (speechEl && speech) speechEl.value = speech;
+      if (photo && preview) {
+        window._ctaProductDataUrl = photo;
+        preview.src = photo;
+        preview.style.display = 'block';
+        if (ph) ph.style.display = 'none';
+      }
+    } catch {}
   }
 
   async function addCtaSegment() {
@@ -8775,15 +8812,16 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         ? 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, other objects on surface, condiments, ingredients, bowls, utensils, props on table, text overlays, watermarks, blurry product'
         : 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product';
       const nbBase = {
-        instruction: `Using the exact person from Photo 1 and the product from Photo 2 (${productDesc}): composite the person holding the product up toward the camera at chest-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile. Keep the person's exact face, skin tone, clothing, hair, and body from Photo 1 unchanged.${surfaceInstruction}`,
-        person_to_preserve: 'The person in Photo 1 — face, body, clothing, hair, skin tone must remain 100% identical.',
-        product_placement: `${productDesc} — held at chest-to-shoulder height, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
+        instruction: `Photo 1 is the PRODUCT (${productDesc}). Photo 2 is the PERSON/CHARACTER. Keep the person from Photo 2 completely unchanged — same face, skin tone, clothing, hair, and body. Composite the person holding the product from Photo 1 up toward the camera at chest-to-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile.${surfaceInstruction}`,
+        photo_1_is: `PRODUCT — ${productDesc}. Do not alter or remove it.`,
+        photo_2_is: 'PERSON/CHARACTER — preserve their face, body, clothing, hair, and skin tone 100% identically. Do not change anything about them.',
+        product_placement: `${productDesc} from Photo 1 — held at chest-to-shoulder height by the person from Photo 2, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
         negative_prompt: surfaceNegPrompt,
       };
       if (clearSurface) {
-        nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character and the product.';
+        nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character (from Photo 2) and the product (from Photo 1).';
       } else {
-        nbBase.surface = 'Keep all existing props and objects from Photo 1 intact.';
+        nbBase.surface = 'Keep all existing props and objects from Photo 2 (the person scene) intact.';
       }
       const nbObj = nbBase;
       const nbPrompt = JSON.stringify(nbObj, null, 2);
@@ -12106,6 +12144,7 @@ TECHNICAL SPECS:
   }
 
   function initVideoStudio(forcedMode) {
+    _restoreCtaState();
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();
@@ -15646,4 +15685,4 @@ TECHNICAL SPECS:
 </div><!-- end userSettingsOverlay -->
 
 </body>
-</html>
+</html>                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
