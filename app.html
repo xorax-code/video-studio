@@ -3665,6 +3665,14 @@
                     placeholder="If you want something easier and more affordable — try this product."></textarea>
                 </div>
               </div>
+              <!-- Clear surface option -->
+              <label style="display:flex;align-items:flex-start;gap:8px;cursor:pointer;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
+                <input type="checkbox" id="ctaClearSurface" style="margin-top:2px;accent-color:var(--accent);flex-shrink:0;">
+                <div>
+                  <div style="font-size:11.5px;font-weight:700;color:var(--text-2);">🧹 Clear the surface</div>
+                  <div style="font-size:10.5px;color:var(--text-3);margin-top:2px;line-height:1.5;">Remove all other objects from the table or surface (condiments, ingredients, props, bowls, etc.) so only the character and product are shown.</div>
+                </div>
+              </label>
               <button id="ctaGenerateBtn" onclick="addCtaSegment()"
                 style="width:100%;padding:9px 0;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">
                 🛍 Add Product CTA Segment
@@ -7758,6 +7766,33 @@ RULES — read carefully:
     saveSegments();
   }
 
+  // --- Duplicate a segment ---
+  function duplicateSegment(i) {
+    const seg = segments[i];
+    if (!seg) return;
+    // Deep-clone the segment, clear done state and target pin
+    const clone = Object.assign({}, seg, {
+      done: false,
+      script: seg.script,        // keep script — user edits it after
+      veoPrompt: seg.veoPrompt,  // keep prompt — user regenerates after
+      nbPrompt: seg.nbPrompt,
+      targetX: null,
+      targetY: null,
+      targetPerson: null,
+      targetGender: null,
+    });
+    // Insert immediately after the source segment
+    segments.splice(i + 1, 0, clone);
+    debounceSave();
+    renderSegments();
+    // Scroll the new card into view
+    setTimeout(() => {
+      const card = document.getElementById('seg-card-' + (i + 1));
+      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }, 120);
+    showToast('Segment duplicated — edit the script and regenerate the prompt.', 'info', 3000);
+  }
+
   // --- Clear all segments ---
   function clearSegments() {
     if (segments.length === 0) { segments = []; saveSegments(); renderSegments(); return; }
@@ -8265,7 +8300,8 @@ RULES — read carefully:
           <span style="font-size:12px;font-weight:800;color:${seg.done ? '#4ade80' : 'var(--accent-2)'};letter-spacing:-0.3px;">Seg ${i+1}</span>
           ${seg.isCTA ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;letter-spacing:0.04em;">🛍 CTA</span>` : `<span style="font-size:10px;color:var(--text-3);font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:0.3px;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</span>`}
           ${seg.done ? `<span class="scene-done-badge" style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>` : `<span class="scene-done-badge" style="display:none;font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>`}
-          <button onclick="removeSegment(${i})" style="margin-left:auto;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">✕</button>
+          <button onclick="duplicateSegment(${i})" title="Duplicate this segment — copies frame, action, prompts" style="margin-left:auto;background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:4px;color:var(--accent-2);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">⧉</button>
+          <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">✕</button>
         </div>
 
         <!-- Thumbnail (replicator) or visual desc (producer) -->
@@ -8722,11 +8758,19 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
 
       // ── Build NB Pro prompt: character holds product ─────────────────────
       // Photo 1 = character/avatar reference  |  Photo 2 = product photo
+      const clearSurface = document.getElementById('ctaClearSurface')?.checked || false;
+      const surfaceInstruction = clearSurface
+        ? ' IMPORTANT: Remove ALL other objects from the table or surface — every condiment, ingredient, bowl, utensil, prop, or decoration must be completely removed. The surface should be clean and empty except for the character and the product they are holding.'
+        : ' Preserve the background, lighting, and all props from Photo 1 exactly as they appear.';
+      const surfaceNegPrompt = clearSurface
+        ? 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, other objects on surface, condiments, ingredients, bowls, utensils, props on table, text overlays, watermarks, blurry product'
+        : 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product';
       const nbObj = {
-        instruction: `Using the exact person from Photo 1 and the product from Photo 2 (${productDesc}): composite the person holding the product up toward the camera at chest-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile. Keep the person's exact face, skin tone, clothing, hair, and body from Photo 1 unchanged. Preserve the background, lighting, and all props from Photo 1 exactly as they appear.`,
+        instruction: `Using the exact person from Photo 1 and the product from Photo 2 (${productDesc}): composite the person holding the product up toward the camera at chest-shoulder height with one hand, label or front face of the product facing the camera. The person looks at the camera with a confident, natural smile. Keep the person's exact face, skin tone, clothing, hair, and body from Photo 1 unchanged.${surfaceInstruction}`,
         person_to_preserve: 'The person in Photo 1 — face, body, clothing, hair, skin tone must remain 100% identical.',
         product_placement: `${productDesc} — held at chest-to-shoulder height, one hand gripping it naturally, front/label facing camera, clearly visible and in focus.`,
-        negative_prompt: 'changed person appearance, wrong face, different person, product not visible, product floating, unnatural hand grip, multiple people, extra hands, changed background, removed props, added props, text overlays, watermarks, blurry product',
+        ${clearSurface ? "surface: 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character and the product.'," : "surface: 'Keep all existing props and objects from Photo 1 intact.',"}
+        negative_prompt: surfaceNegPrompt,
       };
       const nbPrompt = JSON.stringify(nbObj, null, 2);
 
