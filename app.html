@@ -8609,7 +8609,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const seg = segments[i];
     const analyzedAction = sanitizeDirections(seg && seg.action ? seg.action : 'person speaking directly to camera with natural confidence and real eye contact, natural hand gestures');
     const bgNote = bgDataUrl
-      ? 'Match the background/environment from the reference background image provided. Keep it consistent and realistic.'
+      ? 'Match the background/environment from the reference background image provided exactly. All background elements, props, and surface objects are locked — do not move, add, or remove anything.'
       : (setting || 'clean neutral background or lifestyle environment');
     const actionWithSpeech = analyzedAction;
     const voiceStyle = getVoiceStyle();
@@ -8626,7 +8626,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       action: actionWithSpeech,
       speech: scriptSlice || '',
       audio: audioDesc,
-      negative_prompt: negativePrompt,
+      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
     };
@@ -9505,15 +9505,15 @@ Script the person says (word for word): "${script}"
 ${action ? 'Presenter action: ' + action : ''}
 
 Return ONLY a valid JSON object with these fields:
-- action: describe the presenter's natural talking movements — gestures, expressions, eye contact — that match the emotional tone of the script. Reference what you actually see in the starting frame (their pose, what's on the surface in front of them, the setting) and animate from there. Be specific. Do NOT use "left" or "right" to describe hands or body position — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera", "placed on the surface in front of them").
+- action: ONLY describe the presenter's body movements — gestures, facial expressions, eye contact, head movement. Do NOT describe any touching, picking up, moving, or interacting with props or objects on the table. Props stay completely stationary. Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera", "placed on the surface").
 - speech: the exact script text, verbatim
-- starting_frame: describe what you see in the attached image — the person's position, what props/objects are on the surface in front of them, the background setting, the lighting — so Veo 3 knows exactly what frame to start from
-- background: describe the background/setting visible in the image
-- foreground_props: list any objects visible on the surface in front of the presenter
+- starting_frame: describe the person's position, clothing, and pose only — do NOT describe props or background here
+- background: describe the exact background setting visible in the image (wall color, any art/decor, distance). End with: "Background is locked — do not alter, move, or add any elements."
+- foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). End with: "All props are locked in place — do not move, add, remove, or rearrange any object."
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
-- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts". If single person, use "multiple people, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts".
-- IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT (e.g. "the woman on the left points toward the man on the right"). Use explicit left/right anchoring so Veo 3 does not flip the composition.
+- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts".
+- IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT. Use explicit left/right anchoring so Veo 3 does not flip the composition.
 
 No markdown. Return only the JSON object.`
               },
