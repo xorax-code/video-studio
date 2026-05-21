@@ -217,11 +217,18 @@
     color: #ccc8a8;
   }
   .seg-ta-action {
-    font-size:12px; min-height:38px;
+    font-size:12px; min-height:38px; max-height:120px;
+    overflow-y: auto;          /* scrollable — overrides base overflow:hidden */
     background: rgba(52,211,153,0.05);
     border: 1px solid rgba(52,211,153,0.22);
     color: #6ee7b7;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(52,211,153,0.35) transparent;
   }
+  .seg-ta-action::-webkit-scrollbar { width: 4px; }
+  .seg-ta-action::-webkit-scrollbar-track { background: transparent; }
+  .seg-ta-action::-webkit-scrollbar-thumb { background: rgba(52,211,153,0.4); border-radius: 4px; }
+  .seg-ta-action::-webkit-scrollbar-thumb:hover { background: rgba(52,211,153,0.65); }
   .seg-ta-prompt {
     font-size:11.5px; min-height:54px; max-height:180px;
     overflow-y: auto;
@@ -8710,6 +8717,7 @@ RULES — read carefully:
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="(function(){var ta=document.getElementById('action-wrap-${i}');var open=ta.style.display!=='none';ta.style.display=open?'none':'';this.querySelector('.action-toggle').textContent=open?'▸ Show':'▾ Hide';}).call(this)">
             <span class="seg-action-label" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">🎬 Scene Action</span>
             <div style="display:flex;gap:4px;align-items:center;">
+              <button onclick="event.stopPropagation();refreshSegmentAction(${i})" title="Re-analyze frames with GPT-4o to rewrite the scene action" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.35);border-radius:2px;color:#6ee7b7;font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Action</button>
               <button onclick="event.stopPropagation();refreshSegmentVeo3(${i})" title="Regenerate Veo 3" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Veo 3</button>
               <span class="action-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">▸ Show</span>
             </div>
@@ -11661,6 +11669,76 @@ ${veoPrompt}
     if (veoEl) {
       veoEl.value = seg.veoPrompt;
       autoGrow(veoEl);
+    }
+  }
+
+  // --- Refresh Scene Action for a single segment via GPT-4o Vision ---
+  // Uses the same analysis prompt as analyzeAllFrames but scoped to one segment.
+  // Falls back to deriveSceneAction (keyword-based) if no API key or no frames.
+  async function refreshSegmentAction(i) {
+    const seg = segments[i];
+    if (!seg) return;
+    const btn = document.querySelector(`[onclick*="refreshSegmentAction(${i})"]`);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+    const apiKey  = getApiKey();
+    const pronoun = getAvatarPronoun();
+    const actionEl = document.getElementById('action-seg-' + i);
+
+    const done = (text) => {
+      seg.action = sanitizeDirections(text);
+      if (actionEl) {
+        actionEl.value = seg.action;
+        actionEl.style.borderColor = 'rgba(52,211,153,0.6)';
+        setTimeout(() => { if (actionEl) actionEl.style.borderColor = ''; }, 1400);
+      }
+      saveSegments();
+      if (btn) { btn.disabled = false; btn.textContent = '↻ Regen Action'; }
+    };
+
+    // No API key or no frames — fall back to keyword-based derivation
+    if (!apiKey || (!seg.frameDataUrl && seg._scriptOnly)) {
+      done(deriveSceneAction(seg.script || '', i, segments.length));
+      return;
+    }
+
+    try {
+      // Capture fresh frames; fall back to saved start frame
+      let frames = await captureSegmentFrames(seg, 4);
+      if (!frames.length && seg.frameDataUrl) frames = [seg.frameDataUrl];
+      if (!frames.length) {
+        done(deriveSceneAction(seg.script || '', i, segments.length));
+        return;
+      }
+
+      const imageContent = frames.map(f => ({ type: 'image_url', image_url: { url: f, detail: 'low' } }));
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'gpt-4o', max_tokens: 350,
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: `Analyze ALL visible actions and visual events in these video frames. This will be used as the action field in a Veo 3 prompt — describe everything that needs to be animated.
+
+Write in short action sentences using "${pronoun}" as the subject. Cover:
+1. PERSON ACTIONS — hand/arm movements, what they pick up, hold, tilt, pour, squeeze, or demonstrate
+2. PROP & OBJECT INTERACTIONS — any object being used: bottle, container, model, food, liquid. What is it and what is ${pronoun} doing with it?
+3. VISUAL DEMONSTRATIONS & EFFECTS — if anything dissolves, melts, flows, changes, reacts, or transforms, describe it precisely. Example: "${pronoun} pours liquid onto a foam stomach model and the yellow fat layer dissolves on contact." These are critical for Veo 3 to animate correctly.
+4. PHYSICAL MODELS / PROPS — name any anatomical model, food prop, or demonstration prop and describe what happens to it.
+
+RULES: Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms. Do NOT describe appearance, face, clothing, or background. Return only the action description — no intro.` },
+            ...imageContent
+          ]}]
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      let desc = data.choices?.[0]?.message?.content?.trim() || '';
+      const refused = !desc || /i('m| am) sorry|can't assist|cannot assist/i.test(desc);
+      if (refused) desc = deriveSceneAction(seg.script || '', i, segments.length);
+      done(desc);
+    } catch (e) {
+      done(deriveSceneAction(seg.script || '', i, segments.length));
+      showToast('Action regen fell back to keyword match: ' + (e.message || e), 'warning');
     }
   }
 
