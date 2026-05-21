@@ -1256,6 +1256,8 @@
   .vs-step-btn.step-run .vs-step-num { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.5); color: #4ade80; }
   .vs-step-btn.step-run { border-color: rgba(34,197,94,0.45); color: #4ade80; background: rgba(34,197,94,0.06); }
   .vs-step-btn.step-run:hover { background: rgba(34,197,94,0.12); }
+  /* In producer mode the ▾ arrow is hidden — give the Run button full border-radius */
+  #tab-video-studio.studio-producer .vs-step-btn.step-run { border-radius: 6px !important; border-right: 1px solid rgba(34,197,94,0.45) !important; }
   .vs-step-btn.step-agent .vs-step-num { background: rgba(251,146,60,0.15); border-color: rgba(251,146,60,0.4); color: #fb923c; }
   .vs-step-btn.step-agent { border-color: rgba(251,146,60,0.35); color: #fb923c; }
   .vs-step-btn.step-agent:hover { background: rgba(251,146,60,0.08); }
@@ -3651,13 +3653,25 @@
               <span class="vs-step-num">2</span> Generate Prompts
             </button>
             <span class="vs-workflow-divider">→</span>
-            <button class="vs-step-btn step-run" onclick="showPreflightModal(false)" title="Pre-flight check, then download images and copy the run instruction for Claude">
-              <span class="vs-step-num">3</span> Run All Scenes
-            </button>
-            <span class="vs-workflow-divider replicator-only">→</span>
-            <button class="vs-step-btn step-agent replicator-only" onclick="openVeoAgentPanel()" title="Download all frames as ZIP and copy the Veo Agent swap prompt">
-              <span class="vs-step-num">4</span> Veo Agent
-            </button>
+            <!-- Step 3 — split button: Run All Scenes or Veo Agent -->
+            <div style="display:flex;align-items:stretch;position:relative;">
+              <button class="vs-step-btn step-run" style="border-radius:6px 0 0 6px;border-right:none;" onclick="showPreflightModal(false)" title="Pre-flight check, then download images and copy the run instruction for Claude">
+                <span class="vs-step-num">3</span> Run
+              </button>
+              <button id="runSplitArrow" class="replicator-only" style="padding:0 7px;font-size:10px;background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.45);border-left:1px solid rgba(34,197,94,0.2);border-radius:0 6px 6px 0;color:#4ade80;cursor:pointer;line-height:1;" title="Choose run method" onclick="toggleRunSplitMenu(this)">▾</button>
+              <div id="runSplitMenu" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--surface);border:1px solid var(--border-2);border-radius:8px;box-shadow:var(--shadow-panel);z-index:200;min-width:170px;overflow:hidden;">
+                <button onclick="showPreflightModal(false);document.getElementById('runSplitMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 13px;background:none;border:none;border-bottom:1px solid var(--border);color:var(--text-1);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;"
+                  onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='none'">
+                  ⚡ Run All Scenes
+                  <span style="font-size:9px;color:var(--text-3);margin-left:auto;">Claude browser</span>
+                </button>
+                <button class="replicator-only" onclick="openVeoAgentPanel();document.getElementById('runSplitMenu').style.display='none';" style="display:flex;align-items:center;gap:8px;width:100%;padding:9px 13px;background:none;border:none;color:var(--text-1);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;text-align:left;"
+                  onmouseenter="this.style.background='var(--surface-2)'" onmouseleave="this.style.background='none'">
+                  🤖 Veo Agent Mode
+                  <span style="font-size:9px;color:var(--text-3);margin-left:auto;">manual upload</span>
+                </button>
+              </div>
+            </div>
 
             <!-- More dropdown -->
             <div class="vs-more-wrap">
@@ -7862,7 +7876,11 @@ RULES — read carefully:
         }
         return acc;
       }, []);
-    if (phrases.length <= 1) return '';
+    // Single phrase (no internal punctuation) — still output it at 0.0s so the
+    // Veo agent knows when speech starts; just no mid-phrase timing markers.
+    if (phrases.length <= 1) {
+      return phrases.length === 1 ? `  [0.0s] "${phrases[0].trim()}"` : '';
+    }
     let wordsSoFar = 0;
     const lines = [];
     phrases.forEach(phrase => {
@@ -7928,6 +7946,10 @@ RULES — read carefully:
       return;
     }
     const frameCount = segments.filter(s => s.frameDataUrl).length;
+    if (frameCount === 0) {
+      showToast('No scene frames extracted yet — use the timeline to capture frames for each segment first.', 'warning');
+      return;
+    }
     const totalPhotos = 1 + frameCount; // Photo 1 = avatar, Photos 2–N = frames
     const prompt = `Photo 1 is my avatar — the woman whose face, body, hair, and clothing must be preserved exactly as they appear. Photos 2 through ${totalPhotos} are frames pulled from a video. For each frame, replace the person in it with the woman from Photo 1. She must match the original person's exact body position, pose, and stance in that frame. Place her against the original frame's background — do not change the background, lighting, or environment. If the person in the frame is holding, touching, or interacting with any object, she must be holding or interacting with that same object in the same hand, at the same position. Keep her clothing, hair, and appearance identical to Photo 1 throughout every single frame. Remove any text, captions, subtitles, or watermarks from every frame. Apply this consistently across all frames so she looks like a continuous, natural presence throughout the video.`;
     navigator.clipboard.writeText(prompt).then(() => {
@@ -8010,6 +8032,30 @@ RULES — read carefully:
       showToast(`ZIP downloaded — ${total} image${total !== 1 ? 's' : ''} inside. Upload them to Veo in order: avatar first, then frames.`, 'success', 5000);
     } catch (e) {
       showToast('ZIP generation failed: ' + e.message, 'error');
+    }
+  }
+
+  // --- Step 3 split menu (Run All Scenes vs Veo Agent) ---
+  let _runSplitCloseListener = null; // module-level ref — prevents orphaned listeners
+  function toggleRunSplitMenu(btn) {
+    const menu = document.getElementById('runSplitMenu');
+    if (!menu) return;
+    const isOpen = menu.style.display !== 'none';
+    // Always remove any existing outside-click listener first
+    if (_runSplitCloseListener) {
+      document.removeEventListener('click', _runSplitCloseListener);
+      _runSplitCloseListener = null;
+    }
+    menu.style.display = isOpen ? 'none' : 'block';
+    if (!isOpen) {
+      _runSplitCloseListener = (e) => {
+        if (!menu.contains(e.target) && e.target !== btn) {
+          menu.style.display = 'none';
+          document.removeEventListener('click', _runSplitCloseListener);
+          _runSplitCloseListener = null;
+        }
+      };
+      setTimeout(() => document.addEventListener('click', _runSplitCloseListener), 0);
     }
   }
 
@@ -10407,7 +10453,7 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
     // ── Confirm gates (run before the main logic, now that all vars are declared) ──
     if (!preflightDone) {
       const unready = segments.filter(s => !s.veoPrompt?.trim() && !(skipDone && s.done));
-      if (unready.length && !skipDone) {
+      if (unready.length) {
         showConfirm(`${unready.length} scene(s) have no prompts yet and will be skipped. Continue?`, () => {
           runAllScenes(skipDone, true);
         });
@@ -11966,6 +12012,11 @@ TECHNICAL SPECS:
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
         done: s.done || false,
+        isCTA: s.isCTA || false,
+        ctaProductName: s.ctaProductName || '',
+        targetX: s.targetX ?? null, targetY: s.targetY ?? null,
+        targetPerson: s.targetPerson || '',
+        targetGender: s.targetGender || '',
       }))
     };
     studioLibrary.unshift(item);
@@ -14178,7 +14229,7 @@ TECHNICAL SPECS:
     const planInfo   = PLAN_INFO[tier] || PLAN_INFO.free;
     const tierIdx    = PLAN_ORDER.indexOf(tier);
 
-    const manageBtnHtml = `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Manage Plan</button>`;
+    const manageBtnHtml = `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Billing & Cancellation</button>`;
 
     const plansHtml = PLAN_ORDER.map((planKey, idx) => {
       const info       = PLAN_INFO[planKey];
@@ -14297,7 +14348,8 @@ TECHNICAL SPECS:
         const discounted = (baseNum * (1 - _promo.pct / 100)).toFixed(2);
         const period = info.price.includes('/mo') ? '/mo' : '';
         displayPrice = `$${discounted}${period}`;
-        promoLine = `<div style="font-size:10px;color:var(--success,#4ade80);margin-top:4px;text-align:center;">${_promo.pct}% off applied · was <s style="opacity:0.6;">${info.price}</s> · code: ${_promo.code}</div>`;
+        const _safeCode = String(_promo.code || '').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+        promoLine = `<div style="font-size:10px;color:var(--success,#4ade80);margin-top:4px;text-align:center;">${_promo.pct}% off applied · was <s style="opacity:0.6;">${info.price}</s> · code: ${_safeCode}</div>`;
       }
     }
 
@@ -14706,9 +14758,9 @@ TECHNICAL SPECS:
         DB.get('sm_recycle'),       DB.get('sm_ideas'),
         DB.get('sm_post_plans'),    DB.get('sm_daily_items'),
         DB.get('sm_video_log'),
-        DB.get('sm_replicator_projects'),   DB.get('sm_producer_projects'),
-        DB.get('sm_replicator_active_project'), DB.get('sm_producer_active_project'),
-        DB.get('sm_replicator_studio_library'), DB.get('sm_producer_studio_library'),
+        DB.get('sm_projects_r'),        DB.get('sm_projects_p'),
+        DB.get('sm_active_project_r'),  DB.get('sm_active_project_p'),
+        DB.get('sm_studio_library_r'),  DB.get('sm_studio_library_p'),
       ]);
       const payload = {
         _exported:    new Date().toISOString(),
@@ -14764,12 +14816,12 @@ TECHNICAL SPECS:
             await DB.set('sm_post_plans',  JSON.stringify(data.postPlans  || []));
             await DB.set('sm_daily_items', JSON.stringify(data.dailyItems || []));
             await DB.set('sm_video_log',   JSON.stringify(data.videoLog   || []));
-            if (data.replicatorProjects)    await DB.set('sm_replicator_projects',       JSON.stringify(data.replicatorProjects));
-            if (data.producerProjects)      await DB.set('sm_producer_projects',         JSON.stringify(data.producerProjects));
-            if (data.replicatorActiveProject) await DB.set('sm_replicator_active_project', data.replicatorActiveProject);
-            if (data.producerActiveProject)   await DB.set('sm_producer_active_project',   data.producerActiveProject);
-            if (data.replicatorStudio)      await DB.set('sm_replicator_studio_library', JSON.stringify(data.replicatorStudio));
-            if (data.producerStudio)        await DB.set('sm_producer_studio_library',   JSON.stringify(data.producerStudio));
+            if (data.replicatorProjects)      await DB.set('sm_projects_r',       JSON.stringify(data.replicatorProjects));
+            if (data.producerProjects)        await DB.set('sm_projects_p',       JSON.stringify(data.producerProjects));
+            if (data.replicatorActiveProject) await DB.set('sm_active_project_r', data.replicatorActiveProject);
+            if (data.producerActiveProject)   await DB.set('sm_active_project_p', data.producerActiveProject);
+            if (data.replicatorStudio)        await DB.set('sm_studio_library_r', JSON.stringify(data.replicatorStudio));
+            if (data.producerStudio)          await DB.set('sm_studio_library_p', JSON.stringify(data.producerStudio));
             showToast('Import successful — reloading…', 'success');
             setTimeout(() => location.reload(), 1200);
           } catch (err2) { showToast('Import failed: ' + err2.message, 'error'); }
@@ -14785,8 +14837,9 @@ TECHNICAL SPECS:
       try {
         await Promise.all([
           'sm_accounts','sm_competitors','sm_viral_scripts',
-          'sm_projects','sm_replicator_projects','sm_producer_projects',
-          'sm_studio_library','sm_replicator_studio_library','sm_producer_studio_library',
+          'sm_projects','sm_projects_r','sm_projects_p',
+          'sm_active_project_r','sm_active_project_p',
+          'sm_studio_library','sm_studio_library_r','sm_studio_library_p',
           'sm_video_log','sm_post_plans','sm_daily_items',
           'sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments'
         ].map(k => DB.remove(k)));
@@ -14804,15 +14857,17 @@ TECHNICAL SPECS:
       showConfirm('Are you sure? Everything will be cleared.', async () => {
         try {
           await Promise.all([
-            DB.remove('sm_accounts'),   DB.remove('sm_competitors'),
-            DB.remove('sm_viral_scripts'), DB.remove('sm_studio_library'),
-            DB.remove('sm_products'),   DB.remove('sm_hooks'),
-            DB.remove('sm_ctas'),       DB.remove('sm_performance'),
-            DB.remove('sm_recycle'),    DB.remove('sm_ideas'),
-            DB.remove('sm_post_plans'),
-            DB.remove('sm_daily_items'),
-            DB.remove('sm_video_log'),
-            DB.remove('sm_user_settings'),
+            DB.remove('sm_accounts'),       DB.remove('sm_competitors'),
+            DB.remove('sm_viral_scripts'),  DB.remove('sm_studio_library'),
+            DB.remove('sm_studio_library_r'), DB.remove('sm_studio_library_p'),
+            DB.remove('sm_products'),       DB.remove('sm_hooks'),
+            DB.remove('sm_ctas'),           DB.remove('sm_performance'),
+            DB.remove('sm_recycle'),        DB.remove('sm_ideas'),
+            DB.remove('sm_post_plans'),     DB.remove('sm_daily_items'),
+            DB.remove('sm_video_log'),      DB.remove('sm_user_settings'),
+            DB.remove('sm_projects_r'),     DB.remove('sm_projects_p'),
+            DB.remove('sm_active_project_r'), DB.remove('sm_active_project_p'),
+            DB.remove('sm_segments'),
           ]);
           localStorage.removeItem('sm_admin_settings');
           showToast('Data cleared. The page will now reload.', 'success');
