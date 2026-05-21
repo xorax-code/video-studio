@@ -7845,6 +7845,34 @@ RULES — read carefully:
     a.click();
   }
 
+  // --- Build word-level speech timing guide for a segment ---
+  function buildSpeechTimingGuide(script, durationSec) {
+    if (!script || !script.trim() || durationSec <= 0) return '';
+    const WORDS_PER_SEC = 2.5;
+    // Split into natural phrases at punctuation boundaries
+    const phrases = script
+      .split(/([,;.!?…]+)/)
+      .reduce((acc, part, i, arr) => {
+        // Re-attach punctuation to the preceding phrase
+        if (/^[,;.!?…]+$/.test(part)) {
+          if (acc.length) acc[acc.length - 1] += part;
+        } else {
+          const trimmed = part.trim();
+          if (trimmed) acc.push(trimmed);
+        }
+        return acc;
+      }, []);
+    if (phrases.length <= 1) return '';
+    let wordsSoFar = 0;
+    const lines = [];
+    phrases.forEach(phrase => {
+      const t = Math.min(wordsSoFar / WORDS_PER_SEC, durationSec - 0.5);
+      lines.push(`  [${t.toFixed(1)}s] "${phrase.trim()}"`);
+      wordsSoFar += phrase.split(/\s+/).filter(Boolean).length;
+    });
+    return lines.join('\n');
+  }
+
   // --- Copy all Veo 3 prompts as a single ordered agent message ---
   function copyVeoAgentAllScenePrompts() {
     const withPrompts = segments.filter(s => (s.veoPrompt || '').trim());
@@ -7854,18 +7882,32 @@ RULES — read carefully:
     }
     const n = withPrompts.length;
     const lines = [];
-    lines.push(`I have uploaded ${n} swapped frame${n !== 1 ? 's' : ''} in order. Apply the following Veo 3 prompts to each frame in sequence — Prompt 1 goes to Frame 1, Prompt 2 goes to Frame 2, and so on. Use each frame as the starting image for its matching clip and generate the video based on its prompt. Do not mix up the order.`);
+    lines.push(`I have uploaded ${n} swapped frame${n !== 1 ? 's' : ''} in order. Using Veo 3.1 Fast, apply the following prompts to each frame in sequence — Prompt 1 goes to Frame 1, Prompt 2 goes to Frame 2, and so on. Use each frame as the starting image for its matching clip. For every clip, sync the avatar's actions, gestures, and expressions to the exact words being spoken — use the speech timing guide below each prompt to match movements to the moment each phrase is said. Do not mix up the order.`);
     lines.push('');
     withPrompts.forEach((seg, idx) => {
       const sceneNum = segments.indexOf(seg) + 1;
+      const duration = Math.round((seg.endTime - seg.startTime) * 10) / 10;
       lines.push(`━━━ Scene ${idx + 1} of ${n} (Segment ${sceneNum}) ━━━`);
+      lines.push(`Model: Veo 3.1 Fast | Duration: ${duration}s`);
       lines.push(seg.veoPrompt.trim());
+      // Word-timed speech guide
+      let speechText = '';
+      try {
+        const parsed = JSON.parse(seg.veoPrompt);
+        speechText = parsed.speech || seg.script || '';
+      } catch { speechText = seg.script || ''; }
+      const timingGuide = buildSpeechTimingGuide(speechText, duration);
+      if (timingGuide) {
+        lines.push('');
+        lines.push('Speech timing — sync actions to these moments:');
+        lines.push(timingGuide);
+      }
       lines.push('');
     });
     lines.push(`━━━ END — ${n} scene${n !== 1 ? 's' : ''} total ━━━`);
     const message = lines.join('\n');
     navigator.clipboard.writeText(message).then(() => {
-      showToast(`All ${n} scene prompts copied as one agent message — paste it into the Veo agent after uploading your swapped frames.`, 'success', 5000);
+      showToast(`All ${n} scene prompts copied — includes duration, Veo 3.1 Fast model, and speech timing for each scene.`, 'success', 5000);
     }).catch(() => {
       try {
         const ta = document.createElement('textarea');
