@@ -1256,6 +1256,9 @@
   .vs-step-btn.step-run .vs-step-num { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.5); color: #4ade80; }
   .vs-step-btn.step-run { border-color: rgba(34,197,94,0.45); color: #4ade80; background: rgba(34,197,94,0.06); }
   .vs-step-btn.step-run:hover { background: rgba(34,197,94,0.12); }
+  .vs-step-btn.step-agent .vs-step-num { background: rgba(251,146,60,0.15); border-color: rgba(251,146,60,0.4); color: #fb923c; }
+  .vs-step-btn.step-agent { border-color: rgba(251,146,60,0.35); color: #fb923c; }
+  .vs-step-btn.step-agent:hover { background: rgba(251,146,60,0.08); }
   .vs-workflow-divider { color: var(--text-3); font-size: 13px; font-weight: 300; flex-shrink: 0; }
   /* More dropdown */
   .vs-more-wrap { position: relative; margin-left: auto; }
@@ -2489,6 +2492,8 @@
 <!-- Supabase auth -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="./supabase-config.js"></script>
+<!-- JSZip — used for Download All Frames as ZIP -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -3649,6 +3654,10 @@
             <button class="vs-step-btn step-run" onclick="showPreflightModal(false)" title="Pre-flight check, then download images and copy the run instruction for Claude">
               <span class="vs-step-num">3</span> Run All Scenes
             </button>
+            <span class="vs-workflow-divider replicator-only">→</span>
+            <button class="vs-step-btn step-agent replicator-only" onclick="openVeoAgentPanel()" title="Download all frames as ZIP and copy the Veo Agent swap prompt">
+              <span class="vs-step-num">4</span> Veo Agent
+            </button>
 
             <!-- More dropdown -->
             <div class="vs-more-wrap">
@@ -3657,6 +3666,8 @@
                 <button class="vs-more-item" onclick="showPreflightModal(true);closeVsMoreMenu()" title="Skip scenes already marked done">⚡ Resume (skip done)</button>
                 <button class="vs-more-item" id="condenseAllBtn" onclick="condenseAllScripts();closeVsMoreMenu()" title="Rewrite over-limit scenes to fit 8s">✂ Condense Scripts</button>
                 <button class="vs-more-item" onclick="copyAllVeoPrompts();closeVsMoreMenu()" title="Copy all Veo 3 prompts to clipboard">📋 Copy All Veo Prompts</button>
+                <button class="vs-more-item replicator-only" onclick="copyVeoAgentSwapPrompt();closeVsMoreMenu()" title="Copy the Veo Agent avatar-swap prompt to clipboard">🤖 Copy Veo Agent Prompt</button>
+                <button class="vs-more-item replicator-only" onclick="downloadAllFramesAsZip();closeVsMoreMenu()" title="Download avatar + all scene frames as a ZIP folder for batch upload to Veo">📦 Download Frames ZIP</button>
                 <button class="vs-more-item producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes();closeVsMoreMenu()" title="Use GPT to suggest action descriptions">✨ AI Describe Scenes</button>
                 <button class="vs-more-item producer-only" id="hookVariationsBtn" onclick="generateHookVariations();closeVsMoreMenu()" title="Generate 5 alternative hooks for scene 1">🎣 Hook Variations</button>
                 <button class="vs-more-item producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts();closeVsMoreMenu()" title="Build NB Pro prompts for all scenes">🍌 Gen All NB Prompts</button>
@@ -7832,6 +7843,186 @@ RULES — read carefully:
     a.href = seg.frameDataUrl;
     a.download = 'frame_seg' + (i+1) + '_start_' + fmt(seg.startTime) + '.jpg';
     a.click();
+  }
+
+  // --- Copy all Veo 3 prompts as a single ordered agent message ---
+  function copyVeoAgentAllScenePrompts() {
+    const withPrompts = segments.filter(s => (s.veoPrompt || '').trim());
+    if (withPrompts.length === 0) {
+      showToast('No Veo 3 prompts yet — click ⚡ Generate Prompts first.', 'warning');
+      return;
+    }
+    const n = withPrompts.length;
+    const lines = [];
+    lines.push(`I have uploaded ${n} swapped frame${n !== 1 ? 's' : ''} in order. Apply the following Veo 3 prompts to each frame in sequence — Prompt 1 goes to Frame 1, Prompt 2 goes to Frame 2, and so on. Use each frame as the starting image for its matching clip and generate the video based on its prompt. Do not mix up the order.`);
+    lines.push('');
+    withPrompts.forEach((seg, idx) => {
+      const sceneNum = segments.indexOf(seg) + 1;
+      lines.push(`━━━ Scene ${idx + 1} of ${n} (Segment ${sceneNum}) ━━━`);
+      lines.push(seg.veoPrompt.trim());
+      lines.push('');
+    });
+    lines.push(`━━━ END — ${n} scene${n !== 1 ? 's' : ''} total ━━━`);
+    const message = lines.join('\n');
+    navigator.clipboard.writeText(message).then(() => {
+      showToast(`All ${n} scene prompts copied as one agent message — paste it into the Veo agent after uploading your swapped frames.`, 'success', 5000);
+    }).catch(() => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = message;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(`All ${n} scene prompts copied!`, 'success', 3000);
+      } catch(e) { showToast('Copy failed — please try again.', 'error'); }
+    });
+  }
+
+  // --- Copy Veo Agent avatar-swap prompt ---
+  function copyVeoAgentSwapPrompt() {
+    if (!avatarImageDataUrl) {
+      showToast('Upload your avatar photo first — it becomes Photo 1 in the prompt.', 'warning');
+      return;
+    }
+    const frameCount = segments.filter(s => s.frameDataUrl).length;
+    const totalPhotos = 1 + frameCount; // Photo 1 = avatar, Photos 2–N = frames
+    const prompt = `Photo 1 is my avatar — the woman whose face, body, hair, and clothing must be preserved exactly as they appear. Photos 2 through ${totalPhotos} are frames pulled from a video. For each frame, replace the person in it with the woman from Photo 1. She must match the original person's exact body position, pose, and stance in that frame. Place her against the original frame's background — do not change the background, lighting, or environment. If the person in the frame is holding, touching, or interacting with any object, she must be holding or interacting with that same object in the same hand, at the same position. Keep her clothing, hair, and appearance identical to Photo 1 throughout every single frame. Remove any text, captions, subtitles, or watermarks from every frame. Apply this consistently across all frames so she looks like a continuous, natural presence throughout the video.`;
+    navigator.clipboard.writeText(prompt).then(() => {
+      showToast('Veo Agent swap prompt copied — paste it into the Veo agent after uploading your photos.', 'success', 4000);
+    }).catch(() => {
+      const ta = document.createElement('textarea');
+      ta.value = prompt;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      showToast('Veo Agent swap prompt copied!', 'success', 3000);
+    });
+  }
+
+  // --- Download avatar + all scene frames as a single ZIP folder ---
+  async function downloadAllFramesAsZip() {
+    if (typeof JSZip === 'undefined') {
+      showToast('JSZip library not loaded — please refresh the page and try again.', 'error');
+      return;
+    }
+    const frameSegs = segments.filter(s => s.frameDataUrl);
+    if (!avatarImageDataUrl && frameSegs.length === 0) {
+      showToast('No avatar or frames found. Upload your avatar and extract frames first.', 'warning');
+      return;
+    }
+    showToast('Building ZIP…', 'info', 2500);
+
+    const zip = new JSZip();
+    const folder = zip.folder('veo_frames');
+
+    // Helper: convert dataURL to Uint8Array
+    const dataUrlToBytes = (dataUrl) => {
+      const base64 = dataUrl.split(',')[1];
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      return bytes;
+    };
+    // Helper: get file extension from dataURL MIME type
+    const dataUrlExt = (dataUrl) => {
+      const mime = (dataUrl.match(/^data:(image\/[a-z+]+);/) || [])[1] || 'image/jpeg';
+      return mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg';
+    };
+
+    // Photo 1 — avatar (always first so upload order is correct)
+    if (avatarImageDataUrl) {
+      folder.file(`01_avatar_photo.${dataUrlExt(avatarImageDataUrl)}`, dataUrlToBytes(avatarImageDataUrl));
+    }
+
+    // Photos 2–N — one frame per scene, numbered sequentially
+    let idx = 2;
+    segments.forEach((seg, i) => {
+      if (!seg.frameDataUrl) return;
+      const ext = dataUrlExt(seg.frameDataUrl);
+      const filename = String(idx).padStart(2, '0') + '_scene_' + (i + 1) + '.' + ext;
+      folder.file(filename, dataUrlToBytes(seg.frameDataUrl));
+      idx++;
+    });
+
+    // Also include NB preview images if they exist (useful for Veo end-frame uploads)
+    segments.forEach((seg, i) => {
+      if (!seg.nbPreviewDataUrl) return;
+      const ext = dataUrlExt(seg.nbPreviewDataUrl);
+      folder.file(`nb_preview_scene_${i + 1}.${ext}`, dataUrlToBytes(seg.nbPreviewDataUrl));
+    });
+
+    const projectName = getActiveProject()?.name || 'project';
+    const safeName = projectName.replace(/[^a-zA-Z0-9_\-]/g, '_').toLowerCase();
+
+    try {
+      const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', compressionOptions: { level: 3 } });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `veo_frames_${safeName}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+      const total = (avatarImageDataUrl ? 1 : 0) + frameSegs.length;
+      showToast(`ZIP downloaded — ${total} image${total !== 1 ? 's' : ''} inside. Upload them to Veo in order: avatar first, then frames.`, 'success', 5000);
+    } catch (e) {
+      showToast('ZIP generation failed: ' + e.message, 'error');
+    }
+  }
+
+  // --- Veo Agent panel — Step 4 modal with ZIP download + prompt copy ---
+  function openVeoAgentPanel() {
+    document.getElementById('veoAgentModal')?.remove();
+    const frameCount = segments.filter(s => s.frameDataUrl).length;
+    const totalPhotos = (avatarImageDataUrl ? 1 : 0) + frameCount;
+    const modal = document.createElement('div');
+    modal.id = 'veoAgentModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.72);backdrop-filter:blur(6px);padding:20px;';
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid rgba(251,146,60,0.35);border-radius:16px;padding:26px 26px 22px;width:100%;max-width:440px;box-shadow:0 24px 80px rgba(0,0,0,0.6);position:relative;font-family:inherit;">
+        <button onclick="document.getElementById('veoAgentModal').remove()" style="position:absolute;top:14px;right:14px;background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:2px 6px;border-radius:5px;">✕</button>
+
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">
+          <div style="width:38px;height:38px;border-radius:10px;background:rgba(251,146,60,0.15);border:1px solid rgba(251,146,60,0.3);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;">🤖</div>
+          <div>
+            <div style="font-size:15px;font-weight:800;color:var(--text-1);">Veo Agent Mode</div>
+            <div style="font-size:11px;color:var(--text-3);margin-top:1px;">${totalPhotos} image${totalPhotos !== 1 ? 's' : ''} ready · ${frameCount} scene frame${frameCount !== 1 ? 's' : ''} + ${avatarImageDataUrl ? '1 avatar' : 'no avatar yet'}</div>
+          </div>
+        </div>
+
+        <!-- Two-phase workflow instructions -->
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:16px;font-size:11px;color:var(--text-3);line-height:1.9;">
+          <div style="font-weight:700;color:var(--text-2);margin-bottom:4px;">Phase 1 — Swap avatar into frames:</div>
+          <div>① Download ZIP → unzip → upload avatar first, then all frames</div>
+          <div>② Paste the <span style="color:#fb923c;font-weight:600;">Avatar Swap Prompt</span> → agent swaps her in</div>
+          <div style="font-weight:700;color:var(--text-2);margin:8px 0 4px;">Phase 2 — Apply Veo 3 prompts to swapped frames:</div>
+          <div>③ Upload the swapped frames back in the same order</div>
+          <div>④ Paste the <span style="color:#a78bfa;font-weight:600;">All Scene Prompts</span> → agent generates each clip</div>
+        </div>
+
+        <!-- Action buttons -->
+        <div style="display:flex;flex-direction:column;gap:9px;">
+          <button onclick="downloadAllFramesAsZip()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:9px;background:rgba(251,146,60,0.12);border:1px solid rgba(251,146,60,0.35);color:#fb923c;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s;"
+            onmouseenter="this.style.background='rgba(251,146,60,0.2)'" onmouseleave="this.style.background='rgba(251,146,60,0.12)'">
+            📦 Download Frames ZIP
+          </button>
+          <button onclick="copyVeoAgentSwapPrompt()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:9px;background:rgba(251,146,60,0.08);border:1px solid rgba(251,146,60,0.35);color:#fb923c;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.15s;"
+            onmouseenter="this.style.background='rgba(251,146,60,0.16)'" onmouseleave="this.style.background='rgba(251,146,60,0.08)'">
+            🤖 Copy Avatar Swap Prompt <span style="font-size:9px;opacity:0.7;font-weight:500;">(Phase 1)</span>
+          </button>
+          <button onclick="copyVeoAgentAllScenePrompts()" style="display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:9px;background:var(--grad-accent);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;box-shadow:0 4px 16px rgba(124,106,247,0.3);transition:box-shadow 0.15s;"
+            onmouseenter="this.style.boxShadow='0 4px 24px rgba(124,106,247,0.5)'" onmouseleave="this.style.boxShadow='0 4px 16px rgba(124,106,247,0.3)'">
+            📋 Copy All Scene Prompts <span style="font-size:9px;opacity:0.8;font-weight:500;">(Phase 2)</span>
+          </button>
+        </div>
+
+        <div style="margin-top:12px;font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">
+          Prompts auto-update with your current scenes. Re-open any time to regen.
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
 
   // --- Click-to-target pin: click on thumbnail to mark which person to swap ---
