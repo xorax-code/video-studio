@@ -9118,10 +9118,13 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       const bgNote = segments.length > 0
         ? 'Match the background and environment from the previous scenes exactly. Same lighting, same surface, same props — all locked in place.'
         : 'clean neutral background or lifestyle environment';
+      const _ctaWords   = (ctaSpeech || '').split(/\s+/).filter(Boolean).length;
+      const _ctaDur     = (_ctaWords / 2.5) > 5.5 ? 8 : 6;
       const veoStarter = JSON.stringify({
         action: `Character holds ${productDesc} perfectly still toward camera with label facing forward, does not turn or rotate the product. Smiles directly at camera with a confident, natural expression.`,
         speech: ctaSpeech,
         audio: audioDesc,
+        duration: _ctaDur + ' seconds',
         negative_prompt: 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, rearranged props, moved objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words, product rotating, product turning',
         camera: 'static handheld, slight natural movement, medium shot — character and product both clearly visible, vertical 9:16',
         background: bgNote,
@@ -9174,10 +9177,16 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const negativePrompt = twoPersonScene
       ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, flipped composition, mirrored subjects, solo person, disappeared person'
       : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions';
+    // Duration: estimate from speech word count at 2.5 wps + 0.5s breathing room.
+    // Minimum 6s, extend to 8s if the speech fills more than ~5.5 seconds.
+    const _wordCount = (scriptSlice || '').split(/\s+/).filter(Boolean).length;
+    const _estSec    = _wordCount / 2.5;
+    const _duration  = _estSec > 5.5 ? 8 : 6;
     const obj = {
       action: actionWithSpeech,
       speech: scriptSlice || '',
       audio: audioDesc,
+      duration: _duration + ' seconds',
       negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words',
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
@@ -10073,6 +10082,7 @@ Return ONLY a valid JSON object with these fields:
 - foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). Note any visible product labels or text and state they must remain legible and unchanged. End with: "All props are locked in place — do not move, add, remove, or rearrange any object. All product labels and text must remain sharp, legible, and identical throughout the clip."
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
+- duration: estimate the clip duration in whole seconds (minimum 6, maximum 8) based on how long it takes to speak the speech field at a natural pace. Output as e.g. "6 seconds" or "8 seconds".
 - negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
 - IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT. Use explicit left/right anchoring so Veo 3 does not flip the composition.
 
@@ -10092,6 +10102,11 @@ No markdown. Return only the JSON object.`
       if (_parsed.action) _parsed.action = sanitizeDirections(_parsed.action);
       if (!_parsed.speech || !String(_parsed.speech).trim()) {
         _parsed.speech = seg.script || '';
+      }
+      // Always enforce duration — min 6s, 8s if speech is long enough
+      if (!_parsed.duration) {
+        const _wc = String(_parsed.speech || seg.script || '').split(/\s+/).filter(Boolean).length;
+        _parsed.duration = (_wc / 2.5 > 5.5 ? 8 : 6) + ' seconds';
       }
       raw = JSON.stringify(_parsed, null, 2);
       seg.veoPrompt = raw;
