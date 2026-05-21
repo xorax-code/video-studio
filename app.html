@@ -7806,9 +7806,9 @@ RULES — read carefully:
 
   // --- Duplicate a segment ---
   // Smart-splits the script at the nearest clause boundary to the midpoint,
-  // re-derives the action for each half based on the specific words being said,
-  // and rebuilds the Veo 3 JSON prompt for both segments automatically.
-  function duplicateSegment(i) {
+  // splits the timestamp range proportionally, captures a fresh video frame at
+  // the split timestamp for the clone, re-derives actions, and rebuilds prompts.
+  async function duplicateSegment(i) {
     const seg = segments[i];
     if (!seg) return;
 
@@ -7821,9 +7821,10 @@ RULES — read carefully:
     let firstHalf = script;
     let secondHalf = '';
     let didSplit = false;
+    let firstWordCount = 0;
+    let totalWordCount = 0;
 
     if (script) {
-      // Break into clauses at punctuation, re-attaching the punctuation to each clause
       const clauses = [];
       script.split(/([.!?]+|,|;)/).forEach(part => {
         if (/^[.!?,;]+$/.test(part)) {
@@ -7835,47 +7836,56 @@ RULES — read carefully:
       });
 
       if (clauses.length > 1) {
-        const totalWords = script.split(/\s+/).filter(Boolean).length;
-        const midWord    = totalWords / 2;
+        const allWords = script.split(/\s+/).filter(Boolean);
+        totalWordCount = allWords.length;
+        const midWord  = totalWordCount / 2;
         let wordsSoFar = 0, bestSplit = 1, bestDiff = Infinity;
         for (let c = 0; c < clauses.length - 1; c++) {
           wordsSoFar += clauses[c].split(/\s+/).filter(Boolean).length;
           const diff = Math.abs(wordsSoFar - midWord);
           if (diff < bestDiff) { bestDiff = diff; bestSplit = c + 1; }
         }
-        firstHalf  = clauses.slice(0, bestSplit).join(' ').trim();
-        secondHalf = clauses.slice(bestSplit).join(' ').trim();
-        didSplit   = true;
+        firstHalf      = clauses.slice(0, bestSplit).join(' ').trim();
+        secondHalf     = clauses.slice(bestSplit).join(' ').trim();
+        firstWordCount = firstHalf.split(/\s+/).filter(Boolean).length;
+        didSplit       = true;
       }
     }
 
-    const totalScenes = segments.length + 1; // +1 for the incoming clone
+    // ── Timestamp split — proportional to word count ────────────────────────
+    // The clone's startTime is where the second half of speech begins in the video.
+    const clipDur     = seg.endTime - seg.startTime;
+    const splitRatio  = (didSplit && totalWordCount > 0) ? firstWordCount / totalWordCount : 0.5;
+    const splitTime   = seg.startTime + clipDur * splitRatio;
+    const originalEnd = seg.endTime;
 
-    // Update the original segment's script and re-derive its action
-    seg.script = firstHalf;
-    if (didSplit) {
-      seg.action = deriveSceneAction(firstHalf, i, totalScenes);
-    }
+    // Shorten the original segment to the first half
+    seg.endTime = splitTime;
+    seg.script  = firstHalf;
+    if (didSplit) seg.action = deriveSceneAction(firstHalf, i, segments.length + 1);
 
-    // Build the clone with the second half
+    // ── Build the clone ─────────────────────────────────────────────────────
     const clone = Object.assign({}, seg, {
       done:         false,
+      startTime:    splitTime,
+      endTime:      originalEnd,
       script:       secondHalf,
-      action:       deriveSceneAction(secondHalf, i + 1, totalScenes),
+      action:       deriveSceneAction(secondHalf, i + 1, segments.length + 1),
       veoPrompt:    '',
-      nbPrompt:     seg.nbPrompt,   // reuse same NB starting frame
+      nbPrompt:     seg.nbPrompt,
+      frameDataUrl: null,   // frame captured async below at splitTime
       targetX:      null,
       targetY:      null,
       targetPerson: null,
       targetGender: null,
     });
 
-    // Insert now so both i and i+1 are valid indices when building prompts
+    // Insert so both indices are valid when building prompts
     segments.splice(i + 1, 0, clone);
 
-    // Rebuild Veo 3 JSON for both with their matched actions
-    seg.veoPrompt   = buildSegmentVeo3Prompt(i,     seg.startTime,   seg.endTime,   firstHalf,  setting, productName, bgImageDataUrl);
-    clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, clone.startTime, clone.endTime, secondHalf, setting, productName, bgImageDataUrl);
+    // Rebuild Veo 3 JSON for both with their correct time ranges + actions
+    seg.veoPrompt   = buildSegmentVeo3Prompt(i,     seg.startTime, seg.endTime,    firstHalf,  setting, productName, bgImageDataUrl);
+    clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, splitTime,     originalEnd,    secondHalf, setting, productName, bgImageDataUrl);
 
     debounceSave();
     renderSegments();
@@ -7887,10 +7897,37 @@ RULES — read carefully:
 
     showToast(
       didSplit
-        ? '✂ Script split at mid-point — actions matched to each half. Review both cards.'
-        : 'Segment duplicated — edit the script and regenerate the prompt.',
-      'info', 4000
+        ? '✂ Script split — capturing frame at split point…'
+        : 'Segment duplicated — capturing frame…',
+      'info', 3000
     );
+
+    // ── Async: capture the frame at splitTime for the clone ─────────────────
+    // Runs after render so the card is already visible. Once the frame arrives,
+    // update the thumbnail in the DOM and rebuild the clone's Veo 3 prompt with
+    // the new start frame context.
+    if (!seg._scriptOnly) {
+      try {
+        const newFrame = await captureFrame(splitTime);
+        if (newFrame && segments[i + 1] === clone) {
+          clone.frameDataUrl = newFrame;
+          // Update the thumbnail live in the rendered card
+          const card = document.getElementById('seg-card-' + (i + 1));
+          const img  = card?.querySelector('.seg-frame-img');
+          if (img) img.src = newFrame;
+          // Rebuild Veo 3 with the real start frame now available
+          clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, splitTime, originalEnd, secondHalf, setting, productName, bgImageDataUrl);
+          const veoTa = document.getElementById('veo-seg-' + (i + 1));
+          if (veoTa) { veoTa.value = clone.veoPrompt; autoGrow(veoTa); }
+          debounceSave();
+          showToast('✅ Frame captured at split point — second segment ready.', 'success', 3000);
+        } else if (!newFrame) {
+          showToast('Video not loaded — frame not captured for the new segment. Load the video and use ↻ Regen Action to fill it in.', 'warning', 5000);
+        }
+      } catch (e) {
+        showToast('Frame capture failed: ' + (e.message || e), 'warning');
+      }
+    }
   }
 
   // --- Clear all segments ---
@@ -11713,7 +11750,17 @@ ${veoPrompt}
       const clipStart = seg.startTime;
       const clipEnd   = seg.endTime;
       const clipDur   = clipEnd - clipStart;
-      const step      = clipDur / (FRAME_COUNT + 1);
+
+      // Zero-duration guard — if start === end (e.g. a freshly added CTA segment
+      // before the user has set its endpoint) all captures would land on the same
+      // frame; fall back to keyword derivation immediately.
+      if (clipDur <= 0) {
+        done(deriveSceneAction(seg.script || '', i, segments.length));
+        showToast(`Seg ${i+1}: zero-duration clip — used keyword fallback. Adjust the segment timestamps and retry.`, 'warning', 4000);
+        return;
+      }
+
+      const step = clipDur / (FRAME_COUNT + 1);
 
       const liveFrames = [];
       const timestamps = [];
