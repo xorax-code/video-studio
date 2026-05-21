@@ -11673,13 +11673,16 @@ ${veoPrompt}
   }
 
   // --- Refresh Scene Action for a single segment via GPT-4o Vision ---
-  // Uses the same analysis prompt as analyzeAllFrames but scoped to one segment.
-  // Falls back to deriveSceneAction (keyword-based) if no API key or no frames.
+  // Captures 6 evenly-spaced frames across the segment's exact timestamp range
+  // (e.g. 0–4 s) and sends them to GPT-4o as a labelled sequential strip so it
+  // can describe both the person's actions AND any visual changes over time
+  // (pouring → dissolving, squeezing → flowing, etc.).
+  // Falls back to deriveSceneAction (keyword-based) if the video isn't loaded.
   async function refreshSegmentAction(i) {
     const seg = segments[i];
     if (!seg) return;
     const btn = document.querySelector(`[onclick*="refreshSegmentAction(${i})"]`);
-    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Analyzing…'; }
 
     const apiKey  = getApiKey();
     const pronoun = getAvatarPronoun();
@@ -11696,45 +11699,85 @@ ${veoPrompt}
       if (btn) { btn.disabled = false; btn.textContent = '↻ Regen Action'; }
     };
 
-    // No API key or no frames — fall back to keyword-based derivation
-    if (!apiKey || (!seg.frameDataUrl && seg._scriptOnly)) {
+    // No API key — fall back to keyword-based derivation immediately
+    if (!apiKey) {
       done(deriveSceneAction(seg.script || '', i, segments.length));
       return;
     }
 
     try {
-      // Capture fresh frames; fall back to saved start frame
-      let frames = await captureSegmentFrames(seg, 4);
-      if (!frames.length && seg.frameDataUrl) frames = [seg.frameDataUrl];
-      if (!frames.length) {
-        done(deriveSceneAction(seg.script || '', i, segments.length));
-        return;
+      // Capture 6 frames evenly spread across startTime → endTime.
+      // This gives GPT-4o a temporal sequence so it can see motion changes
+      // (e.g. before/during/after a pour, a squeeze, or a dissolving effect).
+      const FRAME_COUNT = 6;
+      const clipStart = seg.startTime;
+      const clipEnd   = seg.endTime;
+      const clipDur   = clipEnd - clipStart;
+      const step      = clipDur / (FRAME_COUNT + 1);
+
+      const liveFrames = [];
+      const timestamps = [];
+      for (let k = 1; k <= FRAME_COUNT; k++) {
+        const t = clipStart + step * k;
+        timestamps.push(t);
+        const f = await captureFrame(t);
+        if (f) liveFrames.push({ t, f });
       }
 
-      const imageContent = frames.map(f => ({ type: 'image_url', image_url: { url: f, detail: 'low' } }));
+      // If video isn't loaded/seekable, fall back to the saved start frame only
+      if (!liveFrames.length) {
+        if (seg.frameDataUrl) {
+          liveFrames.push({ t: clipStart, f: seg.frameDataUrl });
+          showToast(`Seg ${i+1}: video not loaded — using saved start frame only. Load the video for a full sequence analysis.`, 'warning', 4000);
+        } else {
+          done(deriveSceneAction(seg.script || '', i, segments.length));
+          showToast(`Seg ${i+1}: no frames available — used keyword fallback. Load the video and retry.`, 'warning', 4000);
+          return;
+        }
+      }
+
+      // Build the image content with inline timestamp labels
+      // Label format: [0.0s] [1.3s] ... so GPT knows frames are ordered in time
+      const fmt = s => s.toFixed(1) + 's';
+      const frameLabel = liveFrames.map(({t}) => `[${fmt(t)}]`).join('  ');
+      const imageContent = liveFrames.map(({f}) => ({ type: 'image_url', image_url: { url: f, detail: 'low' } }));
+
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'gpt-4o', max_tokens: 350,
+          model: 'gpt-4o', max_tokens: 400,
           messages: [{ role: 'user', content: [
-            { type: 'text', text: `Analyze ALL visible actions and visual events in these video frames. This will be used as the action field in a Veo 3 prompt — describe everything that needs to be animated.
+            { type: 'text', text: `You are analyzing a VIDEO CLIP from ${fmt(clipStart)} to ${fmt(clipEnd)} (${fmt(clipDur)} long).
 
-Write in short action sentences using "${pronoun}" as the subject. Cover:
-1. PERSON ACTIONS — hand/arm movements, what they pick up, hold, tilt, pour, squeeze, or demonstrate
-2. PROP & OBJECT INTERACTIONS — any object being used: bottle, container, model, food, liquid. What is it and what is ${pronoun} doing with it?
-3. VISUAL DEMONSTRATIONS & EFFECTS — if anything dissolves, melts, flows, changes, reacts, or transforms, describe it precisely. Example: "${pronoun} pours liquid onto a foam stomach model and the yellow fat layer dissolves on contact." These are critical for Veo 3 to animate correctly.
-4. PHYSICAL MODELS / PROPS — name any anatomical model, food prop, or demonstration prop and describe what happens to it.
+The ${liveFrames.length} images below are sequential frames captured at: ${frameLabel}
+They are in TIME ORDER — the first image is the start of the clip, the last image is the end. Study how things CHANGE across the sequence.
 
-RULES: Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms. Do NOT describe appearance, face, clothing, or background. Return only the action description — no intro.` },
+Describe ALL visible actions and visual events as a single flowing action description using "${pronoun}" as the subject. This goes into a Veo 3 prompt — every animatable detail matters.
+
+WHAT TO INCLUDE:
+1. PERSON ACTIONS — what ${pronoun} is doing with their hands/arms across the clip. Describe the motion arc (starts with → moves to → ends at).
+2. PROP & OBJECT INTERACTIONS — identify every object involved. What is it? What does ${pronoun} do with it? Be specific: "tilts a glass bottle and pours a clear liquid" not just "pours something".
+3. VISUAL CHANGES & EFFECTS — describe anything that CHANGES between the early frames and the later frames: dissolving, melting, flowing, color change, reaction, transformation. Example: "as the liquid makes contact with the yellow fat model, the fat begins dissolving and receding — by the final frame it has nearly disappeared." These motion effects are essential for Veo 3 to animate correctly.
+4. PHYSICAL MODELS / PROPS — if there is an anatomical model (stomach, gut, liver, organ), food prop, or any demonstration object, name it and describe what it looks like at the START and what it looks like at the END.
+
+RULES:
+- Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera")
+- Do NOT describe the person's appearance, face, clothing, or background
+- Write as a continuous action description, not a bullet list
+- Return only the action description — no intro, no commentary` },
             ...imageContent
           ]}]
         })
       });
+
       const data = await res.json().catch(() => ({}));
       let desc = data.choices?.[0]?.message?.content?.trim() || '';
       const refused = !desc || /i('m| am) sorry|can't assist|cannot assist/i.test(desc);
-      if (refused) desc = deriveSceneAction(seg.script || '', i, segments.length);
+      if (refused) {
+        desc = deriveSceneAction(seg.script || '', i, segments.length);
+        showToast(`Seg ${i+1}: vision refused — used keyword fallback.`, 'warning');
+      }
       done(desc);
     } catch (e) {
       done(deriveSceneAction(seg.script || '', i, segments.length));
