@@ -7888,7 +7888,7 @@ RULES — read carefully:
       const sceneNum = segments.indexOf(seg) + 1;
       const duration = Math.round((seg.endTime - seg.startTime) * 10) / 10;
       lines.push(`━━━ Scene ${idx + 1} of ${n} (Segment ${sceneNum}) ━━━`);
-      lines.push(`Model: Veo 3.1 Fast | Duration: ${duration}s`);
+      lines.push(`Model: Veo 3.1 Fast`);
       lines.push(seg.veoPrompt.trim());
       // Word-timed speech guide
       let speechText = '';
@@ -7907,7 +7907,7 @@ RULES — read carefully:
     lines.push(`━━━ END — ${n} scene${n !== 1 ? 's' : ''} total ━━━`);
     const message = lines.join('\n');
     navigator.clipboard.writeText(message).then(() => {
-      showToast(`All ${n} scene prompts copied — includes duration, Veo 3.1 Fast model, and speech timing for each scene.`, 'success', 5000);
+      showToast(`All ${n} scene prompts copied — includes Veo 3.1 Fast model and speech timing for each scene.`, 'success', 5000);
     }).catch(() => {
       try {
         const ta = document.createElement('textarea');
@@ -8059,9 +8059,10 @@ RULES — read carefully:
           </button>
         </div>
 
-        <div style="margin-top:12px;font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">
-          Prompts auto-update with your current scenes. Re-open any time to regen.
-        </div>
+        <button onclick="openVeoAgentPanel()" style="width:100%;margin-top:10px;padding:8px;border-radius:8px;background:none;border:1px solid var(--border-2);color:var(--text-3);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;transition:border-color 0.15s,color 0.15s;"
+          onmouseenter="this.style.borderColor='rgba(251,146,60,0.4)';this.style.color='#fb923c'" onmouseleave="this.style.borderColor='var(--border-2)';this.style.color='var(--text-3)'">
+          🔄 Regenerate — refresh counts &amp; prompts
+        </button>
       </div>`;
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
