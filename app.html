@@ -3631,7 +3631,7 @@
           style="flex-shrink:0;width:100%;padding:10px 0;font-size:13px;font-weight:800;letter-spacing:-0.2px;background:var(--grad-accent);border:1px solid rgba(167,139,250,0.6);border-radius:8px;color:#fff;box-shadow:0 0 18px rgba(139,92,246,0.35);cursor:pointer;font-family:inherit;transition:box-shadow 0.2s;"
           onmouseenter="this.style.boxShadow='0 0 28px rgba(139,92,246,0.55)'"
           onmouseleave="this.style.boxShadow='0 0 18px rgba(139,92,246,0.35)'"
-          title="One click: analyze the video, generate all prompts, then open the pre-flight check">
+          title="Analyze video frames + generate all prompts. Then click ▶ Run when ready.">
           ⚡ Process Everything
         </button>
 
@@ -7798,30 +7798,92 @@ RULES — read carefully:
   }
 
   // --- Duplicate a segment ---
+  // Smart-splits the script at the nearest clause boundary to the midpoint,
+  // re-derives the action for each half based on the specific words being said,
+  // and rebuilds the Veo 3 JSON prompt for both segments automatically.
   function duplicateSegment(i) {
     const seg = segments[i];
     if (!seg) return;
-    // Deep-clone the segment, clear done state and target pin
+
+    const setting     = document.getElementById('studioSetting')?.value.trim() || '';
+    const productSel  = document.getElementById('studioProduct');
+    const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
+
+    // ── Smart script split ──────────────────────────────────────────────────
+    const script = (seg.script || '').trim();
+    let firstHalf = script;
+    let secondHalf = '';
+    let didSplit = false;
+
+    if (script) {
+      // Break into clauses at punctuation, re-attaching the punctuation to each clause
+      const clauses = [];
+      script.split(/([.!?]+|,|;)/).forEach(part => {
+        if (/^[.!?,;]+$/.test(part)) {
+          if (clauses.length) clauses[clauses.length - 1] += part;
+        } else {
+          const trimmed = part.trim();
+          if (trimmed) clauses.push(trimmed);
+        }
+      });
+
+      if (clauses.length > 1) {
+        const totalWords = script.split(/\s+/).filter(Boolean).length;
+        const midWord    = totalWords / 2;
+        let wordsSoFar = 0, bestSplit = 1, bestDiff = Infinity;
+        for (let c = 0; c < clauses.length - 1; c++) {
+          wordsSoFar += clauses[c].split(/\s+/).filter(Boolean).length;
+          const diff = Math.abs(wordsSoFar - midWord);
+          if (diff < bestDiff) { bestDiff = diff; bestSplit = c + 1; }
+        }
+        firstHalf  = clauses.slice(0, bestSplit).join(' ').trim();
+        secondHalf = clauses.slice(bestSplit).join(' ').trim();
+        didSplit   = true;
+      }
+    }
+
+    const totalScenes = segments.length + 1; // +1 for the incoming clone
+
+    // Update the original segment's script and re-derive its action
+    seg.script = firstHalf;
+    if (didSplit) {
+      seg.action = deriveSceneAction(firstHalf, i, totalScenes);
+    }
+
+    // Build the clone with the second half
     const clone = Object.assign({}, seg, {
-      done: false,
-      script: seg.script,        // keep script — user edits it after
-      veoPrompt: seg.veoPrompt,  // keep prompt — user regenerates after
-      nbPrompt: seg.nbPrompt,
-      targetX: null,
-      targetY: null,
+      done:         false,
+      script:       secondHalf,
+      action:       deriveSceneAction(secondHalf, i + 1, totalScenes),
+      veoPrompt:    '',
+      nbPrompt:     seg.nbPrompt,   // reuse same NB starting frame
+      targetX:      null,
+      targetY:      null,
       targetPerson: null,
       targetGender: null,
     });
-    // Insert immediately after the source segment
+
+    // Insert now so both i and i+1 are valid indices when building prompts
     segments.splice(i + 1, 0, clone);
+
+    // Rebuild Veo 3 JSON for both with their matched actions
+    seg.veoPrompt   = buildSegmentVeo3Prompt(i,     seg.startTime,   seg.endTime,   firstHalf,  setting, productName, bgImageDataUrl);
+    clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, clone.startTime, clone.endTime, secondHalf, setting, productName, bgImageDataUrl);
+
     debounceSave();
     renderSegments();
-    // Scroll the new card into view
+
     setTimeout(() => {
       const card = document.getElementById('seg-card-' + (i + 1));
       if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     }, 120);
-    showToast('Segment duplicated — edit the script and regenerate the prompt.', 'info', 3000);
+
+    showToast(
+      didSplit
+        ? '✂ Script split at mid-point — actions matched to each half. Review both cards.'
+        : 'Segment duplicated — edit the script and regenerate the prompt.',
+      'info', 4000
+    );
   }
 
   // --- Clear all segments ---
@@ -9250,7 +9312,22 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         const content = [
           {
             type: 'text',
-            text: `Analyze the physical actions and movements visible in these video frames. Describe ONLY the body movements, hand gestures, and object interactions shown — not who is doing them, not their appearance, not the background. Write in short action sentences using "${pronoun}" as the subject. Examples: "${pronoun} lifts a bottle with both hands and tilts it forward slowly." "${pronoun} reaches across and picks up an item." "${pronoun} holds an object up toward the camera." Focus on: hand and arm movements, what objects are picked up or put down, body positioning changes, and the final action state. IMPORTANT: Do NOT use the words "left" or "right" to describe hand or body position — use "one hand", "the other hand", "both hands", or describe position relative to the camera instead (e.g. "closer to camera", "held up toward camera"). Return only the movement description — no intro, no identity, no appearance, no environment.`
+            text: `Analyze ALL visible actions and visual events in these video frames. This description will be used to recreate the scene in a Veo 3 video — so capture everything that needs to be animated.
+
+Write in short action sentences using "${pronoun}" as the subject. Cover ALL of the following that are visible:
+
+1. PERSON ACTIONS — hand/arm movements, what they pick up, hold, tilt, pour, squeeze, or demonstrate. Be specific about the motion.
+2. PROP & OBJECT INTERACTIONS — describe any object being used: bottle, container, model, food, tool, liquid. What is it? What is ${pronoun} doing with it?
+3. VISUAL DEMONSTRATIONS & EFFECTS — if anything reacts, dissolves, melts, flows, changes color, transforms, or produces a visible effect, describe it precisely. Example: "${pronoun} pours a clear liquid onto a yellow fat model and the fat dissolves on contact." Example: "${pronoun} squeezes a lemon half over a glass and juice streams down." These cause-and-effect moments are critical — always include them.
+4. PHYSICAL MODELS / PROPS — if there is an anatomical model (stomach, liver, gut), a food prop, or any demonstration prop, name it and describe what happens to it.
+
+RULES:
+- Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera", "tilted toward camera")
+- Do NOT describe the person's appearance, face, clothing, hair, or the background setting
+- DO describe any visual cause-and-effect that Veo 3 would need to animate
+- Be specific: "pours amber liquid onto a foam stomach model and the yellow fat layer dissolves" beats "pours liquid on a model"
+
+Return only the action description — no intro, no commentary, no filler.`
           },
           ...imageContent
         ];
@@ -9270,7 +9347,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         const isRefusal = !description || /i('m| am) sorry|can't assist|cannot assist|I apologize|unable to (help|assist)/i.test(description);
         if (isRefusal && frameList.length > 1) {
           const retryContent = [
-            { type: 'text', text: `Describe the physical movements and actions visible in this image using "${pronoun}" as the subject. Short action sentences only — focus on what hands and arms are doing, what objects are being held or moved. Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms instead. No identity, no appearance, no background.` },
+            { type: 'text', text: `Describe ALL visible actions and visual events in this image using "${pronoun}" as the subject. Short action sentences only. Include: what ${pronoun} is doing with their hands/arms, any objects or props being used, and any visible demonstration effects (dissolving, melting, flowing, reacting). If there is a physical model (stomach, organ, food prop) describe what is happening to it. Do NOT use "left" or "right" — use "one hand", "the other hand", or camera-relative terms. No identity, no appearance, no background setting.` },
             { type: 'image_url', image_url: { url: frameList[0], detail: 'low' } }
           ];
           const retryRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -9327,13 +9404,55 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
   const TARGET_SCENE_S = 8;            // target seconds per scene
   const TARGET_WORDS   = Math.round(TARGET_SCENE_S * WORDS_PER_SEC); // ≈18
 
-  // Derive a meaningful Veo 3 action description from the scene text
+  // Derive a meaningful Veo 3 action description from the scene text.
+  // Physical product/food actions are checked FIRST so they take priority over
+  // generic emotional states — this makes duplicated segment actions match what
+  // the person is actually doing while saying those specific words.
   function deriveSceneAction(text, sceneIndex, totalScenes) {
     const t = text.toLowerCase();
+    // ── Physical / hands-on actions ─────────────────────────────────────────
+    if (/(squeeze|squeezing|press.*juice|juice.*lemon|lemon.*juice|citrus|half.*lemon|lemon.*half)/.test(t))
+      return 'person squeezes citrus over a glass — deliberate hand motion, glances at the action then back to camera';
+    if (/(pour|pouring|drizzle|drizzling|drop.*in|add.*to.*glass|add.*to.*cup|measure.*out)/.test(t))
+      return 'person pours or adds ingredient with a natural deliberate motion — glances at the pour, then back to camera';
+    if (/(drink|drinking|sip|sipping|swallow|take.*sip|taste|tasting|chug|gulp)/.test(t))
+      return 'person takes a sip or drinks — natural smooth motion, reacts with a satisfied expression looking back at camera';
+    if (/(hold.*up|hold.*out|show|showing|look.*at|here.*is|this.*is|see.*this|reveal|check.*this|look.*at.*this)/.test(t))
+      return 'person holds product up toward camera with a confident display — slight smile, direct eye contact';
+    if (/(mix|mixing|stir|stirring|blend|blending|shake|shaking|whisk|whisking)/.test(t))
+      return 'person mixes or stirs with a smooth consistent motion — watches the motion, then returns to camera eye contact';
+    if (/(scoop|scooping|measure|measuring|tablespoon|teaspoon|spoonful|serving)/.test(t))
+      return 'person scoops or measures with deliberate steady hands — precise careful motion';
+    if (/(open|opening|unscrew|cap.*off|twist.*open|crack.*open|peel|peeling)/.test(t))
+      return 'person opens the container with a natural motion — presents product to camera after opening';
+    if (/(spread|spreading|apply|applying|rub|rubbing|put.*on|dab|dip|dipping)/.test(t))
+      return 'person applies product with a gentle deliberate touch — smooth consistent motion';
+    if (/(grab|grabbing|pick.*up|reach.*for|take.*the|pull.*out)/.test(t))
+      return 'person reaches and picks up an item with a natural confident motion — brings it into frame';
+    if (/(point|pointing|tap|tapping|gesture.*toward|look.*down|down.*here|right.*here)/.test(t))
+      return 'person points directly at camera or taps product — strong direct energy, purposeful gesture';
+    if (/(cut|cutting|slice|slicing|chop|chopping|break|breaking)/.test(t))
+      return 'person cuts or breaks an item with a clean deliberate motion — controlled and practiced';
+    if (/(smell|smelling|sniff|sniffing|inhale|breathe.*in)/.test(t))
+      return 'person brings item close and inhales with a genuine pleased reaction — looks back at camera with a smile';
+    if (/(eat|eating|bite|biting|chew|chewing|try|trying|tasted|tasting)/.test(t))
+      return 'person takes a bite or eats with natural motion — genuine satisfying reaction, smiles at camera';
+    if (/(wash|washing|rinse|rinsing|clean|cleaning)/.test(t))
+      return 'person performs washing or cleaning motion with deliberate hands — clear and visible action';
+    if (/(swallow|capsule|pill|tablet|take.*supplement|take.*vitamin)/.test(t))
+      return 'person holds up capsule or tablet, takes it naturally — clean motion, looks back to camera';
+    if (/(dissolv|melt|break.*down|fat.*away|burn.*fat|flush.*out|cleans.*gut|cleanse.*liver|detox|toxin)/.test(t))
+      return 'person demonstrates or gestures toward a visual effect — points to or pours liquid showing a dissolving or clearing reaction on a prop or model';
+    if (/(stomach|gut|liver|organ|model|fat.*model|body.*model|digestive)/.test(t))
+      return 'person holds or gestures toward an anatomical prop or model — demonstrates effect with a deliberate hand motion';
+    if (/(watch|watch.*what|look.*what|look.*how|see.*how|see.*what|i.*show)/.test(t))
+      return 'person holds demonstration prop or object toward camera — gestures to draw attention to a visual effect';
+    // ── Scene position fallbacks ─────────────────────────────────────────────
     if (sceneIndex === 0)
       return 'person delivers opening hook directly to camera — confident eye contact, slight forward lean, engaging energy';
     if (sceneIndex === totalScenes - 1)
       return 'person delivers closing call-to-action with conviction — direct eye contact, warm smile, natural hand gesture';
+    // ── Emotional / rhetorical states ────────────────────────────────────────
     if (/\?/.test(text))
       return 'person asks question with raised eyebrows and a brief pause — inviting expression, slight head tilt';
     if (/(wow|amazing|incredible|unbelievable|crazy|insane|shocking|!{2,})/.test(t))
@@ -10411,8 +10530,8 @@ No markdown. Return only the JSON object.`
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
       const _setStep = (n, label) => {
-        if (btn) btn.textContent = `⏳ Step ${n}/3 — ${label}`;
-        showToast(`Step ${n} of 3: ${label}`, 'info', 2000);
+        if (btn) btn.textContent = `⏳ Step ${n}/2 — ${label}`;
+        showToast(`Step ${n} of 2: ${label}`, 'info', 2000);
       };
       if (btn) { btn.disabled = true; }
       // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
@@ -10429,9 +10548,9 @@ No markdown. Return only the JSON object.`
         return;
       }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
-      showToast('Step 3 of 3: Pre-flight check', 'info', 1500);
-      // Step 3 — pre-flight gate (all prompts including vision-based ones are now ready)
-      showPreflightModal(false);
+      // Done — prompts are ready. Don't auto-run; let the user choose when to click Step 3.
+      const promptCount = segments.filter(s => s.veoPrompt?.trim()).length;
+      showToast(`✅ Done! ${promptCount} scene prompt${promptCount !== 1 ? 's' : ''} ready — click ▶ Run when you're ready to generate.`, 'success', 5000);
     });
   }
 
