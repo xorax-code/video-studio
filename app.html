@@ -9713,11 +9713,26 @@ Rules:
       if (!segments[i]) return;
       ta.value = rewritten;
       segments[i].script = rewritten;
+
+      // Rebuild action + Veo 3 prompt from new script
+      segments[i].action = deriveSceneAction(rewritten, i, segments.length);
+      const setting     = document.getElementById('studioSetting')?.value.trim() || '';
+      const productSel  = document.getElementById('studioProduct');
+      const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
+      segments[i].veoPrompt = buildSegmentVeo3Prompt(i, segments[i].startTime, segments[i].endTime, rewritten, setting, productName, bgImageDataUrl);
+
+      // Update action field in the DOM if visible
+      const actionEl = document.getElementById('action-seg-' + i);
+      if (actionEl) actionEl.value = segments[i].action;
+      const veoEl = document.getElementById('veo-seg-' + i);
+      if (veoEl) veoEl.value = segments[i].veoPrompt;
+
       autoGrow(ta);
       debounceSave();
       // Flash green
       ta.style.borderColor = '#4ade80';
       setTimeout(() => ta.style.borderColor = '', 1200);
+      showToast('↺ Script rewritten — action & Veo 3 prompt updated.', 'success', 2500);
     } catch(e) {
       showToast('Rewrite failed: ' + e.message, 'error');
     } finally {
