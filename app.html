@@ -3230,6 +3230,9 @@
       </div>
       <div id="projectBar" style="display:flex;align-items:center;gap:8px;flex:1;padding:5px 10px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);"></div>
     </div>
+    <p style="font-size:11px;color:rgba(156,163,175,0.75);margin:2px 0 8px;text-align:center;">
+      Have a video to clone? → Replicator &nbsp;|&nbsp; Starting from a script? → Producer
+    </p>
 
     <!-- 2-COLUMN BODY -->
     <div id="vsLayout" style="display:flex;flex-direction:row;gap:0;flex:1;overflow:hidden;min-height:0;">
@@ -3681,6 +3684,10 @@
               </div>
             </div>
 
+            <div style="font-size:10px;color:rgba(156,163,175,0.6);margin-top:3px;text-align:center;align-self:flex-end;">
+              Workflow: NB Pro composite first → then Veo 3 video. Claude handles both steps.
+            </div>
+
             <!-- More dropdown -->
             <div class="vs-more-wrap">
               <button class="vs-more-btn" onclick="toggleVsMoreMenu(this)" title="More options">⋯ More <span style="font-size:9px;">▾</span></button>
@@ -3689,16 +3696,18 @@
                 <button class="vs-more-item" id="condenseAllBtn" onclick="condenseAllScripts();closeVsMoreMenu()" title="Rewrite over-limit scenes to fit 8s">✂ Condense Scripts</button>
                 <button class="vs-more-item" onclick="copyAllVeoPrompts();closeVsMoreMenu()" title="Copy all Veo 3 prompts to clipboard">📋 Copy All Veo Prompts</button>
                 <button class="vs-more-item replicator-only" onclick="copyVeoAgentSwapPrompt();closeVsMoreMenu()" title="Copy the Veo Agent avatar-swap prompt to clipboard">🤖 Copy Veo Agent Prompt</button>
+                <button class="vs-more-item replicator-only" onclick="copyVeoAgentAllScenePrompts ? copyVeoAgentAllScenePrompts() : openVeoAgentPanel();closeVsMoreMenu()" title="Copy all scene prompts for Veo Agent (Claude in Chrome workflow)" style="color:#67e8f9;">🤖 Copy All for Veo Agent</button>
                 <button class="vs-more-item replicator-only" onclick="downloadAllFramesAsZip();closeVsMoreMenu()" title="Download avatar + all scene frames as a ZIP folder for batch upload to Veo">📦 Download Frames ZIP</button>
                 <button class="vs-more-item producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes();closeVsMoreMenu()" title="Use GPT to suggest action descriptions">✨ AI Describe Scenes</button>
                 <button class="vs-more-item producer-only" id="hookVariationsBtn" onclick="generateHookVariations();closeVsMoreMenu()" title="Generate 5 alternative hooks for scene 1">🎣 Hook Variations</button>
                 <button class="vs-more-item producer-only" id="genAllNBBtn" onclick="generateAllNBPrompts();closeVsMoreMenu()" title="Build NB Pro prompts for all scenes">🍌 Gen All NB Prompts</button>
-                <button class="vs-more-item" id="saveAllBtn" onclick="saveGeneratedToLibrary();closeVsMoreMenu()" style="display:none;">💾 Save to Library</button>
+                <button class="vs-more-item" id="saveAllBtn" onclick="saveGeneratedToLibrary();closeVsMoreMenu()" style="display:none;">💾 Save Run to Library</button>
                 <button class="vs-more-item" onclick="openSavedLibraryModal();closeVsMoreMenu()">📚 View Saved <span id="libCount" style="font-size:9px;color:var(--text-3);margin-left:3px;"></span></button>
               </div>
             </div>
 
             <span style="margin-left:4px;font-size:10px;color:var(--text-3);">Segments: <span id="segmentCount" style="font-weight:600;color:var(--text-2);"></span></span>
+            <button onclick="toggleAllPrompts()" id="togglePromptsBtn" style="font-size:11px;padding:3px 8px;background:rgba(139,92,246,0.12);border:1px solid rgba(139,92,246,0.35);border-radius:4px;color:#c4b5fd;cursor:pointer;margin-left:6px;">👁 Reveal Prompts</button>
           </div>
           <div id="segmentTimeline" style="display:none;padding:6px 10px 5px;border-bottom:1px solid var(--border);flex-shrink:0;" title="Segment timeline — block width = scene length, color = script fit. Click a block to jump to it."></div>
           <!-- Scroll nav arrows -->
@@ -3709,7 +3718,8 @@
           </div>
           <div id="segmentsContainer" style="flex:1;min-height:0;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;scrollbar-width:thin;scrollbar-color:var(--accent) transparent;">
             <div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">
-              Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.
+              <strong style="color:var(--text-2);display:block;margin-bottom:6px;">① Upload your reference video → ② Detect Cuts → ③ Transcribe → ④ Generate Prompts → ⑤ Run</strong>
+              Each step takes about 30 seconds.
             </div>
           </div>
 
@@ -4457,7 +4467,7 @@
       <button class="btn" onclick="closeSavedLibraryModal()" style="padding:2px 8px;font-size:12px;">✕</button>
     </div>
     <div id="studioLibrary" style="flex:1;overflow-y:auto;min-height:80px;">
-      <div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet</div>
+      <div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet<p style="font-size:11px;color:rgba(156,163,175,0.5);margin-top:6px;">Generate prompts for any project, then click "Save Run to Library" to archive it here.</p></div>
     </div>
   </div>
 </div>
@@ -6953,7 +6963,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (meta.hasTranscript) {
         try {
           const tx = await DB.get('sm_refvideo_tx_' + id);
-          if (tx) whisperSegments = JSON.parse(tx);
+          if (tx) { try { whisperSegments = JSON.parse(tx); } catch(e) { whisperSegments = []; } }
         } catch (e) { /* transcript optional */ }
       }
     } else {
@@ -6961,7 +6971,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (!whisperSegments.length && meta.hasTranscript) {
         try {
           const tx = await DB.get('sm_refvideo_tx_' + id);
-          if (tx) whisperSegments = JSON.parse(tx);
+          if (tx) { try { whisperSegments = JSON.parse(tx); } catch(e) { whisperSegments = []; } }
         } catch (e) { /* transcript optional */ }
       }
     }
@@ -7500,12 +7510,15 @@ RULES — read carefully:
       const videoEl = document.getElementById('refVideoEl');
       if (!videoEl || !videoEl.duration || isNaN(videoEl.duration) || videoEl.readyState < 1) { resolve(null); return; }
       const canvas = document.getElementById('frameCanvas');
+      const savedTime = videoEl.currentTime;
       const doCapture = () => {
         canvas.width = videoEl.videoWidth || 360;
         canvas.height = videoEl.videoHeight || 640;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/jpeg', 0.8));
+        const result = canvas.toDataURL('image/jpeg', 0.8);
+        try { videoEl.currentTime = savedTime; } catch(_) {}
+        resolve(result);
       };
       if (Math.abs(videoEl.currentTime - time) < 0.1) {
         doCapture();
@@ -7513,6 +7526,7 @@ RULES — read carefully:
         videoEl.currentTime = time;
         const seekTimeout = setTimeout(() => {
           videoEl.removeEventListener('seeked', onSeeked);
+          try { videoEl.currentTime = savedTime; } catch(_) {}
           resolve(null);
         }, 8000);
         const onSeeked = () => { clearTimeout(seekTimeout); doCapture(); };
@@ -7809,6 +7823,9 @@ RULES — read carefully:
   // splits the timestamp range proportionally, captures a fresh video frame at
   // the split timestamp for the clone, re-derives actions, and rebuilds prompts.
   async function duplicateSegment(i) {
+    const dupBtn = document.querySelector(`#seg-card-${i} .dup-btn`);
+    if (dupBtn) dupBtn.disabled = true;
+    try {
     const seg = segments[i];
     if (!seg) return;
 
@@ -7884,8 +7901,9 @@ RULES — read carefully:
     segments.splice(i + 1, 0, clone);
 
     // Rebuild Veo 3 JSON for both with their correct time ranges + actions
-    seg.veoPrompt   = buildSegmentVeo3Prompt(i,     seg.startTime, seg.endTime,    firstHalf,  setting, productName, bgImageDataUrl);
-    clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, splitTime,     originalEnd,    secondHalf, setting, productName, bgImageDataUrl);
+    const cloneIdx = segments.indexOf(clone);
+    seg.veoPrompt   = buildSegmentVeo3Prompt(i,        seg.startTime, seg.endTime, firstHalf,  setting, productName, bgImageDataUrl);
+    clone.veoPrompt = buildSegmentVeo3Prompt(cloneIdx >= 0 ? cloneIdx : i + 1, splitTime, originalEnd, secondHalf, setting, productName, bgImageDataUrl);
 
     debounceSave();
     renderSegments();
@@ -7909,15 +7927,16 @@ RULES — read carefully:
     if (!seg._scriptOnly) {
       try {
         const newFrame = await captureFrame(splitTime);
-        if (newFrame && segments[i + 1] === clone) {
+        const cloneIdxNow = segments.indexOf(clone);
+        if (newFrame && cloneIdxNow >= 0) {
           clone.frameDataUrl = newFrame;
           // Update the thumbnail live in the rendered card
-          const card = document.getElementById('seg-card-' + (i + 1));
+          const card = document.getElementById('seg-card-' + cloneIdxNow);
           const img  = card?.querySelector('.seg-frame-img');
           if (img) img.src = newFrame;
           // Rebuild Veo 3 with the real start frame now available
-          clone.veoPrompt = buildSegmentVeo3Prompt(i + 1, splitTime, originalEnd, secondHalf, setting, productName, bgImageDataUrl);
-          const veoTa = document.getElementById('veo-seg-' + (i + 1));
+          clone.veoPrompt = buildSegmentVeo3Prompt(cloneIdxNow, splitTime, originalEnd, secondHalf, setting, productName, bgImageDataUrl);
+          const veoTa = document.getElementById('veo-seg-' + cloneIdxNow);
           if (veoTa) { veoTa.value = clone.veoPrompt; autoGrow(veoTa); }
           debounceSave();
           showToast('✅ Frame captured at split point — second segment ready.', 'success', 3000);
@@ -7927,6 +7946,10 @@ RULES — read carefully:
       } catch (e) {
         showToast('Frame capture failed: ' + (e.message || e), 'warning');
       }
+    }
+    } finally {
+      const dupBtnFinal = document.querySelector(`#seg-card-${i} .dup-btn`);
+      if (dupBtnFinal) dupBtnFinal.disabled = false;
     }
   }
 
@@ -8253,9 +8276,11 @@ RULES — read carefully:
 
   // --- Remove a single segment ---
   function removeSegment(i) {
-    segments.splice(i, 1);
-    saveSegments();
-    renderSegments();
+    showConfirm(`Remove Segment ${i + 1}? This cannot be undone.`, () => {
+      segments.splice(i, 1);
+      saveSegments();
+      renderSegments();
+    });
   }
 
   // --- Merge two adjacent segments (i and i+1) into one ---
@@ -8552,7 +8577,7 @@ RULES — read carefully:
 
   // --- Auto-grow a textarea to fit its content ---
   function autoGrow(el) {
-    if (!el || el.offsetParent === null) return;
+    if (!el) return;
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 300) + 'px';
   }
@@ -8669,7 +8694,7 @@ RULES — read carefully:
       showVideoMiniBtn(hasVideo);
       const emptyMsg = studioMode === 'producer'
         ? 'Paste your script and click <strong style="color:var(--text-2);">✂ Split into Scenes</strong> to create segments.'
-        : 'Upload a video then click <strong style="color:var(--accent-2);">Detect Cuts</strong> to auto-split into segments, or <strong style="color:var(--text-2);">✂ Mark Scene</strong> while watching.';
+        : '<strong style="color:var(--text-2);display:block;margin-bottom:6px;">① Upload your reference video → ② Detect Cuts → ③ Transcribe → ④ Generate Prompts → ⑤ Run</strong>Each step takes about 30 seconds.';
       container.innerHTML = `<div id="segmentsEmpty" style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">${emptyMsg}</div>`;
       const saveAllBtn = document.getElementById('saveAllBtn');
       if (saveAllBtn) saveAllBtn.style.display = 'none';
@@ -8692,7 +8717,7 @@ RULES — read carefully:
           <span style="font-size:12px;font-weight:800;color:${seg.done ? '#4ade80' : 'var(--accent-2)'};letter-spacing:-0.3px;">Seg ${i+1}</span>
           ${seg.isCTA ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;letter-spacing:0.04em;">🛍 CTA</span>` : `<span style="font-size:10px;color:var(--text-3);font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:0.3px;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</span>`}
           ${seg.done ? `<span class="scene-done-badge" style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>` : `<span class="scene-done-badge" style="display:none;font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>`}
-          <button onclick="duplicateSegment(${i})" title="Duplicate this segment — copies frame, action, prompts" style="margin-left:auto;background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:4px;color:var(--accent-2);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">⧉</button>
+          <button class="dup-btn" onclick="duplicateSegment(${i})" title="Duplicate this segment — copies frame, action, prompts" style="margin-left:auto;background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:4px;color:var(--accent-2);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">⧉ Split</button>
           <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">✕</button>
         </div>
 
@@ -8832,7 +8857,7 @@ RULES — read carefully:
       ${i < segments.length - 1 ? `
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-start;margin-top:72px;gap:3px;">
         <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
-        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:5px;color:#60a5fa;font-size:10px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:0.1px;">⊕</button>
+        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2} — combines script, keeps first frame" style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:5px;color:#60a5fa;font-size:10px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:0.1px;">⊕ Merge</button>
         <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
       </div>` : ''}
 `).join('');
@@ -9619,6 +9644,7 @@ Rules:
       const data = await res.json();
       const rewritten = data.choices?.[0]?.message?.content?.trim() || '';
       if (!rewritten) throw new Error('Empty response');
+      if (!segments[i]) return;
       ta.value = rewritten;
       segments[i].script = rewritten;
       autoGrow(ta);
@@ -9652,6 +9678,7 @@ Rules:
   }
 
   async function generateHookVariations() {
+    window._vsHookResults = [];
     if (segments.length === 0) { showToast('Split your script into scenes first.', 'warning'); return; }
     const key = getApiKey();
     if (!key) { showToast('Add your OpenAI API key in Settings first.', 'warning'); return; }
@@ -9748,10 +9775,9 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       return;
     }
 
-    // Warn if any existing segments have generated prompts
-    const hasPrompts = segments.length > 0 && segments.some(s => (s.nbPrompt && s.nbPrompt.trim()) || (s.veoPrompt && s.veoPrompt.trim()));
-    if (hasPrompts) {
-      showConfirm('Re-splitting will erase all generated NB and Veo prompts. Continue?', () => _doSplit(rawSentences));
+    // Warn if there are any existing segments (not just those with generated prompts)
+    if (segments.length > 0) {
+      showConfirm('This will replace your current segments. Continue?', () => _doSplit(rawSentences));
       return;
     }
     _doSplit(rawSentences);
@@ -9823,6 +9849,12 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     const countEl = document.getElementById('segmentCount');
     if (countEl) countEl.textContent = `${total} scene${total !== 1 ? 's' : ''}`;
     showToast(`${total} scene${total !== 1 ? 's' : ''} created — now click ⚡ Generate All Prompts.`, 'success');
+
+    // Check for short segments after split
+    const shortSegs = segments.filter(s => (s.script || '').split(/\s+/).filter(Boolean).length < 4);
+    if (shortSegs.length > 0) {
+      showToast(`${shortSegs.length} segment${shortSegs.length > 1 ? 's have' : ' has'} fewer than 4 words. Use the ⊕ Merge button to combine them.`, 'warning', 5000);
+    }
   }  // end _doSplit
 
   // NB Pro starting-frame prompt for script-only scenes (no video frame reference)
@@ -9901,6 +9933,8 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     });
     saveSegments();
     renderSegments();
+    // Auto-reveal Veo 3 prompts after generation
+    document.querySelectorAll('[id^="veo-wrap-"]').forEach(el => { el.style.display = ''; });
 
     // For segments that have an NB preview image, build vision-based Veo 3 prompts asynchronously.
     // Also run a vision pass to build smarter NB prompts for segments with frame images.
@@ -10091,7 +10125,7 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
     const tab  = window.open(url, '_blank');
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
     // Keep focus on the current tab — images open silently in the background
     if (tab) { tab.blur(); window.focus(); }
   }
@@ -10142,31 +10176,50 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
     }
     const total = segments.filter(s => s.veoPrompt?.trim()).length;
     const done  = segments.filter(s => s.veoPrompt?.trim() && s.done).length;
+    const wasMinimized = panel.dataset.minimized === '1';
     panel.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
         <span style="font-size:11px;font-weight:700;color:var(--text-1);">🎬 Scene Progress</span>
-        <button onclick="dismissStatusPanel()" title="Dismiss — clears the saved run" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
+        <div style="display:flex;gap:4px;align-items:center;">
+          <button id="statusPanelMinBtn" onclick="toggleStatusPanel()" title="Minimize" style="background:none;border:none;color:rgba(156,163,175,0.7);cursor:pointer;font-size:11px;padding:2px 6px;">${wasMinimized ? '▲' : '▼'}</button>
+          <button onclick="dismissStatusPanel()" title="Dismiss — clears the saved run" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px;">✕</button>
+        </div>
       </div>
-      <div style="display:flex;flex-direction:column;gap:4px;">
-        ${segments.filter(s => s.veoPrompt?.trim()).map((seg, idx) => {
-          const globalIdx = segments.indexOf(seg);
-          const statusIcon = seg.done ? '✅' : '⏳';
-          const statusColor = seg.done ? '#4ade80' : 'var(--text-3)';
-          return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;">
-            <span>${statusIcon}</span>
-            <span style="color:${statusColor};">Scene ${globalIdx + 1}</span>
-            ${seg.done ? '<span style="color:#4ade80;font-size:9px;margin-left:auto;">Done</span>' : ''}
-          </div>`;
-        }).join('')}
-      </div>
-      <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:10px;color:var(--text-3);">${done} / ${total} complete</div>
-      <div style="margin-top:6px;background:var(--surface-2);border-radius:3px;height:4px;overflow:hidden;">
-        <div style="width:${total>0?Math.round(done/total*100):0}%;height:100%;background:var(--success);border-radius:3px;transition:width 0.4s;"></div>
+      <div id="statusPanelBody" style="${wasMinimized ? 'display:none;' : ''}">
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          ${segments.filter(s => s.veoPrompt?.trim()).map((seg, idx) => {
+            const globalIdx = segments.indexOf(seg);
+            const statusIcon = seg.done ? '✅' : '⏳';
+            const statusColor = seg.done ? '#4ade80' : 'var(--text-3)';
+            return `<div style="display:flex;align-items:center;gap:6px;font-size:10px;">
+              <span>${statusIcon}</span>
+              <span style="color:${statusColor};">Scene ${globalIdx + 1}</span>
+              ${seg.done ? '<span style="color:#4ade80;font-size:9px;margin-left:auto;">Done</span>' : ''}
+            </div>`;
+          }).join('')}
+        </div>
+        <div style="margin-top:8px;padding-top:6px;border-top:1px solid var(--border);font-size:10px;color:var(--text-3);">${done} / ${total} complete</div>
+        <div style="margin-top:6px;background:var(--surface-2);border-radius:3px;height:4px;overflow:hidden;">
+          <div style="width:${total>0?Math.round(done/total*100):0}%;height:100%;background:var(--success);border-radius:3px;transition:width 0.4s;"></div>
+        </div>
       </div>`;
     // Persist that a run is active for this project so the panel survives a
     // reload / app restart until the user dismisses it.
     DB.set(modeKey('sm_active_run'), JSON.stringify({ projectId: activeProjectId })).catch(() => {});
     return panel;
+  }
+
+  // Minimize / restore the status panel body.
+  function toggleStatusPanel() {
+    const panel = document.getElementById('sceneStatusPanel');
+    if (!panel) return;
+    const body = document.getElementById('statusPanelBody');
+    const btn = document.getElementById('statusPanelMinBtn');
+    if (!body) return;
+    const isMin = body.style.display === 'none';
+    body.style.display = isMin ? '' : 'none';
+    panel.dataset.minimized = isMin ? '0' : '1';
+    if (btn) btn.textContent = isMin ? '▼' : '▲';
   }
 
   // Dismiss the status panel AND clear the persisted run marker.
@@ -10310,7 +10363,19 @@ No markdown. Return only the JSON object.`
       } catch (err) {
         console.error('onNbPreviewChange error:', err);
         const veoTa = document.getElementById('veo-seg-' + i);
-        if (veoTa && veoTa.value.startsWith('⏳')) veoTa.value = '';
+        if (veoTa && veoTa.value.startsWith('⏳')) {
+          // Fall back to text-based prompt so the textarea is never left blank
+          const setting = document.getElementById('studioSetting')?.value.trim() || '';
+          const productSel = document.getElementById('studioProduct');
+          const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || '') : '';
+          if (segments[i]) {
+            segments[i].veoPrompt = buildSegmentVeo3Prompt(i, segments[i].startTime, segments[i].endTime, segments[i].script, setting, productName, bgImageDataUrl);
+            veoTa.value = segments[i].veoPrompt;
+            autoGrow(veoTa);
+          } else {
+            veoTa.value = '';
+          }
+        }
         showToast('Image processing failed — please try uploading again.', 'error');
       }
     };
@@ -10326,6 +10391,15 @@ No markdown. Return only the JSON object.`
     segments[i].nbPreviewDataUrl = null;
     debounceSave();
     renderSegments();
+  }
+
+  // ── Toggle all Veo 3 prompts visible / hidden ────────────────────────────
+  function toggleAllPrompts() {
+    const btn = document.getElementById('togglePromptsBtn');
+    const sections = document.querySelectorAll('[id^="veo-wrap-"]');
+    const anyHidden = Array.from(sections).some(el => el.style.display === 'none' || getComputedStyle(el).display === 'none');
+    sections.forEach(el => { el.style.display = anyHidden ? '' : 'none'; });
+    if (btn) btn.textContent = anyHidden ? '👁 Hide Prompts' : '👁 Reveal Prompts';
   }
 
   // ── Toggle Veo 3 prompt visibility ───────────────────────────────────────
@@ -10571,7 +10645,7 @@ No markdown. Return only the JSON object.`
       showToast('No segments yet — upload a video and run Detect Cuts first.', 'warning');
       return;
     }
-    showConfirm('Run Process Everything? This analyzes video frames and generates all NB Pro + Veo 3 prompts. May take a minute.', async () => {
+    showConfirm('Run Process Everything? This analyzes video frames and generates all NB Pro + Veo 3 prompts. May take a minute.\n\nThis will:\n1. Analyze all video frames with GPT-4o vision\n2. Build NB Pro prompts for every segment\n3. Build Veo 3 prompts for every segment', async () => {
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
       const _setStep = (n, label) => {
@@ -11639,7 +11713,10 @@ ${veoPrompt}
       try { el.select(); document.execCommand('copy'); } catch(e) {}
     };
     navigator.clipboard.writeText(el.value).catch(doCopy);
-    window.open('https://labs.google/fx/tools/flow', '_blank');
+    const tab = window.open('https://labs.google/fx/tools/flow', '_blank');
+    if (!tab) {
+      showToast('Popup blocked — prompt copied to clipboard. Open a new tab and paste.', 'warning', 4000);
+    }
     // Show a persistent toast reminding user to paste
     showVeo3Toast(i + 1);
   }
@@ -11899,7 +11976,7 @@ RULES:
     }
 
     const btn = document.getElementById('condenseAllBtn');
-    if (btn) { btn.textContent = '⏳ Condensing…'; btn.disabled = true; }
+    if (btn) { btn.textContent = `⏳ Condensing ${overLimit.length} scene${overLimit.length !== 1 ? 's' : ''}…`; btn.disabled = true; }
 
     const sceneList = overLimit.map(x =>
       `Scene ${x.i + 1} (${x.wc} words — target ≤${TARGET_WORDS}): "${x.text}"`
@@ -12065,7 +12142,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
     DB.get('sm_avatar_profile').then(saved => {
       const el = document.getElementById('avatarDesc');
       if (saved && el) el.value = saved;
-    }).catch(err => console.error('loadAvatarProfile:', err));
+    }).catch(err => { console.error('loadAvatarProfile:', err); showToast('Could not load avatar profile — please re-enter your description.', 'warning'); });
     // Restore voice config
     try {
       const vc = JSON.parse(localStorage.getItem('vs_avatar_voice_config') || 'null');
@@ -12327,7 +12404,7 @@ TECHNICAL SPECS:
     DB.set('sm_bg_from_avatar', bgFromAvatar ? '1' : '').catch(() => {});
     renderStudioLibrary();
     const btn = document.getElementById('saveAllBtn');
-    if (btn) { btn.textContent = 'Project Saved'; setTimeout(() => btn.textContent = 'Save to Library', 2000); }
+    if (btn) { btn.textContent = 'Project Saved'; setTimeout(() => btn.textContent = '💾 Save Run to Library', 2000); }
   }
 
   function renderStudioLibrary() {
@@ -12340,7 +12417,7 @@ TECHNICAL SPECS:
       if (el) el.textContent = countText;
     });
     if (studioLibrary.length === 0) {
-      container.innerHTML = '<div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet</div>';
+      container.innerHTML = '<div style="font-size:11px;color:var(--text-3);text-align:center;padding:16px 0;">No saved recreations yet<p style="font-size:11px;color:rgba(156,163,175,0.5);margin-top:6px;">Generate prompts for any project, then click "Save Run to Library" to archive it here.</p></div>';
       return;
     }
     container.innerHTML = studioLibrary.map((item, i) => `
@@ -12412,9 +12489,11 @@ TECHNICAL SPECS:
   }
 
   function deleteLibraryItem(i) {
-    studioLibrary.splice(i, 1);
-    saveStudioLibrary();
-    renderStudioLibrary();
+    showConfirm('Delete this library item? This cannot be undone.', () => {
+      studioLibrary.splice(i, 1);
+      saveStudioLibrary();
+      renderStudioLibrary();
+    });
   }
 
   function populateAvatarAccountPicker() {
@@ -15116,8 +15195,10 @@ TECHNICAL SPECS:
             if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
             if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
             if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
-            await DB.set('sm_post_plans',  JSON.stringify(data.postPlans  || []));
-            await DB.set('sm_daily_items', JSON.stringify(data.dailyItems || []));
+            const postPlans = Array.isArray(data.postPlans) ? data.postPlans : [];
+            const dailyItems = Array.isArray(data.dailyItems) ? data.dailyItems : [];
+            await DB.set('sm_post_plans',  JSON.stringify(postPlans));
+            await DB.set('sm_daily_items', JSON.stringify(dailyItems));
             await DB.set('sm_video_log',   JSON.stringify(data.videoLog   || []));
             if (data.replicatorProjects)      await DB.set('sm_projects_r',       JSON.stringify(data.replicatorProjects));
             if (data.producerProjects)        await DB.set('sm_projects_p',       JSON.stringify(data.producerProjects));
@@ -15350,12 +15431,26 @@ TECHNICAL SPECS:
   // ============================================================
   let hooks = [];
 
+  const DEFAULT_HOOKS = [
+    "Stop scrolling — this changed everything for me",
+    "I tried this for 30 days. Here's what happened.",
+    "Nobody talks about this, but you need to know",
+    "The reason you're not seeing results (it's not what you think)",
+    "I wish I knew this before I started"
+  ];
+
   async function loadHooks() {
     try { hooks = _safeJSON(await DB.get('sm_hooks'), []); } catch(e) { hooks = []; showToast('Could not load Hook Bank.', 'error'); }
     // Purge any pre-seeded sample entries
     const before = hooks.length;
     hooks = hooks.filter(h => h.source !== 'Sample');
     if (hooks.length !== before) saveHooks();
+    // Seed example hooks on first load (before any user hooks exist)
+    if (hooks.length === 0 && !localStorage.getItem('aos_hooks_seeded_v1')) {
+      hooks = DEFAULT_HOOKS.map((text, i) => ({ id: 'default_hook_' + i, text, category: 'Template', source: 'Example', copyCount: 0 }));
+      saveHooks();
+      localStorage.setItem('aos_hooks_seeded_v1', '1');
+    }
     renderHookBank();
   }
 
@@ -15497,6 +15592,13 @@ TECHNICAL SPECS:
   // ============================================================
   let ctas = [];
 
+  const DEFAULT_CTAS = [
+    { text: "Link in bio to grab yours", type: "soft" },
+    { text: "Comment 'INFO' and I'll send you the link", type: "engagement" },
+    { text: "Swipe up to get the deal before it expires", type: "urgency" },
+    { text: "Try it free for 7 days — link in bio", type: "trial" }
+  ];
+
   async function loadCTALibrary() {
     try {
       // One-time wipe of seeded sample data.
@@ -15519,6 +15621,12 @@ TECHNICAL SPECS:
       ctas = ctas.filter(c => c.source !== 'Sample');
       if (ctas.length !== _beforeLen) saveCTALibrary();
     } catch(e) { ctas = []; showToast('Could not load CTA Library.', 'error'); }
+    // Seed example CTAs on first load (before any user CTAs exist)
+    if (ctas.length === 0 && !localStorage.getItem('aos_ctas_seeded_v1')) {
+      ctas = DEFAULT_CTAS.map((c, i) => ({ id: 'default_cta_' + i, text: c.text, type: c.type, source: 'Example', copyCount: 0 }));
+      saveCTALibrary();
+      localStorage.setItem('aos_ctas_seeded_v1', '1');
+    }
     renderCTALibrary();
   }
 
@@ -15878,12 +15986,11 @@ TECHNICAL SPECS:
   function useRecycleItem(id, btn) {
     const r = recycleItems.find(x => x.id === id);
     if (!r) return;
-    navigator.clipboard.writeText(r.content).then(() => {
-      r.timesUsed = (r.timesUsed || 0) + 1;
-      saveRecycleItems();
-      renderContentRecycler();
-      _showCopied(btn, '✅ Copied!');
-    }).catch(() => showToast('Copy failed — check browser permissions.', 'warning'));
+    navigator.clipboard.writeText(r.content).catch(() => {});
+    r.timesUsed = (r.timesUsed || 0) + 1;
+    saveRecycleItems();
+    _showCopied(btn, '✅ Copied!');
+    setTimeout(() => renderContentRecycler(), 2100);
   }
 
   // ============================================================
@@ -16015,12 +16122,6 @@ TECHNICAL SPECS:
   function cycleIdeaStatus(id) {
     const i = ideas.find(x => x.id === id);
     if (!i) return;
-    if (!['inbox', 'in-progress', 'done'].includes(i.status)) {
-      i.status = 'inbox';
-      saveIdeas();
-      renderIdeasInbox();
-      return;
-    }
     const order = ['inbox', 'in-progress', 'done'];
     const cur = order.indexOf(i.status);
     i.status = order[(cur + 1) % order.length];
@@ -16188,164 +16289,161 @@ TECHNICAL SPECS:
 
         <div class="uset-section-title">Background Theme</div>
         <div class="bg-theme-grid">
-          <button class="bg-theme-btn active" data-bg="midnight" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#0d0d1a,#13131f);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
-            <span style="font-size:10px;color:var(--text-2);">Midnight</span>
+          <button class="bg-theme-btn" data-bg="midnight" onclick="selectBgTheme(this)">
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#0d1117,#161b22);"></div>
+            <span class="bg-theme-label">Midnight</span>
           </button>
           <button class="bg-theme-btn" data-bg="abyss" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e,#0c1830);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
-            <span style="font-size:10px;color:var(--text-2);">Abyss</span>
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#050d1e,#0c1830);"></div>
+            <span class="bg-theme-label">Abyss</span>
           </button>
           <button class="bg-theme-btn" data-bg="carbon" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000,#101010);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
-            <span style="font-size:10px;color:var(--text-2);">Carbon</span>
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#000000,#181818);"></div>
+            <span class="bg-theme-label">Carbon</span>
           </button>
           <button class="bg-theme-btn" data-bg="slate" onclick="selectBgTheme(this)">
-            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12,#101520);border-radius:6px;width:100%;height:36px;border:1px solid rgba(255,255,255,0.06);"></div>
-            <span style="font-size:10px;color:var(--text-2);">Slate</span>
+            <div class="bg-theme-preview" style="background:linear-gradient(135deg,#090c12,#181e2c);"></div>
+            <span class="bg-theme-label">Slate</span>
           </button>
         </div>
 
-        <div class="uset-section-title">HUD Scaling</div>
-        <div class="uset-scale-row">
-          <input type="range" id="uset-scale-slider" min="70" max="130" value="100" step="5"
-            oninput="document.getElementById('uset-scale-display').textContent=this.value+'%';applyUiZoom(parseInt(this.value))">
-          <span class="uset-scale-val" id="uset-scale-display">100%</span>
-        </div>
-        <div style="font-size:10px;color:var(--text-3);margin-bottom:20px;">Scales the entire app UI. Useful if text feels too small or too large on your display.</div>
-
-        <div class="uset-section-title">Accessibility</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <div class="uset-toggle"><input type="checkbox" id="uset-hc-toggle" onchange="toggleHighContrast(this.checked)"><span class="uset-toggle-track"></span><span class="uset-toggle-thumb"></span></div>
-            <span style="font-size:12px;color:var(--text-1);">High contrast mode</span>
-          </label>
-          <label style="display:flex;align-items:center;gap:10px;cursor:pointer;">
-            <div class="uset-toggle"><input type="checkbox" id="uset-rm-toggle" onchange="toggleReduceMotion(this.checked)"><span class="uset-toggle-track"></span><span class="uset-toggle-thumb"></span></div>
-            <span style="font-size:12px;color:var(--text-1);">Reduce motion</span>
-          </label>
+        <div class="uset-section-title">UI Scale</div>
+        <div class="uset-row" style="margin-bottom:4px;">
+          <label class="uset-label">Zoom</label>
+          <input id="uset-scale-slider" type="range" min="80" max="130" step="5" value="100" oninput="previewUsetScale(this.value)" style="flex:1;accent-color:var(--accent);">
+          <span id="uset-scale-display" style="font-size:12px;font-weight:600;color:var(--text-1);min-width:36px;">100%</span>
         </div>
 
+        <div class="uset-section-title" style="margin-top:18px;">Accessibility</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;display:flex;flex-direction:column;gap:12px;">
+          <div class="uset-row">
+            <label class="uset-toggle">
+              <input type="checkbox" id="uset-hc-toggle" onchange="toggleHighContrast(this.checked)">
+              <div class="uset-toggle-track"></div>
+              <div class="uset-toggle-thumb"></div>
+            </label>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">High Contrast</div>
+              <div style="font-size:11px;color:var(--text-3);">Increases border and text contrast for readability.</div>
+            </div>
+          </div>
+          <div class="uset-row">
+            <label class="uset-toggle">
+              <input type="checkbox" id="uset-rm-toggle" onchange="toggleReduceMotion(this.checked)">
+              <div class="uset-toggle-track"></div>
+              <div class="uset-toggle-thumb"></div>
+            </label>
+            <div>
+              <div style="font-size:12px;font-weight:600;color:var(--text-1);">Reduce Motion</div>
+              <div style="font-size:11px;color:var(--text-3);">Disables animations and transitions throughout the app.</div>
+            </div>
+          </div>
+        </div>
         <div class="uset-save-row"><button class="uset-btn-save" onclick="saveAccessibilitySettings()">Save Appearance</button></div>
       </div>
 
       <!-- BILLING -->
       <div id="uset-tab-billing" class="uset-tab-content">
         <div id="billingTabContent">
-          <div style="text-align:center;padding:32px;color:var(--text-3);font-size:12px;">Loading billing info…</div>
+          <div style="display:flex;align-items:center;gap:10px;padding:40px 0;justify-content:center;color:var(--text-3);font-size:13px;">
+            <i class="ti ti-loader-2" style="font-size:18px;"></i> Loading billing info…
+          </div>
         </div>
       </div>
 
       <!-- SECURITY -->
       <div id="uset-tab-security" class="uset-tab-content">
         <div class="uset-section-title">Change Password</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;max-width:340px;">
-          <div class="uset-field-wrap">
-            <label class="uset-label">New Password</label>
-            <div style="position:relative;">
-              <input type="password" id="uset-newPassword" class="uset-input" placeholder="Min 8 characters" autocomplete="new-password">
-            </div>
-          </div>
-          <div class="uset-field-wrap">
-            <label class="uset-label">Confirm Password</label>
-            <input type="password" id="uset-confirmPassword" class="uset-input" placeholder="Re-enter new password" autocomplete="new-password">
-          </div>
-          <div id="uset-pwError"   style="display:none;font-size:11px;color:var(--danger);padding:6px 10px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:6px;"></div>
-          <div id="uset-pwSuccess" style="display:none;font-size:11px;color:#4ade80;padding:6px 10px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:6px;">✅ Password updated successfully.</div>
-          <button class="uset-btn-save" onclick="saveNewPassword()" style="align-self:flex-start;">Update Password</button>
+        <div class="uset-desc">Update the password for your account. Must be at least 8 characters.</div>
+        <div class="uset-row">
+          <label class="uset-label">New Password</label>
+          <input id="uset-newPassword" class="uset-input" type="password" placeholder="New password (min 8 chars)">
         </div>
+        <div class="uset-row">
+          <label class="uset-label">Confirm</label>
+          <input id="uset-confirmPassword" class="uset-input" type="password" placeholder="Confirm new password">
+        </div>
+        <div id="uset-pwError"   style="display:none;font-size:11px;color:#f87171;margin-bottom:10px;"></div>
+        <div id="uset-pwSuccess" style="display:none;font-size:11px;color:#4ade80;margin-bottom:10px;">Password updated successfully.</div>
+        <div class="uset-save-row"><button class="uset-btn-save" onclick="saveNewPassword()">Update Password</button></div>
 
-        <div class="uset-section-title" style="color:var(--danger);margin-top:10px;">Danger Zone</div>
-        <div style="padding:14px;background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.15);border-radius:8px;margin-bottom:20px;">
-          <div style="font-size:12px;color:var(--text-1);font-weight:600;margin-bottom:6px;">Sign out of all sessions</div>
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">This will log you out on all devices.</div>
-          <button onclick="doLogout()" style="padding:6px 14px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:inherit;">Sign Out Everywhere</button>
+        <div class="uset-section-title" style="margin-top:24px;">Sessions</div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:18px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:6px;">You are currently signed in on this device.</div>
+          <button onclick="closeUserSettings();doLogout();" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Sign Out</button>
         </div>
       </div>
 
       <!-- HELP -->
       <div id="uset-tab-help" class="uset-tab-content">
         <div class="uset-section-title">Getting Started</div>
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px;">
-          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">📹 Video Replicator</div>
-            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Upload a reference video, detect cuts, transcribe the script, then swap your avatar in using NB Pro and generate Veo 3 clips for each scene.</div>
+        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">1. Add your accounts</div>
+            <div style="font-size:11px;color:var(--text-3);">Go to Accounts tab and add each social profile you manage. Include the username, platform, niche, and target audience.</div>
           </div>
-          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">🎬 Video Producer</div>
-            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Paste your script, split it into 8-second scenes, generate NB Pro starting frames and Veo 3 prompts for each scene without a reference video.</div>
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">2. Load a viral script</div>
+            <div style="font-size:11px;color:var(--text-3);">Open Viral Scripts, pick a script, and click Use Script to load it into the Video Studio.</div>
           </div>
-          <div style="padding:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">🔥 Viral Scripts</div>
-            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Browse proven viral script frameworks, customize them to your niche and product, then send them directly to the Video Producer.</div>
+          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;">
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">3. Generate your Veo 3 prompts</div>
+            <div style="font-size:11px;color:var(--text-3);">In Video Studio, split your script into scenes and use AI Describe or Generate All to build prompts. Then copy to Google Flow.</div>
           </div>
         </div>
         <div class="uset-section-title">Support</div>
-        <div style="font-size:12px;color:var(--text-2);line-height:1.7;">
-          For help, reach out at <a href="mailto:support@affiliateos.app" style="color:var(--accent-2);text-decoration:none;">support@affiliateos.app</a> or visit the community Discord.
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Have a question or found a bug? Reach out and we'll get back to you.</div>
+          <a href="mailto:support@affiliateos.app" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:8px;background:var(--grad-accent);color:#fff;font-size:12px;font-weight:600;text-decoration:none;">
+            <i class="ti ti-mail"></i> support@affiliateos.app
+          </a>
         </div>
       </div>
 
       <!-- DATA -->
       <div id="uset-tab-data" class="uset-tab-content">
-        <div class="uset-section-title">Export &amp; Import</div>
-        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:24px;">
-          <div style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">Export All Data</div>
-            <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Download a full backup of your accounts, scripts, plans, and settings as a JSON file.</div>
-            <button onclick="admExport()" style="padding:6px 16px;background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:6px;color:var(--accent-2);font-size:11px;cursor:pointer;font-family:inherit;font-weight:600;">⬇ Export Backup</button>
-          </div>
-          <div style="padding:14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;">
-            <div style="font-size:12px;font-weight:600;color:var(--text-1);margin-bottom:4px;">Import Data</div>
-            <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Restore from a previously exported backup file. This will overwrite your current data.</div>
-            <label style="padding:6px 16px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.3);border-radius:6px;color:var(--warning);font-size:11px;cursor:pointer;font-weight:600;">
-              ⬆ Import Backup
-              <input type="file" accept=".json" style="display:none;" onchange="admImport(event)">
-            </label>
-          </div>
+        <div class="uset-section-title">Export Data</div>
+        <div class="uset-desc">Download a copy of your accounts, scripts, and settings as a JSON file.</div>
+        <div class="uset-save-row" style="margin-bottom:24px;">
+          <button class="uset-btn-save" onclick="exportProjectJSON()">Export All Data</button>
         </div>
-        <div class="uset-section-title" style="color:var(--danger);">Reset</div>
-        <div style="padding:14px;background:rgba(248,113,113,0.05);border:1px solid rgba(248,113,113,0.15);border-radius:8px;">
-          <div style="font-size:11px;color:var(--text-3);margin-bottom:10px;">Permanently clear all local data and reset the app to its default state. This cannot be undone.</div>
-          <button onclick="admReset()" style="padding:6px 14px;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);font-size:11px;cursor:pointer;font-family:inherit;">🗑 Reset All Data</button>
+        <div class="uset-section-title">Import Data</div>
+        <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
+        <div class="uset-save-row" style="margin-bottom:24px;">
+          <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
+          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(this)">
         </div>
-      </div><!-- end uset-tab-data -->
+        <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
+        <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">Clear all local data. This removes your accounts, scripts, and settings from this browser. Your Supabase account stays intact.</div>
+          <button onclick="clearAllLocalData()" style="padding:7px 16px;border-radius:8px;background:rgba(248,113,113,0.12);border:1px solid rgba(248,113,113,0.25);color:#f87171;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Clear Local Data</button>
+        </div>
+      </div>
 
       <!-- ABOUT -->
       <div id="uset-tab-about" class="uset-tab-content">
-        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 0;text-align:center;">
-          <svg width="48" height="48" viewBox="0 0 26 26" xmlns="http://www.w3.org/2000/svg" style="border-radius:10px;">
-            <rect width="26" height="26" rx="6" fill="var(--surface-2)"/>
-            <circle cx="13" cy="13" r="6" fill="none" stroke="var(--accent)" stroke-width="1.5"/>
-            <line x1="13" y1="7" x2="13" y2="5" stroke="var(--accent-2)" stroke-width="1.2"/>
-            <line x1="13" y1="21" x2="13" y2="19" stroke="var(--accent-2)" stroke-width="1.2"/>
-            <line x1="7" y1="13" x2="5" y2="13" stroke="var(--accent-2)" stroke-width="1.2"/>
-            <line x1="21" y1="13" x2="19" y2="13" stroke="var(--accent-2)" stroke-width="1.2"/>
-          </svg>
-          <div>
-            <div style="font-size:18px;font-weight:800;color:var(--text-1);letter-spacing:-0.4px;">AffiliateOS VideoStudio</div>
-            <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px;">
-              <span style="font-size:10px;font-weight:700;color:var(--accent-2);background:rgba(124,106,247,0.12);padding:2px 10px;border-radius:4px;">v1.0</span>
-              <span style="font-size:10px;color:var(--text-3);">by affiliateos.app</span>
-            </div>
+        <div style="text-align:center;padding:30px 0 20px;">
+          <div style="font-size:28px;margin-bottom:8px;">⚡</div>
+          <div style="font-size:16px;font-weight:800;color:var(--text-1);margin-bottom:4px;">AffiliateOS</div>
+          <div style="font-size:11px;color:var(--text-3);">AI-powered video content engine for affiliate marketers</div>
+        </div>
+        <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:14px 16px;margin-bottom:10px;">
+          <div class="uset-row" style="margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text-3);">Version</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">1.0.0</span>
           </div>
-          <div style="font-size:12px;color:var(--text-3);line-height:1.7;max-width:320px;text-align:center;">
-            AI-powered affiliate video production — detect scenes, generate NB Pro starting frames, and build Veo 3 prompts at scale.
+          <div class="uset-row" style="margin-bottom:6px;">
+            <span style="font-size:11px;color:var(--text-3);">Platform</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Web App (Netlify)</span>
           </div>
-          <div style="display:flex;flex-direction:column;gap:8px;width:100%;max-width:280px;">
-            <div style="padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-3);line-height:1.6;text-align:left;">
-              <span style="font-weight:600;color:var(--text-2);">Support:</span> <a href="mailto:support@affiliateos.app" style="color:var(--accent-2);text-decoration:none;">support@affiliateos.app</a>
-            </div>
-            <div style="padding:10px 14px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--text-3);line-height:1.6;text-align:left;">
-              <span style="font-weight:600;color:var(--text-2);">Site:</span> <a href="https://affiliateos.app" target="_blank" rel="noopener" style="color:var(--accent-2);text-decoration:none;">affiliateos.app</a>
-            </div>
+          <div class="uset-row">
+            <span style="font-size:11px;color:var(--text-3);">AI Engine</span>
+            <span style="font-size:11px;font-weight:600;color:var(--text-2);">Veo 3 · GPT-4o · Claude</span>
           </div>
         </div>
-      </div><!-- end uset-tab-about -->
+        <div style="text-align:center;padding-top:16px;">
+          <a href="https://affiliateos.app" target="_blank" style="font-size:11px;color:var(--accent-2);text-decoration:none;">affiliateos.app</a>
+        </div>
+      </div>
 
-    </div><!-- end settings content area -->
-  </div><!-- end userSettingsPanel -->
-</div><!-- end userSettingsOverlay -->
-
-</body>
-</html>                                                                                                                                                                                                                                                                                                                                                                                                             
+    </div><!-- end cont
