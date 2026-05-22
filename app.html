@@ -6948,7 +6948,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
     refVideoObjectUrl = URL.createObjectURL(file);
     const videoEl = document.getElementById('refVideoEl');
+    if (!videoEl) { showToast('Video player not found — please refresh the page.', 'error'); return; }
     videoEl.src = refVideoObjectUrl;
+    videoEl.load(); // Explicitly trigger load — required in some browsers after programmatic src change
     videoEl.style.display = 'block';
     document.getElementById('videoUploadPlaceholder').style.display = 'none';
     document.getElementById('clearVideoBtn').style.display = 'inline-block';
@@ -6978,6 +6980,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     saveCurrentProjectData();
     renderSegments();
     closeVideoLibrary();
+    showToast(`✅ "${meta.name || file.name}" loaded${clearSegs ? ' — segments cleared' : ' — segments kept'}.`, 'success', 3000);
   }
 
   async function loadVideoFromLibrary(id) {
@@ -8032,17 +8035,55 @@ RULES — read carefully:
     return lines.join('\n');
   }
 
-  // --- Copy all scene prompts as a full two-phase workflow instruction for Claude in Chrome ---
-  // Delegates to runAllScenes so the output is identical to the Run button:
-  // Phase 1 (NB Pro composites) → Phase 2 (Veo 3 videos), with frame downloads, retry logic, etc.
+  // --- Copy all Veo 3 prompts as a single ordered message to paste into Claude in Chrome ---
+  // Produces a clean scene-by-scene prompt list with speech timing guides.
+  // Use this to hand off directly to the Veo Agent for Phase 2 (video generation).
+  // For the full two-phase NB Pro + Veo 3 workflow instruction, use ▶ Run All Scenes.
   function copyVeoAgentAllScenePrompts() {
     const withPrompts = segments.filter(s => (s.veoPrompt || '').trim());
     if (withPrompts.length === 0) {
       showToast('No Veo 3 prompts yet — click ⚡ Generate Prompts first.', 'warning');
       return;
     }
-    // Run without skipping done scenes, skip the preflight confirms
-    runAllScenes(false, true);
+    const n = withPrompts.length;
+    const lines = [];
+    lines.push(`I have ${n} swapped NB Pro composite${n !== 1 ? 's' : ''} ready in order. Using Veo 3.1 Fast, generate a video for each composite in sequence — Prompt 1 goes to Composite 1, Prompt 2 goes to Composite 2, and so on. Use each composite as the starting image (start frame) for its matching video clip. For every clip, sync the avatar's actions, gestures, and expressions to the exact words being spoken — use the speech timing guide below each prompt to match movements to the moment each phrase is said. Do not mix up the order.`);
+    lines.push('');
+    withPrompts.forEach((seg, idx) => {
+      const sceneNum = segments.indexOf(seg) + 1;
+      const duration = Math.round((seg.endTime - seg.startTime) * 10) / 10;
+      lines.push(`━━━ Scene ${idx + 1} of ${n} (Segment ${sceneNum}) ━━━`);
+      lines.push(`Model: Veo 3.1 Fast`);
+      lines.push(seg.veoPrompt.trim());
+      // Word-timed speech guide
+      let speechText = '';
+      try {
+        const parsed = JSON.parse(seg.veoPrompt);
+        speechText = parsed.speech || seg.script || '';
+      } catch { speechText = seg.script || ''; }
+      const timingGuide = buildSpeechTimingGuide(speechText, duration);
+      if (timingGuide) {
+        lines.push('');
+        lines.push('Speech timing — sync actions to these moments:');
+        lines.push(timingGuide);
+      }
+      lines.push('');
+    });
+    lines.push(`━━━ END — ${n} scene${n !== 1 ? 's' : ''} total ━━━`);
+    const message = lines.join('\n');
+    navigator.clipboard.writeText(message).then(() => {
+      showToast(`All ${n} Veo 3 prompts copied — paste into Claude in Chrome to run Phase 2.`, 'success', 5000);
+    }).catch(() => {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = message;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast(`All ${n} scene prompts copied!`, 'success', 3000);
+      } catch(e) { showToast('Copy failed — please try again.', 'error'); }
+    });
   }
 
   // --- Copy Veo Agent avatar-swap prompt ---
@@ -8886,14 +8927,14 @@ RULES — read carefully:
     if (bgFromAvatar) {
       // Avatar BG mode: Photo 1 is both person and background
       instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+      negPrompt = 'captions, watermarks, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
     } else {
       // Standard: person from Photo 1, background/scene from Photo 2 (uploaded background)
-      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
+      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. CRITICAL: match the person\'s exact screen position, size, and placement within the frame as shown in photo 2 — if the person appears in the lower-right corner in photo 2, place them in the lower-right corner at the same scale. Do not center or reposition the person. Match the pose, body position, framing, and camera angle from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
+      negPrompt = 'captions, watermarks, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing, repositioned person, centered person, wrong scale';
     }
     instruction += getAvatarAccessoryNote();
-    return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
+    return JSON.stringify({ instruction, remove_captions: true, negative_prompt: negPrompt }, null, 2);
   }
 
   // --- Build Nano Banana prompt for the END frame of a segment ---
@@ -8902,14 +8943,14 @@ RULES — read carefully:
     if (bgFromAvatar) {
       // Avatar BG mode: Photo 1 is both person and background
       instruction = 'Use reference photo 1 exactly as the source for both the person and the background. Keep the character appearance, clothing, and the background environment from photo 1 completely unchanged. Frame the composition naturally for a 9:16 vertical video. Do not add, remove, or alter any visual elements.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
+      negPrompt = 'captions, watermarks, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed environment, changed clothing, changed props';
     } else {
       // Standard: person from Photo 1, background/scene from Photo 2 (uploaded background)
-      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, body position, framing, and environment from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
-      negPrompt = 'text, watermarks, captions, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing';
+      instruction = 'Place the person from reference photo 1 exactly into the scene from reference photo 2. CRITICAL: match the person\'s exact screen position, size, and placement within the frame as shown in photo 2 — if the person appears in the lower-right corner in photo 2, place them in the lower-right corner at the same scale. Do not center or reposition the person. Match the pose, body position, framing, and camera angle from photo 2 precisely. Do not describe or alter the character — use only reference photo 1 for the person.';
+      negPrompt = 'captions, watermarks, logos, subtitles, camera movement, zoom, pan, cuts, blurry, distorted face, extra limbs, missing hands, duplicate people, cartoon, illustration, painting, drawing, anime, changed background, changed props, changed clothing, repositioned person, centered person, wrong scale';
     }
     instruction += getAvatarAccessoryNote();
-    return JSON.stringify({ instruction, no_text: true, negative_prompt: negPrompt }, null, 2);
+    return JSON.stringify({ instruction, remove_captions: true, negative_prompt: negPrompt }, null, 2);
   }
 
   // --- Vision-based NB prompt builder: analyzes the frame to tailor the instruction ---
@@ -8949,6 +8990,11 @@ Classify the shot type:
 - CLOSE-UP FACE: tight shot, mainly face and neck
 - TWO-PERSON: two people visible in the same frame — identify the targeted person vs the one to preserve
 
+CRITICAL — identify the person's SCREEN POSITION AND SIZE:
+- Where is the person positioned within the frame? Describe using quadrant terms: top-left, top-center, top-right, center-left, center, center-right, bottom-left, bottom-center, bottom-right
+- What fraction of the FRAME HEIGHT does the person occupy? (e.g. "person fills ~80% of frame height" vs "person is a small insert in the bottom-right corner, filling ~25% of frame height")
+- Is most of the frame showing BACKGROUND/ENVIRONMENT rather than the person? (e.g. person is small and off to one side while the background or a product dominates the rest of the frame)
+
 Also identify:
 - Exact products/props visible on the table or in hands (brand names, colors, sizes)
 - Background elements (wall color, any signs, plants, flags, furniture)
@@ -8967,13 +9013,19 @@ FOR TWO-PERSON shots (when a specific person is targeted — indicated above):
 - Specify camera angle and all background elements as usual.
 
 FOR FULL PERSON shots:
-- "Place the person from reference photo 1 exactly into the scene from reference photo 2. Match the pose, framing, and camera angle precisely. Keep the person's face, clothing, hair, and accessories exactly as shown in photo 1."
+- "Place the person from reference photo 1 exactly into the scene from reference photo 2."
+- CRITICAL — POSITION AND SIZE: Explicitly state the person's exact position within the frame using the quadrant you identified in Step 1. Examples:
+  - "Position the person in the LOWER-RIGHT CORNER of the frame, occupying approximately [X]% of the frame height, exactly as they appear in photo 2. The [left/center] portion of the frame shows the background."
+  - "The person should be centered in the frame, filling approximately [X]% of the frame height, matching photo 2 exactly."
+  - "The person appears as a small insert in the BOTTOM-RIGHT, with the background and [product/scene] visible across the rest of the frame — maintain this exact composition and scale."
+- "Match the pose, body position, framing, and camera angle from photo 2 precisely. Keep the person's face, clothing, hair, and accessories exactly as shown in photo 1."
 - Specify the camera angle precisely (e.g. "straight-on at chest height")
 - List background elements to preserve
 
 FOR HANDS/ARMS ONLY or CHIN/NECK CROPPED shots:
 - NEVER say "face not visible" or "head not visible" — this causes the model to REMOVE the head
 - ALWAYS say: "The person's head and face exist but are cropped above the top edge of the frame — do NOT remove or erase the head"
+- POSITION: State the person's lateral position in the frame (left side, right side, center) and approximate scale — e.g. "The person's arms and torso are centered in the frame, hands occupying the lower half of the image."
 - Specify: "camera positioned at [low/table] level shooting upward" or whatever angle you see
 - Use hands/forearms/skin from photo 1 exactly — preserve skin tone, hand shape, nail appearance
 - Replace any clothing visible with the avatar's clothing from photo 1
@@ -8992,7 +9044,7 @@ Always include these based on what could go wrong:
 - If TWO-PERSON shot: ALWAYS add "missing person, removed person, only one person, disappeared person, merged people, both people replaced, wrong person swapped"
 - If head is cropped: ALWAYS add "headless, missing head, decapitated, head removed"
 - If hands shot: add "face fully visible, wide shot showing full person"
-- Always add: "changed clothing, changed skin tone, changed face, text overlays, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face"
+- Always add: "changed clothing, changed skin tone, changed face, captions, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face"
 - If there's a sign in the background: add "sign touching person, sign held in hand, sign in foreground"
 - If background should be plain: add "sign on wall, framed sign, painting, artwork, text on wall, any writing on wall"
 
@@ -9030,8 +9082,8 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         if (nbTa && nbTa.value.startsWith('⏳')) nbTa.value = seg.nbPrompt || '';
         return false;
       }
-      // Merge with no_text field
-      const result = { instruction: parsed.instruction, no_text: true, negative_prompt: parsed.negative_prompt || '' };
+      // Merge result fields
+      const result = { instruction: parsed.instruction, remove_captions: true, negative_prompt: parsed.negative_prompt || '' };
       // Append avatar accessory note
       result.instruction += getAvatarAccessoryNote();
       seg.nbPrompt = JSON.stringify(result, null, 2);
@@ -9858,8 +9910,8 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       framing: 'vertical 9:16, medium close-up, person centered, 85mm equivalent, f/1.8 shallow depth of field',
       expression: isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
       style: 'photorealistic lifestyle editorial — real room, real light, real decor. Pinterest home aesthetic. NOT AI art, NOT studio backdrop, NOT blurred gradient',
-      no_text: true,
-      negative_prompt: 'AI art style, fake background, blurred gradient backdrop, studio seamless, painterly, illustration, cartoon, render, CGI, unrealistic lighting, perfect symmetry, text, watermarks, logos, multiple people, distorted hands, extra limbs',
+      remove_captions: true,
+      negative_prompt: 'AI art style, fake background, blurred gradient backdrop, studio seamless, painterly, illustration, cartoon, render, CGI, unrealistic lighting, perfect symmetry, captions, watermarks, logos, multiple people, distorted hands, extra limbs',
     };
     if (frameDesc) {
       obj.visual_description = frameDesc;
@@ -11169,6 +11221,12 @@ For each composite:
 
      ✅ CHECK 1 — Avatar present & recognisable (face + clothing match Photo 1)
         FAIL if: completely different person, or no person visible.${inventoryBlock}
+
+     ✅ CHECK 1b — Person position matches Photo 2 (the scene start frame)
+        The avatar must appear at the SAME LOCATION AND SCALE as the original person in Photo 2.
+        FAIL if: person was repositioned (e.g. centered when they should be bottom-right),
+        or wrong size (fills full frame when reference shows a small corner insert, or vice versa).
+        The background/environment visible in Photo 2 must still be visible in the composite at the same proportions.
 
      ✅ CHECK 2 — Background correct
 ${bgFromAvatar
@@ -12487,6 +12545,10 @@ TECHNICAL SPECS:
     if (item.avatarImageDataUrl) DB.set('sm_avatar_img', item.avatarImageDataUrl).catch(e => console.warn('loadLibraryItem avatar error:', e));
     if (item.bgImageDataUrl) DB.set('sm_bg_image', item.bgImageDataUrl).catch(e => console.warn('loadLibraryItem bg error:', e));
     if (avatarDescEl) DB.set('sm_avatar_profile', avatarDescEl.value).catch(e => console.warn('loadLibraryItem profile error:', e));
+
+    // Close modal so the user can see the restored segments
+    closeSavedLibraryModal();
+    showToast(`✅ Loaded "${item.product || 'Untitled'}" — ${item.segmentCount || 0} segment${(item.segmentCount || 0) !== 1 ? 's' : ''} restored.`, 'success', 3000);
   }
 
   function deleteLibraryItem(i) {
