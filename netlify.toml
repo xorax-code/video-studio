@@ -39,3 +39,7 @@
 [functions.stripe-webhook]
   node_version = "18"
   timeout = 26
+
+[functions.validate-promo]
+  node_version = "18"
+  timeout = 10

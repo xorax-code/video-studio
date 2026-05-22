@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Affiliate OS</title>
+<title>AffiliateOS</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'><rect width='30' height='30' rx='7' fill='%230f172a'/><circle cx='15' cy='15' r='3.8' fill='%2310b981'/><circle cx='15' cy='6.5' r='2.2' fill='%2310b981'/><circle cx='23.5' cy='20' r='2.2' fill='%2310b981'/><circle cx='6.5' cy='20' r='2.2' fill='%2310b981'/></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -7819,7 +7819,9 @@ RULES — read carefully:
       }
       prev.endTime = t;
     }
+    const _mcSavedTime = videoEl.currentTime;
     const frameDataUrl = await captureFrame(t);
+    try { videoEl.currentTime = _mcSavedTime; } catch(_) {}
     const dur = videoEl.duration || t + 8;
     segments.push({ startTime: t, endTime: dur, frameDataUrl, script: '', action: '', nbPrompt: '', veoPrompt: '' });
     distributeScript();
@@ -8047,7 +8049,7 @@ RULES — read carefully:
     }
     const n = withPrompts.length;
     const lines = [];
-    lines.push(`I have ${n} swapped NB Pro composite${n !== 1 ? 's' : ''} ready in order. Using Veo 3.1 Fast, generate a video for each composite in sequence — Prompt 1 goes to Composite 1, Prompt 2 goes to Composite 2, and so on. Use each composite as the starting image (start frame) for its matching video clip. For every clip, sync the avatar's actions, gestures, and expressions to the exact words being spoken — use the speech timing guide below each prompt to match movements to the moment each phrase is said. Do not mix up the order.`);
+    lines.push(`I have ${n} swapped NB Pro composite${n !== 1 ? 's' : ''} ready in order. Use the most recent ${n} frame${n !== 1 ? 's' : ''} I just gave you — do not use any frames from previous sessions or earlier in this conversation. Using Veo 3.1 Fast, generate a video for each frame in sequence — Prompt 1 goes to Frame 1, Prompt 2 goes to Frame 2, and so on. Use each frame as the starting image (start frame) for its matching video clip. For every clip, sync the avatar's actions, gestures, and expressions to the exact words being spoken — use the speech timing guide below each prompt to match movements to the moment each phrase is said. Do not mix up the order.`);
     lines.push('');
     withPrompts.forEach((seg, idx) => {
       const sceneNum = segments.indexOf(seg) + 1;
@@ -8303,14 +8305,37 @@ RULES — read carefully:
   // --- Merge two adjacent segments (i and i+1) into one ---
   function mergeSegments(i, j) {
     if (i < 0 || j >= segments.length || j !== i + 1) return;
-    segments[i].endTime = segments[j].endTime;
-    segments[i].script = [segments[i].script, segments[j].script].filter(Boolean).join(' ').trim();
-    segments[i].action = [segments[i].action, segments[j].action].filter(Boolean).join(' ').trim();
-    // Keep first segment's frame/NB/Veo prompts (user can regen if needed)
+
+    const setting     = document.getElementById('studioSetting')?.value.trim() || '';
+    const productSel  = document.getElementById('studioProduct');
+    const productName = productSel ? (productSel.options[productSel.selectedIndex]?.text || 'the product') : 'the product';
+
+    const mergedEndTime = segments[j].endTime;
+    segments[i].endTime = mergedEndTime;
+
+    // Combine scripts
+    const mergedScript = [segments[i].script, segments[j].script].filter(Boolean).join(' ').trim();
+    segments[i].script = mergedScript;
+
+    // Re-derive action from the full combined script
+    segments[i].action = deriveSceneAction(mergedScript, i, segments.length - 1);
+
+    // Rebuild Veo 3 prompt for the merged segment
+    segments[i].veoPrompt = buildSegmentVeo3Prompt(
+      i,
+      segments[i].startTime,
+      mergedEndTime,
+      mergedScript,
+      setting,
+      productName,
+      bgImageDataUrl
+    );
+
+    // Keep first segment's frame + NB prompt (frame stays at original start)
     segments.splice(j, 1);
     renderSegments();
     saveSegments();
-    showToast('Segments merged.', 'success');
+    showToast('✅ Segments merged — action & Veo 3 prompt updated.', 'success');
   }
 
   // --- Auto-merge all segments whose script is fewer than N words ---
@@ -8326,6 +8351,9 @@ RULES — read carefully:
           segments[i - 1].endTime = segments[i].endTime;
           segments[i - 1].script = [segments[i - 1].script, segments[i].script].filter(Boolean).join(' ').trim();
           segments[i - 1].action = [segments[i - 1].action, segments[i].action].filter(Boolean).join(' ').trim();
+          segments[i - 1].action = deriveSceneAction(segments[i - 1].script, i - 1, segments.length - 1);
+          segments[i - 1].veoPrompt = '';  // Clear stale prompt — will regen on next Process Everything
+          segments[i - 1].nbPrompt = '';   // Clear stale NB prompt
           segments.splice(i, 1);
           i--; // Re-check i-1: merged result may itself be short
           merged++;
@@ -8335,6 +8363,9 @@ RULES — read carefully:
           segments[1].frameDataUrl = segments[0].frameDataUrl || segments[1].frameDataUrl;
           segments[1].script = [segments[0].script, segments[1].script].filter(Boolean).join(' ').trim();
           segments[1].action = [segments[0].action, segments[1].action].filter(Boolean).join(' ').trim();
+          segments[1].action = deriveSceneAction(segments[1].script, 0, segments.length - 1);
+          segments[1].veoPrompt = '';
+          segments[1].nbPrompt = '';
           segments.splice(0, 1);
           merged++;
         } else {
@@ -8347,7 +8378,7 @@ RULES — read carefully:
     if (merged > 0) {
       renderSegments();
       saveSegments();
-      showToast(`Auto-merged ${merged} short segment${merged !== 1 ? 's' : ''}.`, 'success');
+      showToast(`Auto-merged ${merged} short segment${merged !== 1 ? 's' : ''}. Run ⚡ Generate Prompts to refresh.`, 'success');
     } else {
       showToast('No short segments found (all have ≥ 4 words).', 'info');
     }
@@ -9260,6 +9291,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         photo_2_is: `PRODUCT (${productDesc}) — place this into the person's hand. Keep label readable and facing camera.`,
         product_placement: `${productDesc} from Photo 2 — gripped naturally in the person's hand at chest-to-shoulder height, front/label facing camera, clearly visible and in sharp focus.`,
         negative_prompt: surfaceNegPrompt,
+        remove_captions: true,
       };
       if (clearSurface) {
         nbBase.surface = 'CLEAR — remove all other objects, condiments, ingredients, props, and decorations from the table or surface. Leave only the character (from Photo 1) holding the product (from Photo 2).';
@@ -9465,6 +9497,7 @@ Return only the action description — no intro, no commentary, no filler.`
 
         if (!description || /i('m| am) sorry|can't assist|cannot assist/i.test(description)) { skipped++; continue; }
         if (!segments[i]) continue;
+        if (!segments.includes(seg)) continue;
         seg.action = sanitizeDirections(description);
 
         // Update the textarea value immediately (use .value, not .textContent, for textareas)
@@ -9480,10 +9513,10 @@ Return only the action description — no intro, no commentary, no filler.`
           setTimeout(() => { if (actionEl) actionEl.style.borderColor = ''; }, 1200);
         }
       } catch (e) {
-        if (btn) { btn.disabled = false; btn.textContent = '🔍 Analyze Video'; }
-        showToast('Segment ' + (i+1) + ' failed: ' + (e.message || String(e)), 'error');
-        saveSegments();
-        return;
+        console.error('[analyzeAllFrames] segment ' + (i+1) + ' error:', e);
+        showToast('Scene ' + (i+1) + ' could not be analyzed — skipping and continuing.', 'warning');
+        skipped++;
+        continue;
       }
     }
 
@@ -9758,7 +9791,10 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       if (!res.ok) { const err = await res.json().catch(() => ({})); throw new Error(err?.error?.message || `API error ${res.status}`); }
       const data = await res.json();
       const raw = data.choices?.[0]?.message?.content?.trim() || '';
-      const jsonStr = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      let jsonStr = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      const arrStart = jsonStr.indexOf('[');
+      const arrEnd = jsonStr.lastIndexOf(']');
+      if (arrStart !== -1 && arrEnd !== -1) jsonStr = jsonStr.slice(arrStart, arrEnd + 1);
       const hooks = JSON.parse(jsonStr);
       if (!Array.isArray(hooks)) throw new Error('Unexpected response format from AI — please try again.');
       window._vsHookResults = hooks; // stored so onclick can reference by index safely
@@ -10011,7 +10047,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
           }
         }));
         saveSegments();
-      })().catch(e => showToast('Error building prompts: ' + e.message, 'error'));
+      })().catch(e => showToast('Error building prompts: ' + (e?.message || String(e)), 'error'));
     }
     return Promise.resolve();
   }
@@ -10678,7 +10714,7 @@ No markdown. Return only the JSON object.`
       showToast('No segments yet — upload a video and run Detect Cuts first.', 'warning');
       return;
     }
-    showConfirm('Run Process Everything? This analyzes video frames and generates all NB Pro + Veo 3 prompts. May take a minute.\n\nThis will:\n1. Analyze all video frames with GPT-4o vision\n2. Build NB Pro prompts for every segment\n3. Build Veo 3 prompts for every segment', async () => {
+    showConfirm('Ready to generate your video prompts? This will analyze your scenes and prepare everything for Google Flow. Usually takes 30–60 seconds.', async () => {
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
       const _setStep = (n, label) => {
@@ -10696,7 +10732,7 @@ No markdown. Return only the JSON object.`
         await generateAllSegmentPrompts();
       } catch (e) {
         if (btn) { btn.disabled = false; btn.textContent = origText; }
-        showToast('Could not generate prompts: ' + ((e && e.message) || e), 'error');
+        showToast('Something went wrong — please try again. Check your internet connection if this keeps happening.', 'error');
         return;
       }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
@@ -11881,7 +11917,7 @@ ${veoPrompt}
       // frame; fall back to keyword derivation immediately.
       if (clipDur <= 0) {
         done(deriveSceneAction(seg.script || '', i, segments.length));
-        showToast(`Seg ${i+1}: zero-duration clip — used keyword fallback. Adjust the segment timestamps and retry.`, 'warning', 4000);
+        showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning', 4000);
         return;
       }
 
@@ -11914,7 +11950,7 @@ ${veoPrompt}
           showToast(`Seg ${i+1}: video not loaded — using saved start frame only. Load the video for a full sequence analysis.`, 'warning', 4000);
         } else {
           done(deriveSceneAction(seg.script || '', i, segments.length));
-          showToast(`Seg ${i+1}: no frames available — used keyword fallback. Load the video and retry.`, 'warning', 4000);
+          showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning', 4000);
           return;
         }
       }
@@ -11959,7 +11995,7 @@ RULES:
       const refused = !desc || /i('m| am) sorry|can't assist|cannot assist/i.test(desc);
       if (refused) {
         desc = deriveSceneAction(seg.script || '', i, segments.length);
-        showToast(`Seg ${i+1}: vision refused — used keyword fallback.`, 'warning');
+        showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning');
       }
       done(desc);
     } catch (e) {
@@ -11986,7 +12022,7 @@ RULES:
           // clears the spinner, but seg.nbPrompt holds the last good value)
           nbEl.value = seg.nbPrompt || '';
           autoGrow(nbEl);
-          showToast('NB prompt rebuild failed — previous prompt kept.', 'warning');
+          showToast('Could not rebuild the scene description — your previous version was kept.', 'warning');
         }
         saveSegments();
       } finally {
@@ -12174,7 +12210,7 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
 
   function saveAvatarVoice() {
     const v = buildAvatarVoiceString();
-    localStorage.setItem('vs_avatar_voice', v);
+    DB.set('vs_avatar_voice', v).catch(() => {});
     const preview = document.getElementById('avatarVoicePreview');
     if (preview) preview.textContent = v ? '🎙 ' + v : '';
   }
@@ -12192,19 +12228,26 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
       accent: document.getElementById('avatarAccent')?.value      || '',
       custom: document.getElementById('avatarVoiceCustom')?.value || '',
     };
-    localStorage.setItem('vs_avatar_voice_config', JSON.stringify(voiceData));
+    DB.set('vs_avatar_voice_config', voiceData).catch(() => {});
     const note = document.getElementById('avatarSavedNote');
     if (note) { note.style.display = 'block'; setTimeout(() => note.style.display = 'none', 2500); }
   }
 
-  function loadAvatarProfile() {
+  async function loadAvatarProfile() {
+    // Migration: move voice config from localStorage to DB if needed
+    const _voiceConfigOld = localStorage.getItem('vs_avatar_voice_config');
+    if (_voiceConfigOld) {
+      try { await DB.set('vs_avatar_voice_config', JSON.parse(_voiceConfigOld)); } catch(_) {}
+      localStorage.removeItem('vs_avatar_voice_config');
+    }
     DB.get('sm_avatar_profile').then(saved => {
       const el = document.getElementById('avatarDesc');
       if (saved && el) el.value = saved;
     }).catch(err => { console.error('loadAvatarProfile:', err); showToast('Could not load avatar profile — please re-enter your description.', 'warning'); });
-    // Restore voice config
+    // Restore voice config from DB
     try {
-      const vc = JSON.parse(localStorage.getItem('vs_avatar_voice_config') || 'null');
+      let vc = await DB.get('vs_avatar_voice_config');
+      if (typeof vc === 'string') { try { vc = JSON.parse(vc); } catch(_) { vc = null; } }
       if (vc) {
         if (document.getElementById('avatarVoiceGender')) document.getElementById('avatarVoiceGender').value = vc.gender || '';
         if (document.getElementById('avatarVoiceAge'))    document.getElementById('avatarVoiceAge').value    = vc.age    || '';
@@ -12495,13 +12538,14 @@ TECHNICAL SPECS:
   function loadLibraryItem(i) {
     const item = studioLibrary[i];
     if (!item) return;
+    try {
 
     // Preserve current project before loading library item
     saveCurrentProjectData();
 
     // Restore segments
     if (item.segments && item.segments.length > 0) {
-      segments = item.segments.map(s => ({ ...s }));
+      segments = (item.segments || []).filter(Boolean).map(s => ({ ...s }));
       renderSegments();
     }
 
@@ -12549,6 +12593,12 @@ TECHNICAL SPECS:
     // Close modal so the user can see the restored segments
     closeSavedLibraryModal();
     showToast(`✅ Loaded "${item.product || 'Untitled'}" — ${item.segmentCount || 0} segment${(item.segmentCount || 0) !== 1 ? 's' : ''} restored.`, 'success', 3000);
+
+    } catch(err) {
+      console.error('[loadLibraryItem] error:', err);
+      showToast('Failed to load — this entry may be corrupted. Try deleting and re-saving.', 'error');
+      return;
+    }
   }
 
   function deleteLibraryItem(i) {
@@ -14050,8 +14100,8 @@ TECHNICAL SPECS:
   }
 
   // ===== HIDDEN ADMIN KEY PANEL =====
-  // SHA-256 hash of the admin password (default: 'socialos2025').
-  // To change: run hashPassword('yournewpassword') in the browser console and paste the result here.
+  // SHA-256 hash of the admin password.
+  // To change: run SHA-256 hash of your new password in the browser console and update this value.
   const ADMIN_PASSWORD_HASH = '9f2076bc7b2301578527698143e4551eb9099e94fdcddfd65e958687bad1d924';
 
   let _logoClickCount = 0, _logoClickTimer = null;
@@ -14127,7 +14177,6 @@ TECHNICAL SPECS:
   async function checkAuthAndBoot() {
     // ── Local file bypass: skip auth when opened via file:// ──
     if (window.location.protocol === 'file:') {
-      console.info('[AffiliateOS] Local file detected — skipping auth, booting directly.');
       updateUserChip('Local Preview');
       initApp();
       return;
@@ -14441,7 +14490,7 @@ TECHNICAL SPECS:
     if (target <= now) target.setDate(target.getDate() + 1);
     const ms = target - now;
     _reminderTimeout = setTimeout(() => {
-      new Notification('Daily Posting Reminder', { body: "Time to post! Open your app and check today's plan.", icon: '' });
+      new Notification('Daily Posting Reminder', { body: "Time to post! Open your app and check today's plan.", icon: '/favicon.ico' });
       _scheduleReminder(timeStr); // reschedule for tomorrow
     }, ms);
   }
@@ -14578,26 +14627,15 @@ TECHNICAL SPECS:
   };
 
   // ── Promo codes ──────────────────────────────────────────────
-  // type:'unlock'   → unlocks `tier` immediately, no payment needed
-  // type:'discount' → stores a % off applied at Stripe checkout
-  // Add / remove codes here freely. Codes are case-insensitive.
-  // Promo codes — unlock codes are stored obfuscated (base64) to prevent casual discovery via DevTools.
-  // Discount codes (type:'discount') are intentionally visible; they only reduce price, not bypass payment.
-  // For true security, move unlock validation to a server-side endpoint before launch.
-  const _pc = (s) => atob(s); // decode helper
-  const PROMO_CODES = (() => {
-    const m = {};
-    // Unlock codes (obfuscated)
-    [[_pc('TUFYQUNDRVNT'),  'agency', 'Full Access — All Features Unlocked'],
-     [_pc('VklQQkVUQQ=='),  'pro',    'Pro Access — VIP Beta'],
-     [_pc('RUFSTFlCSVJE'), 'agency', 'Early Bird — Full Access'],
-    ].forEach(([k, tier, label]) => { m[k] = { type:'unlock', tier, label }; });
-    // Discount codes (plaintext — no payment bypass risk)
-    m['FRIEND50'] = { type:'discount', pct:50, label:'50% Off Any Plan' };
-    m['LAUNCH30'] = { type:'discount', pct:30, label:'30% Off — Launch Special' };
-    m['SAVE20']   = { type:'discount', pct:20, label:'20% Off' };
-    return m;
-  })();
+  // type:'unlock'   → unlocks `tier` immediately — validated SERVER-SIDE via /.netlify/functions/validate-promo
+  // type:'discount' → stores a % off applied at Stripe checkout (client-side only, no bypass risk)
+  // Unlock codes are NOT stored here — they live in netlify/functions/validate-promo.js only.
+  const PROMO_CODES = {
+    // Discount codes only (plaintext is fine — they reduce price, they can't bypass payment)
+    FRIEND50: { type: 'discount', pct: 50, label: '50% Off Any Plan' },
+    LAUNCH30: { type: 'discount', pct: 30, label: '30% Off — Launch Special' },
+    SAVE20:   { type: 'discount', pct: 20, label: '20% Off' },
+  };
 
   const PROMO_STORAGE_KEY = 'affiliateos_promo_v1';
 
@@ -14605,9 +14643,16 @@ TECHNICAL SPECS:
     try {
       const saved = JSON.parse(localStorage.getItem(PROMO_STORAGE_KEY) || 'null');
       if (!saved || !saved.code) return null;
-      const def = PROMO_CODES[saved.code.toUpperCase()];
+      const code = saved.code.toUpperCase();
+      // Unlock codes: trust the server-validated result stored at submission time
+      if (saved.type === 'unlock') {
+        if (!saved.tier || !saved.label) { localStorage.removeItem(PROMO_STORAGE_KEY); return null; }
+        return { code, type: 'unlock', tier: saved.tier, label: saved.label };
+      }
+      // Discount codes: re-validate client-side (they're kept here)
+      const def = PROMO_CODES[code];
       if (!def) { localStorage.removeItem(PROMO_STORAGE_KEY); return null; }
-      return { code: saved.code.toUpperCase(), ...def };
+      return { code, ...def };
     } catch { return null; }
   }
 
@@ -14624,26 +14669,63 @@ TECHNICAL SPECS:
     window._activePromo = promo;
   }
 
-  function submitPromoCode() {
+  async function submitPromoCode() {
     const input = document.getElementById('promoCodeInput');
     if (!input) return;
     const code = (input.value || '').trim().toUpperCase();
     if (!code) { showToast('Enter a promo code first.', 'warning'); return; }
-    const def = PROMO_CODES[code];
-    if (!def) { showToast('Invalid promo code — please check and try again.', 'error'); return; }
-    // Save to localStorage
-    localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code }));
-    window._activePromo = { code, ...def };
-    if (def.type === 'unlock') {
-      const order = ['free','starter','pro','agency'];
+
+    // ── Discount codes: validate client-side (no bypass risk) ──────────────
+    const discountDef = PROMO_CODES[code];
+    if (discountDef && discountDef.type === 'discount') {
+      localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({
+        code, type: 'discount', pct: discountDef.pct, label: discountDef.label
+      }));
+      window._activePromo = { code, ...discountDef };
+      showToast('✅ ' + discountDef.label + ' — saved! Discount applies at checkout.', 'success', 5000);
+      renderBillingTab();
+      return;
+    }
+
+    // ── Unlock codes: validate server-side ─────────────────────────────────
+    const btn = document.getElementById('promoSubmitBtn');
+    const originalLabel = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Checking…'; }
+
+    try {
+      const resp = await fetch('/.netlify/functions/validate-promo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+
+      if (!resp.ok) throw new Error('Server error ' + resp.status);
+      const result = await resp.json();
+
+      if (!result.valid) {
+        showToast('Invalid promo code — please check and try again.', 'error');
+        return;
+      }
+
+      // Server confirmed valid — store all fields so we don't need to re-validate later
+      const def = { type: result.type, tier: result.tier, label: result.label };
+      localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code, ...def }));
+      window._activePromo = { code, ...def };
+
+      const order = ['free', 'starter', 'pro', 'agency'];
       const stripeIdx = order.indexOf(window._stripeTier || 'free');
       const promoIdx  = order.indexOf(def.tier);
       if (promoIdx > stripeIdx) window._stripeTier = def.tier;
+
       showToast('🎉 ' + def.label + ' — activated!', 'success', 5000);
-    } else {
-      showToast('✅ ' + def.label + ' — saved! Discount applies at checkout.', 'success', 5000);
+      renderBillingTab();
+
+    } catch (e) {
+      console.error('[submitPromoCode]', e);
+      showToast('Could not validate code — check your connection and try again.', 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = originalLabel; }
     }
-    renderBillingTab();
   }
 
   function removePromoCode() {
@@ -15280,7 +15362,7 @@ TECHNICAL SPECS:
   }
 
   async function clearAllLocalData() {
-    showConfirm('Clear all local data? This cannot be undone.', async () => {
+    showConfirm('Clear all local app data? This cannot be undone. You will be signed out — your account and subscription remain active and you can sign back in.', async () => {
       try {
         await Promise.all([
           'sm_accounts','sm_competitors','sm_viral_scripts',
@@ -15676,6 +15758,11 @@ TECHNICAL SPECS:
         }
         try { localStorage.setItem('aos_ctas_cleared_v1', '1'); } catch(_) {}
         ctas = filtered;
+        if (ctas.length === 0 && !localStorage.getItem('aos_ctas_seeded_v1')) {
+          ctas = DEFAULT_CTAS.map(c => ({ ...c, id: 'cta_' + Date.now() + '_' + Math.random().toString(36).slice(2) }));
+          saveCTAs();
+          localStorage.setItem('aos_ctas_seeded_v1', '1');
+        }
         renderCTALibrary();
         return;
       }
@@ -16466,15 +16553,15 @@ TECHNICAL SPECS:
       <!-- DATA -->
       <div id="uset-tab-data" class="uset-tab-content">
         <div class="uset-section-title">Export Data</div>
-        <div class="uset-desc">Download a copy of your accounts, scripts, and settings as a JSON file.</div>
+        <div class="uset-desc">Backs up all accounts, scripts, hooks, CTAs, settings, and projects.</div>
         <div class="uset-save-row" style="margin-bottom:24px;">
-          <button class="uset-btn-save" onclick="exportProjectJSON()">Export All Data</button>
+          <button class="uset-btn-save" onclick="admExport()">Export All Data (Full Backup)</button>
         </div>
         <div class="uset-section-title">Import Data</div>
         <div class="uset-desc">Restore from a previously exported JSON file. This will overwrite your current data.</div>
         <div class="uset-save-row" style="margin-bottom:24px;">
           <button class="uset-btn-save" onclick="document.getElementById('importJsonFile').click()">Import from File</button>
-          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="importProjectJSON(this)">
+          <input type="file" id="importJsonFile" accept=".json" style="display:none" onchange="admImport(event)">
         </div>
         <div class="uset-section-title" style="color:#f87171;">Danger Zone</div>
         <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:9px;padding:14px 16px;">
