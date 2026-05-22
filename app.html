@@ -7506,19 +7506,21 @@ RULES — read carefully:
 
   // --- Frame capture (returns Promise<dataUrl>) ---
   function captureFrame(time) {
+    // Pure capture — does NOT restore currentTime after seeking.
+    // Callers that need playhead restore should save videoEl.currentTime before
+    // their call (or loop) and restore it after. Restoring inside here fires a
+    // second 'seeked' event that can be caught by the next call's listener,
+    // causing it to capture the wrong frame in rapid-succession loops.
     return new Promise((resolve) => {
       const videoEl = document.getElementById('refVideoEl');
       if (!videoEl || !videoEl.duration || isNaN(videoEl.duration) || videoEl.readyState < 1) { resolve(null); return; }
       const canvas = document.getElementById('frameCanvas');
-      const savedTime = videoEl.currentTime;
       const doCapture = () => {
         canvas.width = videoEl.videoWidth || 360;
         canvas.height = videoEl.videoHeight || 640;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-        const result = canvas.toDataURL('image/jpeg', 0.8);
-        try { videoEl.currentTime = savedTime; } catch(_) {}
-        resolve(result);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
       };
       if (Math.abs(videoEl.currentTime - time) < 0.1) {
         doCapture();
@@ -7526,7 +7528,6 @@ RULES — read carefully:
         videoEl.currentTime = time;
         const seekTimeout = setTimeout(() => {
           videoEl.removeEventListener('seeked', onSeeked);
-          try { videoEl.currentTime = savedTime; } catch(_) {}
           resolve(null);
         }, 8000);
         const onSeeked = () => { clearTimeout(seekTimeout); doCapture(); };
@@ -7551,12 +7552,14 @@ RULES — read carefully:
     }
     document.getElementById('segmentsContainer').innerHTML =
       '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
+    const savedPlayhead = videoEl.currentTime;
     for (let i = 0; i < times.length; i++) {
       const frameDataUrl = await captureFrame(times[i].start);
       segments.push({ startTime: times[i].start, endTime: times[i].end, frameDataUrl, script: '', action: '', nbPrompt: '', veoPrompt: '' });
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = (i + 1) + '/' + times.length;
     }
+    try { videoEl.currentTime = savedPlayhead; } catch(_) {}
     distributeScript();
     renderSegments();
     saveSegments();
@@ -7603,6 +7606,7 @@ RULES — read carefully:
     }
 
     _autoSegRunning = true;
+    const savedPlayheadASC = videoEl.currentTime;
     const btn = document.getElementById('detectCutsBtn');
     if (btn) { btn.disabled = true; btn.textContent = '⏳ Scanning…'; }
     try {
@@ -7779,6 +7783,8 @@ RULES — read carefully:
       const prog = document.getElementById('captureProgress');
       if (prog) prog.textContent = (i + 1) + '/' + segments.length;
     }
+    // Restore playhead to where it was before the scan
+    try { videoEl.currentTime = savedPlayheadASC; } catch(_) {}
 
     // Use Whisper timestamps if available (most accurate), else proportional fallback
     if (!distributeScriptFromTimestamps()) distributeScript();
@@ -7926,7 +7932,12 @@ RULES — read carefully:
     // the new start frame context.
     if (!seg._scriptOnly) {
       try {
+        const _dupVidEl = document.getElementById('refVideoEl');
+        const _dupSavedTime = _dupVidEl ? _dupVidEl.currentTime : null;
         const newFrame = await captureFrame(splitTime);
+        if (_dupVidEl && _dupSavedTime !== null) {
+          try { _dupVidEl.currentTime = _dupSavedTime; } catch(_) {}
+        }
         const cloneIdxNow = segments.indexOf(clone);
         if (newFrame && cloneIdxNow >= 0) {
           clone.frameDataUrl = newFrame;
@@ -8021,52 +8032,17 @@ RULES — read carefully:
     return lines.join('\n');
   }
 
-  // --- Copy all Veo 3 prompts as a single ordered agent message ---
+  // --- Copy all scene prompts as a full two-phase workflow instruction for Claude in Chrome ---
+  // Delegates to runAllScenes so the output is identical to the Run button:
+  // Phase 1 (NB Pro composites) → Phase 2 (Veo 3 videos), with frame downloads, retry logic, etc.
   function copyVeoAgentAllScenePrompts() {
     const withPrompts = segments.filter(s => (s.veoPrompt || '').trim());
     if (withPrompts.length === 0) {
       showToast('No Veo 3 prompts yet — click ⚡ Generate Prompts first.', 'warning');
       return;
     }
-    const n = withPrompts.length;
-    const lines = [];
-    lines.push(`I have uploaded ${n} swapped frame${n !== 1 ? 's' : ''} in order. Using Veo 3.1 Fast, apply the following prompts to each frame in sequence — Prompt 1 goes to Frame 1, Prompt 2 goes to Frame 2, and so on. Use each frame as the starting image for its matching clip. For every clip, sync the avatar's actions, gestures, and expressions to the exact words being spoken — use the speech timing guide below each prompt to match movements to the moment each phrase is said. Do not mix up the order.`);
-    lines.push('');
-    withPrompts.forEach((seg, idx) => {
-      const sceneNum = segments.indexOf(seg) + 1;
-      const duration = Math.round((seg.endTime - seg.startTime) * 10) / 10;
-      lines.push(`━━━ Scene ${idx + 1} of ${n} (Segment ${sceneNum}) ━━━`);
-      lines.push(`Model: Veo 3.1 Fast`);
-      lines.push(seg.veoPrompt.trim());
-      // Word-timed speech guide
-      let speechText = '';
-      try {
-        const parsed = JSON.parse(seg.veoPrompt);
-        speechText = parsed.speech || seg.script || '';
-      } catch { speechText = seg.script || ''; }
-      const timingGuide = buildSpeechTimingGuide(speechText, duration);
-      if (timingGuide) {
-        lines.push('');
-        lines.push('Speech timing — sync actions to these moments:');
-        lines.push(timingGuide);
-      }
-      lines.push('');
-    });
-    lines.push(`━━━ END — ${n} scene${n !== 1 ? 's' : ''} total ━━━`);
-    const message = lines.join('\n');
-    navigator.clipboard.writeText(message).then(() => {
-      showToast(`All ${n} scene prompts copied — includes Veo 3.1 Fast model and speech timing for each scene.`, 'success', 5000);
-    }).catch(() => {
-      try {
-        const ta = document.createElement('textarea');
-        ta.value = message;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        showToast(`All ${n} scene prompts copied!`, 'success', 3000);
-      } catch(e) { showToast('Copy failed — please try again.', 'error'); }
-    });
+    // Run without skipping done scenes, skip the preflight confirms
+    runAllScenes(false, true);
   }
 
   // --- Copy Veo Agent avatar-swap prompt ---
@@ -9328,12 +9304,17 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
 
   // --- Capture multiple frames from a segment for video analysis ---
   async function captureSegmentFrames(seg, count) {
+    const videoElRef = document.getElementById('refVideoEl');
+    const savedPlayhead = videoElRef ? videoElRef.currentTime : null;
     const frames = [];
     const step = (seg.endTime - seg.startTime) / (count + 1);
     for (let k = 1; k <= count; k++) {
       const t = seg.startTime + step * k;
       const dataUrl = await captureFrame(t);
       if (dataUrl) frames.push(dataUrl);
+    }
+    if (videoElRef && savedPlayhead !== null) {
+      try { videoElRef.currentTime = savedPlayhead; } catch(_) {}
     }
     return frames;
   }
@@ -11326,6 +11307,11 @@ ALL SCENES COMPLETE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Report back: how many scenes completed successfully, and note any that had issues.`;
 
+    // Store for Cowork auto-run pickup
+    window._aosPendingInstruction = instruction;
+    window._aosPendingTs = Date.now();
+    window._aosPendingSceneCount = ready.length;
+
     navigator.clipboard.writeText(instruction).catch(() => {
       try {
         const ta = document.createElement('textarea');
@@ -11370,10 +11356,14 @@ Report back: how many scenes completed successfully, and note any that had issue
             </div>
           </div>
           ${doneCount > 0 && !skipDone ? `<div style="background:rgba(251,191,36,0.06);border:1px solid rgba(251,191,36,0.2);border-radius:6px;padding:8px 12px;font-size:10px;color:var(--warning);">⚡ ${doneCount} scene${doneCount>1?'s are':' is'} already done. Use <strong>Resume</strong> to skip them and save ~${estimateCredits(segments.filter(s=>s.done&&s.veoPrompt?.trim()))} credits.</div>` : ''}
-          <div style="color:var(--text-3);font-size:10px;">Paste the instruction into Claude desktop → it runs everything hands-free</div>
+          <div style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.3);border-radius:6px;padding:10px 12px;">
+            <div style="font-size:11px;color:#67e8f9;font-weight:700;margin-bottom:4px;">🤖 Auto-Run via Cowork (recommended)</div>
+            <div style="font-size:10px;color:var(--text-2);line-height:1.5;">The instruction is ready. Switch to the Cowork chat and type <strong style="color:#e2e8f0;">run it</strong> — Claude will open Google Flow in Chrome and execute the full workflow automatically. No pasting needed.</div>
+          </div>
+          <div style="color:var(--text-3);font-size:10px;text-align:center;">— or paste manually into any Claude chat (Ctrl+V) —</div>
         </div>
         <div style="display:flex;gap:8px;">
-          <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:8px;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:6px;color:#4ade80;font-weight:600;cursor:pointer;font-size:12px;">Got it — pasting now</button>
+          <button onclick="this.closest('div[style*=fixed]').remove()" style="flex:1;padding:8px;background:rgba(6,182,212,0.12);border:1px solid rgba(6,182,212,0.4);border-radius:6px;color:#67e8f9;font-weight:700;cursor:pointer;font-size:12px;">Got it — switching to Cowork</button>
         </div>
       </div>`;
     document.body.appendChild(modal);
@@ -11839,6 +11829,12 @@ ${veoPrompt}
 
       const step = clipDur / (FRAME_COUNT + 1);
 
+      // Save playhead before the loop; restore after so the user's position is preserved.
+      // captureFrame is pure (no internal restore) — restoring inside it fires a second
+      // 'seeked' event that the next call's listener would catch, capturing the wrong frame.
+      const videoElRef = document.getElementById('refVideoEl');
+      const savedPlayhead = videoElRef ? videoElRef.currentTime : null;
+
       const liveFrames = [];
       const timestamps = [];
       for (let k = 1; k <= FRAME_COUNT; k++) {
@@ -11846,6 +11842,11 @@ ${veoPrompt}
         timestamps.push(t);
         const f = await captureFrame(t);
         if (f) liveFrames.push({ t, f });
+      }
+
+      // Restore playhead after all frames captured
+      if (videoElRef && savedPlayhead !== null) {
+        try { videoElRef.currentTime = savedPlayhead; } catch(_) {}
       }
 
       // If video isn't loaded/seekable, fall back to the saved start frame only
