@@ -3758,11 +3758,6 @@
             <div class="vs-more-wrap">
               <button class="vs-more-btn" onclick="toggleVsMoreMenu(this)" title="More options">⋯ More <span style="font-size:9px;">▾</span></button>
               <div class="vs-more-menu" id="vsMoreMenu">
-                <button class="vs-more-item" onclick="showPreflightModal(true);closeVsMoreMenu()" title="Skip scenes already marked done">⚡ Resume (skip done)</button>
-                <button class="vs-more-item" id="condenseAllBtn" onclick="condenseAllScripts();closeVsMoreMenu()" title="Rewrite over-limit scenes to fit 8s">✂ Condense Scripts</button>
-                <button class="vs-more-item" onclick="copyAllVeoPrompts();closeVsMoreMenu()" title="Copy all Veo 3 prompts to clipboard">📋 Copy All Veo Prompts</button>
-                <button class="vs-more-item replicator-only" onclick="copyVeoAgentSwapPrompt();closeVsMoreMenu()" title="Copy the Veo Agent avatar-swap prompt to clipboard">🤖 Copy Veo Agent Prompt</button>
-                <button class="vs-more-item replicator-only" onclick="copyVeoAgentAllScenePrompts ? copyVeoAgentAllScenePrompts() : openVeoAgentPanel();closeVsMoreMenu()" title="Copy all scene prompts for Veo Agent (Claude in Chrome workflow)" style="color:#67e8f9;">🤖 Copy All for Veo Agent</button>
                 <button class="vs-more-item replicator-only" onclick="downloadAllFramesAsZip();closeVsMoreMenu()" title="Download avatar + all scene frames as a ZIP folder for batch upload to Veo">📦 Download Frames ZIP</button>
                 <button class="vs-more-item producer-only" id="aiDescribeBtn" onclick="aiDescribeScenes();closeVsMoreMenu()" title="Use GPT to suggest action descriptions">✨ AI Describe Scenes</button>
                 <button class="vs-more-item producer-only" id="hookVariationsBtn" onclick="generateHookVariations();closeVsMoreMenu()" title="Generate 5 alternative hooks for scene 1">🎣 Hook Variations</button>
@@ -3770,6 +3765,18 @@
                 <button class="vs-more-item" id="saveAllBtn" onclick="saveGeneratedToLibrary();closeVsMoreMenu()" style="display:none;">💾 Save Run to Library</button>
                 <button class="vs-more-item" onclick="openSavedLibraryModal();closeVsMoreMenu()">📚 View Saved <span id="libCount" style="font-size:9px;color:var(--text-3);margin-left:3px;"></span></button>
               </div>
+            </div>
+
+            <!-- Veo model toggle -->
+            <div style="display:flex;align-items:center;gap:0;margin-left:6px;border:1px solid var(--border-2);border-radius:6px;overflow:hidden;flex-shrink:0;" title="Veo 3 model for generation">
+              <button id="veoModelFastBtn" onclick="setVeoModel('Veo 3.1 Fast')"
+                style="padding:3px 9px;font-size:10px;font-weight:600;font-family:inherit;border:none;border-right:1px solid var(--border-2);cursor:pointer;transition:background 0.15s,color 0.15s;background:rgba(34,197,94,0.18);color:#4ade80;">
+                ⚡ Fast
+              </button>
+              <button id="veoModelQualBtn" onclick="setVeoModel('Veo 3')"
+                style="padding:3px 9px;font-size:10px;font-weight:600;font-family:inherit;border:none;cursor:pointer;transition:background 0.15s,color 0.15s;background:var(--surface);color:var(--text-3);">
+                ✦ Quality
+              </button>
             </div>
 
             <span style="margin-left:4px;font-size:10px;color:var(--text-3);">Segments: <span id="segmentCount" style="font-weight:600;color:var(--text-2);"></span></span>
@@ -7495,17 +7502,16 @@ RULES — read carefully:
       // If the file is larger than ~4 MB, extract audio-only before sending.
       // 16 kHz mono WAV for a 60s clip ≈ 1.9 MB — well within the 6 MB Lambda cap.
       if (refVideoFile.size > 3.5 * 1024 * 1024) {
-        status.textContent = 'Extracting audio…';
-        status.style.color = '#888';
+        if (status) { status.textContent = 'Extracting audio…'; status.style.color = '#888'; }
         try {
           fileToSend = await extractAudioAsWav(refVideoFile, (msg) => {
-            status.textContent = msg;
+            if (status) status.textContent = msg;
           });
           // Rename so the function picks the right MIME type
           fileToSend = new File([fileToSend], 'audio.wav', { type: 'audio/wav' });
           // Netlify Lambda payload cap is 6 MB; base64 overhead is ~4/3×
           if (fileToSend.size > 4.5 * 1024 * 1024) {
-            status.textContent = '⚠️ Audio is too long to transcribe (max ~2 min). Trim the video and try again.';
+            if (status) status.textContent = '⚠️ Audio is too long to transcribe (max ~2 min). Trim the video and try again.';
             btn.disabled = false;
             return;
           }
@@ -7515,18 +7521,15 @@ RULES — read carefully:
         }
       }
 
-      status.textContent = 'Transcribing…';
-      status.style.color = '#888';
+      if (status) { status.textContent = 'Transcribing…'; status.style.color = '#888'; }
 
       const response = await _proxyTranscribe(fileToSend);
       if (!response.ok) {
         const err = await response.json().catch(() => ({}));
         if (response.status === 401) {
-          status.textContent = '✗ Invalid API key';
-          status.style.color = '#cc6060';
+          if (status) { status.textContent = '✗ Invalid API key'; status.style.color = '#cc6060'; }
         } else {
-          status.textContent = '✗ ' + (err.error?.message || 'API error ' + response.status);
-          status.style.color = '#cc6060';
+          if (status) { status.textContent = '✗ ' + (err.error?.message || 'API error ' + response.status); status.style.color = '#cc6060'; }
         }
         return;
       }
@@ -7604,6 +7607,27 @@ RULES — read carefully:
         const onSeeked = () => { clearTimeout(seekTimeout); doCapture(); };
         videoEl.addEventListener('seeked', onSeeked, { once: true });
       }
+    });
+  }
+
+  // --- Downscale a dataURL to max 512px wide (keeps aspect ratio) ---
+  // OpenAI detail:'low' caps at 512px anyway, so this is lossless from the
+  // model's perspective but cuts payload size by ~75% on 1080p source videos,
+  // keeping 6-frame batches well under Netlify's 6MB function body limit.
+  function scaleDataUrl(dataUrl, maxWidth) {
+    if (!dataUrl) return dataUrl;
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = Math.min(img.width, maxWidth || 512);
+        const h = Math.round(img.height * (w / img.width));
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = () => resolve(dataUrl); // fallback: send original
+      img.src = dataUrl;
     });
   }
 
@@ -9232,7 +9256,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
   // --- Read the voice style set by the user ---
   function getVoiceStyle() {
     // Avatar-level voice takes priority; fall back to global studio voice field
-    const avatarVoice = buildAvatarVoiceString?.() || localStorage.getItem('vs_avatar_voice') || '';
+    const avatarVoice = buildAvatarVoiceString?.() || '';
     const studioVoice = (document.getElementById('studioVoice')?.value || localStorage.getItem('vs_voice_style') || '').trim();
     return avatarVoice || studioVoice;
   }
@@ -9394,7 +9418,7 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
         ? 'Match the background and environment from the previous scenes exactly. Same lighting, same surface, same props — all locked in place.'
         : 'clean neutral background or lifestyle environment';
       const _ctaWords   = (ctaSpeech || '').split(/\s+/).filter(Boolean).length;
-      const _ctaDur     = (_ctaWords / 2.5) > 5.5 ? 8 : 6;
+      const _ctaDur     = (_ctaWords / 2.5) > 7 ? 8 : 6;
       const veoStarter = JSON.stringify({
         action: `Character holds ${productDesc} perfectly still toward camera with label facing forward, does not turn or rotate the product. Smiles directly at camera with a confident, natural expression.`,
         speech: ctaSpeech,
@@ -9452,17 +9476,17 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const negativePrompt = twoPersonScene
       ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, flipped composition, mirrored subjects, solo person, disappeared person'
       : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions';
-    // Duration: use actual clip length (endTime - startTime) when available.
-    // Veo 3 max is 8 seconds — clamp between 5 and 8s.
-    // Fall back to word-count estimate (2.5 wps) if timestamps are missing.
+    // Duration: must be exactly 6 or 8 seconds — Veo 3 only supports these two.
+    // Use actual clip length when available, fall back to word-count estimate.
+    // Snap rule: ≤7s → 6s, >7s → 8s.
     let _duration;
     if (typeof startTime === 'number' && typeof endTime === 'number' && endTime > startTime) {
       const clipSec = endTime - startTime;
-      _duration = Math.min(8, Math.max(5, Math.round(clipSec)));
+      _duration = clipSec > 7 ? 8 : 6;
     } else {
       const _wordCount = (scriptSlice || '').split(/\s+/).filter(Boolean).length;
       const _estSec    = _wordCount / 2.5;
-      _duration = _estSec > 5.5 ? 8 : 6;
+      _duration = _estSec > 7 ? 8 : 6;
     }
     const obj = {
       action: actionWithSpeech,
@@ -10336,10 +10360,11 @@ Return ONLY a raw JSON array of exactly ${segments.length} objects with "action"
   }
 
   function getVeoDuration(script) {
-    // Choose 6s or 8s based on how long the dialogue will take at 2.3 words/sec
+    // Must return exactly 6 or 8 — Veo 3 only supports these two durations.
+    // Snap rule: >7s speech → 8, otherwise → 6.
     const words = (script || '').trim().split(/\s+/).filter(Boolean).length;
     const secs  = words / WORDS_PER_SEC;
-    return secs <= 6.5 ? 6 : 8;
+    return secs > 7 ? 8 : 6;
   }
 
   // ── Live Scene Status Panel ───────────────────────────────────────────────
@@ -10476,7 +10501,7 @@ Return ONLY a valid JSON object with these fields:
 - foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). Note any visible product labels or text and state they must remain legible and unchanged. End with: "All props are locked in place — do not move, add, remove, or rearrange any object. All product labels and text must remain sharp, legible, and identical throughout the clip."
 - camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
-- duration: estimate the clip duration in whole seconds (minimum 6, maximum 8) based on how long it takes to speak the speech field at a natural pace. Output as e.g. "6 seconds" or "8 seconds".
+- duration: MUST be exactly "6 seconds" or "8 seconds" — no other values are valid. Choose 8 if the speech takes longer than 7 seconds to say at a natural pace, otherwise choose 6.
 - negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
 - IMPORTANT for TWO-PERSON frames: in the action field, always specify which person is on the LEFT and which is on the RIGHT. Use explicit left/right anchoring so Veo 3 does not flip the composition.
 
@@ -10497,10 +10522,17 @@ No markdown. Return only the JSON object.`
       if (!_parsed.speech || !String(_parsed.speech).trim()) {
         _parsed.speech = seg.script || '';
       }
-      // Always enforce duration — min 6s, 8s if speech is long enough
-      if (!_parsed.duration) {
+      // Always enforce duration — must be exactly 6s or 8s (Veo 3 only supports these two)
+      {
         const _wc = String(_parsed.speech || seg.script || '').split(/\s+/).filter(Boolean).length;
-        _parsed.duration = (_wc / 2.5 > 5.5 ? 8 : 6) + ' seconds';
+        const _fallback = (_wc / 2.5 > 7 ? 8 : 6) + ' seconds';
+        if (!_parsed.duration) {
+          _parsed.duration = _fallback;
+        } else {
+          // Snap whatever GPT returned to exactly 6 or 8
+          const _n = parseInt(_parsed.duration, 10);
+          _parsed.duration = (!isNaN(_n) && _n > 7 ? 8 : 6) + ' seconds';
+        }
       }
       raw = JSON.stringify(_parsed, null, 2);
       seg.veoPrompt = raw;
@@ -10571,6 +10603,24 @@ No markdown. Return only the JSON object.`
   }
 
   // ── Toggle all Veo 3 prompts visible / hidden ────────────────────────────
+  function setVeoModel(model) {
+    const s = getAdminSettings();
+    s.defaultModel = model;
+    saveAdminSettings(s);
+    _syncVeoModelToggle(model);
+  }
+
+  function _syncVeoModelToggle(model) {
+    const fastBtn = document.getElementById('veoModelFastBtn');
+    const qualBtn = document.getElementById('veoModelQualBtn');
+    if (!fastBtn || !qualBtn) return;
+    const isFast = model !== 'Veo 3';
+    fastBtn.style.background = isFast  ? 'rgba(34,197,94,0.18)' : 'var(--surface)';
+    fastBtn.style.color      = isFast  ? '#4ade80'              : 'var(--text-3)';
+    qualBtn.style.background = !isFast ? 'rgba(251,191,36,0.15)': 'var(--surface)';
+    qualBtn.style.color      = !isFast ? '#fbbf24'              : 'var(--text-3)';
+  }
+
   function toggleAllPrompts() {
     const btn = document.getElementById('togglePromptsBtn');
     const sections = document.querySelectorAll('[id^="veo-wrap-"]');
@@ -12042,7 +12092,10 @@ ${veoPrompt}
       for (let k = 1; k <= FRAME_COUNT; k++) {
         const t = clipStart + step * k;
         timestamps.push(t);
-        const f = await captureFrame(t);
+        const raw = await captureFrame(t);
+        // Scale to 512px max — OpenAI detail:'low' caps there anyway.
+        // Keeps 6-frame payload well under Netlify's 6MB function body limit.
+        const f = raw ? await scaleDataUrl(raw, 512) : null;
         if (f) liveFrames.push({ t, f });
       }
 
@@ -12054,7 +12107,8 @@ ${veoPrompt}
       // If video isn't loaded/seekable, fall back to the saved start frame only
       if (!liveFrames.length) {
         if (seg.frameDataUrl) {
-          liveFrames.push({ t: clipStart, f: seg.frameDataUrl });
+          const scaledFallback = await scaleDataUrl(seg.frameDataUrl, 512);
+          liveFrames.push({ t: clipStart, f: scaledFallback });
           showToast(`Seg ${i+1}: video not loaded — using saved start frame only. Load the video for a full sequence analysis.`, 'warning', 4000);
         } else {
           done(deriveSceneAction(seg.script || '', i, segments.length));
@@ -12099,6 +12153,17 @@ RULES:
       });
 
       const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const errMsg = data?.error?.message || ('API error ' + res.status);
+        done(deriveSceneAction(seg.script || '', i, segments.length));
+        showToast('Regen action failed: ' + errMsg, 'error', 5000);
+        return;
+      }
+      if (data.error) {
+        done(deriveSceneAction(seg.script || '', i, segments.length));
+        showToast('Regen action failed: ' + (data.error.message || data.error), 'error', 5000);
+        return;
+      }
       let desc = data.choices?.[0]?.message?.content?.trim() || '';
       const refused = !desc || /i('m| am) sorry|can't assist|cannot assist/i.test(desc);
       if (refused) {
@@ -13222,6 +13287,8 @@ TECHNICAL SPECS:
 
   function initVideoStudio(forcedMode) {
     _restoreCtaState();
+    // Sync the Fast/Quality toggle to whatever model is saved
+    _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Fast');
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();
@@ -14209,7 +14276,6 @@ TECHNICAL SPECS:
   // ===== THEME TOGGLE =====
   function applyTheme(theme) {
     document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('socialos_theme', theme);
     const isLight = theme === 'light';
     const label = document.getElementById('themeLabel');
     const thumb = document.getElementById('themeToggleThumb');
@@ -14686,7 +14752,6 @@ TECHNICAL SPECS:
     const resolved = s.themeMode === 'system'
       ? (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
       : s.themeMode;
-    localStorage.setItem('socialos_theme', resolved);
     applyTheme(resolved);
     _showUsetSaved();
   }
