@@ -3411,7 +3411,7 @@
 
         <!-- Product CTA Segment — replicator only -->
         <div id="ctaPanel" class="vs-panel replicator-only" style="flex-shrink:0;" data-collapsed="1">
-          <div class="vs-panel-header collapsible" style="padding:5px 10px;" onclick="vsPanelToggle(this); _onCtaPanelToggle(this)">
+          <div class="vs-panel-header collapsible" style="padding:5px 10px;" onclick="vsPanelToggle(this)">
             <span>🛍 Product CTA Segment</span>
             <span class="vsp-arrow" style="transform:rotate(-90deg)">▾</span>
           </div>
@@ -8331,7 +8331,7 @@ RULES — read carefully:
     const mergedScript = [segments[i].script, segments[j].script].filter(Boolean).join(' ').trim();
     segments[i].script = mergedScript;
 
-    // Re-derive action from the full combined script
+    // Re-derive action from the full combined script (length-1 = correct post-splice last index)
     segments[i].action = deriveSceneAction(mergedScript, i, segments.length - 1);
 
     // Rebuild Veo 3 prompt for the merged segment
@@ -8660,8 +8660,9 @@ RULES — read carefully:
   // won't fit one clip. Green = fits, yellow = slightly long, red = won't fit
   // (or too short to be a real scene).
   function scriptHealth(seg) {
+    const _WPS = 2.3; // words per second — keep in sync with module-level WORDS_PER_SEC
     const wc = (seg && seg.script || '').trim().split(/\s+/).filter(Boolean).length;
-    const estSec = wc / WORDS_PER_SEC;
+    const estSec = wc / _WPS;
     let color, level, title;
     if (wc === 0) {
       color = 'var(--text-3)'; level = 'empty'; title = 'No script yet';
@@ -9495,8 +9496,8 @@ Return only the action description — no intro, no commentary, no filler.`
           body: JSON.stringify({ model: 'gpt-4o', max_tokens: 300, messages: [{ role: 'user', content }] })
         });
         const data = await res.json().catch(() => ({}));
-        if (data.error) { showToast('Frame analysis error: ' + (data.error.message || data.error), 'error'); skipped++; continue; }
-        if (!res.ok) { throw new Error(data?.error?.message || 'API error ' + res.status); }
+        if (!res.ok) { skipped++; showToast('Frame analysis error: ' + (data?.error?.message || 'API error ' + res.status), 'error'); continue; }
+        if (data.error) { skipped++; showToast('Frame analysis error: ' + (data.error.message || data.error), 'error'); continue; }
         let description = data.choices?.[0]?.message?.content?.trim() || '';
 
         // If OpenAI refused the image, retry with only the start frame (no end frame)
@@ -9763,7 +9764,8 @@ Rules:
 
   // Hook Variations + Ad Scoring
   function closeHookVariationsModal() {
-    document.getElementById('hookVariationsModal').style.display = 'none';
+    const m = document.getElementById('hookVariationsModal');
+    if (m) m.style.display = 'none';
   }
 
   function applyHookVariation(text) {
@@ -10057,7 +10059,8 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
           const veoTa = document.getElementById('veo-seg-' + i);
           if (veoTa) veoTa.value = '⏳ Building from NB image…';
           const _nbOk = await buildVeo3FromNBImage(i);
-          if (!segments[i]) return;
+          // Guard: if segments were replaced during the await, abort — stale index
+          if (!segments[i] || seg !== segments[i]) return;
           if (!_nbOk && veoTa && veoTa.value.startsWith('⏳')) {
             // Vision call failed — fall back to template so the textarea isn't stuck on the spinner
             const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
@@ -10072,7 +10075,8 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
           if (seg._scriptOnly || !seg.frameDataUrl) return;
           const nbTa2 = document.getElementById('nb-seg-' + i);
           const ok = await buildNBPromptFromImage(i);
-          if (!segments[i]) return;
+          // Guard: if segments were replaced during the await, abort — stale index
+          if (!segments[i] || seg !== segments[i]) return;
           if (!ok) {
             // Vision call failed — keep the template-built prompt already set above
             const _s2 = document.getElementById('studioSetting')?.value.trim() || '';
@@ -11953,7 +11957,7 @@ ${veoPrompt}
       // frame; fall back to keyword derivation immediately.
       if (clipDur <= 0) {
         done(deriveSceneAction(seg.script || '', i, segments.length));
-        showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning', 4000);
+        showToast('Segment has no duration yet — action set from script keywords.', 'info', 3000);
         return;
       }
 
@@ -11986,7 +11990,7 @@ ${veoPrompt}
           showToast(`Seg ${i+1}: video not loaded — using saved start frame only. Load the video for a full sequence analysis.`, 'warning', 4000);
         } else {
           done(deriveSceneAction(seg.script || '', i, segments.length));
-          showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning', 4000);
+          showToast('Video not loaded — action set from script keywords. Load the video for AI frame analysis.', 'info', 4000);
           return;
         }
       }
@@ -12031,12 +12035,12 @@ RULES:
       const refused = !desc || /i('m| am) sorry|can't assist|cannot assist/i.test(desc);
       if (refused) {
         desc = deriveSceneAction(seg.script || '', i, segments.length);
-        showToast('Scene action could not be analyzed — using automatic detection instead.', 'warning');
+        showToast('AI analysis unavailable — action set from script keywords.', 'info', 3000);
       }
       done(desc);
     } catch (e) {
       done(deriveSceneAction(seg.script || '', i, segments.length));
-      showToast('Action regen fell back to keyword match: ' + (e.message || e), 'warning');
+      showToast('Action updated from script keywords (AI analysis error: ' + (e.message || e) + ').', 'info', 4000);
     }
   }
 
@@ -14873,7 +14877,7 @@ TECHNICAL SPECS:
           <input id="promoCodeInput" type="text" placeholder="e.g. MAXACCESS"
             style="flex:1;padding:8px 12px;background:var(--bg);border:1px solid var(--border-2);border-radius:7px;color:var(--text-1);font-size:12px;font-family:inherit;letter-spacing:0.5px;text-transform:uppercase;outline:none;"
             onkeydown="if(event.key==='Enter')submitPromoCode()">
-          <button onclick="submitPromoCode()" style="padding:8px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
+          <button id="promoSubmitBtn" onclick="submitPromoCode()" style="padding:8px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Apply</button>
         </div>`}
       </div>
 
@@ -14985,7 +14989,7 @@ TECHNICAL SPECS:
     }
     // Apply promo
     const promoData = { code, ...def };
-    try { localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code })); } catch {}
+    try { localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code, ...def })); } catch {}
     window._activePromo = promoData;
     if (def.type === 'unlock') {
       window._stripeTier = def.tier;
@@ -15796,7 +15800,7 @@ TECHNICAL SPECS:
         ctas = filtered;
         if (ctas.length === 0 && !localStorage.getItem('aos_ctas_seeded_v1')) {
           ctas = DEFAULT_CTAS.map(c => ({ ...c, id: 'cta_' + Date.now() + '_' + Math.random().toString(36).slice(2) }));
-          saveCTAs();
+          saveCTALibrary();
           localStorage.setItem('aos_ctas_seeded_v1', '1');
         }
         renderCTALibrary();
