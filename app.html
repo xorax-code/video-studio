@@ -9383,11 +9383,18 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const negativePrompt = twoPersonScene
       ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, flipped composition, mirrored subjects, solo person, disappeared person'
       : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions';
-    // Duration: estimate from speech word count at 2.5 wps + 0.5s breathing room.
-    // Minimum 6s, extend to 8s if the speech fills more than ~5.5 seconds.
-    const _wordCount = (scriptSlice || '').split(/\s+/).filter(Boolean).length;
-    const _estSec    = _wordCount / 2.5;
-    const _duration  = _estSec > 5.5 ? 8 : 6;
+    // Duration: use actual clip length (endTime - startTime) when available.
+    // Veo 3 max is 8 seconds — clamp between 5 and 8s.
+    // Fall back to word-count estimate (2.5 wps) if timestamps are missing.
+    let _duration;
+    if (typeof startTime === 'number' && typeof endTime === 'number' && endTime > startTime) {
+      const clipSec = endTime - startTime;
+      _duration = Math.min(8, Math.max(5, Math.round(clipSec)));
+    } else {
+      const _wordCount = (scriptSlice || '').split(/\s+/).filter(Boolean).length;
+      const _estSec    = _wordCount / 2.5;
+      _duration = _estSec > 5.5 ? 8 : 6;
+    }
     const obj = {
       action: actionWithSpeech,
       speech: scriptSlice || '',
