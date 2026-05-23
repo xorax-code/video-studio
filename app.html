@@ -8099,8 +8099,22 @@ RULES — read carefully:
       showToast('No scene frames extracted yet — use the timeline to capture frames for each segment first.', 'warning');
       return;
     }
+
+    // Derive gender language from the Voice & Accent gender selector
+    const voiceGender = (document.getElementById('avatarVoiceGender')?.value || '').toLowerCase();
+    let genderNoun, genderPronoun, genderPossessive;
+    if (voiceGender === 'male') {
+      genderNoun = 'the man'; genderPronoun = 'he'; genderPossessive = 'his';
+    } else if (voiceGender === 'female') {
+      genderNoun = 'the woman'; genderPronoun = 'she'; genderPossessive = 'her';
+    } else {
+      // Gender not set — use neutral language and nudge the user
+      genderNoun = 'the person'; genderPronoun = 'they'; genderPossessive = 'their';
+      showToast('Tip: set the Gender in Voice & Accent to get he/she language in the swap prompt.', 'info', 4000);
+    }
+
     const totalPhotos = 1 + frameCount; // Photo 1 = avatar, Photos 2–N = frames
-    const prompt = `Photo 1 is my avatar — the woman whose face, body, hair, and clothing must be preserved exactly as they appear. Photos 2 through ${totalPhotos} are frames pulled from a video. For each frame, replace the person in it with the woman from Photo 1. She must match the original person's exact body position, pose, and stance in that frame. Place her against the original frame's background — do not change the background, lighting, or environment. If the person in the frame is holding, touching, or interacting with any object, she must be holding or interacting with that same object in the same hand, at the same position. Keep her clothing, hair, and appearance identical to Photo 1 throughout every single frame. Remove any text, captions, subtitles, or watermarks from every frame. Apply this consistently across all frames so she looks like a continuous, natural presence throughout the video.`;
+    const prompt = `Photo 1 is my avatar — ${genderNoun} whose face, body, hair, and clothing must be preserved exactly as they appear. Photos 2 through ${totalPhotos} are frames pulled from a video. For each frame, replace the person in it with ${genderNoun} from Photo 1. ${genderPronoun.charAt(0).toUpperCase() + genderPronoun.slice(1)} must match the original person's exact body position, pose, and stance in that frame. Place ${genderPronoun === 'they' ? 'them' : genderPronoun === 'he' ? 'him' : 'her'} against the original frame's background — do not change the background, lighting, or environment. If the person in the frame is holding, touching, or interacting with any object, ${genderPronoun} must be holding or interacting with that same object in the same hand, at the same position. Keep ${genderPossessive} clothing, hair, and appearance identical to Photo 1 throughout every single frame. Remove any text, captions, subtitles, or watermarks from every frame. Apply this consistently across all frames so ${genderPronoun} looks like a continuous, natural presence throughout the video.`;
     navigator.clipboard.writeText(prompt).then(() => {
       showToast('Veo Agent swap prompt copied — paste it into the Veo agent after uploading your photos.', 'success', 4000);
     }).catch(() => {
