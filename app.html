@@ -3359,7 +3359,7 @@
                 <input type="file" id="avatarImgInput" accept="image/*" style="display:none;" onchange="onAvatarImageChange(event)">
                 <button class="btn" id="clearAvatarImgBtn" onclick="clearAvatarImage()" style="width:100%;margin-top:2px;font-size:9px;padding:1px 0;display:none;">Clear</button>
               </div>
-              <textarea id="avatarDesc" rows="3" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
+              <textarea id="avatarDesc" rows="3" autocomplete="off" placeholder="Notes: outfit, tone, energy…" style="flex:1;font-size:10px;padding:4px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:2px;color:var(--text-1);font-family:inherit;outline:none;resize:none;"></textarea>
             </div>
             <!-- Voice & Accent — injected into every Veo 3 audio field -->
             <div style="display:flex;flex-direction:column;gap:3px;">
@@ -3404,7 +3404,7 @@
                   <option value="soft Jamaican accent">🇯🇲 Jamaican</option>
                 </select>
               </div>
-              <input id="avatarVoiceCustom" type="text" placeholder="Custom override (e.g. raspy elderly woman, fast-paced)" oninput="saveAvatarVoice()" style="font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;width:100%;">
+              <input id="avatarVoiceCustom" type="text" autocomplete="off" placeholder="Custom override (e.g. raspy elderly woman, fast-paced)" oninput="saveAvatarVoice()" style="font-size:10px;padding:3px 6px;background:var(--bg);border:1px solid var(--border-2);border-radius:3px;color:var(--text-1);font-family:inherit;outline:none;box-sizing:border-box;width:100%;">
               <div id="avatarVoicePreview" style="font-size:9px;color:var(--accent-2);opacity:0.7;font-style:italic;min-height:12px;"></div>
             </div>
             <!-- Appearance Inventory — collapsible, starts closed -->
@@ -12389,7 +12389,15 @@ Return ONLY a raw JSON array of objects with keys "i" (scene index, integer) and
         if (document.getElementById('avatarVoiceAge'))    document.getElementById('avatarVoiceAge').value    = vc.age    || '';
         if (document.getElementById('avatarVoiceTone'))   document.getElementById('avatarVoiceTone').value   = vc.tone   || '';
         if (document.getElementById('avatarAccent'))      document.getElementById('avatarAccent').value      = vc.accent || '';
-        if (document.getElementById('avatarVoiceCustom')) document.getElementById('avatarVoiceCustom').value = vc.custom || '';
+        // Guard: never restore an email address into the custom override — browser autofill
+        // can silently inject the user's email which then gets persisted on Save.
+        const _safeCustom = (vc.custom || '').trim();
+        const _isEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(_safeCustom);
+        if (_isEmail) {
+          vc.custom = '';
+          DB.set('vs_avatar_voice_config', vc).catch(() => {});
+        }
+        if (document.getElementById('avatarVoiceCustom')) document.getElementById('avatarVoiceCustom').value = _isEmail ? '' : _safeCustom;
         saveAvatarVoice();
       }
     } catch(e) {}
