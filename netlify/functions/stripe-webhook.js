@@ -58,7 +58,10 @@ function stripeGet(path) {
     }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
-      res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); } });
+      res.on('end', () => {
+        if (res.statusCode < 200 || res.statusCode >= 300) { resolve(null); return; }
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); }
+      });
     });
     req.on('error', () => resolve(null));
     req.end();
@@ -203,7 +206,7 @@ exports.handler = async (event) => {
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {
-          await updateUserMeta(userId, { stripe_tier: tier });
+          await updateUserMeta(userId, { stripe_tier: tier, stripe_subscription_id: sub.id });
           console.log(`User ${userId} plan updated to ${tier}`);
         }
         break;
@@ -216,6 +219,49 @@ exports.handler = async (event) => {
         if (userId) {
           await updateUserMeta(userId, { stripe_tier: 'free' });
           console.log(`User ${userId} downgraded to free (subscription cancelled)`);
+        }
+        break;
+      }
+
+      // ── New subscription created (fires before checkout.session.completed) ──
+      // Use this as a fallback in case checkout.session.completed lacks client_reference_id
+      case 'customer.subscription.created': {
+        const sub        = stripeEvent.data.object;
+        const customerId = sub.customer;
+        const priceId    = sub.items?.data?.[0]?.price?.id;
+        const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
+        const tier = PAID_STATUSES.has(sub.status) ? (tierFromPriceId(priceId) || 'starter') : 'free';
+
+        const userId = await findUserByCustomerId(customerId);
+        if (userId) {
+          await updateUserMeta(userId, {
+            stripe_tier:            tier,
+            stripe_subscription_id: sub.id,
+          });
+          console.log(`User ${userId} subscription created → ${tier}`);
+        } else {
+          // userId not in Supabase yet — checkout.session.completed will handle it via client_reference_id
+          console.log(`subscription.created: no Supabase user found for customer ${customerId} — will be set by checkout.session.completed`);
+        }
+        break;
+      }
+
+      // ── Successful payment (initial + every renewal) ──────────────────────
+      case 'invoice.payment_succeeded': {
+        const invoice        = stripeEvent.data.object;
+        const customerId     = invoice.customer;
+        const subscriptionId = invoice.subscription;
+        if (!subscriptionId) break; // one-off charge, not a subscription
+
+        // Fetch the subscription to get current price → tier
+        const sub     = await stripeGet(`/v1/subscriptions/${subscriptionId}`);
+        const priceId = sub?.items?.data?.[0]?.price?.id;
+        const tier    = tierFromPriceId(priceId) || 'starter';
+
+        const userId = await findUserByCustomerId(customerId);
+        if (userId) {
+          await updateUserMeta(userId, { stripe_tier: tier });
+          console.log(`User ${userId} payment succeeded → tier confirmed as ${tier}`);
         }
         break;
       }

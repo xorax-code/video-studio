@@ -11,10 +11,21 @@ const UNLOCK_CODES = {
   EARLYBIRD:  { tier: 'agency', label: 'Early Bird — Full Access' },
 };
 
+const CORS = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 exports.handler = async (event) => {
+  // Handle CORS preflight
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: { ...CORS, 'Access-Control-Allow-Methods': 'POST, OPTIONS' }, body: '' };
+  }
+
   // Only accept POST
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { statusCode: 405, headers: CORS, body: JSON.stringify({ valid: false, error: 'Method Not Allowed' }) };
   }
 
   let code;
@@ -24,7 +35,7 @@ exports.handler = async (event) => {
   } catch {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: CORS,
       body: JSON.stringify({ valid: false, error: 'Bad request' }),
     };
   }
@@ -32,7 +43,7 @@ exports.handler = async (event) => {
   if (!code) {
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: CORS,
       body: JSON.stringify({ valid: false }),
     };
   }
@@ -41,7 +52,7 @@ exports.handler = async (event) => {
 
   return {
     statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
+    headers: CORS,
     body: JSON.stringify(
       def
         ? { valid: true, type: 'unlock', tier: def.tier, label: def.label }
