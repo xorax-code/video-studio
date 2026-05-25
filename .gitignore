@@ -1,0 +1,6 @@
+# Supabase credentials — generated at Netlify build time from env vars
+supabase-config.js
+
+# Local build artifacts
+node_modules/
+app.obfuscated.html
