@@ -14,16 +14,9 @@ exports.handler = async (event) => {
     return { statusCode: 405, body: JSON.stringify({ error: { message: 'Method not allowed' } }) };
   }
 
-  // Prefer the server-side env var; fall back to admin key forwarded in header
-  const apiKey = process.env.OPENAI_API_KEY
-    || event.headers['x-api-key']
-    || event.headers['X-Api-Key'];
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
-    return {
-      statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: { message: 'OpenAI API key not configured. Set OPENAI_API_KEY in Netlify env vars or add it in the app Admin panel.' } })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: 'Server configuration error: missing API key' }) };
   }
 
   try {
