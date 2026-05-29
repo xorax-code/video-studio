@@ -5,11 +5,15 @@
 
 'use strict';
 
-const UNLOCK_CODES = {
-  MAXACCESS:  { tier: 'agency', label: 'Full Access — All Features Unlocked' },
-  VIPBETA:    { tier: 'pro',    label: 'Pro Access — VIP Beta' },
-  EARLYBIRD:  { tier: 'agency', label: 'Early Bird — Full Access' },
-};
+// Promo codes loaded from PROMO_CODES_JSON env var (set in Netlify dashboard)
+// Format: {"MYCODE":{"label":"My Label","plan":"pro","durationDays":30},...}
+// Fallback to empty object if not configured — prevents code exposure in source
+const PROMO_CODES = (() => {
+  try { return JSON.parse(process.env.PROMO_CODES_JSON || '{}'); }
+  catch(e) { return {}; }
+})();
+// Legacy alias so existing handler logic referencing UNLOCK_CODES still works
+const UNLOCK_CODES = PROMO_CODES;
 
 const CORS = {
   'Content-Type': 'application/json',
