@@ -30,7 +30,7 @@ exports.handler = async (event) => {
 
   let parsed;
   try {
-    parsed = JSON.parse(event.body);
+    parsed = JSON.parse(event.body || '{}');
   } catch {
     return {
       statusCode: 400,

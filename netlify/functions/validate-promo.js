@@ -59,7 +59,7 @@ exports.handler = async (event) => {
     headers: CORS,
     body: JSON.stringify(
       def
-        ? { valid: true, type: 'unlock', tier: def.tier, label: def.label }
+        ? { valid: true, type: 'unlock', tier: def.tier || def.plan, label: def.label }
         : { valid: false }
     ),
   };

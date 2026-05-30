@@ -34,7 +34,9 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
   const payload  = `${parts.t}.${rawBody}`;
   const expected = crypto.createHmac('sha256', secret).update(payload, 'utf8').digest('hex');
   try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(parts.v1));
+    const _a = Buffer.from(expected), _b = Buffer.from(parts.v1);
+    if (_a.length !== _b.length) return false;
+    return crypto.timingSafeEqual(_a, _b);
   } catch { return false; }
 }
 
@@ -149,6 +151,10 @@ exports.handler = async (event) => {
   if (!webhookSecret) {
     return { statusCode: 500, body: 'Webhook secret not configured.' };
   }
+  if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('stripe-webhook: Supabase env vars missing');
+    return { statusCode: 500, body: 'Server configuration error.' };
+  }
 
   const sigHeader = event.headers['stripe-signature'] || '';
   const rawBody   = event.isBase64Encoded
@@ -182,6 +188,7 @@ exports.handler = async (event) => {
         let tier = 'starter';
         if (subscriptionId) {
           const sub    = await stripeGet(`/v1/subscriptions/${subscriptionId}`);
+          if (!sub) { console.error(`stripe-webhook: failed to fetch sub ${subscriptionId}`); break; }
           const priceId = sub?.items?.data?.[0]?.price?.id;
           tier = tierFromPriceId(priceId);
         }
@@ -255,6 +262,7 @@ exports.handler = async (event) => {
 
         // Fetch the subscription to get current price → tier
         const sub     = await stripeGet(`/v1/subscriptions/${subscriptionId}`);
+        if (!sub) { console.error(`stripe-webhook: failed to fetch sub ${subscriptionId} on payment`); break; }
         const priceId = sub?.items?.data?.[0]?.price?.id;
         const tier    = tierFromPriceId(priceId) || 'starter';
 
