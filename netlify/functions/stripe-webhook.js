@@ -129,7 +129,8 @@ async function findUserByCustomerId(customerId) {
   }
 
   let page = 1;
-  while (true) {
+  const MAX_PAGES = 20;
+  while (page <= MAX_PAGES) {
     const result = await fetchPage(page);
     if (!result) return null;
     const users = Array.isArray(result?.users) ? result.users : [];

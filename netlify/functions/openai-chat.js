@@ -26,7 +26,14 @@ exports.handler = async (event) => {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
-      body: event.body,
+      body: (() => {
+      try {
+        const _b = JSON.parse(event.body || '{}');
+        // Cap max_tokens to prevent abuse
+        if (_b.max_tokens && _b.max_tokens > 8000) _b.max_tokens = 8000;
+        return JSON.stringify(_b);
+      } catch(_) { return event.body; }
+    })(),
     });
 
     const data = await response.json();
