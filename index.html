@@ -1250,7 +1250,7 @@
           <li><i class="ti ti-check"></i> Unlimited projects</li>
           <li class="muted"><i class="ti ti-x"></i> Unlimited competitor accounts</li>
         </ul>
-        <a href="/login.html" class="price-btn price-btn-ghost">Get started</a>
+        <a href="https://buy.stripe.com/eVqfZi1iT8rBgam6ny2go0q" id="btn-starter" class="price-btn price-btn-ghost">Get started</a>
       </div>
 
       <!-- Pro (featured) -->
@@ -1267,7 +1267,7 @@
           <li><i class="ti ti-check"></i> Early access to new features</li>
           <li>&nbsp;</li>
         </ul>
-        <a href="/login.html" class="price-btn price-btn-primary">Get started</a>
+        <a href="https://buy.stripe.com/fZu5kE3r19vF1fscLW2go0r" id="btn-pro" class="price-btn price-btn-primary">Get started</a>
         <div class="price-note"><i class="ti ti-lock"></i> Cancel anytime</div>
       </div>
 
@@ -1275,7 +1275,7 @@
       <div class="price-card">
         <div class="price-badge coming">More Plans Coming</div>
         <div class="price-tier">Agency</div>
-        <div class="price-val">$197<span class="price-per">/mo</span></div>
+        <div class="price-val"><span id="price-agency-val">$197</span><span id="price-agency-per" class="price-per">/mo</span></div>
         <div class="price-desc">For teams and power users running at scale.</div>
         <ul class="price-features">
           <li><i class="ti ti-check"></i> Everything in Pro</li>
@@ -1609,6 +1609,16 @@
     if (sp) sp.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
     if (pv) pv.textContent = _isAnnual ? '$78' : '$97';
     if (pp) pp.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
+    // Agency annual (20% off $197 = $158)
+    var av = document.getElementById('price-agency-val');
+    var ap = document.getElementById('price-agency-per');
+    if (av) av.textContent = _isAnnual ? '$158' : '$197';
+    if (ap) ap.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
+    // Swap CTA button links based on billing period
+    var bStarter = document.getElementById('btn-starter');
+    var bPro     = document.getElementById('btn-pro');
+    if (bStarter) bStarter.href = _isAnnual ? '/login.html?plan=starter&billing=annual' : 'https://buy.stripe.com/eVqfZi1iT8rBgam6ny2go0q';
+    if (bPro)     bPro.href     = _isAnnual ? '/login.html?plan=pro&billing=annual'     : 'https://buy.stripe.com/fZu5kE3r19vF1fscLW2go0r';
   }
 
   // ── Agency waitlist notify ──────────────────────────────────────────────
