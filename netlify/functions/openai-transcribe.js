@@ -30,7 +30,7 @@ exports.handler = async (event) => {
 
   let parsed;
   try {
-    parsed = JSON.parse(event.body);
+    parsed = JSON.parse(event.body || '{}');
   } catch {
     return {
       statusCode: 400,
@@ -70,7 +70,7 @@ exports.handler = async (event) => {
     // Ensure the filename that reaches Whisper always carries a known extension.
     const safeFileName = (rawExt && mimeMap[rawExt])
       ? sanitized
-      : sanitized.replace(/\.[^.]*$/, '') + '.' + ext || ('audio.' + ext);
+      : (sanitized.replace(/\.[^.]*$/, '') || 'audio') + '.' + ext;
     const mimeType = mimeMap[ext];
 
     // Build multipart/form-data manually — avoids Blob/FormData Node.js quirks

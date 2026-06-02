@@ -832,6 +832,68 @@
      The sections already use padding/clamp values that scale well vertically. */
 
 </style>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap" rel="stylesheet">
+<style>
+  /* ── MANIFESTO TYPOGRAPHY ── */
+  .manifesto-serif { font-family: 'Playfair Display', Georgia, serif; }
+  .manifesto-dear { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 1.1rem; color: rgba(255,255,255,0.55); margin-bottom: 16px; display: block; }
+  .manifesto-h { font-family: 'Playfair Display', Georgia, serif; font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 900; line-height: 1.1; margin-bottom: 12px; }
+  .manifesto-h2 { font-family: 'Playfair Display', Georgia, serif; font-size: clamp(1.6rem, 4vw, 2.6rem); font-weight: 900; line-height: 1.15; margin-bottom: 20px; }
+  .manifesto-italic-sub { font-family: 'Playfair Display', Georgia, serif; font-style: italic; font-size: 1.1rem; color: rgba(255,255,255,0.7); margin-bottom: 16px; display: block; }
+  .manifesto-body { font-size: 1.05rem; line-height: 1.85; color: rgba(240,238,255,0.8); }
+  .manifesto-body p { margin-bottom: 20px; }
+  .manifesto-body strong { color: #f0eeff; font-weight: 700; }
+  .manifesto-body em { color: #a78bfa; font-style: italic; }
+  .hi-green { color: #4ade80; font-weight: 700; }
+  .hi-red { color: #f87171; font-weight: 700; }
+  .hi-blue { color: #60a5fa; font-weight: 700; }
+  .hi-purple { color: #c4b5fd; font-weight: 700; }
+  .hi-orange { color: #fb923c; font-weight: 700; }
+  .manifesto-col { max-width: 720px; margin: 0 auto; }
+  .old-new-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; border-radius: 16px; overflow: hidden; margin: 40px 0; }
+  .old-new-col { padding: 32px 28px; }
+  .old-new-col.old { background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.18); border-radius: 12px 0 0 12px; }
+  .old-new-col.new { background: rgba(124,106,247,0.08); border: 1px solid rgba(124,106,247,0.3); border-radius: 0 12px 12px 0; box-shadow: 0 0 40px rgba(124,106,247,0.12); }
+  .old-new-label { font-size: 10px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 16px; }
+  .old-new-label.old { color: #f87171; }
+  .old-new-label.new { color: #a78bfa; }
+  .old-new-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 12px; font-size: 0.9rem; color: rgba(255,255,255,0.7); }
+  .old-new-item .x { color: #f87171; flex-shrink: 0; font-weight: 900; }
+  .old-new-item .chk { color: #4ade80; flex-shrink: 0; font-weight: 900; }
+  .pill-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0; }
+  .pill { padding: 8px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.05); font-size: 0.85rem; color: rgba(255,255,255,0.75); }
+  /* Sticky bottom CTA bar */
+  .sticky-cta-bar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 200;
+    background: rgba(10,10,15,0.96); backdrop-filter: blur(20px);
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding: 12px 24px; display: flex; align-items: center; justify-content: center; gap: 20px;
+    transform: translateY(100%); transition: transform 0.3s ease;
+  }
+  .sticky-cta-bar.visible { transform: translateY(0); }
+  .sticky-cta-bar .bar-dot { width: 8px; height: 8px; border-radius: 50%; background: #4ade80; animation: pulse 2s infinite; flex-shrink: 0; }
+  .sticky-cta-bar .bar-text { font-size: 0.875rem; font-weight: 600; color: rgba(255,255,255,0.8); }
+  .sticky-cta-bar .bar-price { font-size: 0.8rem; color: rgba(255,255,255,0.4); text-decoration: line-through; }
+  .sticky-cta-bar .bar-save { font-size: 10px; font-weight: 800; color: #4ade80; background: rgba(74,222,128,0.12); padding: 2px 7px; border-radius: 4px; }
+  .sticky-cta-bar .bar-btn { padding: 10px 24px; border-radius: 8px; background: var(--grad-accent); color: #fff; font-weight: 700; font-size: 0.875rem; text-decoration: none; white-space: nowrap; box-shadow: 0 0 20px rgba(124,106,247,0.4); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  /* Slop comparison section */
+  .slop-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 32px 0; }
+  .slop-card { padding: 20px; border-radius: 12px; text-align: center; }
+  .slop-card.theirs { background: rgba(239,68,68,0.07); border: 1px solid rgba(239,68,68,0.2); }
+  .slop-card.ours { background: rgba(74,222,128,0.07); border: 1px solid rgba(74,222,128,0.2); }
+  .slop-badge { display: inline-block; padding: 3px 12px; border-radius: 20px; font-size: 10px; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 10px; }
+  .slop-badge.theirs { background: rgba(239,68,68,0.15); color: #f87171; }
+  .slop-badge.ours { background: rgba(74,222,128,0.15); color: #4ade80; }
+  .ps-section { max-width: 720px; margin: 0 auto; padding: 60px 24px 0; border-top: 1px solid rgba(255,255,255,0.07); }
+  .ps-section h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 1.4rem; font-weight: 700; margin-bottom: 16px; }
+  @media (max-width: 600px) {
+    .old-new-grid, .slop-compare { grid-template-columns: 1fr; }
+    .old-new-col.old { border-radius: 12px 12px 0 0; }
+    .old-new-col.new { border-radius: 0 0 12px 12px; }
+    .sticky-cta-bar .bar-price, .sticky-cta-bar .bar-save { display: none; }
+  }
+</style>
 </head>
 <body>
 
@@ -860,7 +922,7 @@
     <a href="#how">How it works</a>
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
-    <a href="https://discord.com/invite/ykGDZzc3" target="_blank" rel="noopener" title="Join our Discord community" style="display:flex;align-items:center;gap:5px;color:var(--text-muted);text-decoration:none;font-size:0.875rem;font-weight:500;transition:color 0.2s;" onmouseover="this.style.color='#5865F2'" onmouseout="this.style.color=''">
+    <a href="https://discord.gg/htSCtN9gUs" target="_blank" rel="noopener" title="Join our Discord community" style="display:flex;align-items:center;gap:5px;color:var(--text-muted);text-decoration:none;font-size:0.875rem;font-weight:500;transition:color 0.2s;" onmouseover="this.style.color='#5865F2'" onmouseout="this.style.color=''">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
       Discord
     </a>
@@ -882,6 +944,28 @@
 </div>
 
 <!-- HERO -->
+<!-- STICKY BOTTOM CTA BAR -->
+<div class="sticky-cta-bar" id="stickyCta">
+  <div class="bar-dot"></div>
+  <span class="bar-text">Start Affiliate OS Free</span>
+  <span class="bar-price">$97/mo</span>
+  <span class="bar-save">FREE TRIAL</span>
+  <a href="/login.html" class="bar-btn">Try it free →</a>
+</div>
+<script>
+  (function() {
+    var bar = document.getElementById('stickyCta');
+    var hero = document.querySelector('.hero');
+    function onScroll() {
+      if (!hero) return;
+      var rect = hero.getBoundingClientRect();
+      if (rect.bottom < 0) bar.classList.add('visible');
+      else bar.classList.remove('visible');
+    }
+    window.addEventListener('scroll', onScroll, {passive: true});
+  })();
+</script>
+
 <section class="hero">
   <div class="hero-badge fade-in">
     <span class="dot"></span>
@@ -960,6 +1044,62 @@
 
 </section>
 
+<!-- STORY / MANIFESTO — full manifesto version -->
+<section id="story" style="padding: 100px 24px;">
+  <div class="manifesto-col">
+    <span class="manifesto-dear">Dear Friend,</span>
+    <h2 class="manifesto-h">Affiliate Content Gave Me an<br><span class="hi-purple">Unfair Advantage.</span></h2>
+    <p style="font-family:'Playfair Display',Georgia,serif;font-size:1.2rem;color:rgba(255,255,255,0.7);margin-bottom:40px;font-style:italic;">It can do the same for you.</p>
+
+    <a href="/login.html" class="btn-primary" style="margin-bottom:56px;display:inline-flex;">
+      <i class="ti ti-player-play-filled"></i> Start for free
+    </a>
+
+    <div class="manifesto-body">
+      <p>I don't care what niche you're in. Health, beauty, fitness, tech — it doesn't matter. What matters is this: <strong>content is everything.</strong> And in 2026, the affiliate creators producing high-quality videos at scale are dominating everyone who isn't.</p>
+      <p>This isn't speculation. It's already happening.</p>
+    </div>
+
+    <div class="old-new-grid">
+      <div class="old-new-col old">
+        <div class="old-new-label old">The Old Reality</div>
+        <div class="old-new-item"><span class="x">✕</span> UGC creators cost $150–$500 per video</div>
+        <div class="old-new-item"><span class="x">✕</span> 7–10 days to get a revision back</div>
+        <div class="old-new-item"><span class="x">✕</span> Could only test 3–5 scripts per week</div>
+        <div class="old-new-item"><span class="x">✕</span> <span style="color:#f87171;font-weight:700;">Bigger budgets always won.</span></div>
+      </div>
+      <div class="old-new-col new">
+        <div class="old-new-label new">The New Reality</div>
+        <div class="old-new-item"><span class="chk">✓</span> AI has collapsed the cost to near zero</div>
+        <div class="old-new-item"><span class="chk">✓</span> Test 30 scripts before lunch</div>
+        <div class="old-new-item"><span class="chk">✓</span> Iterate daily instead of monthly</div>
+        <div class="old-new-item"><span class="chk" style="color:#a78bfa;">✓</span> <span class="hi-purple">The skill is the advantage now.</span></div>
+      </div>
+    </div>
+
+    <div class="manifesto-body">
+      <p>Here's what most people don't understand: <span class="hi-orange">we are in a very small window right now.</span></p>
+      <p>The tools exist. The technology is finally good enough. But <span class="hi-blue">95% of affiliate creators have no idea how to use them properly.</span> They're still hiring UGC creators, getting inconsistent results, and burning cash waiting on revisions.</p>
+      <p>The creators who learn this system <strong>right now</strong> — while the competition is still asleep — will have <span class="hi-green">6–12 months of compounding advantage</span> before everyone else catches up. That gap closes fast.</p>
+    </div>
+
+    <h2 class="manifesto-h2" style="margin-top:48px;">This Works For <em style="font-style:italic;color:#a78bfa;">Every</em> Affiliate Creator</h2>
+    <div class="pill-row">
+      <span class="pill">🛒 E-Commerce</span>
+      <span class="pill">💊 Health & Wellness</span>
+      <span class="pill">💄 Beauty</span>
+      <span class="pill">🏋️ Fitness</span>
+      <span class="pill">📱 Tech & Gadgets</span>
+      <span class="pill">🏢 Multi-Account Operators</span>
+    </div>
+    <div class="manifesto-body">
+      <p>Every single one needs content. The ones who produce it faster, cheaper, and at higher volume win.</p>
+    </div>
+    <a href="/login.html" class="btn-primary" style="display:inline-flex;margin-top:8px;">
+      <i class="ti ti-rocket"></i> Start for free — no card required
+    </a>
+  </div>
+</section>
 <!-- PLATFORM TRUST STRIP -->
 <div class="trust-strip">
   <div class="trust-label">Works with your favourite platforms</div>
@@ -1019,6 +1159,38 @@
     <div class="marquee-item"><i class="ti ti-infinity"></i> Unlimited Projects</div>
   </div>
 </div>
+
+<!-- ECONOMICS TABLE — new section -->
+<section style="padding: 80px 24px 0;">
+  <div class="container">
+    <div style="text-align:center;margin-bottom:48px;">
+      <div class="section-label fade-in">The math that changes everything</div>
+      <h2 class="section-title fade-in fade-in-delay-1">While others burn cash on 3 ads,<br>you test 30 before lunch.</h2>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:820px;margin:0 auto;">
+      <!-- Old way -->
+      <div style="background:rgba(248,113,113,0.06);border:1px solid rgba(248,113,113,0.2);border-radius:16px;padding:32px;">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#f87171;margin-bottom:20px;">Traditional UGC Creator</div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Cost per video</div><div style="font-size:1.5rem;font-weight:900;color:#f87171;">$150 – $500</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Turnaround time</div><div style="font-size:1.5rem;font-weight:900;color:#f87171;">7–10 days</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Variations per week</div><div style="font-size:1.5rem;font-weight:900;color:#f87171;">3–5</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Avg monthly spend</div><div style="font-size:1.5rem;font-weight:900;color:#f87171;">$2,000+</div></div>
+        </div>
+      </div>
+      <!-- Affiliate OS -->
+      <div style="background:rgba(124,106,247,0.08);border:1px solid rgba(124,106,247,0.35);border-radius:16px;padding:32px;box-shadow:0 0 40px rgba(124,106,247,0.15);">
+        <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a78bfa;margin-bottom:20px;">Affiliate OS</div>
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Cost per video</div><div style="font-size:1.5rem;font-weight:900;color:#4ade80;">$1 – $10</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Turnaround time</div><div style="font-size:1.5rem;font-weight:900;color:#4ade80;">Under 15 min</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Variations per week</div><div style="font-size:1.5rem;font-weight:900;color:#4ade80;">Unlimited</div></div>
+          <div><div style="font-size:11px;color:rgba(255,255,255,0.45);margin-bottom:4px;">Avg monthly spend</div><div style="font-size:1.5rem;font-weight:900;color:#4ade80;">$47 – $97</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- HOW IT WORKS -->
 <section id="how">
@@ -1155,7 +1327,37 @@
   </div>
 </section>
 
-<!-- COMPARISON TABLE -->
+<!-- QUALITY CREDIBILITY — THEIRS vs OURS -->
+<section style="padding: 80px 24px;">
+  <div class="container" style="max-width:860px;text-align:center;">
+    <span class="manifesto-italic-sub" style="display:block;margin-bottom:8px;">But here's what most people get wrong...</span>
+    <h2 class="manifesto-h2 manifesto-serif">Your competitors make <span style="font-style:italic;color:#f87171;">Slop.</span> You won't.</h2>
+    <p style="color:var(--text-muted);margin-bottom:36px;">AI content only looks bad when you don't know the right techniques. Affiliate OS uses scene-locked Veo 3 prompts, NB Pro compositing, and structured character workflows that produce content that actually stops the scroll.</p>
+
+    <div class="slop-compare" style="max-width:600px;margin:0 auto 40px;">
+      <div class="slop-card theirs">
+        <div class="slop-badge theirs">THEIRS</div>
+        <div style="font-size:1rem;font-weight:700;color:#f87171;margin-bottom:8px;">Bad AI</div>
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);">Dead eyes · Robotic voice · Obvious artifacts · Gets flagged</div>
+      </div>
+      <div class="slop-card ours">
+        <div class="slop-badge ours">OURS</div>
+        <div style="font-size:1rem;font-weight:700;color:#4ade80;margin-bottom:8px;">Pro Grade</div>
+        <div style="font-size:0.85rem;color:rgba(255,255,255,0.5);">Character lock · Natural motion · Platform-ready · Converts</div>
+      </div>
+    </div>
+
+    <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:20px;padding:40px;text-align:left;">
+      <div style="font-size:11px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#a78bfa;margin-bottom:20px;">THE ANTIDOTE — We don't generate. We engineer.</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">
+        <div><div style="font-size:22px;margin-bottom:8px;">🎭</div><div style="font-weight:700;margin-bottom:6px;font-size:0.95rem;">Character Lock</div><div style="font-size:0.85rem;color:var(--text-muted);">Same face, same voice, same energy across every clip.</div></div>
+        <div><div style="font-size:22px;margin-bottom:8px;">🎬</div><div style="font-weight:700;margin-bottom:6px;font-size:0.95rem;">Scene-by-Scene Prompts</div><div style="font-size:0.85rem;color:var(--text-muted);">Structured Veo 3 JSON — not a paragraph of hope.</div></div>
+        <div><div style="font-size:22px;margin-bottom:8px;">📱</div><div style="font-weight:700;margin-bottom:6px;font-size:0.95rem;">Platform-Ready</div><div style="font-size:0.85rem;color:var(--text-muted);">9:16 vertical, no watermarks, zero copyright issues.</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- COMPARISON TABLE --><!-- COMPARISON TABLE -->
 <section id="compare" style="padding: 80px 24px 0;">
   <div class="container">
     <div style="text-align:center;">
@@ -1203,6 +1405,19 @@
   </div>
 </section>
 
+<!-- URGENCY — Window closing -->
+<section style="padding: 80px 24px;">
+  <div class="container" style="max-width:720px;text-align:center;">
+    <div style="display:inline-block;padding:6px 16px;border-radius:20px;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.3);font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:#fbbf24;margin-bottom:24px;">⚠ The window is closing</div>
+    <h2 style="font-size:clamp(1.6rem,4vw,2.4rem);font-weight:900;line-height:1.2;margin-bottom:20px;">By the end of 2026, every affiliate creator will know these tools exist.</h2>
+    <p style="font-size:1.05rem;color:var(--text-muted);line-height:1.7;margin-bottom:32px;">Right now, 95% of your competitors are still recording on their phones and paying for UGC creators. The people who learn this system <em>today</em> will have 12+ months of compounding advantage before the rest of the market catches up. That gap closes fast.</p>
+    <a href="/login.html" class="btn-primary" style="font-size:1rem;padding:14px 32px;">
+      <i class="ti ti-lock-open"></i>
+      Claim your early access now
+    </a>
+  </div>
+</section>
+
 <!-- PRICING -->
 <section id="pricing">
   <div class="container">
@@ -1241,16 +1456,16 @@
       <div class="price-card">
         <div class="price-tier">Starter</div>
         <div class="price-val"><span id="price-starter-val">$47</span><span id="price-starter-per" class="price-per">/mo</span></div>
-        <div class="price-desc">Full Video Replicator + Veo 3 prompts for growing creators.</div>
+        <div class="price-desc">Everything you need to start replicating and posting at scale.</div>
         <ul class="price-features">
           <li><i class="ti ti-check"></i> Full Video Replicator</li>
           <li><i class="ti ti-check"></i> Veo 3 + NB Pro prompt system</li>
+          <li><i class="ti ti-check"></i> In-app clip generation</li>
           <li><i class="ti ti-check"></i> Up to 5 tracked accounts</li>
           <li><i class="ti ti-check"></i> Viral script library</li>
           <li><i class="ti ti-check"></i> Unlimited projects</li>
-          <li class="muted"><i class="ti ti-x"></i> Unlimited competitor accounts</li>
         </ul>
-        <a href="/login.html" class="price-btn price-btn-ghost">Get started</a>
+        <a href="https://buy.stripe.com/eVqfZif9JcHR4rE3bm2go0s" id="btn-starter" class="price-btn price-btn-ghost">Get started</a>
       </div>
 
       <!-- Pro (featured) -->
@@ -1258,16 +1473,16 @@
         <div class="price-badge">Most Popular</div>
         <div class="price-tier">Pro</div>
         <div class="price-val"><span id="price-pro-val">$97</span><span id="price-pro-per" class="price-per">/mo</span></div>
-        <div class="price-desc">Everything in Starter, scaled for serious affiliates.</div>
+        <div class="price-desc">Built for creators posting daily across multiple products.</div>
         <ul class="price-features">
           <li><i class="ti ti-check"></i> Everything in Starter</li>
+          <li><i class="ti ti-check"></i> More monthly generations included</li>
           <li><i class="ti ti-check"></i> Unlimited competitor accounts</li>
           <li><i class="ti ti-check"></i> Multiple script variations per video</li>
           <li><i class="ti ti-check"></i> Priority AI processing</li>
           <li><i class="ti ti-check"></i> Early access to new features</li>
-          <li>&nbsp;</li>
         </ul>
-        <a href="/login.html" class="price-btn price-btn-primary">Get started</a>
+        <a href="https://buy.stripe.com/28E00kgdN9vF6zMaDO2go0t" id="btn-pro" class="price-btn price-btn-primary">Get started</a>
         <div class="price-note"><i class="ti ti-lock"></i> Cancel anytime</div>
       </div>
 
@@ -1275,7 +1490,7 @@
       <div class="price-card">
         <div class="price-badge coming">More Plans Coming</div>
         <div class="price-tier">Agency</div>
-        <div class="price-val">$197<span class="price-per">/mo</span></div>
+        <div class="price-val"><span id="price-agency-val">$197</span><span id="price-agency-per" class="price-per">/mo</span></div>
         <div class="price-desc">For teams and power users running at scale.</div>
         <ul class="price-features">
           <li><i class="ti ti-check"></i> Everything in Pro</li>
@@ -1297,6 +1512,39 @@
     </div>
   </div>
 </section>
+
+<!-- GUARANTEE -->
+<section style="padding: 0 24px 80px;">
+  <div class="container" style="max-width:680px;text-align:center;">
+    <div style="background:rgba(74,222,128,0.05);border:2px solid rgba(74,222,128,0.2);border-radius:20px;padding:40px 36px;">
+      <div style="font-size:40px;margin-bottom:16px;">🛡️</div>
+      <h3 style="font-size:1.4rem;font-weight:800;margin-bottom:12px;color:var(--text);">Try it free for 3 days. No card required.</h3>
+      <p style="color:var(--text-muted);line-height:1.7;margin-bottom:24px;">Full access to every feature from day one. If it doesn't transform how you create content, you lose nothing. No credit card asked, no commitments. Just try it.</p>
+      <a href="/login.html" class="btn-primary" style="font-size:1rem;padding:14px 32px;background:linear-gradient(135deg,#34d399,#10b981);">
+        <i class="ti ti-player-play-filled"></i>
+        Start your free trial
+      </a>
+      <p style="font-size:12px;color:rgba(255,255,255,0.3);margin-top:16px;">3-day full access · No credit card · Cancel anytime</p>
+    </div>
+  </div>
+</section>
+<!-- P.S. SECTION -->
+<div class="ps-section">
+  <div class="manifesto-body">
+    <span class="manifesto-dear" style="font-size:1rem;">P.S.</span>
+    <p>If you're the kind of person who scrolls to the bottom first — I respect it. Here's the quick version:</p>
+    <p>Affiliate OS is the tool that takes viral videos in your niche, reverse-engineers exactly why they worked, rewrites the script for your product and voice, and generates production-ready Veo 3 video prompts. All in under 15 minutes.</p>
+    <ul style="list-style:none;padding:0;margin:0 0 20px;">
+      <li style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:10px;"><span class="hi-green">$150+ per video</span><span style="color:rgba(255,255,255,0.3);">→</span><span class="hi-green">under $10</span></li>
+      <li style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:10px;"><span class="hi-green">7–10 day wait</span><span style="color:rgba(255,255,255,0.3);">→</span><span class="hi-green">15 minutes</span></li>
+      <li style="padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;gap:10px;"><span class="hi-green">3 scripts per week</span><span style="color:rgba(255,255,255,0.3);">→</span><span class="hi-green">unlimited</span></li>
+    </ul>
+    <p>3-day free trial. No credit card. Cancel anytime. The window to get ahead of your competition is still open — but it's closing.</p>
+    <a href="/login.html" class="btn-primary" style="display:inline-flex;margin-top:8px;">
+      <i class="ti ti-player-play-filled"></i> Start your free trial now
+    </a>
+  </div>
+</div>
 
 <!-- FAQ -->
 <section id="faq" style="padding: 96px 24px 64px;">
@@ -1454,7 +1702,7 @@
     <a href="#features">Features</a>
     <a href="#pricing">Pricing</a>
     <a href="/login.html">Sign up</a>
-    <a href="https://discord.com/invite/ykGDZzc3" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;" onmouseover="this.style.color='#5865F2'" onmouseout="this.style.color=''">
+    <a href="https://discord.gg/htSCtN9gUs" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:5px;" onmouseover="this.style.color='#5865F2'" onmouseout="this.style.color=''">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg" style="flex-shrink:0;"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/></svg>
       Discord
     </a>
@@ -1609,6 +1857,16 @@
     if (sp) sp.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
     if (pv) pv.textContent = _isAnnual ? '$78' : '$97';
     if (pp) pp.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
+    // Agency annual (20% off $197 = $158)
+    var av = document.getElementById('price-agency-val');
+    var ap = document.getElementById('price-agency-per');
+    if (av) av.textContent = _isAnnual ? '$158' : '$197';
+    if (ap) ap.textContent = _isAnnual ? '/mo, billed annually' : '/mo';
+    // Swap CTA button links based on billing period
+    var bStarter = document.getElementById('btn-starter');
+    var bPro     = document.getElementById('btn-pro');
+    if (bStarter) bStarter.href = _isAnnual ? '/login.html?plan=starter&billing=annual' : 'https://buy.stripe.com/eVqfZif9JcHR4rE3bm2go0s';
+    if (bPro)     bPro.href     = _isAnnual ? '/login.html?plan=pro&billing=annual'     : 'https://buy.stripe.com/28E00kgdN9vF6zMaDO2go0t';
   }
 
   // ── Agency waitlist notify ──────────────────────────────────────────────

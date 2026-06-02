@@ -10,7 +10,7 @@
 // Fallback to empty object if not configured — prevents code exposure in source
 const PROMO_CODES = (() => {
   try { return JSON.parse(process.env.PROMO_CODES_JSON || '{}'); }
-  catch(e) { return {}; }
+  catch(e) { console.error('PROMO_CODES_JSON parse error:', e.message); return {}; }
 })();
 // Legacy alias so existing handler logic referencing UNLOCK_CODES still works
 const UNLOCK_CODES = PROMO_CODES;
@@ -59,7 +59,7 @@ exports.handler = async (event) => {
     headers: CORS,
     body: JSON.stringify(
       def
-        ? { valid: true, type: 'unlock', tier: def.tier, label: def.label }
+        ? { valid: true, type: 'unlock', tier: def.tier || def.plan, label: def.label }
         : { valid: false }
     ),
   };
