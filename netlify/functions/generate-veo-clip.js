@@ -104,23 +104,23 @@ async function updateUserMeta(userId, meta) {
 
 // ── Start Gemini Veo generation (returns operation name) ─────────────────────
 async function startGeminiGeneration(prompt, durationSecs, modelId) {
-  const apiKey  = process.env.GEMINI_API_KEY;
-  const initUrl = new URL(`${GEMINI_BASE}/models/${modelId}:generateVideo?key=${apiKey}`);
-  const body    = JSON.stringify({
-    prompt:           { text: prompt },
-    generationConfig: {
-      durationSecs:  durationSecs,
-      aspectRatio:   '9:16',
-      enhancePrompt: false,
+  const apiKey = process.env.GEMINI_API_KEY;
+  const path   = `/v1beta/models/${modelId}:predictLongRunning`;
+  const body   = JSON.stringify({
+    instances: [{ prompt: prompt }],
+    parameters: {
+      aspectRatio:     '9:16',
+      durationSeconds: String(durationSecs),
     },
   });
   const result = await httpsRequest({
-    hostname: initUrl.hostname,
-    path:     initUrl.pathname + initUrl.search,
+    hostname: 'generativelanguage.googleapis.com',
+    path:     path,
     method:   'POST',
     headers: {
       'Content-Type':   'application/json',
       'Content-Length': Buffer.byteLength(body),
+      'x-goog-api-key': apiKey,
     },
   }, body);
   return result;

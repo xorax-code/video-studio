@@ -23,9 +23,14 @@ const https = require('https');
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
 
-function httpsGet(url) {
+function httpsGet(path, apiKey) {
   return new Promise((resolve, reject) => {
-    const req = https.request(url, { method: 'GET' }, (res) => {
+    const req = https.request({
+      hostname: 'generativelanguage.googleapis.com',
+      path:     path,
+      method:   'GET',
+      headers:  { 'x-goog-api-key': apiKey },
+    }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
@@ -106,12 +111,12 @@ exports.handler = async (event) => {
   }
 
   // ── Poll Gemini ────────────────────────────────────────────────────────────
-  const apiKey  = encodeURIComponent(process.env.GEMINI_API_KEY);
-  const pollUrl = `${GEMINI_BASE}/${operationName}?key=${apiKey}`;
+  const apiKey   = process.env.GEMINI_API_KEY;
+  const pollPath = `/v1beta/${operationName}`;
 
   let pollResult;
   try {
-    pollResult = await httpsGet(pollUrl);
+    pollResult = await httpsGet(pollPath, apiKey);
   } catch (e) {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach generation service.' }) };
   }
@@ -135,20 +140,20 @@ exports.handler = async (event) => {
   }
 
   // ── Done — extract video URI ───────────────────────────────────────────────
-  const videos = pd.response?.generatedVideos;
-  if (!videos || !videos.length) {
+  const samples = pd.response?.generateVideoResponse?.generatedSamples;
+  if (!samples || !samples.length) {
     return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ done: false, error: 'Generation finished but no video returned.' }) };
   }
 
-  const vid = videos[0].video || videos[0];
-  const videoUrl = vid.uri || vid.url || '';
+  const videoUrl = samples[0]?.video?.uri || '';
+  const mimeType = samples[0]?.video?.mimeType || 'video/mp4';
   if (!videoUrl) {
     return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ done: false, error: 'Video URI missing from response.' }) };
   }
 
-  // Append API key to video URI so the frontend can fetch the blob
+  // Append API key to video URI so the frontend can fetch the blob directly
   const sep = videoUrl.includes('?') ? '&' : '?';
   const signedUrl = `${videoUrl}${sep}key=${process.env.GEMINI_API_KEY}`;
 
@@ -158,7 +163,7 @@ exports.handler = async (event) => {
     body: JSON.stringify({
       done:     true,
       videoUrl: signedUrl,
-      mimeType: vid.mimeType || 'video/mp4',
+      mimeType: mimeType,
     }),
   };
 };
