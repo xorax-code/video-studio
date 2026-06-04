@@ -94,7 +94,7 @@
 
   function showAdmSaved() {
     const el = document.getElementById('admSaveStatus');
-    if (el) { el.style.display = 'block'; setTimeout(() => { el.style.display = 'none'; }, 1800); }
+    if (el) { el.style.display = 'block'; setTimeout(() => { if (el) el.style.display = 'none'; }, 1800); }
     showToast('Settings saved', 'success', 2000);
   }
 
