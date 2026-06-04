@@ -213,6 +213,10 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach generation service. Credits refunded.' }) };
   }
 
+  // Log full Gemini response for debugging
+  console.log('generate-veo-clip: Gemini HTTP status:', geminiResult.status);
+  console.log('generate-veo-clip: Gemini response body:', JSON.stringify(geminiResult.data));
+
   if (!geminiResult.data?.name) {
     // Refund credits — generation didn't start
     await updateUserMeta(userId, { credits_balance: currentBalance });
