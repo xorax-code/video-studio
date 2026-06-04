@@ -91,7 +91,7 @@ async function updateUserMeta(userId, meta) {
   const result = await httpsRequest({
     hostname: url.hostname,
     path:     url.pathname,
-    method:   'PATCH',
+    method:   'PUT',
     headers: {
       'Authorization':  `Bearer ${svcKey}`,
       'apikey':         svcKey,
