@@ -1524,32 +1524,53 @@ Production rules:
       showToast('No segments yet — upload a video and run Detect Cuts first.', 'warning');
       return;
     }
-    showConfirm('Ready to generate your video prompts? This will analyze your scenes and prepare everything for Google Flow. Usually takes 30–60 seconds.', async () => {
+    const _apiMode = (typeof getGenerateMode === 'function') ? getGenerateMode() === 'api' : true;
+    const _confirmMsg = _apiMode
+      ? 'Ready to generate? This will analyze your scenes, build prompts, then send all clips to the API automatically. Usually 2–5 minutes.'
+      : 'Ready to generate prompts? This will analyze your scenes and prepare everything for manual generation. Usually takes 30–60 seconds.';
+
+    showConfirm(_confirmMsg, async () => {
       pushUndo('Process Everything');
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
+      const _totalSteps = _apiMode ? 3 : 2;
       const _setStep = (n, label) => {
-        if (btn) btn.textContent = `⏳ Step ${n}/2 — ${label}`;
-        showToast(`Step ${n} of 2: ${label}`, 'info', 2000);
+        if (btn) btn.textContent = `⏳ Step ${n}/${_totalSteps} — ${label}`;
+        showToast(`Step ${n} of ${_totalSteps}: ${label}`, 'info', 2000);
       };
       if (btn) { btn.disabled = true; }
-      // Step 1 — analyze frames (handles its own errors / missing API key gracefully)
+
+      // Step 1 — analyze frames (non-fatal if it fails)
       _setStep(1, 'Analyzing frames…');
-      try { await analyzeAllFrames(); } catch (e) { /* non-fatal — prompts still generate */ }
-      // Step 2 — generate all prompts (await so NB-image async Veo 3 building finishes
-      // before pre-flight runs — otherwise those segments incorrectly show as missing prompts)
+      try { await analyzeAllFrames(); } catch (e) { /* non-fatal */ }
+
+      // Step 2 — generate all prompts
       _setStep(2, 'Generating prompts…');
       try {
         await generateAllSegmentPrompts();
       } catch (e) {
         if (btn) { btn.disabled = false; btn.textContent = origText; }
-        showToast('Something went wrong — please try again. Check your internet connection if this keeps happening.', 'error');
+        showToast('Something went wrong — please try again.', 'error');
         return;
       }
+
+      if (!_apiMode) {
+        // Manual mode — done after prompts, let user click Step 3
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        const promptCount = segments.filter(s => s.veoPrompt?.trim()).length;
+        showToast(`✅ ${promptCount} prompts ready — click Run → to open the agent panel.`, 'success', 5000);
+        return;
+      }
+
+      // API mode — Step 3: auto-generate all clips
+      _setStep(3, 'Generating clips via API…');
+      if (btn) btn.textContent = '⏳ Generating clips…';
+      try {
+        await generateAllScenesViaAPI();
+      } catch (e) {
+        // generateAllScenesViaAPI shows its own toasts/modal
+      }
       if (btn) { btn.disabled = false; btn.textContent = origText; }
-      // Done — prompts are ready. Don't auto-run; let the user choose when to click Step 3.
-      const promptCount = segments.filter(s => s.veoPrompt?.trim()).length;
-      showToast(`✅ Done! ${promptCount} scene prompt${promptCount !== 1 ? 's' : ''} ready — click ▶ Run when you're ready to generate.`, 'success', 5000);
     });
   }
 
@@ -1612,54 +1633,6 @@ ${_avInv.split(/\r?\n/).map(l => '        ' + l.trim()).filter(l => l.trim()).jo
 
     // ── MANUAL MODE: build a simple copy-paste prompt sheet ──────────────────
     if (!claudeBrowserMode) {
-      // ── Grok mode sheet ──────────────────────────────────────────────────
-      if (typeof grokMode !== 'undefined' && grokMode) {
-        const mt = segments.filter(s => (s.grokVideoPrompt || s.veoPrompt || s.action)?.trim() && !(skipDone && s.done)).length;
-        let sheet = `GROK SESSION — ${mt} SCENE${mt>1?'S':''}\nGenerated: ${new Date().toLocaleString()}\n`;
-        sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-        sheet += `GLOBAL RULES (paste your session brief first if you haven't):\n`;
-        sheet += `• Photo 1 = avatar (reuse every scene)\n`;
-        sheet += `• Photo 2 = reference frame (changes each scene)\n`;
-        sheet += `• 9:16 vertical, photorealistic, no captions, no watermarks\n`;
-        sheet += `• Match the background from Photo 2 exactly\n\n`;
-        let mn = 0;
-        segments.forEach((seg, i) => {
-          const grokVid = seg.grokVideoPrompt || (typeof buildGrokVideoPrompt === 'function' ? buildGrokVideoPrompt(i) : '');
-          if (!grokVid?.trim() && !seg.action?.trim()) return;
-          if (skipDone && seg.done) return;
-          mn++;
-          const hasFrame = !!seg.frameDataUrl && !bgFromAvatar;
-          sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nSCENE ${mn} of ${mt}  (App Scene ${i+1})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
-          sheet += `━ GROK IMAGE (swap the person)\n`;
-          if (avatarImageDataUrl) sheet += `Upload Photo 1: avatar image from app\n`;
-          if (hasFrame) sheet += `Upload Photo 2: scene ${i+1} frame from app\n`;
-          if (seg.grokImgPrompt) {
-            sheet += `\nImage prompt:\n${seg.grokImgPrompt}\n\n`;
-          } else {
-            sheet += `\nSwap the person — place avatar (Photo 1) into this scene (Photo 2). Match position, framing, and background exactly.\n\n`;
-          }
-          sheet += `━ GROK VIDEO (make the clip)\n`;
-          if (grokVid) sheet += `${grokVid}\n\n`;
-          else sheet += `Make a 6 second clip of the image above. Natural ambient sound, no captions.\n\n`;
-        });
-        sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nEND — ${mt} scene${mt>1?'s':''} total`;
-        navigator.clipboard.writeText(sheet).catch(() => {
-          try { const ta=document.createElement('textarea');ta.value=sheet;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta); } catch(e){}
-        });
-        // Download frames
-        let dlDelay=0; let dlCount=0;
-        if (avatarImageDataUrl) { downloadFrameAsFile(avatarImageDataUrl,'avatar_photo.jpg',dlDelay); dlDelay+=400; dlCount++; }
-        segments.forEach((seg,i) => {
-          if (skipDone && seg.done) return;
-          if (seg.frameDataUrl && !bgFromAvatar) { downloadFrameAsFile(seg.frameDataUrl,`frame_scene_${i+1}.jpg`,dlDelay); dlDelay+=400; dlCount++; }
-        });
-        const mm=document.createElement('div');
-        mm.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:9999;display:flex;align-items:center;justify-content:center;';
-        mm.innerHTML=`<div style="background:var(--surface);border:1px solid rgba(99,102,241,0.4);border-radius:12px;padding:24px;width:430px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.6);font-family:inherit;"><div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;"><div style="font-size:22px;">🤖</div><div><div style="font-size:14px;font-weight:700;color:var(--text-1);">Grok Prompts Copied — ${mt} Scene${mt>1?'s':''}</div><div style="font-size:11px;color:var(--text-3);">Paste into Grok and upload frames in order</div></div></div><div style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.2);border-radius:6px;padding:10px 12px;font-size:11px;color:var(--text-2);margin-bottom:14px;">${dlCount>0?`📁 ${dlCount} image file${dlCount>1?'s':''} downloading to Downloads<br>`:''}📋 All Grok image + video prompts copied<br>1. Paste session brief into Grok first<br>2. Then paste this — do one scene at a time</div><button onclick="this.closest('div[style*=fixed]').remove()" style="width:100%;padding:9px;background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.4);border-radius:6px;color:#a5b4fc;font-weight:600;cursor:pointer;font-size:12px;font-family:inherit;">Got it</button></div>`;
-        document.body.appendChild(mm);
-        mm.addEventListener('click',e=>{ if(e.target===mm)mm.remove(); });
-        return;
-      }
       // ── Standard NB Pro + Veo 3 sheet ────────────────────────────────────
       let sheet = `ALL SCENES — MANUAL PROMPT SHEET\nGenerated: ${new Date().toLocaleString()}\n`;
       sheet += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;

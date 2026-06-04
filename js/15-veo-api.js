@@ -13,8 +13,16 @@
   function setGenerateMode(mode) {
     var m = (mode === 'flow') ? 'flow' : 'api';
     try { localStorage.setItem('affiliateos_generate_mode', m); } catch(e) {}
+    _applyModeUI(m);
+  }
+  window.getGenerateMode = getGenerateMode;
+  window.setGenerateMode = setGenerateMode;
 
-    // Directly update button DOM — reliable without full re-render
+  // ── Apply all mode-dependent UI updates in one place ─────────────────────
+  function _applyModeUI(m) {
+    if (!m) m = getGenerateMode();
+
+    // Credits panel buttons (Dashboard)
     var apiBtn  = document.getElementById('genModeApiBtn');
     var flowBtn = document.getElementById('genModeFlowBtn');
     if (apiBtn) {
@@ -28,20 +36,61 @@
       flowBtn.style.color      = m === 'flow' ? '#38bdf8' : 'var(--text-3)';
     }
 
-    updateGenerateModeBadge();
-  }
-  window.getGenerateMode = getGenerateMode;
-  window.setGenerateMode = setGenerateMode;
+    // Workflow bar toggle (wfMode buttons)
+    var wfApi    = document.getElementById('wfModeApiBtn');
+    var wfManual = document.getElementById('wfModeManualBtn');
+    if (wfApi) {
+      wfApi.style.background = m === 'api' ? 'rgba(52,211,153,0.22)' : 'var(--surface)';
+      wfApi.style.color      = m === 'api' ? '#34d399' : 'var(--text-3)';
+    }
+    if (wfManual) {
+      wfManual.style.background = m === 'flow' ? 'rgba(56,189,248,0.18)' : 'var(--surface)';
+      wfManual.style.color      = m === 'flow' ? '#38bdf8' : 'var(--text-3)';
+    }
 
-  function updateGenerateModeBadge() {
-    var mode  = getGenerateMode();
+    // Step 3 button in workflow bar
+    var step3Btn   = document.getElementById('step3RunBtn');
+    var step3Label = document.getElementById('step3Label');
+    if (step3Btn) {
+      if (m === 'api') {
+        step3Btn.title             = 'Generate all clips via API — uses credits';
+        step3Btn.style.borderColor = 'rgba(34,197,94,0.55)';
+        step3Btn.style.background  = 'rgba(34,197,94,0.10)';
+        step3Btn.style.color       = '#4ade80';
+        var numEl = step3Btn.querySelector('.vs-step-num');
+        if (numEl) { numEl.style.background = 'rgba(34,197,94,0.18)'; numEl.style.borderColor = 'rgba(34,197,94,0.5)'; numEl.style.color = '#4ade80'; }
+      } else {
+        step3Btn.title             = 'Open agent panel — copy prompts for manual Google Flow';
+        step3Btn.style.borderColor = 'rgba(251,146,60,0.45)';
+        step3Btn.style.background  = 'rgba(251,146,60,0.07)';
+        step3Btn.style.color       = '#fb923c';
+        var numEl2 = step3Btn.querySelector('.vs-step-num');
+        if (numEl2) { numEl2.style.background = 'rgba(251,146,60,0.15)'; numEl2.style.borderColor = 'rgba(251,146,60,0.4)'; numEl2.style.color = '#fb923c'; }
+      }
+    }
+    if (step3Label) step3Label.textContent = m === 'api' ? '⚡ Run via API' : 'Run →';
+
+    // Settings badge
     var badge = document.getElementById('generateModeBadge');
-    if (!badge) return;
-    badge.textContent = mode === 'flow' ? 'Google Flow (Manual)' : 'Gemini API (Credits)';
-    badge.style.background  = mode === 'flow' ? 'rgba(56,189,248,0.15)' : 'rgba(52,211,153,0.15)';
-    badge.style.color       = mode === 'flow' ? '#38bdf8' : '#34d399';
-    badge.style.borderColor = mode === 'flow' ? 'rgba(56,189,248,0.4)' : 'rgba(52,211,153,0.4)';
+    if (badge) {
+      badge.textContent = m === 'flow' ? 'Google Flow (Manual)' : 'Gemini API (Credits)';
+      badge.style.background  = m === 'flow' ? 'rgba(56,189,248,0.15)' : 'rgba(52,211,153,0.15)';
+      badge.style.color       = m === 'flow' ? '#38bdf8' : '#34d399';
+      badge.style.borderColor = m === 'flow' ? 'rgba(56,189,248,0.4)' : 'rgba(52,211,153,0.4)';
+    }
   }
+
+  function updateGenerateModeBadge() { _applyModeUI(); }
+
+  // ── Step 3 handler — routes to API or manual agent panel ─────────────────
+  function handleStep3Run() {
+    if (getGenerateMode() === 'api') {
+      generateAllScenesViaAPI();
+    } else {
+      if (typeof openVeoAgentPanel === 'function') openVeoAgentPanel();
+    }
+  }
+  window.handleStep3Run = handleStep3Run;
 
   // ── Get Supabase JWT for authenticated server requests ────────────────────
   async function _getSupabaseJwt() {
@@ -277,3 +326,10 @@
   }
   window.generateAllScenesViaAPI = generateAllScenesViaAPI;
   window.generateVeoClipViaAPI   = generateVeoClipViaAPI;
+
+  // Apply mode UI on load (after DOM is ready)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() { _applyModeUI(); });
+  } else {
+    setTimeout(function() { _applyModeUI(); }, 0);
+  }

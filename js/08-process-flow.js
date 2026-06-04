@@ -206,7 +206,6 @@
     _restoreCtaState();
     // Sync the Fast/Quality toggle to whatever model is saved
     _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Fast');
-    if (typeof _initGrokMode === 'function') _initGrokMode();
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();

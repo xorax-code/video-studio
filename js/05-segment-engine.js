@@ -879,81 +879,9 @@
     });
   }
 
-  // --- Copy all Grok image prompts ---
-  function copyAllGrokImagePrompts() {
-    const withImgs = segments.filter(s => s.grokImgPrompt && s.grokImgPrompt.trim());
-    const total = segments.filter(s => s.frameDataUrl).length;
-    if (!withImgs.length) {
-      showToast('No Grok image prompts yet \u2014 click \u21ba Grok Img on each segment card first.', 'warning', 5000);
-      return;
-    }
-    const lines = [];
-    lines.push('GROK IMAGE PROMPTS \u2014 ' + withImgs.length + ' of ' + total + ' segments');
-    lines.push('For each: upload Photo 1 (avatar) + Photo 2 (frame), then paste the prompt.');
-    lines.push('');
-    withImgs.forEach((seg) => {
-      const gi = segments.indexOf(seg);
-      lines.push('\u2501\u2501\u2501 Scene ' + (gi + 1) + ' \u2501\u2501\u2501');
-      lines.push('Photo 1: avatar | Photo 2: scene ' + (gi + 1) + ' frame');
-      lines.push('');
-      lines.push(seg.grokImgPrompt.trim());
-      lines.push('');
-    });
-    const msg = lines.join('\n');
-    navigator.clipboard.writeText(msg).then(() => {
-      showToast(withImgs.length + ' Grok image prompts copied \u2014 paste into Grok one scene at a time.', 'success', 4000);
-    }).catch(() => {
-      try { const ta=document.createElement('textarea');ta.value=msg;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Grok image prompts copied!','success',3000); } catch(e) { showToast('Copy failed.','error'); }
-    });
-  }
-
   // --- Copy all Veo 3 prompts as a single ordered message to paste into Claude in Chrome ---
   function copyVeoAgentAllScenePrompts() {
     const withPrompts = segments.filter(s => (s.veoPrompt || '').trim());
-    // ── Grok mode: plain-text Grok prompts ──────────────────────────────
-    if (typeof grokMode !== 'undefined' && grokMode) {
-      const withSegs = segments.filter((s, idx) => {
-        const gv = s.grokVideoPrompt || (typeof buildGrokVideoPrompt === 'function' ? buildGrokVideoPrompt(idx) : '');
-        return gv && gv.trim();
-      });
-      if (!withSegs.length) { showToast('No Grok prompts yet — generate prompts first.', 'warning'); return; }
-      const _gn = withSegs.length;
-      const _gl = [];
-      _gl.push('I have ' + _gn + ' Grok image composites ready. Generate one clip per frame in sequence. ' + _gn + ' clips total.');
-      _gl.push('');
-      _gl.push('GLOBAL RULES (already in your session brief):');
-      _gl.push('• Resolution: 720p (Grok default)');
-      _gl.push('• Photo 1 = avatar (reuse every clip)');
-      _gl.push('• Photo 2 = reference frame (changes each clip)');
-      _gl.push('• 9:16 vertical, photorealistic, no captions, no watermarks');
-      _gl.push('• Match the background from Photo 2 exactly');
-      _gl.push('');
-      withSegs.forEach((seg, idx) => {
-        const gi = segments.indexOf(seg);
-        const grokVid = seg.grokVideoPrompt || (typeof buildGrokVideoPrompt === 'function' ? buildGrokVideoPrompt(gi) : '');
-        _gl.push('━━━ Clip ' + (idx + 1) + ' of ' + _gn + ' · Frame ' + (idx + 1) + ' ━━━');
-        if (seg.grokImgPrompt) {
-          _gl.push('─ GROK IMAGE (swap the person)');
-          _gl.push(seg.grokImgPrompt.trim());
-          _gl.push('');
-        } else {
-          _gl.push('─ GROK IMAGE: Swap the person — place avatar (Photo 1) into this scene (Photo 2). Match position, framing, and background exactly.');
-          _gl.push('');
-        }
-        _gl.push('─ GROK VIDEO (make the clip)');
-        _gl.push((grokVid || '').trim());
-        _gl.push('');
-      });
-      _gl.push('━━━ END — ' + _gn + ' clips ━━━');
-      const _gm = _gl.join('\n');
-      navigator.clipboard.writeText(_gm).then(() => {
-        showToast(_gn + ' Grok prompts copied — paste into Grok.', 'success', 4000);
-      }).catch(() => {
-        try { const ta=document.createElement('textarea');ta.value=_gm;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);showToast('Grok prompts copied!','success',3000); } catch(e) { showToast('Copy failed.','error'); }
-      });
-      return;
-    }
-    if (withPrompts.length === 0) { showToast('No Veo 3 prompts yet \u2014 click \u26a1 Generate Prompts first.', 'warning'); return; }
     const n = withPrompts.length;
 
     // Build flat clip list with frame assignments
@@ -1192,27 +1120,8 @@
     var extra = extras && extras[ei];
     if (!extra) return;
     var text = '';
-    if (typeof grokMode !== 'undefined' && grokMode) {
-      // Build Grok video prompt for continuation clip
-      var seg = segments[si];
-      var speech = extra.speech || '';
-      var action = (seg && seg.action) ? seg.action.trim() : '';
-      var voiceStyle = (typeof getVoiceStyle === 'function') ? (getVoiceStyle() || 'calm authoritative voice, neutral American accent') : 'calm authoritative voice, neutral American accent';
-      var wc = speech.trim().split(/\s+/).filter(Boolean).length;
-      var dur = wc > 14 ? 8 : 6;
-      var parts = ['Animate the start frame image exactly as shown. The character in the start frame should come to life:'];
-      if (action) parts.push(action);
-      if (speech) parts.push('The character says, word for word: "' + speech + '"');
-      parts.push('Keep the background, environment, lighting, and all props identical to the start frame — do not change anything in the scene.');
-      parts.push('Close-up to medium shot, static handheld with slight natural movement, vertical 9:16, ' + dur + ' seconds, 720p.');
-      parts.push('Natural ambient sound, ' + voiceStyle + ', no background music.');
-      parts.push('No captions, no text overlays, no subtitles, no watermarks.');
-      text = parts.join(' ');
-    } else {
-      text = extra.veoPrompt || '';
-    }
     navigator.clipboard.writeText(text).then(function() {
-      showToast('Clip ' + clipNum + (typeof grokMode !== 'undefined' && grokMode ? ' Grok' : '') + ' prompt copied', 'success', 2000);
+      showToast('Clip ' + clipNum + ' prompt copied', 'success', 2000);
     }).catch(function() {});
   }
 
@@ -1232,7 +1141,7 @@
         h += '<textarea id="veo-extra-speech-' + i + '-' + j + '" oninput="updateVeoExtraSpeech(' + i + ',' + j + ',this.value)" class="seg-ta-base seg-ta-script" style="min-height:38px;" placeholder="Exact speech for this clip...">' + escHtml(extra.speech || '') + '</textarea>';
         if (extra.veoPrompt) {
           h += '<div style="display:flex;justify-content:space-between;align-items:center;">';
-          h += '<span style="font-size:8.5px;color:rgba(99,102,241,0.55);cursor:pointer;" onclick="_toggleExtraPrompt(' + JSON.stringify(promptId) + ')">&#x25B8; ' + (typeof grokMode !== 'undefined' && grokMode ? 'Grok Prompt' : 'Veo 3 JSON') + ' (tap to view/edit)</span>';
+          h += '<span style="font-size:8.5px;color:rgba(99,102,241,0.55);cursor:pointer;" onclick="_toggleExtraPrompt(' + JSON.stringify(promptId) + ')">&#x25B8; Veo 3 JSON (tap to view/edit)</span>';
           h += '<button class="btn-copy" onclick="_copyExtraPrompt(' + i + ',' + j + ',' + (j + 2) + ')" style="font-size:9px;padding:1px 7px;">Copy</button>';
           h += '</div>';
           h += '<textarea id="' + promptId + '" oninput="if(segments[' + i + '].veoExtras[' + j + '])segments[' + i + '].veoExtras[' + j + '].veoPrompt=this.value;debounceSave()" class="seg-ta-base seg-ta-prompt" style="display:none;font-size:9px;">' + escHtml(extra.veoPrompt || '') + '</textarea>';
@@ -1532,14 +1441,9 @@
   function openVeoAgentPanel() {
     if (typeof window.requireAccess === 'function' && !window.requireAccess()) return;
     document.getElementById('veoAgentModal')?.remove();
-    var _isGrok = (typeof grokMode !== 'undefined' && grokMode);
     var _fc = segments.filter(function(s) { return s.frameDataUrl; }).length;
-    var _nbR = _isGrok
-      ? segments.filter(function(s) { return (s.grokImgPrompt||'').trim(); }).length
-      : segments.filter(function(s) { return (s.nbPrompt||''  ).trim(); }).length;
-    var _vR  = _isGrok
-      ? segments.filter(function(s,idx) { return (s.grokVideoPrompt||(typeof buildGrokVideoPrompt==='function'?buildGrokVideoPrompt(idx):'')||'').trim(); }).length
-      : segments.filter(function(s) { return (s.veoPrompt||'').trim(); }).length;
+    var _nbR = segments.filter(function(s) { return (s.nbPrompt||''  ).trim(); }).length;
+    var _vR  = segments.filter(function(s) { return (s.veoPrompt||''  ).trim(); }).length;
     var _hasP = !!(typeof productImageDataUrl !== 'undefined' && productImageDataUrl);
     var _hasB = !!(typeof bgImageDataUrl !== 'undefined' && bgImageDataUrl && !(typeof bgFromAvatar !== 'undefined' && bgFromAvatar));
     var _fixed = (avatarImageDataUrl ? 1 : 0) + (_hasP ? 1 : 0) + (_hasB ? 1 : 0);
@@ -1555,9 +1459,9 @@
     // NB prompt buttons
     var _nbBtns = '';
     if (_zb <= 1) {
-      var _nbLabel = _isGrok ? '\uD83E\uDD16 Copy Grok Image Prompts' : '\uD83C\uDF4C Copy NB Prompts';
-      var _nbCount = _isGrok ? (_nbR > 0 ? _nbR + ' prompts' : _fc + ' frames ready') : _nbR + ' prompts';
-      var _nbOnClick = _isGrok ? 'copyAllGrokImagePrompts()' : 'copyAllNBPromptsForAgent()';
+      var _nbLabel = '\uD83C\uDF4C Copy NB Prompts';
+      var _nbCount = _nbR + ' prompts';
+      var _nbOnClick = 'copyAllNBPromptsForAgent()';
       _nbBtns = '<button onclick="' + _nbOnClick + '" style="display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-radius:8px;background:rgba(251,146,60,0.09);border:1px solid rgba(251,146,60,0.32);color:#fb923c;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;width:100%;box-sizing:border-box;"><span>' + _nbLabel + '</span><span style="font-size:10px;opacity:0.6;font-weight:500;">' + _nbCount + '</span></button>';
     } else {
       for (var _bn = 0; _bn < _zb; _bn++) {
@@ -1570,7 +1474,7 @@
     // Veo 3 buttons
     var _vBtn = '';
     if (!_vR) {
-      _vBtn = '<div style="font-size:11px;color:var(--text-3);padding:4px 0;">' + (_isGrok ? 'No Grok video prompts yet — generate prompts first.' : 'No Veo 3 prompts yet.') + '</div>';
+      _vBtn = '<div style="font-size:11px;color:var(--text-3);padding:4px 0;">No Veo 3 prompts yet.</div>';
     } else if (_vR <= 20) {
       _vBtn = '<button onclick="copyVeoAgentAllScenePrompts()" style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;box-sizing:border-box;"><span>\uD83D\uDCCB Copy All ' + _vR + ' Scene Prompts</span></button>';
     } else {
@@ -1583,15 +1487,15 @@
     }
 
     var _badge = _zb > 1 ? '<span style="font-size:10px;background:rgba(251,146,60,0.15);border:1px solid rgba(251,146,60,0.4);color:#fb923c;border-radius:4px;padding:2px 7px;font-weight:700;margin-left:6px;">\xD7' + _zb + ' batches</span>' : '';
-    var _step3Label = (_isGrok ? 'Generate Grok video clips' : 'Generate Veo 3 clips') + (_vR > 20 ? ' <span style="font-size:10px;color:var(--text-3);font-weight:400;">(' + _vb + ' batches)</span>' : '');
+    var _step3Label = 'Generate Veo 3 clips' + (_vR > 20 ? ' <span style="font-size:10px;color:var(--text-3);font-weight:400;">(' + _vb + ' batches)</span>' : '');
     var _noAvatar = !avatarImageDataUrl ? ' \u00B7 <span style="color:#f87171;">no avatar</span>' : '';
 
     var _html = '';
     _html += '<div style="background:var(--surface);border:1px solid rgba(124,106,247,0.3);border-radius:16px;width:100%;max-width:460px;box-shadow:0 24px 80px rgba(0,0,0,0.65);font-family:inherit;overflow:hidden;">';
     _html += '<div style="padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">';
     _html += '<div style="display:flex;align-items:center;gap:10px;"><div style="font-size:22px;line-height:1;">\uD83E\uDD16</div><div>';
-    _html += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:14px;font-weight:800;color:var(--text-1);">' + (_isGrok ? '🤖 Grok Agent Panel' : 'Veo Agent Panel') + '</span>' + _badge + '</div>';
-    _html += '<div style="font-size:10px;color:var(--text-3);margin-top:2px;">' + _fc + ' frames \u00B7 ' + _nbR + (_isGrok ? ' Grok image prompts' : ' NB prompts') + ' \u00B7 ' + _vR + (_isGrok ? ' Grok video prompts' : ' Veo 3 prompts') + _noAvatar + '</div></div></div>';
+    _html += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:14px;font-weight:800;color:var(--text-1);">Veo Agent Panel</span>' + _badge + '</div>';
+    _html += '<div style="font-size:10px;color:var(--text-3);margin-top:2px;">' + _fc + ' frames \u00B7 ' + _nbR + ' NB prompts \u00B7 ' + _vR + ' Veo 3 prompts' + _noAvatar + '</div></div></div>';
     _html += '<button onclick="document.getElementById(\'veoAgentModal\').remove()" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;">\u2715</button></div>';
 
     _html += '<div style="padding:16px 20px;display:flex;flex-direction:column;gap:0;">';
@@ -2165,13 +2069,6 @@
       color = 'var(--text-3)'; level = 'empty'; title = 'No script yet';
     } else if (wc < 5) {
       color = '#f87171'; level = 'short'; title = 'Too short — try 5+ words';
-    } else if (grokMode) {
-      // Grok: sweet spot is 6s, hard max is 10s
-      if (estSec <= 6.5)      { color = '#4ade80'; level = 'ok';   title = 'Fits in one 6s Grok clip'; }
-      else if (estSec <= 10)  { color = '#fbbf24'; level = 'long'; title = 'Over 6s — still fits Grok (max 10s), consider trimming'; }
-      else                    { color = '#f87171'; level = 'over'; title = 'Too long for Grok (max 10s) — split this scene'; }
-    } else {
-      // Veo 3: max 8s
       if (estSec <= 8.5)      { color = '#4ade80'; level = 'ok';   title = 'Fits comfortably in one 8s Veo clip'; }
       else if (estSec <= 11)  { color = '#fbbf24'; level = 'long'; title = 'Slightly long — may run past 8s, consider trimming'; }
       else                    { color = '#f87171'; level = 'over'; title = 'Too long for one 8s Veo clip — split this scene'; }
@@ -2244,108 +2141,6 @@
         style="flex:${len.toFixed(2)};min-width:24px;height:18px;background:${bg};border:1px solid ${bd};border-radius:2px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:7px;font-weight:700;color:var(--text-1);overflow:hidden;white-space:nowrap;padding:0 2px;">Sc ${i+1}</div>`;
     }).join('');
     strip.innerHTML = `<div style="display:flex;gap:2px;align-items:center;">${blocks}</div>`;
-  }
-
-  // ── Grok Mode ─────────────────────────────────────────────────────────────
-  let grokMode = false;
-
-  function toggleGrokMode() {
-    grokMode = !grokMode;
-    try { localStorage.setItem('vs_grok_mode', grokMode ? '1' : '0'); } catch(_) {}
-    const btn = document.getElementById('grokModeBtn');
-    if (btn) {
-      btn.style.background = grokMode ? 'rgba(99,102,241,0.2)' : '';
-      btn.style.borderColor = grokMode ? 'rgba(99,102,241,0.55)' : 'rgba(255,255,255,0.12)';
-      btn.style.color = grokMode ? '#a5b4fc' : 'var(--text-3)';
-      btn.textContent = grokMode ? '🤖 Grok ON' : '🤖 Grok';
-    }
-    renderSegments();
-  }
-
-  function _initGrokMode() {
-    try { grokMode = localStorage.getItem('vs_grok_mode') === '1'; } catch(_) {}
-    const btn = document.getElementById('grokModeBtn');
-    if (btn && grokMode) {
-      btn.style.background = 'rgba(99,102,241,0.2)';
-      btn.style.borderColor = 'rgba(99,102,241,0.55)';
-      btn.style.color = '#a5b4fc';
-      btn.textContent = '🤖 Grok ON';
-    }
-  }
-
-  function buildGrokVideoPrompt(i) {
-    const seg = segments[i];
-    if (!seg) return '';
-    const action = (seg.action || '').trim();
-    const speech = (seg.script || '').trim();
-    const dur = (typeof getVeoDuration === 'function') ? (getVeoDuration(speech) || 6) : 6;
-    const voiceStyle = (typeof getVoiceStyle === 'function') ? (getVoiceStyle() || 'calm authoritative voice, neutral American accent') : 'calm authoritative voice, neutral American accent';
-    // Build a self-contained Grok video prompt
-    // The start frame IS the already-composited NB Pro image — only one photo needed
-    const parts = [];
-    parts.push('Animate the start frame image exactly as shown. The character in the start frame should come to life:');
-    if (action) parts.push(action);
-    if (speech) parts.push('The character says, word for word: "' + speech + '"');
-    parts.push('Keep the background, environment, lighting, and all props identical to the start frame — do not change anything in the scene.');
-    parts.push('Close-up to medium shot, static handheld with slight natural movement, vertical 9:16, ' + dur + ' seconds, 720p.');
-    parts.push('Natural ambient sound, ' + voiceStyle + ', no background music.');
-    parts.push('No captions, no text overlays, no subtitles, no watermarks.');
-    return parts.join(' ');
-  }
-
-  async function buildGrokImagePrompt(i) {
-    const seg = segments[i];
-    if (!seg || !seg.frameDataUrl) { showToast('No frame for this segment.', 'warning'); return false; }
-    const apiKey = getApiKey();
-    if (!apiKey) { showToast('Add your OpenAI API key in settings first.', 'warning'); return false; }
-    const nbTa = document.getElementById('nb-seg-' + i);
-    if (nbTa) nbTa.value = '⏳ Generating Grok image prompt…';
-    const sceneNotes = seg.sceneNotes || '';
-    const _nbScript = seg.script || '';
-    try {
-      const res = await _fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
-        body: JSON.stringify({
-          model: 'gpt-4o', temperature: 0.2, max_tokens: 400,
-          messages: [{ role: 'user', content: [
-            { type: 'text', text: `You are writing a structured Grok image composite prompt. The user will upload two photos:
-• Photo 1 = their avatar (the CHARACTER to swap in — use ONLY this person's face, hair, skin tone, clothing)
-• Photo 2 = this reference frame (the SCENE — background, props, composition, lighting, dimensions must be preserved exactly)
-
-Analyze the attached frame (Photo 2) and write a prompt using this EXACT structure:
-
-COMPOSITE TASK:
-Photo 1 = CHARACTER — swap this person into the scene. Preserve their exact appearance from Photo 1.
-Photo 2 = SCENE — keep everything in this frame identical: background, props, lighting, composition, dimensions.
-
-SCENE (describe what you see in Photo 2 — shot type, person position in frame, background elements, props, camera angle, lighting):
-[your scene description here — 2-3 sentences max]
-
-COMPOSITE RULES:
-• Output dimensions must exactly match Photo 2 — same 9:16 aspect ratio, same framing, do NOT crop or zoom.
-• Place the character from Photo 1 at the exact same position, scale, and body orientation as the person in Photo 2.
-• Match the lighting direction and color temperature from Photo 2 so the composite looks natural.
-• Background, environment, props, and all objects from Photo 2 must remain 100% unchanged.
-• Use Photo 1 for ALL character details — face, skin tone, hair, clothing. Do not invent or alter any appearance.
-• No captions, no text overlays, no watermarks, no AI artifacts. Photorealistic only.${sceneNotes ? '\n\nSCENE NOTES (override anything you think you see): ' + sceneNotes : ''}${_nbScript ? '\n\nSCRIPT CONTEXT: "' + _nbScript + '" — use this to correctly identify any products or props.' : ''}` },
-            { type: 'image_url', image_url: { url: await scaleDataUrl(seg.frameDataUrl, 512), detail: 'low' } }
-          ]}]
-        })
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) { showToast('Grok image prompt failed: ' + (data?.error?.message || 'API error'), 'error'); if (nbTa) nbTa.value = seg.grokImgPrompt || ''; return false; }
-      const grokImgPrompt = (data.choices?.[0]?.message?.content || '').trim();
-      if (!grokImgPrompt) { showToast('Empty response from GPT-4o.', 'error'); return false; }
-      seg.grokImgPrompt = grokImgPrompt;
-      if (nbTa) nbTa.value = grokImgPrompt;
-      debounceSave();
-      return true;
-    } catch (err) {
-      showToast('Grok image prompt error: ' + err.message, 'error');
-      if (nbTa) nbTa.value = seg.grokImgPrompt || '';
-      return false;
-    }
   }
 
   function renderSegments() {
@@ -2477,19 +2272,19 @@ COMPOSITE RULES:
         <!-- NB Pro prompt — collapsed by default -->
         <div class="seg-field-nb">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="const ta=document.getElementById('nb-seg-${i}');const pre=document.getElementById('nbpreview-wrap-${i}');const open=ta.style.display!=='none';ta.style.display=open?'none':'';if(pre)pre.style.display=open?'none':'flex';this.querySelector('.nb-toggle').textContent=open?'▸ Show':'▾ Hide';">
-            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">${grokMode ? '🤖 Grok Image' : (seg._scriptOnly ? '🎨 NB Pro — Starting Frame' : '🍌 NB Pro')}${(grokMode ? seg.grokImgPrompt : seg.nbPrompt) ? ' <span style="color:#4ade80;font-weight:900;font-size:10px;">✓</span>' : ''}</span>
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">${seg._scriptOnly ? '🎨 NB Pro — Starting Frame' : '🍌 NB Pro'}${seg.nbPrompt ? ' <span style="color:#4ade80;font-weight:900;font-size:10px;">✓</span>' : ''}</span>
             <div style="display:flex;gap:4px;align-items:center;">
-              <button data-nb-regen="${i}" onclick="event.stopPropagation();${grokMode ? 'buildGrokImagePrompt' : 'refreshSegmentNB'}(${i})" title="${grokMode ? 'Generate Grok image prompt' : 'Regenerate NB Pro prompt'}" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">${grokMode ? '↻ Grok Img' : '↻ Regen NB'}</button>
+              <button data-nb-regen="${i}" onclick="event.stopPropagation();refreshSegmentNB(${i})" title="Regenerate NB Pro prompt" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen NB</button>
               <button class="btn-copy" onclick="event.stopPropagation();copyPromptTA('nb-seg-${i}')">Copy</button>
               <span class="nb-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;cursor:pointer;">▸ Show</span>
             </div>
           </div>
           <textarea id="nb-seg-${i}"
-            oninput="${grokMode ? 'segments[' + i + '].grokImgPrompt=this.value' : 'segments[' + i + '].nbPrompt=this.value'};autoGrow(this);debounceSave()"
+            oninput="segments[${i}].nbPrompt=this.value;autoGrow(this);debounceSave()"
             class="seg-ta-base seg-ta-prompt"
             style="display:none;"
-            placeholder="${grokMode ? 'Grok image prompt — click ↻ Grok Img to generate…' : 'Describe the scene for NB Pro…'}"
-          >${escHtml(grokMode ? (seg.grokImgPrompt || '') : (seg.nbPrompt || ''))}</textarea>
+            placeholder="Describe the scene for NB Pro…"
+          >${escHtml(seg.nbPrompt || '')}</textarea>
           <!-- NB composite upload — producer mode only (replicator uses the segment frame directly) -->
           ${seg._scriptOnly ? `
           <div id="nbpreview-wrap-${i}" style="display:none;margin-top:5px;flex-direction:column;gap:4px;">
@@ -2517,7 +2312,7 @@ COMPOSITE RULES:
         <!-- Veo 3 prompt -->
         <div class="seg-field-veo">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;">
-            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">${grokMode ? '🤖 GROK' : '🎬 VEO 3'} / ${grokMode ? 'PROMPT' : 'JSON'} &nbsp;${grokMode ? '' : veoLintBadgeHtml(seg)}</span>
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--accent-2);">🎬 VEO 3 / JSON &nbsp;${veoLintBadgeHtml(seg)}</span>
             <div style="display:flex;gap:4px;align-items:center;">
               ${seg.done ? `<button onclick="redoScene(${i})" title="Redo this scene" style="background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.35);border-radius:2px;color:var(--warning);font-size:9px;padding:1px 6px;cursor:pointer;">🔄 Redo</button>` : ''}
               <button onclick="copyClaudeInstruction(${i})" title="Copy Claude Browser instruction" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.4);border-radius:2px;color:#a78bfa;font-size:9px;padding:1px 6px;cursor:pointer;">🤖</button>
@@ -2527,10 +2322,10 @@ COMPOSITE RULES:
           </div>
           <div id="veo-wrap-${i}" style="display:none;">
             <textarea id="veo-seg-${i}"
-              oninput="${grokMode ? 'segments[' + i + '].grokVideoPrompt=this.value;debounceSave()' : 'segments[' + i + '].veoPrompt=this.value;debounceSave()'};autoGrow(this);"
+              oninput="segments[${i}].veoPrompt=this.value;debounceSave();autoGrow(this);"
               class="seg-ta-base seg-ta-prompt"
-              placeholder="${grokMode ? 'Grok video prompt — edit freely, or it auto-builds from action + script…' : 'Describe the video clip — action, speech, camera, background, audio…'}"
-            >${escHtml(grokMode ? (seg.grokVideoPrompt || buildGrokVideoPrompt(i)) : (seg.veoPrompt || ''))}</textarea>
+              placeholder="Describe the video clip — action, speech, camera, background, audio…"
+            >${escHtml(seg.veoPrompt || '')}</textarea>
           </div>
         </div>
 
