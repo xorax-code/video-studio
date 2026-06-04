@@ -173,7 +173,9 @@ exports.handler = async (event) => {
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
   const { prompt, durationSecs, model = 'lite' } = body;
+  console.log('generate-veo-clip: body parsed — prompt length:', (prompt||'').length, 'dur:', durationSecs, 'model:', model);
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
+    console.error('generate-veo-clip: prompt missing or empty');
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
   }
   const dur = (durationSecs === 8) ? 8 : 6;
@@ -182,12 +184,15 @@ exports.handler = async (event) => {
   const modelId = MODEL_IDS[modelKey];
 
   // ── Credit check ───────────────────────────────────────────────────────────
+  console.log('generate-veo-clip: fetching admin user for credit check...');
   const adminUser = await getAdminUser(userId);
+  console.log('generate-veo-clip: adminUser result:', adminUser ? 'OK' : 'NULL');
   if (!adminUser) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
   }
 
   const currentBalance = adminUser.app_metadata?.credits_balance ?? 0;
+  console.log('generate-veo-clip: balance:', currentBalance, 'cost:', cost, 'model:', modelKey);
   if (currentBalance < cost) {
     return {
       statusCode: 402,
@@ -203,7 +208,9 @@ exports.handler = async (event) => {
 
   // ── Deduct credits upfront ─────────────────────────────────────────────────
   const newBalance = currentBalance - cost;
+  console.log('generate-veo-clip: deducting credits, new balance will be:', newBalance);
   const deducted = await updateUserMeta(userId, { credits_balance: newBalance });
+  console.log('generate-veo-clip: deduct result:', deducted);
   if (!deducted) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
   }
