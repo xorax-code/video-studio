@@ -59,7 +59,7 @@ async function getAuthUser(jwt) {
     method:   'GET',
     headers: {
       'Authorization': `Bearer ${jwt}`,
-      'apikey':        process.env.SUPABASE_ANON_KEY,
+      'apikey':        process.env.SUPABASE_ANON,
     },
   });
   if (result.status !== 200 || !result.data?.id) return null;
