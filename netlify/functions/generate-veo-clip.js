@@ -103,11 +103,24 @@ async function updateUserMeta(userId, meta) {
 }
 
 // ── Start Gemini Veo generation (returns operation name) ─────────────────────
-async function startGeminiGeneration(prompt, durationSecs, modelId) {
+async function startGeminiGeneration(prompt, durationSecs, modelId, startImageB64, startImageMime) {
   const apiKey = process.env.GEMINI_API_KEY;
   const path   = `/v1beta/models/${modelId}:predictLongRunning`;
-  const body   = JSON.stringify({
-    instances: [{ prompt: prompt }],
+
+  // Build the instance — include starting frame if provided
+  const instance = { prompt };
+  if (startImageB64 && startImageMime) {
+    instance.image = {
+      bytesBase64Encoded: startImageB64,
+      mimeType:           startImageMime,
+    };
+    console.log('generate-veo-clip: using starting frame image (' + startImageMime + ', ' + Math.round(startImageB64.length * 0.75 / 1024) + 'KB)');
+  } else {
+    console.log('generate-veo-clip: no starting frame — text-only generation');
+  }
+
+  const body = JSON.stringify({
+    instances: [instance],
     parameters: {
       aspectRatio:     '9:16',
       durationSeconds: durationSecs,
@@ -172,7 +185,7 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const { prompt, durationSecs, model = 'lite' } = body;
+  const { prompt, durationSecs, model = 'lite', startImageB64 = null, startImageMime = null } = body;
   console.log('generate-veo-clip: body parsed — prompt length:', (prompt||'').length, 'dur:', durationSecs, 'model:', model);
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     console.error('generate-veo-clip: prompt missing or empty');
@@ -218,7 +231,7 @@ exports.handler = async (event) => {
   // ── Start Gemini generation ────────────────────────────────────────────────
   let geminiResult;
   try {
-    geminiResult = await startGeminiGeneration(prompt.trim(), dur, modelId);
+    geminiResult = await startGeminiGeneration(prompt.trim(), dur, modelId, startImageB64, startImageMime);
   } catch (e) {
     // Refund credits on network error
     await updateUserMeta(userId, { credits_balance: currentBalance });

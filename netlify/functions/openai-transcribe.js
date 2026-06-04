@@ -10,11 +10,21 @@
 
 const https = require('https');
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-Key',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers: CORS, body: '' };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Method not allowed' } }),
     };
   }
@@ -23,7 +33,7 @@ exports.handler = async (event) => {
   if (!apiKey) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'OpenAI API key not configured on server.' } }),
     };
   }
@@ -34,7 +44,7 @@ exports.handler = async (event) => {
   } catch {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Invalid JSON body.' } }),
     };
   }
@@ -44,7 +54,7 @@ exports.handler = async (event) => {
   if (!audioBase64) {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Missing audioBase64 field.' } }),
     };
   }
@@ -161,20 +171,20 @@ exports.handler = async (event) => {
       // OpenAI returned non-JSON (shouldn't happen, but handle gracefully)
       return {
         statusCode: 502,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: { message: 'Unexpected response from OpenAI: ' + result.body.slice(0, 200) } }),
       };
     }
 
     return {
       statusCode: result.status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }),
     };
   }

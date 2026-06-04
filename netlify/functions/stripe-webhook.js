@@ -222,7 +222,8 @@ exports.handler = async (event) => {
         if (session.mode === 'payment') {
           const credits = parseInt(session.metadata?.credits || '0', 10);
           if (credits > 0) {
-            const adminUser      = await getAdminUser(userId);
+            const adminUser = await getAdminUser(userId);
+            if (!adminUser) { console.error(`stripe-webhook: getAdminUser returned null for user ${userId} during top-up; aborting credit write`); break; }
             const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
             const newBalance     = currentBalance + credits;
             await updateUserMeta(userId, { credits_balance: newBalance });
@@ -245,8 +246,9 @@ exports.handler = async (event) => {
         }
 
         // Allocate monthly credits for the new plan
-        const planCredits    = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
-        const adminUser      = await getAdminUser(userId);
+        const planCredits = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
+        const adminUser   = await getAdminUser(userId);
+        if (!adminUser) { console.error(`stripe-webhook: getAdminUser returned null for user ${userId} during subscription checkout; aborting credit write`); break; }
         const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
         // On new subscription, set to plan credits (or keep existing if higher — carried over from trial)
         const newBalance     = Math.max(currentBalance, planCredits);
@@ -337,8 +339,9 @@ exports.handler = async (event) => {
           if (isRenewal) {
             // Monthly renewal: add plan credits on top of current balance (unused credits carry over)
             // Cap at 2× the monthly plan amount to prevent infinite accumulation
-            const planCredits    = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
-            const adminUser      = await getAdminUser(userId);
+            const planCredits = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
+            const adminUser   = await getAdminUser(userId);
+            if (!adminUser) { console.error(`stripe-webhook: getAdminUser returned null for user ${userId} during renewal; aborting credit write`); break; }
             const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
             const maxBalance     = planCredits * 2;
             const addAmount      = Math.min(planCredits, Math.max(0, maxBalance - currentBalance));

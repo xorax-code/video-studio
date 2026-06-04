@@ -1119,7 +1119,7 @@
     var extras = segments[si] && segments[si].veoExtras;
     var extra = extras && extras[ei];
     if (!extra) return;
-    var text = '';
+    var text = extra.veoPrompt || '';
     navigator.clipboard.writeText(text).then(function() {
       showToast('Clip ' + clipNum + ' prompt copied', 'success', 2000);
     }).catch(function() {});
@@ -2069,9 +2069,12 @@
       color = 'var(--text-3)'; level = 'empty'; title = 'No script yet';
     } else if (wc < 5) {
       color = '#f87171'; level = 'short'; title = 'Too short — try 5+ words';
-      if (estSec <= 8.5)      { color = '#4ade80'; level = 'ok';   title = 'Fits comfortably in one 8s Veo clip'; }
-      else if (estSec <= 11)  { color = '#fbbf24'; level = 'long'; title = 'Slightly long — may run past 8s, consider trimming'; }
-      else                    { color = '#f87171'; level = 'over'; title = 'Too long for one 8s Veo clip — split this scene'; }
+    } else if (estSec <= 8.5) {
+      color = '#4ade80'; level = 'ok';   title = 'Fits comfortably in one 8s Veo clip';
+    } else if (estSec <= 11) {
+      color = '#fbbf24'; level = 'long'; title = 'Slightly long — may run past 8s, consider trimming';
+    } else {
+      color = '#f87171'; level = 'over'; title = 'Too long for one 8s Veo clip — split this scene';
     }
     return { wc, estSec, color, level, title };
   }
