@@ -1254,6 +1254,8 @@
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
   window.openTopupModal = openTopupModal;
+  window.applyPromoOverride = applyPromoOverride;
+  window.clearReminderTimer = clearReminderTimer;
 
   // ── Handle post-topup redirect (?credits_added=1) ─────────────────────────
   (function checkTopupRedirect() {

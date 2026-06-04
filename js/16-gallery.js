@@ -144,7 +144,7 @@
 
   // ── Render Assembler ───────────────────────────────────────────────────────
   function renderAssembler() {
-    var timeline = document.getElementById('assemblerTimeline');
+    var timeline = document.getElementById('assemblerTimeline') || document.getElementById('assemblerPanel');
     var totalEl  = document.getElementById('assemblerTotal');
     var emptyEl  = document.getElementById('assemblerEmpty');
     if (!timeline) return;

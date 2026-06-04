@@ -316,6 +316,8 @@
 
         if (typeof saveSegments   === 'function') saveSegments();
         if (typeof renderSegments === 'function') renderSegments();
+        if (typeof renderGallery  === 'function') renderGallery();
+        if (typeof renderAssembler === 'function') renderAssembler();
       } catch(e) {
         console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
         _updateVeoAPIScene(sceneNum, total, 'error');
@@ -336,6 +338,12 @@
       showToast(succeeded + ' clips done, ' + failed + ' failed. See the API modal for details.', 'warning', 6000);
     } else {
       showToast('Generation failed. Check credits or API status.', 'error', 6000);
+    }
+
+    // Refresh gallery one final time after all clips are done
+    if (succeeded > 0) {
+      if (typeof renderGallery   === 'function') renderGallery();
+      if (typeof renderAssembler === 'function') renderAssembler();
     }
 
     // Show "Open Video Editor" nudge after at least one clip succeeds
