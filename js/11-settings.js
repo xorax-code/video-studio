@@ -275,11 +275,29 @@
       return;
     }
     // ── Dev domain bypass: full access for testing on dev--aiscaling.netlify.app ──
+    // Still restores a real Supabase session so server-side functions receive a valid JWT.
     if (window.location.hostname === 'dev--aiscaling.netlify.app') {
       window._stripeTier    = 'agency';
       window._stripeBaseTier = 'agency';
       window.userCredits    = 9999; // unlimited credits for dev testing
-      updateUserChip('Dev Preview');
+      // Restore any cached session so /.netlify/functions/* get a valid Bearer token
+      if (_sb) {
+        try {
+          const { data: _devSess } = await _sb.auth.getSession();
+          if (_devSess?.session) {
+            DB.setUser(_devSess.session.user.id);
+            updateUserChip(_devSess.session.user.email || 'Dev Preview');
+          } else {
+            // No cached session — redirect to login so the user gets a real JWT
+            window.location.href = '/login.html';
+            return;
+          }
+        } catch(e) {
+          updateUserChip('Dev Preview');
+        }
+      } else {
+        updateUserChip('Dev Preview');
+      }
       initApp().catch(e => console.error('initApp failed (dev bypass):', e));
       return;
     }
