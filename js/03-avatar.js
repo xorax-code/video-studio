@@ -15,6 +15,12 @@
   let refVideoObjectUrl = null;
   let refVideoFile = null; // Raw File object for Whisper transcription
   let segments = []; // [{startTime, endTime, frameDataUrl, script, action, nbPrompt, veoPrompt}]
+  // Expose as window.segments via getter so reassignments (segments = []) stay in sync
+  Object.defineProperty(window, 'segments', {
+    get: function() { return segments; },
+    set: function(v) { segments = v; },
+    configurable: true,
+  });
   let _undoStack = []; // [{label, segments: deep-clone}] — capped at _UNDO_MAX entries
   const _UNDO_MAX = 15;
   let _activeLibraryVideoId = null; // library video ID currently loaded into the player

@@ -268,68 +268,85 @@
 
   // ── Generate all scenes via API ───────────────────────────────────────────
   async function generateAllScenesViaAPI() {
-    if (getGenerateMode() === 'flow') {
-      if (typeof showToast === 'function') showToast('Generate mode is Google Flow — switch to API mode in Settings to use credits.', 'warning', 4000);
-      return;
-    }
-    if (!window.segments || !window.segments.length) {
-      if (typeof showToast === 'function') showToast('Build prompts first.', 'warning');
-      return;
-    }
-    var withPrompts = window.segments.filter(function(s) { return (s.veoPrompt || '').trim(); });
-    if (!withPrompts.length) {
-      if (typeof showToast === 'function') showToast('Build prompts first.', 'warning');
+    var toGenerate = segments.filter(function(s) { return s.veoPrompt && s.veoPrompt.trim(); });
+    if (!toGenerate.length) {
+      showToast('Generate prompts first before running via API.', 'warning');
       return;
     }
 
-    var total = withPrompts.length;
+    var adm = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
+    var modelKey = (adm.defaultModel || 'Veo 3.1 Fast').toLowerCase().includes('fast') ? 'fast' : 'lite';
+    var total = toGenerate.length;
+
     _openVeoAPIModal(total);
-    var succeeded = 0, failed = 0;
 
-    for (var i = 0; i < total; i++) {
-      var seg = withPrompts[i];
-      _updateVeoAPIScene(i + 1, total, 'generating', '');
+    var succeeded = 0;
+    var failed    = 0;
+
+    for (var _i = 0; _i < toGenerate.length; _i++) {
+      var seg      = toGenerate[_i];
+      var sceneNum = _i + 1;
+
+      _updateVeoAPIScene(sceneNum, total, 'generating');
+      _updateVeoAPIProgress(_i, total, succeeded, failed);
+
+      var durSecs = 6;
+      try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(e) {}
+
       try {
-        var dur = 6;
-        try { var po = JSON.parse(seg.veoPrompt); var rd = po.duration; dur = typeof rd === 'number' ? rd : parseInt(rd) || 6; } catch(e) {}
-        dur = (dur === 8) ? 8 : 6;
+        var result = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey);
 
-        var result   = await generateVeoClipViaAPI(seg.veoPrompt, dur, 'lite');
-        var blobUrl  = await _fetchVideoAsBlob(result.videoUrl);
-        seg.apiVideoUrl  = blobUrl || result.videoUrl;
-        seg.apiVideoMime = result.mimeType;
-        seg.apiVideoRaw  = result.videoUrl;
+        // Store the raw URI and fetch a blob URL for local playback
+        seg.apiVideoUrl  = result.videoUrl;
+        seg.apiVideoMime = result.mimeType || 'video/mp4';
+        var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
+        if (blobUrl) { seg.apiVideoRaw = blobUrl; }
+
+        _updateVeoAPIScene(sceneNum, total, 'done');
         succeeded++;
-        _updateVeoAPIScene(i + 1, total, 'done', seg.apiVideoUrl);
+
+        if (typeof saveSegments   === 'function') saveSegments();
+        if (typeof renderSegments === 'function') renderSegments();
       } catch(e) {
+        console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
+        _updateVeoAPIScene(sceneNum, total, 'error');
         failed++;
-        console.error('[VeoAPI] Scene ' + (i + 1) + ' failed:', e.message);
-        _updateVeoAPIScene(i + 1, total, 'error', e.message);
-        if (e.message && (e.message.includes('credits') || e.message.includes('Not enough'))) break;
+
+        // Insufficient credits — abort the whole run, modal already shown
+        if (e.message && e.message.toLowerCase().includes('credit')) break;
       }
-      _updateVeoAPIProgress(i + 1, total, succeeded, failed);
+
+      _updateVeoAPIProgress(_i + 1, total, succeeded, failed);
+      if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
     }
 
-    if (typeof saveSegments === 'function') saveSegments();
-    if (typeof renderSegments === 'function') renderSegments();
-    await refreshCreditBalance();
+    // Final summary toast
+    if (failed === 0) {
+      showToast('All ' + succeeded + ' clips generated!', 'success', 5000);
+    } else if (succeeded > 0) {
+      showToast(succeeded + ' clips done, ' + failed + ' failed. See the API modal for details.', 'warning', 6000);
+    } else {
+      showToast('Generation failed. Check credits or API status.', 'error', 6000);
+    }
 
-    var msg = succeeded + '/' + total + ' clips generated';
-    if (failed > 0) msg += ' (' + failed + ' failed)';
-    if (typeof showToast === 'function') showToast(msg, succeeded > 0 ? 'success' : 'error', 5000);
-
-    // Show the "Open Video Editor" nudge if any clips succeeded
+    // Show "Open Video Editor" nudge after at least one clip succeeds
     if (succeeded > 0) {
       var nudge = document.getElementById('openEditorNudge');
       if (nudge) nudge.style.display = 'flex';
     }
   }
   window.generateAllScenesViaAPI = generateAllScenesViaAPI;
-  window.generateVeoClipViaAPI   = generateVeoClipViaAPI;
 
-  // Apply mode UI on load (after DOM is ready)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() { _applyModeUI(); });
-  } else {
-    setTimeout(function() { _applyModeUI(); }, 0);
+  // ── Remove API video from a segment ──────────────────────────────────────
+  function clearSegmentApiVideo(i) {
+    if (!segments[i]) return;
+    segments[i].apiVideoUrl  = null;
+    segments[i].apiVideoRaw  = null;
+    segments[i].apiVideoMime = null;
+    if (typeof saveSegments   === 'function') saveSegments();
+    if (typeof renderSegments === 'function') renderSegments();
   }
+  window.clearSegmentApiVideo = clearSegmentApiVideo;
+
+  // ── Apply mode UI on page load (restores pill + step3 button state) ───────
+  document.addEventListener('DOMContentLoaded', function() { _applyModeUI(); });
