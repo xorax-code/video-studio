@@ -17,6 +17,19 @@
   to = "/login.html"
   status = 200
 
+# ── COOP/COEP headers for /app — required for FFmpeg.wasm (SharedArrayBuffer) ──
+[[headers]]
+  for = "/app"
+  [headers.values]
+    Cross-Origin-Opener-Policy   = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
+[[headers]]
+  for = "/app.html"
+  [headers.values]
+    Cross-Origin-Opener-Policy   = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
@@ -44,3 +57,15 @@
 [functions.validate-promo]
   node_version = "18"
   timeout = 10
+
+[functions.generate-veo-clip]
+  node_version = "18"
+  timeout = 26
+
+[functions.poll-veo-clip]
+  node_version = "18"
+  timeout = 26
+
+[functions.create-topup-session]
+  node_version = "18"
+  timeout = 26
