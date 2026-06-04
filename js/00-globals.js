@@ -132,6 +132,7 @@
     'calendar': 'Video Calendar',
     'video-replicator': 'Video Replicator',
     'video-producer': 'Video Producer',
+    'video-editor': 'Video Editor',
   };
 
   function switchTab(tab) {
@@ -170,6 +171,10 @@
       if (tab === 'viral-scripts') { renderScripts(); renderHookBank(); renderCTALibrary(); renderIdeasInbox(); }
       if (tab === 'calendar') { renderCalendar(); renderPlans(); renderDailyPlan(); }
       if (tab === 'my-accounts') renderTable();
+      if (tab === 'video-editor') {
+        if (typeof renderGallery === 'function') renderGallery();
+        if (typeof renderAssembler === 'function') renderAssembler();
+      }
     }
   }
 

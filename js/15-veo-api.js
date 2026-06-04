@@ -268,6 +268,12 @@
     var msg = succeeded + '/' + total + ' clips generated';
     if (failed > 0) msg += ' (' + failed + ' failed)';
     if (typeof showToast === 'function') showToast(msg, succeeded > 0 ? 'success' : 'error', 5000);
+
+    // Show the "Open Video Editor" nudge if any clips succeeded
+    if (succeeded > 0) {
+      var nudge = document.getElementById('openEditorNudge');
+      if (nudge) nudge.style.display = 'flex';
+    }
   }
   window.generateAllScenesViaAPI = generateAllScenesViaAPI;
   window.generateVeoClipViaAPI   = generateVeoClipViaAPI;
