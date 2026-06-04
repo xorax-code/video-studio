@@ -1,22 +1,32 @@
 /**
  * Netlify Function: stripe-webhook
- * Receives Stripe events and syncs subscription tier to Supabase user app_metadata.
+ * Receives Stripe events and syncs subscription tier + credits to Supabase user app_metadata.
  *
  * Required env vars:
  *   STRIPE_SECRET_KEY          — sk_live_... or sk_test_...
  *   STRIPE_WEBHOOK_SECRET      — whsec_... (from Stripe Dashboard → Webhooks)
- *   STRIPE_PRICE_STARTER       — price_... for $19/mo
- *   STRIPE_PRICE_PRO           — price_... for $49/mo
- *   STRIPE_PRICE_AGENCY        — price_... for $99/mo
+ *   STRIPE_PRICE_STARTER       — price_... for Starter plan
+ *   STRIPE_PRICE_PRO           — price_... for Pro plan
+ *   STRIPE_PRICE_AGENCY        — price_... for Agency plan
  *   SUPABASE_URL               — https://xxx.supabase.co
  *   SUPABASE_SERVICE_ROLE_KEY  — service_role JWT from Supabase → Settings → API
  *
  * Stripe events handled:
- *   checkout.session.completed       → set tier on first payment
- *   customer.subscription.updated    → plan change / reactivation
- *   customer.subscription.deleted    → cancellation → reset to free
- *   invoice.payment_failed           → (logged, no downgrade on first failure)
+ *   checkout.session.completed (subscription) → set tier + allocate monthly credits
+ *   checkout.session.completed (payment)       → add top-up credits
+ *   customer.subscription.updated             → plan change / reactivation
+ *   customer.subscription.deleted             → cancellation → reset to free
+ *   invoice.payment_succeeded (subscription)  → monthly renewal → add plan credits
+ *   invoice.payment_failed                    → (logged, no downgrade on first failure)
  */
+
+// ── Monthly credits per plan ─────────────────────────────────────────────────
+const PLAN_MONTHLY_CREDITS = {
+  free:    50,
+  starter: 1000,
+  pro:     4000,
+  agency:  5000,
+};
 
 const https  = require('https');
 const crypto = require('crypto');
@@ -63,6 +73,32 @@ function stripeGet(path) {
       res.on('end', () => {
         if (res.statusCode < 200 || res.statusCode >= 300) { resolve(null); return; }
         try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
+// ── Supabase: read user app_metadata ────────────────────────────────────────
+async function getAdminUser(userId) {
+  const url    = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  return new Promise((resolve) => {
+    const req = https.request({
+      hostname: url.hostname,
+      path:     url.pathname + url.search,
+      method:   'GET',
+      headers: {
+        'Authorization': `Bearer ${svcKey}`,
+        'apikey':        svcKey,
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try { resolve(JSON.parse(Buffer.concat(chunks).toString())); }
+        catch { resolve(null); }
       });
     });
     req.on('error', () => resolve(null));
@@ -176,12 +212,26 @@ exports.handler = async (event) => {
   try {
     switch (stripeEvent.type) {
 
-      // ── New subscription / first payment ──────────────────────────────────
+      // ── New subscription / first payment OR one-time top-up ─────────────
       case 'checkout.session.completed': {
         const session = stripeEvent.data.object;
-        const userId  = session.client_reference_id;
-        if (!userId) { console.warn('No client_reference_id on session'); break; }
+        const userId  = session.client_reference_id || session.metadata?.user_id;
+        if (!userId) { console.warn('No user id on session'); break; }
 
+        // ── One-time payment: credit top-up ───────────────────────────────
+        if (session.mode === 'payment') {
+          const credits = parseInt(session.metadata?.credits || '0', 10);
+          if (credits > 0) {
+            const adminUser      = await getAdminUser(userId);
+            const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
+            const newBalance     = currentBalance + credits;
+            await updateUserMeta(userId, { credits_balance: newBalance });
+            console.log(`User ${userId} top-up: +${credits} credits (pack: ${session.metadata?.pack_id}, new balance: ${newBalance})`);
+          }
+          break;
+        }
+
+        // ── Subscription checkout ─────────────────────────────────────────
         const customerId     = session.customer;
         const subscriptionId = session.subscription;
 
@@ -194,12 +244,21 @@ exports.handler = async (event) => {
           tier = tierFromPriceId(priceId);
         }
 
+        // Allocate monthly credits for the new plan
+        const planCredits    = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
+        const adminUser      = await getAdminUser(userId);
+        const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
+        // On new subscription, set to plan credits (or keep existing if higher — carried over from trial)
+        const newBalance     = Math.max(currentBalance, planCredits);
+
         await updateUserMeta(userId, {
           stripe_tier:            tier,
           stripe_customer_id:     customerId,
           stripe_subscription_id: subscriptionId,
+          credits_balance:        newBalance,
+          credits_plan_monthly:   planCredits,
         });
-        console.log(`User ${userId} upgraded to ${tier}`);
+        console.log(`User ${userId} upgraded to ${tier}, credits set to ${newBalance}`);
         break;
       }
 
@@ -254,12 +313,16 @@ exports.handler = async (event) => {
         break;
       }
 
-      // ── Successful payment (initial + every renewal) ──────────────────────
+      // ── Successful payment (initial + every monthly renewal) ─────────────
       case 'invoice.payment_succeeded': {
         const invoice        = stripeEvent.data.object;
         const customerId     = invoice.customer;
         const subscriptionId = invoice.subscription;
         if (!subscriptionId) break; // one-off charge, not a subscription
+
+        // Skip the very first invoice — checkout.session.completed handles that
+        // billing_reason: 'subscription_create' = first charge, 'subscription_cycle' = renewal
+        const isRenewal = invoice.billing_reason === 'subscription_cycle';
 
         // Fetch the subscription to get current price → tier
         const sub     = await stripeGet(`/v1/subscriptions/${subscriptionId}`);
@@ -269,8 +332,24 @@ exports.handler = async (event) => {
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {
-          await updateUserMeta(userId, { stripe_tier: tier });
-          console.log(`User ${userId} payment succeeded → tier confirmed as ${tier}`);
+          const metaUpdate = { stripe_tier: tier };
+
+          if (isRenewal) {
+            // Monthly renewal: add plan credits on top of current balance (unused credits carry over)
+            // Cap at 2× the monthly plan amount to prevent infinite accumulation
+            const planCredits    = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
+            const adminUser      = await getAdminUser(userId);
+            const currentBalance = adminUser?.app_metadata?.credits_balance ?? 0;
+            const maxBalance     = planCredits * 2;
+            const addAmount      = Math.min(planCredits, Math.max(0, maxBalance - currentBalance));
+            const newBalance     = currentBalance + addAmount;
+            metaUpdate.credits_balance      = newBalance;
+            metaUpdate.credits_plan_monthly = planCredits;
+            console.log(`User ${userId} renewal → +${addAmount} credits (balance: ${newBalance}, tier: ${tier})`);
+          }
+
+          await updateUserMeta(userId, metaUpdate);
+          if (!isRenewal) console.log(`User ${userId} payment succeeded → tier confirmed as ${tier}`);
         }
         break;
       }
