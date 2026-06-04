@@ -97,9 +97,18 @@
     try {
       if (typeof _sb !== 'undefined' && _sb) {
         var sessionRes = await _sb.auth.getSession();
-        return sessionRes?.data?.session?.access_token || null;
+        var session = sessionRes?.data?.session;
+        if (!session) return null;
+        // Force refresh if token expires within 60 seconds (or already expired)
+        var exp = session.expires_at; // unix timestamp in seconds
+        if (exp && (exp - Math.floor(Date.now() / 1000)) < 60) {
+          var refreshed = await _sb.auth.refreshSession();
+          console.log('[JWT] token near/past expiry — refreshed:', !!refreshed?.data?.session);
+          return refreshed?.data?.session?.access_token || null;
+        }
+        return session.access_token || null;
       }
-    } catch(e) {}
+    } catch(e) { console.warn('[_getSupabaseJwt] error:', e?.message); }
     return null;
   }
 

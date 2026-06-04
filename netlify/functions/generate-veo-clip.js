@@ -110,7 +110,7 @@ async function startGeminiGeneration(prompt, durationSecs, modelId) {
     instances: [{ prompt: prompt }],
     parameters: {
       aspectRatio:     '9:16',
-      durationSeconds: String(durationSecs),
+      durationSeconds: durationSecs,
     },
   });
   const result = await httpsRequest({
@@ -142,19 +142,25 @@ exports.handler = async (event) => {
   }
 
   // ── Env check ──────────────────────────────────────────────────────────────
-  if (!process.env.GEMINI_API_KEY || !process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    console.error('generate-veo-clip: missing required env vars');
+  const _missingVars = ['GEMINI_API_KEY','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ANON']
+    .filter(k => !process.env[k]);
+  if (_missingVars.length) {
+    console.error('generate-veo-clip: missing env vars:', _missingVars.join(', '));
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error.' }) };
   }
+  console.log('generate-veo-clip: env check passed');
 
   // ── Auth ───────────────────────────────────────────────────────────────────
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!jwt) {
+    console.error('generate-veo-clip: no JWT in request');
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
   }
+  console.log('generate-veo-clip: JWT present, validating with Supabase...');
 
   const anonUser = await getAuthUser(jwt);
+  console.log('generate-veo-clip: getAuthUser result:', anonUser ? `uid=${anonUser.id}` : 'NULL (auth failed)');
   if (!anonUser) {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session. Please log in again.' }) };
   }
