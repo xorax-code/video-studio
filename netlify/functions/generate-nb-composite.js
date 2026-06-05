@@ -121,7 +121,7 @@ Output a single photorealistic image. No text, no watermarks, no collages.`;
     },
   });
 
-  const apiPath = `/v1beta/models/gemini-2.0-flash-preview-image-generation:generateContent?key=${geminiKey}`;
+  const apiPath = `/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${geminiKey}`;
 
   console.log(`generate-nb-composite: user=${user.id}, hasFrame=${!!frameB64}, instrLen=${instruction.length}`);
 
