@@ -96,21 +96,52 @@ function createSignedUrl(gcsUri, sa, expiresInSeconds) {
   return 'https://storage.googleapis.com/' + bucket + '/' + encodedObject + '?' + queryParams + '&X-Goog-Signature=' + signature;
 }
 
-// Poll Vertex AI operation
-// Veo uses UUID-format operation IDs scoped to the model path:
+// Poll Vertex AI Veo operation via fetchPredictOperation
+//
+// Veo's predictLongRunning returns operation names like:
 //   projects/{p}/locations/{l}/publishers/google/models/{m}/operations/{uuid}
-// Poll using the full path as returned — DO NOT strip to location-level operations
-// (that endpoint only accepts numeric Long IDs, not UUIDs).
+//
+// Neither GET /v1/{operationName} nor GET /v1/projects/{p}/locations/{l}/operations/{uuid}
+// work for Veo — the correct API is POST :fetchPredictOperation on the model endpoint,
+// passing the full operation name in the request body.
+//
+// The project and model in the operation name come from Google's internal routing
+// (may differ from GOOGLE_CLOUD_PROJECT_ID), so we parse them from operationName directly.
 function pollOperation(operationName, accessToken) {
-  const path = '/v1/' + operationName;
-  console.log('poll-veo-clip: polling path:', path);
+  // Parse: projects/{p}/locations/{l}/publishers/google/models/{m}/operations/{id}
+  var match = operationName.match(
+    /^projects\/([^/]+)\/locations\/([^/]+)\/publishers\/google\/models\/([^/]+)\/operations\//
+  );
+  var hostname, path, body;
+  if (match) {
+    var opProject  = match[1];
+    var opLocation = match[2];
+    var opModel    = match[3];
+    path = '/v1/projects/' + opProject + '/locations/' + opLocation
+         + '/publishers/google/models/' + opModel + ':fetchPredictOperation';
+    hostname = opLocation + '-aiplatform.googleapis.com';
+    body = JSON.stringify({ operationName: operationName });
+    console.log('poll-veo-clip: fetchPredictOperation', hostname + path);
+  } else {
+    // Fallback: GET on the full name (may 404 but worth trying)
+    path = '/v1/' + operationName;
+    hostname = LOCATION + '-aiplatform.googleapis.com';
+    body = null;
+    console.log('poll-veo-clip: fallback GET', hostname + path);
+  }
+
   return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: LOCATION + '-aiplatform.googleapis.com',
-      path,
-      method:   'GET',
-      headers: { 'Authorization': 'Bearer ' + accessToken },
-    }, (res) => {
+    var opts = {
+      hostname: hostname,
+      path:     path,
+      method:   body ? 'POST' : 'GET',
+      headers:  { 'Authorization': 'Bearer ' + accessToken },
+    };
+    if (body) {
+      opts.headers['Content-Type']   = 'application/json';
+      opts.headers['Content-Length'] = Buffer.byteLength(body);
+    }
+    const req = https.request(opts, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
       res.on('end', () => {
@@ -120,6 +151,7 @@ function pollOperation(operationName, accessToken) {
       });
     });
     req.on('error', reject);
+    if (body) req.write(body);
     req.end();
   });
 }
