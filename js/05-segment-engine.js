@@ -2385,8 +2385,8 @@
       ${i < segments.length - 1 ? `
       <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-start;margin-top:72px;gap:3px;">
         <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
-        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2} — combines script, keeps first frame" style="background:rgba(96,165,250,0.07);border:1px solid rgba(96,165,250,0.22);border-radius:5px;color:#60a5fa;font-size:10px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit;letter-spacing:0.1px;">⊕ Merge</button>
-        <button onclick="addVeoExtraFromNextSeg(${i})" title="Add Seg ${i+2}'s script as a continuation clip on Seg ${i+1} (same frame, new speech)" style="background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.28);border-radius:5px;color:rgba(129,140,248,0.85);font-size:9.5px;padding:4px 8px;cursor:pointer;white-space:nowrap;font-family:inherit;">＋ Cont.</button>
+        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="background:rgba(96,165,250,0.14);border:1px solid rgba(96,165,250,0.45);border-radius:6px;color:#93c5fd;font-size:10px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">⊕ Merge</button>
+        <button onclick="addVeoExtraFromNextSeg(${i})" title="Add as continuation clip" style="background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.42);border-radius:6px;color:#c4b5fd;font-size:9.5px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">＋ Cont.</button>
         <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
       </div>` : ''}
 `).join('');
