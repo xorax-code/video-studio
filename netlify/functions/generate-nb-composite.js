@@ -159,18 +159,19 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
   }
 
   // ── Extract image from response ────────────────────────────────────────────
+  // Gemini REST API returns camelCase keys (inlineData, mimeType) in responses,
+  // but proto3 JSON also accepts snake_case — handle both to be safe.
   const candidates = result.data.candidates || [];
   for (const candidate of candidates) {
     for (const part of (candidate.content?.parts || [])) {
-      if (part.inline_data?.data) {
-        console.log('generate-nb-composite: image generated, mime:', part.inline_data.mime_type);
+      const blob = part.inlineData || part.inline_data;
+      if (blob?.data) {
+        const mime = blob.mimeType || blob.mime_type || 'image/png';
+        console.log('generate-nb-composite: image generated, mime:', mime);
         return {
           statusCode: 200,
           headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            imageB64: part.inline_data.data,
-            mime:     part.inline_data.mime_type || 'image/png',
-          }),
+          body: JSON.stringify({ imageB64: blob.data, mime }),
         };
       }
     }
@@ -179,7 +180,7 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
   // No image in response — log full details for debugging
   const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
   const textParts = candidates.flatMap(c => (c.content?.parts || []).filter(p => p.text).map(p => p.text)).join(' ');
-  console.error('generate-nb-composite: no image in response. finishReasons:', finishReasons, '| Text:', textParts.slice(0, 300));
+  console.error('generate-nb-composite: no image. finishReasons:', finishReasons, '| parts:', JSON.stringify(candidates.flatMap(c => (c.content?.parts || []).map(p => Object.keys(p))).slice(0,5)), '| text:', textParts.slice(0, 300));
   const errDetail = finishReasons ? `(finishReason: ${finishReasons})` : '';
   return {
     statusCode: 502,
