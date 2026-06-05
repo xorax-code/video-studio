@@ -98,23 +98,29 @@ exports.handler = async (event) => {
   }
 
   // ── Build Gemini request ───────────────────────────────────────────────────
-  // System instruction: creative lifestyle image generation
-  const systemText = `You are a creative lifestyle photo editor. Generate a single vertical 9:16 image based on the instructions below.
-Photo 1 shows a person — use their visual style, clothing, and overall look as a style reference for the scene.
-If Photo 2 is provided, use it as a background and scene composition reference.
-Create a natural, high-quality lifestyle photograph. Output a single image only. No text overlays, no watermarks, no collages.`;
+  // system_instruction is kept separate from contents so the model treats
+  // the user turn as an image-generation command, not a conversation.
+  const systemInstruction = {
+    parts: [{
+      text: `You are a creative lifestyle photo editor. Your job is to generate a single vertical 9:16 lifestyle photograph.
+Photo 1 is the person reference — match their clothing, accessories, and overall look in the scene.
+${frameB64 ? 'Photo 2 is the scene/background reference — match its location, lighting, and composition.' : ''}
+Output ONLY the image. No text, no commentary, no watermarks.`,
+    }],
+  };
 
-  const parts = [
-    { text: systemText + '\n\n' + instruction },
+  const userParts = [
+    { text: instruction },
     { inline_data: { mime_type: avatarMime, data: avatarB64 } },
   ];
 
   if (frameB64) {
-    parts.push({ inline_data: { mime_type: frameMime, data: frameB64 } });
+    userParts.push({ inline_data: { mime_type: frameMime, data: frameB64 } });
   }
 
   const requestBody = JSON.stringify({
-    contents: [{ role: 'user', parts }],
+    system_instruction: systemInstruction,
+    contents: [{ role: 'user', parts: userParts }],
   });
 
   // gemini-3.1-flash-image (Nano Banana 2) — stable image-in/image-out model, uses v1
