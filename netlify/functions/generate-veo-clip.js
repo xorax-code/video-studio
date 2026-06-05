@@ -1,36 +1,88 @@
 /**
- * Netlify Function: generate-veo-clip
- * Validates auth → checks/deducts credits → starts Gemini Veo generation.
- * Returns the Gemini operation name so the frontend can poll via poll-veo-clip.js.
+ * Netlify Function: generate-veo-clip  (Vertex AI version — no RPD cap)
+ * Validates auth → checks/deducts credits → starts Vertex AI Veo generation.
+ * Returns the Vertex AI operation name so the frontend can poll via poll-veo-clip.js.
  *
  * Required env vars:
- *   GEMINI_API_KEY             — Google AI Studio key with Veo access
- *   SUPABASE_URL               — https://xxx.supabase.co
- *   SUPABASE_ANON_KEY          — anon/public key (for JWT validation)
- *   SUPABASE_SERVICE_ROLE_KEY  — service role key (for reading/writing app_metadata)
+ *   GOOGLE_SERVICE_ACCOUNT_JSON   — full service account key JSON (as a string)
+ *   GOOGLE_CLOUD_PROJECT_ID       — e.g. gen-lang-client-0657577212
+ *   GOOGLE_CLOUD_STORAGE_BUCKET   — GCS bucket for output, e.g. gs://my-veo-outputs
+ *   SUPABASE_URL                  — https://xxx.supabase.co
+ *   SUPABASE_ANON                 — anon/public key
+ *   SUPABASE_SERVICE_ROLE_KEY     — service role key
  *
  * POST body (JSON):
- *   { prompt: string, durationSecs: 6|8, model: 'lite'|'fast' }
- *
- * Authorization header: Bearer <supabase_jwt>
+ *   { prompt, durationSecs, model: 'lite'|'fast', startImageB64?, startImageMime? }
  */
 
-const https = require('https');
+const https  = require('https');
+const crypto = require('crypto');
 
-// ── Credit costs per model ────────────────────────────────────────────────────
+// ── Credit costs ──────────────────────────────────────────────────────────────
 const CREDIT_COSTS = {
-  lite: 15,   // veo-3.1-lite-generate-preview
-  fast: 30,   // veo-3.1-fast-generate-preview
+  lite: 15,
+  fast: 30,
 };
 
+// Vertex AI model IDs — fast is GA (-001), lite is still preview
 const MODEL_IDS = {
   lite: 'veo-3.1-lite-generate-preview',
-  fast: 'veo-3.1-fast-generate-preview',
+  fast: 'veo-3.1-fast-generate-001',
 };
 
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta';
+const LOCATION = 'us-central1';
 
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
+// ── OAuth2: service account → access token ────────────────────────────────────
+async function getAccessToken(saJson) {
+  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  const now = Math.floor(Date.now() / 1000);
+
+  const claim = {
+    iss:   sa.client_email,
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
+    aud:   'https://oauth2.googleapis.com/token',
+    exp:   now + 3600,
+    iat:   now,
+  };
+
+  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  const unsigned = `${header}.${payload}`;
+
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, 'base64url');
+  const jwt = `${unsigned}.${sig}`;
+
+  const body = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${jwt}`;
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'oauth2.googleapis.com',
+      path:     '/token',
+      method:   'POST',
+      headers: {
+        'Content-Type':   'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          if (data.access_token) resolve(data.access_token);
+          else reject(new Error('Token exchange failed: ' + JSON.stringify(data)));
+        } catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// ── Generic HTTPS helper ──────────────────────────────────────────────────────
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -39,7 +91,7 @@ function httpsRequest(options, body) {
       res.on('end', () => {
         try {
           resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks).toString()) });
-        } catch (e) {
+        } catch(e) {
           resolve({ status: res.statusCode, data: null });
         }
       });
@@ -50,7 +102,7 @@ function httpsRequest(options, body) {
   });
 }
 
-// ── Validate JWT and return user (including app_metadata) ─────────────────────
+// ── Supabase helpers ──────────────────────────────────────────────────────────
 async function getAuthUser(jwt) {
   const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/user`);
   const result = await httpsRequest({
@@ -66,9 +118,8 @@ async function getAuthUser(jwt) {
   return result.data;
 }
 
-// ── Read full user from admin API (includes app_metadata) ─────────────────────
 async function getAdminUser(userId) {
-  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const url    = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const result = await httpsRequest({
     hostname: url.hostname,
@@ -79,11 +130,9 @@ async function getAdminUser(userId) {
       'apikey':        svcKey,
     },
   });
-  if (result.status !== 200) return null;
-  return result.data;
+  return result.status === 200 ? result.data : null;
 }
 
-// ── Update user app_metadata (merge-patch) ────────────────────────────────────
 async function updateUserMeta(userId, meta) {
   const url    = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -102,41 +151,40 @@ async function updateUserMeta(userId, meta) {
   return result.status === 200;
 }
 
-// ── Start Gemini Veo generation (returns operation name) ─────────────────────
-async function startGeminiGeneration(prompt, durationSecs, modelId, startImageB64, startImageMime) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  const path   = `/v1beta/models/${modelId}:predictLongRunning`;
+// ── Start Vertex AI Veo generation ────────────────────────────────────────────
+async function startVertexGeneration(prompt, durationSecs, modelId, startImageB64, startImageMime, accessToken) {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const gcsBucket = process.env.GOOGLE_CLOUD_STORAGE_BUCKET; // e.g. gs://my-veo-outputs
+  const path      = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${modelId}:predictLongRunning`;
 
-  // Build the instance — include starting frame if provided
   const instance = { prompt };
   if (startImageB64 && startImageMime) {
-    instance.image = {
-      bytesBase64Encoded: startImageB64,
-      mimeType:           startImageMime,
-    };
-    console.log('generate-veo-clip: using starting frame image (' + startImageMime + ', ' + Math.round(startImageB64.length * 0.75 / 1024) + 'KB)');
+    instance.image = { bytesBase64Encoded: startImageB64, mimeType: startImageMime };
+    console.log('generate-veo-clip: using starting frame (' + startImageMime + ', ~' + Math.round(startImageB64.length * 0.75 / 1024) + 'KB)');
   } else {
-    console.log('generate-veo-clip: no starting frame — text-only generation');
+    console.log('generate-veo-clip: text-only generation');
   }
 
   const body = JSON.stringify({
-    instances: [instance],
+    instances:  [instance],
     parameters: {
       aspectRatio:     '9:16',
       durationSeconds: durationSecs,
+      storageUri:      gcsBucket,   // GCS bucket for output videos
+      generateAudio:   true,        // include synchronized audio in output
     },
   });
-  const result = await httpsRequest({
-    hostname: 'generativelanguage.googleapis.com',
-    path:     path,
-    method:   'POST',
+
+  return httpsRequest({
+    hostname: `${LOCATION}-aiplatform.googleapis.com`,
+    path,
+    method: 'POST',
     headers: {
       'Content-Type':   'application/json',
       'Content-Length': Buffer.byteLength(body),
-      'x-goog-api-key': apiKey,
+      'Authorization':  `Bearer ${accessToken}`,
     },
   }, body);
-  return result;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -147,123 +195,104 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 200, headers: CORS, body: '' };
-  }
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  // ── Env check ──────────────────────────────────────────────────────────────
-  const _missingVars = ['GEMINI_API_KEY','SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ANON']
-    .filter(k => !process.env[k]);
-  if (_missingVars.length) {
-    console.error('generate-veo-clip: missing env vars:', _missingVars.join(', '));
+  // ── Env check ─────────────────────────────────────────────────────────────
+  const required = ['GOOGLE_SERVICE_ACCOUNT_JSON','GOOGLE_CLOUD_PROJECT_ID','GOOGLE_CLOUD_STORAGE_BUCKET',
+                    'SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY','SUPABASE_ANON'];
+  const missing  = required.filter(k => !process.env[k]);
+  if (missing.length) {
+    console.error('generate-veo-clip: missing env vars:', missing.join(', '));
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error.' }) };
   }
-  console.log('generate-veo-clip: env check passed');
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
+  // ── Auth ──────────────────────────────────────────────────────────────────
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
-  if (!jwt) {
-    console.error('generate-veo-clip: no JWT in request');
-    return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
-  }
-  console.log('generate-veo-clip: JWT present, validating with Supabase...');
+  if (!jwt) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
 
   const anonUser = await getAuthUser(jwt);
-  console.log('generate-veo-clip: getAuthUser result:', anonUser ? `uid=${anonUser.id}` : 'NULL (auth failed)');
-  if (!anonUser) {
-    return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session. Please log in again.' }) };
-  }
-
+  if (!anonUser) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session. Please log in again.' }) };
   const userId = anonUser.id;
 
-  // ── Parse request body ─────────────────────────────────────────────────────
+  // ── Parse body ────────────────────────────────────────────────────────────
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
   const { prompt, durationSecs, model = 'lite', startImageB64 = null, startImageMime = null } = body;
-  console.log('generate-veo-clip: body parsed — prompt length:', (prompt||'').length, 'dur:', durationSecs, 'model:', model);
-  if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
-    console.error('generate-veo-clip: prompt missing or empty');
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
-  }
-  const dur = (durationSecs === 8) ? 8 : 6;
-  const modelKey = (model === 'fast') ? 'fast' : 'lite';
-  const cost = CREDIT_COSTS[modelKey];
-  const modelId = MODEL_IDS[modelKey];
+  if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
-  // ── Credit check ───────────────────────────────────────────────────────────
-  console.log('generate-veo-clip: fetching admin user for credit check...');
+  const dur      = (durationSecs === 8) ? 8 : 6;
+  const modelKey = (model === 'fast') ? 'fast' : 'lite';
+  const cost     = CREDIT_COSTS[modelKey];
+  const modelId  = MODEL_IDS[modelKey];
+
+  console.log(`generate-veo-clip: model=${modelKey} (${modelId}), dur=${dur}s, cost=${cost} credits`);
+
+  // ── Credit check ──────────────────────────────────────────────────────────
   const adminUser = await getAdminUser(userId);
-  console.log('generate-veo-clip: adminUser result:', adminUser ? 'OK' : 'NULL');
-  if (!adminUser) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
-  }
+  if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
 
   const currentBalance = adminUser.app_metadata?.credits_balance ?? 0;
-  console.log('generate-veo-clip: balance:', currentBalance, 'cost:', cost, 'model:', modelKey);
   if (currentBalance < cost) {
     return {
-      statusCode: 402,
-      headers: CORS,
-      body: JSON.stringify({
-        error:          'insufficient_credits',
-        message:        `This clip costs ${cost} credits. You have ${currentBalance}.`,
-        balance:        currentBalance,
-        cost,
-      }),
+      statusCode: 402, headers: CORS,
+      body: JSON.stringify({ error: 'insufficient_credits', message: `This clip costs ${cost} credits. You have ${currentBalance}.`, balance: currentBalance, cost }),
     };
   }
 
-  // ── Deduct credits upfront ─────────────────────────────────────────────────
+  // ── Deduct credits upfront ────────────────────────────────────────────────
   const newBalance = currentBalance - cost;
-  console.log('generate-veo-clip: deducting credits, new balance will be:', newBalance);
-  const deducted = await updateUserMeta(userId, { credits_balance: newBalance });
-  console.log('generate-veo-clip: deduct result:', deducted);
-  if (!deducted) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
+  const deducted   = await updateUserMeta(userId, { credits_balance: newBalance });
+  if (!deducted) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
+
+  // ── Get Vertex AI access token ────────────────────────────────────────────
+  let accessToken;
+  try {
+    accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+    console.log('generate-veo-clip: access token obtained');
+  } catch(e) {
+    await updateUserMeta(userId, { credits_balance: currentBalance });
+    console.error('generate-veo-clip: getAccessToken failed:', e.message);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with generation service. Credits refunded.' }) };
   }
 
-  // ── Start Gemini generation ────────────────────────────────────────────────
-  let geminiResult;
+  // ── Start Vertex AI generation ────────────────────────────────────────────
+  let vtxResult;
   try {
-    geminiResult = await startGeminiGeneration(prompt.trim(), dur, modelId, startImageB64, startImageMime);
-  } catch (e) {
-    // Refund credits on network error
+    vtxResult = await startVertexGeneration(prompt.trim(), dur, modelId, startImageB64, startImageMime, accessToken);
+  } catch(e) {
     await updateUserMeta(userId, { credits_balance: currentBalance });
-    console.error('generate-veo-clip: Gemini start failed', e.message);
+    console.error('generate-veo-clip: Vertex AI start failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach generation service. Credits refunded.' }) };
   }
 
-  // Log full Gemini response for debugging
-  console.log('generate-veo-clip: Gemini HTTP status:', geminiResult.status);
-  console.log('generate-veo-clip: Gemini response body:', JSON.stringify(geminiResult.data));
+  console.log('generate-veo-clip: Vertex AI HTTP status:', vtxResult.status);
+  console.log('generate-veo-clip: Vertex AI response:', JSON.stringify(vtxResult.data));
 
-  if (!geminiResult.data?.name) {
-    // Refund credits — generation didn't start
+  if (!vtxResult.data?.name) {
     await updateUserMeta(userId, { credits_balance: currentBalance });
-
-    const errMsg = geminiResult.data?.error?.message || `Gemini API error (HTTP ${geminiResult.status})`;
-    if (geminiResult.status === 401 || geminiResult.status === 403) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Generation API key not authorized. Contact support.' }) };
+    const errMsg = vtxResult.data?.error?.message || `Vertex AI error (HTTP ${vtxResult.status})`;
+    if (vtxResult.status === 401 || vtxResult.status === 403) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Service account not authorized. Check IAM permissions. Credits refunded.' }) };
     }
-    if (geminiResult.status === 429) {
-      return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Generation rate limit hit. Wait a moment and try again. Credits refunded.' }) };
+    if (vtxResult.status === 429) {
+      return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit hit. Wait a moment and try again. Credits refunded.' }) };
     }
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg + '. Credits refunded.' }) };
   }
 
-  console.log(`generate-veo-clip: user ${userId} started op ${geminiResult.data.name}, ${cost} credits deducted (balance: ${newBalance})`);
+  console.log(`generate-veo-clip: user ${userId} started op ${vtxResult.data.name}, ${cost} credits deducted (balance: ${newBalance})`);
 
   return {
     statusCode: 200,
     headers: { ...CORS, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      operationName:   geminiResult.data.name,
+      operationName:   vtxResult.data.name,
       creditsDeducted: cost,
       newBalance,
       model:           modelKey,

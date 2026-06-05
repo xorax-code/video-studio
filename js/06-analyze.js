@@ -23,9 +23,9 @@
       return 'person takes a sip or drinks — natural smooth motion, reacts with a satisfied expression looking back at camera';
     if (/(hold.*up|hold.*out|show|showing|look.*at|here.*is|this.*is|see.*this|reveal|check.*this|look.*at.*this)/.test(t))
       return 'person holds product up toward camera with a confident display — slight smile, direct eye contact';
-    if (/(mix|mixing|stir|stirring|blend|blending|shake|shaking|whisk|whisking)/.test(t))
+    if (/(mix|mixing|stir|stirring|blend|blending|shake|shaking|whisk|whisking)/.test(t) && /(bowl|container|cup|jar|bottle|glass|pan|spoon)/.test(t))
       return 'person mixes or stirs with a smooth consistent motion — watches the motion, then returns to camera eye contact';
-    if (/(scoop|scooping|measure|measuring|tablespoon|teaspoon|spoonful|serving)/.test(t))
+    if (/(scoop|scooping|measure|measuring)/.test(t) && /(spoon|cup|tablespoon|teaspoon|scoop|powder|supplement)/.test(t))
       return 'person scoops or measures with deliberate steady hands — precise careful motion';
     if (/(open|opening|unscrew|cap.*off|twist.*open|crack.*open|peel|peeling)/.test(t))
       return 'person opens the container with a natural motion — presents product to camera after opening';
@@ -2839,21 +2839,19 @@ ${veoPrompt}
             { type: 'text', text: `You are analyzing a VIDEO CLIP from ${fmt(clipStart)} to ${fmt(clipEnd)} (${fmt(clipDur)} long).
 
 The ${liveFrames.length} images below are sequential frames captured at: ${frameLabel}
-They are in TIME ORDER — the first image is the start of the clip, the last image is the end. Study how things CHANGE across the sequence.
+They are in TIME ORDER. Study what the PERSON is ACTUALLY DOING across the sequence.
 
-Describe ALL visible actions and visual events as a single flowing action description using "${pronoun}" as the subject. This goes into a Veo 3 prompt — every animatable detail matters.
+Your job: describe ONLY the person's actual physical body movements you can SEE in the frames. This will be used to direct a Veo 3 avatar recreating the same physical behavior.
 
-WHAT TO INCLUDE:
-1. PERSON ACTIONS — what ${pronoun} is doing with their hands/arms across the clip. Describe the motion arc (starts with → moves to → ends at).
-2. PROP & OBJECT INTERACTIONS — identify every object involved. What is it? What does ${pronoun} do with it? Be specific: "tilts a glass bottle and pours a clear liquid" not just "pours something".
-3. VISUAL CHANGES & EFFECTS — describe anything that CHANGES between the early frames and the later frames: dissolving, melting, flowing, color change, reaction, transformation. Example: "as the liquid makes contact with the yellow fat model, the fat begins dissolving and receding — by the final frame it has nearly disappeared." These motion effects are essential for Veo 3 to animate correctly.
-4. PHYSICAL MODELS / PROPS — if there is an anatomical model (stomach, gut, liver, organ), food prop, or any demonstration object, name it and describe what it looks like at the START and what it looks like at the END.
-
-RULES:
-- Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms (e.g. "held toward camera")
-- Do NOT describe the person's appearance, face, clothing, or background
-- Write as a continuous action description, not a bullet list
-- Return only the action description — no intro, no commentary` },
+STRICT RULES:
+1. ONLY describe movements the person is VISIBLY PERFORMING in the frames. Do NOT infer, predict, or narrate what they might do based on props or ingredients nearby.
+2. If the person is standing/sitting and TALKING without performing a distinct physical action — write that. Example: "${pronoun} stands at a counter speaking naturally to camera with subtle hand gestures."
+3. If the person IS actively handling an object (pouring, holding, demonstrating), describe that specific motion precisely.
+4. NEVER describe ingredients, foods, or objects doing things on their own (no "the mixture thickens", no "the oil blends in") unless you can see the person actually causing that effect with their hands in the frames.
+5. Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands".
+6. Do NOT describe the person's appearance, face, clothing, or background.
+7. Write one flowing sentence or two short sentences. No bullet lists.
+8. Return ONLY the action description — no intro, no commentary.` },
             ...imageContent
           ]}]
         })
