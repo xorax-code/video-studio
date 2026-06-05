@@ -62,9 +62,10 @@
     // Get JWT for auth
     var jwt = null;
     try {
-      if (window._sb) {
-        var sessionRes = await window._sb.auth.getSession();
-        jwt = sessionRes?.data?.session?.access_token || null;
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) {
+        var sessionRes = await _sbRef.auth.getSession();
+        jwt = (sessionRes && sessionRes.data && sessionRes.data.session && sessionRes.data.session.access_token) || null;
       }
     } catch(_) {}
     if (!jwt) { showToast('Please log in to generate NB composites.', 'warning'); return false; }
