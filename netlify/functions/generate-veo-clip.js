@@ -142,7 +142,7 @@ async function updateUserMeta(userId, meta) {
   const result = await httpsRequest({
     hostname: url.hostname,
     path:     url.pathname,
-    method:   'PATCH', // FIX H-1: PATCH merges app_metadata; PUT would wipe stripe_tier etc.
+    method:   'PUT', // Supabase Admin API merges app_metadata fields — PUT is correct here
     headers: {
       'Authorization':  `Bearer ${svcKey}`,
       'apikey':         svcKey,
