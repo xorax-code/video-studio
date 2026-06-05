@@ -84,7 +84,7 @@
       window._assemblerClips = window._assemblerClips.filter(function(c) { return c.segIdx !== segIdx; });
     } else {
       var dur = 6;
-      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = po.duration || 6; } catch(e) {}
+      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
       window._assemblerClips.push({
         segIdx: segIdx,
         start:  0,
@@ -122,7 +122,7 @@
     segs.forEach(function(seg, idx) {
       if (!seg.apiVideoUrl && !seg.apiVideoRaw) return;
       var dur = 6;
-      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = po.duration || 6; } catch(e) {}
+      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
       window._assemblerClips.push({
         segIdx: idx, start: 0, end: dur, dur: dur,
         blobUrl: seg.apiVideoUrl || seg.apiVideoRaw || '',
