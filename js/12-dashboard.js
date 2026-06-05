@@ -1119,8 +1119,8 @@
     try {
       const res  = await fetch('/.netlify/functions/create-checkout-session', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priceId, userId: session.user.id, email: session.user.email }),
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ priceId }),
       });
       if (!res.ok) throw new Error(`Server error ${res.status}`);
       const data = await res.json();

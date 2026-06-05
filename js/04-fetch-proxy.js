@@ -493,33 +493,45 @@ RULES:
   // ── OpenAI Proxy Interceptor ──
   // In production, transparently reroutes all OpenAI API calls through
   // Netlify serverless functions so the API key never reaches the browser.
+  // Injects Supabase JWT so the server-side auth guard passes.
   (function() {
     if (window.location.protocol === 'file:') return; // local — bypass
     const _realFetch = window.fetch.bind(window);
+
+    // Helper: get current Supabase access token (async)
+    async function _getJwt() {
+      try {
+        if (typeof _sb !== 'undefined' && _sb) {
+          var s = await _sb.auth.getSession();
+          return (s && s.data && s.data.session && s.data.session.access_token) || null;
+        }
+      } catch(e) {}
+      return null;
+    }
+
     window.fetch = function(url, opts) {
       if (typeof url === 'string') {
-        // Chat completions → /.netlify/functions/openai-chat
-        if (url.includes('api.openai.com/v1/chat/completions')) {
-          const safeOpts = Object.assign({}, opts);
-          // Strip client-side Authorization header — proxy uses server-side key
-          if (safeOpts.headers) {
-            const h = Object.assign({}, safeOpts.headers);
-            delete h['Authorization'];
-            delete h['authorization'];
+        var isChat       = url.includes('api.openai.com/v1/chat/completions')   || url.includes('/.netlify/functions/openai-chat');
+        var isTranscribe = url.includes('api.openai.com/v1/audio/transcriptions') || url.includes('/.netlify/functions/openai-transcribe');
+
+        if (isChat || isTranscribe) {
+          var target = isChat ? '/.netlify/functions/openai-chat' : '/.netlify/functions/openai-transcribe';
+          // Return a Promise — async so we can await the JWT
+          return _getJwt().then(function(token) {
+            var safeOpts = Object.assign({}, opts);
+            var h = Object.assign({}, safeOpts.headers || {});
+            // Replace any client-side OpenAI key with the Supabase JWT
+            delete h['X-Api-Key']; delete h['x-api-key'];
+            // Only the openai.com path may have had a real Authorization header — strip it
+            // but inject ours (the server uses OPENAI_API_KEY from env)
+            if (token) {
+              h['Authorization'] = 'Bearer ' + token;
+            } else {
+              delete h['Authorization']; delete h['authorization'];
+            }
             safeOpts.headers = h;
-          }
-          return _realFetch('/.netlify/functions/openai-chat', safeOpts);
-        }
-        // Audio transcriptions → /.netlify/functions/openai-transcribe
-        if (url.includes('api.openai.com/v1/audio/transcriptions')) {
-          const safeOpts = Object.assign({}, opts);
-          if (safeOpts.headers) {
-            const h = Object.assign({}, safeOpts.headers);
-            delete h['Authorization'];
-            delete h['authorization'];
-            safeOpts.headers = h;
-          }
-          return _realFetch('/.netlify/functions/openai-transcribe', safeOpts);
+            return _realFetch(target, safeOpts);
+          });
         }
       }
       return _realFetch(url, opts);
@@ -578,9 +590,19 @@ RULES:
       timestamp_granularities: ['word', 'segment'],
     });
 
+    // Inject Supabase JWT so the server-side auth guard passes
+    var _transcribeHeaders = { 'Content-Type': 'application/json' };
+    try {
+      if (typeof _sb !== 'undefined' && _sb) {
+        var _sess = await _sb.auth.getSession();
+        var _tok = _sess && _sess.data && _sess.data.session && _sess.data.session.access_token;
+        if (_tok) _transcribeHeaders['Authorization'] = 'Bearer ' + _tok;
+      }
+    } catch(e) {}
+
     const raw = await fetch('/.netlify/functions/openai-transcribe', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: _transcribeHeaders,
       body: payload,
     });
 
