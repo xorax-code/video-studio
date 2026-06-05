@@ -212,6 +212,7 @@
       await new Promise(function(r) { setTimeout(r, wait); });
       delay = Math.min(delay * 2, 30000);
     }
+    return res;
   }
 
 

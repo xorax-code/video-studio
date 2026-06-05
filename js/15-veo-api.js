@@ -461,10 +461,11 @@
       } catch(e) {
         console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
         _updateVeoAPIScene(sceneNum, total, 'error');
+        showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown error'), 'error', 7000);
         failed++;
 
         // Insufficient credits — abort the whole run, modal already shown
-        if (e.message && e.message.toLowerCase().includes('credit')) break;
+        if (e.message && e.message.toLowerCase().includes('insufficient_credits') || (e.message && e.message.toLowerCase().includes('credit'))) break;
       }
 
       _updateVeoAPIProgress(_i + 1, total, succeeded, failed);
