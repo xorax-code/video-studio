@@ -70,3 +70,7 @@
 [functions.create-topup-session]
   node_version = "18"
   timeout = 26
+
+[functions.generate-nb-composite]
+  node_version = "18"
+  timeout = 26
