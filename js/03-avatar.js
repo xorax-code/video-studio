@@ -6,6 +6,13 @@
   let studioLibrary = [];
   let studioMode = 'replicator'; // 'replicator' | 'producer'
   let avatarImageDataUrl = null;
+  // Expose as window.avatarImageDataUrl so other script tags (e.g. 17-nb-api.js) can read it.
+  // top-level `let` is script-scoped and NOT a window property in Chrome.
+  Object.defineProperty(window, 'avatarImageDataUrl', {
+    get: function() { return avatarImageDataUrl; },
+    set: function(v) { avatarImageDataUrl = v; },
+    configurable: true,
+  });
   let avatarInventory = ''; // auto-extracted appearance catalogue for verifying generations
   let productImageDataUrl = null;  // product reference photo for consistent image gen
   let bgImageDataUrl = null;

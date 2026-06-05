@@ -203,8 +203,9 @@
   async function _fetchWithRetry(url, opts, maxRetries) {
     maxRetries = (maxRetries == null) ? 5 : maxRetries;
     let delay = 3000;
+    let res;
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      const res = await fetch(url, opts);
+      res = await fetch(url, opts);
       if (res.status !== 429 || attempt === maxRetries) return res;
       const retryAfter = parseInt(res.headers.get('Retry-After') || '0', 10) * 1000;
       const wait = Math.max(retryAfter || 0, delay);

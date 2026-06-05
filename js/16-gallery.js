@@ -330,16 +330,36 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Loading FFmpeg…'; }
     setProgress(5, 'Loading FFmpeg…');
 
-    // Load FFmpeg.wasm from CDN
-    if (!window.FFmpeg) {
-      var script = document.createElement('script');
-      script.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js';
-      script.onload = function() { _runFFmpeg(clips, setProgress, resetBtn); };
-      script.onerror = function() {
+    // Load FFmpeg.wasm from CDN.
+    // Requires both @ffmpeg/ffmpeg (exposes window.FFmpeg) AND @ffmpeg/util
+    // (exposes window.FFmpegUtil with toBlobURL). Load them sequentially so
+    // _runFFmpeg is only called once both are available.
+    if (!window.FFmpeg || !window.FFmpegUtil) {
+      var ffmpegLoaded = !!window.FFmpeg;
+      var utilLoaded   = !!window.FFmpegUtil;
+
+      function _onBothLoaded() {
+        if (window.FFmpeg && window.FFmpegUtil) _runFFmpeg(clips, setProgress, resetBtn);
+      }
+      function _onScriptError() {
         resetBtn();
         if (typeof showToast === 'function') showToast('FFmpeg failed to load — check your internet connection.', 'error');
-      };
-      document.head.appendChild(script);
+      }
+
+      if (!ffmpegLoaded) {
+        var s1 = document.createElement('script');
+        s1.src = 'https://unpkg.com/@ffmpeg/ffmpeg@0.12.6/dist/umd/ffmpeg.js';
+        s1.onload = _onBothLoaded;
+        s1.onerror = _onScriptError;
+        document.head.appendChild(s1);
+      }
+      if (!utilLoaded) {
+        var s2 = document.createElement('script');
+        s2.src = 'https://unpkg.com/@ffmpeg/util@0.12.1/dist/umd/index.js';
+        s2.onload = _onBothLoaded;
+        s2.onerror = _onScriptError;
+        document.head.appendChild(s2);
+      }
     } else {
       _runFFmpeg(clips, setProgress, resetBtn);
     }
@@ -393,7 +413,10 @@
 
       setProgress(95, 'Downloading…');
       var data = await ff.readFile('output.mp4');
-      var blob = new Blob([data.buffer], { type: 'video/mp4' });
+      // Pass the Uint8Array directly — using data.buffer would include the entire
+      // backing ArrayBuffer even if data is a view with a non-zero byteOffset,
+      // which produces a corrupt or oversized blob.
+      var blob = new Blob([data], { type: 'video/mp4' });
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement('a');
       a.href = url; a.download = 'assembled-video.mp4'; a.click();
@@ -410,7 +433,7 @@
     }
   }
 
-  // ── Hook into renderSegments so gallery auto-refreshes ────────────────────
+  // -- Hook into renderSegments so gallery auto-refreshes
   var _origRenderSegments = window.renderSegments;
   window.renderSegments = function() {
     if (typeof _origRenderSegments === 'function') _origRenderSegments.apply(this, arguments);

@@ -214,7 +214,7 @@
       card.id = 'nb-approval-card-' + idx;
       card.style.cssText = 'border:2px solid ' + (approved ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.5)')
         + ';border-radius:8px;overflow:hidden;background:var(--surface-2);cursor:pointer;';
-      card.innerHTML = '<img src="' + escHtml(seg.nbPreviewDataUrl) + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
+      card.innerHTML = '<img src="' + seg.nbPreviewDataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
         + '<div style="padding:8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">'
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
           + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'

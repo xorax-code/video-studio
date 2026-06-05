@@ -258,7 +258,9 @@ exports.handler = async (event) => {
     accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
     console.log('generate-veo-clip: access token obtained');
   } catch(e) {
-    await updateUserMeta(userId, { credits_balance: currentBalance });
+    // FIX: log if the refund itself fails so ops can remediate
+    const refunded1 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    if (!refunded1) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after token error; balance may be wrong`);
     console.error('generate-veo-clip: getAccessToken failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with generation service. Credits refunded.' }) };
   }
@@ -268,7 +270,8 @@ exports.handler = async (event) => {
   try {
     vtxResult = await startVertexGeneration(prompt.trim(), dur, modelId, startImageB64, startImageMime, accessToken);
   } catch(e) {
-    await updateUserMeta(userId, { credits_balance: currentBalance });
+    const refunded2 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    if (!refunded2) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex start error; balance may be wrong`);
     console.error('generate-veo-clip: Vertex AI start failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach generation service. Credits refunded.' }) };
   }
@@ -277,7 +280,8 @@ exports.handler = async (event) => {
   console.log('generate-veo-clip: Vertex AI response:', JSON.stringify(vtxResult.data));
 
   if (!vtxResult.data?.name) {
-    await updateUserMeta(userId, { credits_balance: currentBalance });
+    const refunded3 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    if (!refunded3) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex response error; balance may be wrong`);
     const errMsg = vtxResult.data?.error?.message || `Vertex AI error (HTTP ${vtxResult.status})`;
     if (vtxResult.status === 401 || vtxResult.status === 403) {
       return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Service account not authorized. Check IAM permissions. Credits refunded.' }) };

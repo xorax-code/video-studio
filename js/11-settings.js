@@ -186,7 +186,10 @@
     if (!gateInput) return;
     const entered = (gateInput.value || '').trim();
     let hash;
-    try { hash = await hashPassword(entered); }
+    try {
+      const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(entered));
+      hash = Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
     catch(e) { console.error('hashPassword failed:', e); return; }
     if (hash === ADMIN_PASSWORD_HASH) {
       const gateScreen = document.getElementById('adminGateScreen');

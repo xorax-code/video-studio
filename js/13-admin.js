@@ -118,7 +118,7 @@
           ${a.url   ? `<div style="font-size:10px;color:var(--accent-2);">${escHtml(a.url)}</div>` : ''}
           ${a.notes ? `<div style="font-size:10px;color:var(--text-3);">${escHtml(a.notes)}</div>` : ''}
         </div>
-        <button class="adm-acc-del" onclick="deleteAdmAccount(${(JSON.stringify(a.id || a.handle)||'').replace(/</g,'<').replace(/>/g,'>')})" title="Remove">✕</button>
+        <button class="adm-acc-del" onclick="deleteAdmAccount(${escHtml(JSON.stringify(a.id || a.handle))})" title="Remove">✕</button>
       </div>`).join('');
   }
 

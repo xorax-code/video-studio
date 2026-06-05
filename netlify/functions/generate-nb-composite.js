@@ -150,7 +150,10 @@ Output a single photorealistic image. No text, no watermarks, no collages.`;
   if (result.status !== 200 || result.data.error) {
     const errMsg = result.data?.error?.message || `Gemini API error (HTTP ${result.status})`;
     console.error('generate-nb-composite: Gemini error:', errMsg);
-    return { statusCode: result.status || 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
+    // FIX: Normalize upstream error codes to 502 — avoids leaking Gemini's 401/403 to the
+    // frontend where they would be misinterpreted as the user's session being expired.
+    const clientStatus = (result.status === 429) ? 429 : 502;
+    return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
   // ── Extract image from response ────────────────────────────────────────────

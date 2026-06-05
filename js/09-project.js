@@ -590,8 +590,8 @@
   function fmtDailyDate(d) {
     const dt = new Date(d + 'T12:00:00');
     const today = new Date().toISOString().slice(0,10);
-    const _tmrw = new Date(); _tmrw.setDate(_tmrw.getDate()+1);
-    const tomorrow = _tmrw.toLocaleDateString('en-CA');
+    const _tmrw = new Date(Date.now() + 86400000);
+    const tomorrow = _tmrw.toISOString().slice(0, 10);
     const names = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
     const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const label = d===today ? 'Today' : d===tomorrow ? 'Tomorrow' : names[dt.getDay()];

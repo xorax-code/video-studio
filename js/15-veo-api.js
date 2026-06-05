@@ -330,7 +330,12 @@
       var pollData;
       try { pollData = await pollRes.json(); } catch(e) { continue; }
 
-      if (!pollRes.ok) throw new Error(pollData.error || ('Poll error ' + pollRes.status));
+      if (!pollRes.ok) {
+        // Transient server error on the poll endpoint — log and retry rather than aborting
+        // (the generation operation is still running server-side)
+        console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
+        continue;
+      }
       if (pollData.error && !pollData.done) {
         console.warn('[VeoAPI] poll warning:', pollData.error);
         continue;
@@ -465,7 +470,7 @@
         failed++;
 
         // Insufficient credits — abort the whole run, modal already shown
-        if (e.message && e.message.toLowerCase().includes('insufficient_credits') || (e.message && e.message.toLowerCase().includes('credit'))) break;
+        if (e.message && (e.message.toLowerCase().includes('insufficient_credits') || e.message.toLowerCase().includes('credit'))) break;
       }
 
       _updateVeoAPIProgress(_i + 1, total, succeeded, failed);

@@ -68,7 +68,8 @@ async function getAuthUser(jwt) {
       method:   'GET',
       headers: {
         'Authorization': `Bearer ${jwt}`,
-        'apikey':        process.env.SUPABASE_ANON || '',
+        // FIX: header comment documents SUPABASE_ANON_KEY; fall back to SUPABASE_ANON for compat
+        'apikey':        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || '',
       },
     }, (res) => {
       const chunks = [];
@@ -168,7 +169,7 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Checkout error. Please try again.' }) };
   }
 
-  console.log(`create-topup-session: user ${user.id} → ${packId} (${pack.credits} credits), session ${session.id}`);
+  console.log(`create-topup-session: user ${user.id} => ${packId} (${pack.credits} credits), session ${session.id}`);
 
   return {
     statusCode: 200,
