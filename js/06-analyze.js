@@ -3597,6 +3597,8 @@ TECHNICAL SPECS:
       showProduct: s.showProduct || false,
       _shotlessData: s._shotlessData || null,
       veoExtras: s.veoExtras && s.veoExtras.length ? s.veoExtras.map(function(e){ return { speech: e.speech || '', action: e.action || '', veoPrompt: e.veoPrompt || '' }; }) : [],
+      apiVideoUrl:  s.apiVideoUrl  || null,
+      apiVideoMime: s.apiVideoMime || null,
     }));
     p.bgImageDataUrl = (typeof bgImageDataUrl !== 'undefined' ? bgImageDataUrl : null) || null;
     p.bgFromAvatar   = (typeof bgFromAvatar !== 'undefined' ? bgFromAvatar : false) || false;
@@ -3622,6 +3624,32 @@ TECHNICAL SPECS:
     const _osel = document.getElementById('originalScript');
     if (_osel) _osel.value = p.originalScript || '';
     renderSegments();
+
+    // Re-fetch blob URLs for any segments whose apiVideoUrl survived the save.
+    // Blob URLs (blob:http://…) die on page unload, so we store the raw Google
+    // URI and rebuild the local blob URL after load. Runs async after a short
+    // delay so 15-veo-api.js (which exposes window._fetchVideoAsBlob) has loaded.
+    var _segsWithVideo = segments.filter(function(s) { return s.apiVideoUrl; });
+    if (_segsWithVideo.length) {
+      setTimeout(async function() {
+        var _fetchBlob = window._fetchVideoAsBlob;
+        if (typeof _fetchBlob !== 'function') return;
+        var changed = false;
+        for (var _vi = 0; _vi < _segsWithVideo.length; _vi++) {
+          var _vs = _segsWithVideo[_vi];
+          if (!_vs.apiVideoUrl) continue;
+          try {
+            var _blob = await _fetchBlob(_vs.apiVideoUrl);
+            if (_blob) { _vs.apiVideoRaw = _blob; changed = true; }
+          } catch(_) {}
+        }
+        if (changed) {
+          if (typeof renderSegments  === 'function') renderSegments();
+          if (typeof renderGallery   === 'function') renderGallery();
+          if (typeof renderAssembler === 'function') renderAssembler();
+        }
+      }, 800);
+    }
   }
 
   function renderProjectBar() {

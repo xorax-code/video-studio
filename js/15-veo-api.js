@@ -365,6 +365,7 @@
       return URL.createObjectURL(blob);
     } catch(e) { return null; }
   }
+  window._fetchVideoAsBlob = _fetchVideoAsBlob;
 
   // ── VEO API progress modal ────────────────────────────────────────────────
   function _openVeoAPIModal(total) {
@@ -518,5 +519,47 @@
     if (typeof renderSegments === 'function') renderSegments();
   }
   window.clearSegmentApiVideo = clearSegmentApiVideo;
+
+  // ── Regenerate a single scene via API ─────────────────────────────────────
+  // Called from the ↺ Regen button on each segment card's generated video section.
+  async function regenSingleScene(segIdx) {
+    var seg = (window.segments || [])[segIdx];
+    if (!seg) { showToast('Segment not found.', 'error'); return; }
+    if (!seg.veoPrompt || !seg.veoPrompt.trim()) {
+      showToast('Generate the Veo 3 prompt for this scene first.', 'warning'); return;
+    }
+
+    var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
+    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
+    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+
+    var durSecs = 6;
+    try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+
+    // Show loading state on the regen button
+    var btn = document.getElementById('regenSceneBtn-' + segIdx);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+    try {
+      var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
+      var result   = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, startImg);
+
+      seg.apiVideoUrl  = result.videoUrl;
+      seg.apiVideoMime = result.mimeType || 'video/mp4';
+      var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
+      if (blobUrl) seg.apiVideoRaw = blobUrl;
+
+      if (typeof saveSegments    === 'function') saveSegments();
+      if (typeof renderSegments  === 'function') renderSegments();
+      if (typeof renderGallery   === 'function') renderGallery();
+      if (typeof renderAssembler === 'function') renderAssembler();
+      if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      showToast('Scene ' + (segIdx + 1) + ' regenerated!', 'success', 4000);
+    } catch(e) {
+      showToast('Regen failed (Scene ' + (segIdx + 1) + '): ' + e.message, 'error', 8000);
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Regen'; }
+    }
+  }
+  window.regenSingleScene = regenSingleScene;
 
   // ── Apply mode UI on page load (restores pi

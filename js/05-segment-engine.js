@@ -2368,6 +2368,7 @@
             </div>
             `).join('')}
           </div>` : ''}
+          ${seg.veoPrompt && !seg.apiVideoUrl ? `<button id="regenSceneBtn-${i}" onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to generate via API.','info',4000);}" title="Generate this clip via API" style="width:100%;padding:6px 0;font-size:10px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:6px;color:#38bdf8;cursor:pointer;font-family:inherit;margin-top:5px;margin-bottom:3px;transition:all 0.15s;">⚡ Generate This Clip</button>` : ''}
           <button onclick="addVeoExtra(${i})" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:${(seg.veoExtras && seg.veoExtras.length > 0) ? '0' : '4px'};">＋ Add Continuation Clip</button>
         </div>
 
@@ -2376,9 +2377,12 @@
         <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#34d399;">⚡ Generated Video</span>
-            <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:1px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:3px;color:var(--danger);cursor:pointer;font-family:inherit;">✕ Remove</button>
+            <div style="display:flex;gap:5px;align-items:center;">
+              <button id="regenSceneBtn-${i}" onclick="if(getGenerateMode&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate this clip via API" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">↺ Regen</button>
+              <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+            </div>
           </div>
-          <video controls playsinline style="width:100%;border-radius:6px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoUrl}"></video>
+          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoUrl}"></video>
           <a href="${seg.apiVideoUrl}" download="scene-${i+1}.mp4" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;text-decoration:none;">⬇ Download Scene ${i+1}</a>
         </div>` : ''}
 
