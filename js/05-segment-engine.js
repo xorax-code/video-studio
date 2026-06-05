@@ -492,10 +492,11 @@
     _tcv.width = 40; _tcv.height = 23;
     const _tcvCtx = _tcv.getContext('2d');
     if (!_tcvCtx) {
-      // canvas context unavailable — re-enable button and exit cleanly
+      // FIX H-5: reset running flag before returning or button is stuck forever
+      _autoSegRunning = false;
       if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-scissors"></i> Detect Cuts'; }
       return;
-    } // canvas context unavailable — skip diff pass entirely
+    }
     const seekAndVariance = async (t) => {
       await new Promise(res => {
         if (Math.abs(videoEl.currentTime - t) < 0.04) { res(); return; }

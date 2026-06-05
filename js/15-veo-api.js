@@ -340,6 +340,10 @@
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
         continue;
       }
+      // FIX M-8: terminal error (404/403 op not found) returns done:true with error — throw the real message
+      if (pollData.done && pollData.error) {
+        throw new Error(pollData.error);
+      }
       if (pollData.error && !pollData.done) {
         console.warn('[VeoAPI] poll warning:', pollData.error);
         continue;

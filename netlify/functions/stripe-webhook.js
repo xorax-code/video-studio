@@ -284,13 +284,16 @@ exports.handler = async (event) => {
         break;
       }
 
-      // Cancellation
+      // Cancellation — FIX M-12: reset credits to free tier so cancelled users don't keep paid balance
       case 'customer.subscription.deleted': {
         const customerId = stripeEvent.data.object.customer;
         const userId     = await findUserByCustomerId(customerId);
         if (userId) {
-          await updateUserMeta(userId, { stripe_tier: 'free' });
-          console.log('User ' + userId + ' downgraded to free (subscription cancelled)');
+          await updateUserMeta(userId, {
+            stripe_tier: 'free',
+            credits_balance: PLAN_MONTHLY_CREDITS.free,
+          });
+          console.log('User ' + userId + ' downgraded to free + credits reset to ' + PLAN_MONTHLY_CREDITS.free);
         }
         break;
       }

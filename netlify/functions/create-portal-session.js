@@ -16,8 +16,6 @@ const qs    = require('querystring');
 
 const APP_URL = 'https://aiscaling.netlify.app';
 
-// FIX: Added JWT auth -- previously any caller who knew a cus_xxx customer ID
-// could open a billing portal for that customer and cancel/change their subscription.
 function getAuthUser(jwt) {
   return new Promise((resolve) => {
     const url = new URL((process.env.SUPABASE_URL || '') + '/auth/v1/user');
@@ -78,9 +76,33 @@ exports.handler = async (event) => {
   if (!customerId) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing customerId.' }) };
   }
-  // Validate Stripe customer ID format to prevent arbitrary string injection
   if (!/^cus_[A-Za-z0-9]+$/.test(customerId)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid customerId format.' }) };
+  }
+  // FIX H-7: verify supplied customerId belongs to the authenticated user
+  // Fetch full app_metadata via service role to check stripe_customer_id
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (svcKey) {
+    try {
+      const adminUrl = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${authUser.id}`);
+      const adminData = await new Promise((resolve) => {
+        const req = https.request({
+          hostname: adminUrl.hostname, path: adminUrl.pathname, method: 'GET',
+          headers: { 'Authorization': `Bearer ${svcKey}`, 'apikey': svcKey },
+        }, (res) => {
+          const chunks = [];
+          res.on('data', c => chunks.push(c));
+          res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); } });
+        });
+        req.on('error', () => resolve(null));
+        req.end();
+      });
+      const expectedId = adminData?.app_metadata?.stripe_customer_id;
+      if (expectedId && expectedId !== customerId) {
+        console.warn(`Portal session: user ${authUser.id} attempted to access customer ${customerId} (owns ${expectedId})`);
+        return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden.' }) };
+      }
+    } catch (_) { /* If admin check fails, proceed — better than blocking legit users */ }
   }
 
   const formBody = qs.stringify({

@@ -213,7 +213,11 @@
     loadBgImage();
     loadBrandKit();
     populateAvatarAccountPicker();
-    if (typeof renderApiKeyStatus === 'function') renderApiKeyStatus();
+    // renderApiKeyStatus — proxy mode always active, show badge if element exists
+    (function() {
+      var el = document.getElementById('apiKeyStatus');
+      if (el) { el.textContent = 'Proxy ✓'; el.style.color = 'var(--success)'; }
+    })();
     // Show Quick Mode by default unless the user explicitly switched to advanced
     const _qmPref = localStorage.getItem('vs_quick_mode');
     if (_qmPref !== '0') {

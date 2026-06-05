@@ -734,7 +734,7 @@
               + '<span style="font-size:8.5px;color:var(--text-3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">or use API</span>'
               + '<div style="flex:1;height:1px;background:var(--border);"></div>'
             + '</div>'
-            + '<button id="nbAPIPhase1Btn" onclick="generateNBMasterViaAPI()" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border-radius:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);color:#34d399;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'rgba(16,185,129,0.20)\'" onmouseleave="this.style.background=\'rgba(16,185,129,0.10)\'">'
+            + '<button id="nbAPIPhase1Btn" onclick="if(typeof generateNBMasterViaAPI===\'function\'){generateNBMasterViaAPI();}else{showToast(\'Auto NB generation coming soon — use manual upload for now.\',\'info\',5000);}" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border-radius:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);color:#34d399;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'rgba(16,185,129,0.20)\'" onmouseleave="this.style.background=\'rgba(16,185,129,0.10)\'">'
               + (sceneAnalyzed ? '&#x2705;' : '&#x26A1;') + ' Generate Master Reference via API &nbsp;<span style="font-size:9px;opacity:0.75;font-weight:500;">(Nano Banana 2 · no browser needed)</span>'
             + '</button>'
           + '</div>'
@@ -760,7 +760,7 @@
               + '<span style="font-size:8.5px;color:var(--text-3);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;">or use API</span>'
               + '<div style="flex:1;height:1px;background:var(--border);"></div>'
             + '</div>'
-            + '<button onclick="document.getElementById(\'sbProducerModal\').remove();generateAllNBFramesViaAPI();" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border-radius:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);color:#34d399;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'rgba(16,185,129,0.20)\'" onmouseleave="this.style.background=\'rgba(16,185,129,0.10)\'">'
+            + '<button onclick="document.getElementById(\'sbProducerModal\').remove();if(typeof generateAllNBFramesViaAPI===\'function\'){generateAllNBFramesViaAPI();}else if(typeof generateAllNbComposites===\'function\'){generateAllNbComposites();}else{showToast(\'Auto NB frame generation coming soon — use manual upload for now.\',\'info\',5000);}" style="display:flex;align-items:center;justify-content:center;gap:7px;padding:10px;border-radius:8px;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.35);color:#34d399;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" onmouseenter="this.style.background=\'rgba(16,185,129,0.20)\'" onmouseleave="this.style.background=\'rgba(16,185,129,0.10)\'">'
               + (compositesUploaded > 0 ? '&#x2705;' : '&#x26A1;') + ' Generate All Start Frames via API &nbsp;<span style="font-size:9px;opacity:0.75;font-weight:500;">(Nano Banana 2 · ' + n + ' frames)</span>'
             + '</button>'
           + '</div>'
@@ -789,7 +789,7 @@
             + '&#x26A1; Generate via Gemini API &nbsp;<span style="font-size:9px;opacity:0.8;font-weight:500;">($0.05/clip · audio included · no Flow needed)</span>'
           + '</button>'
           + '<div style="font-size:9px;color:var(--text-3);text-align:center;margin-top:5px;">'
-            + (getGeminiKey && getGeminiKey()
+            + (typeof getGeminiKey === 'function' && getGeminiKey()
                 ? '&#x2705; API key saved &mdash; ready to generate'
                 : '&#x26A0; No API key &mdash; <span style="color:var(--accent-2);cursor:pointer;" onclick="document.getElementById(\'sbProducerModal\').remove();openUserSettings(\'setup\')">Add in Settings &rarr;</span>')
           + '</div>'

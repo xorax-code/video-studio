@@ -337,9 +337,14 @@
     if (!window.FFmpeg || !window.FFmpegUtil) {
       var ffmpegLoaded = !!window.FFmpeg;
       var utilLoaded   = !!window.FFmpegUtil;
+      // FIX C-3: latch counter prevents _runFFmpeg being called twice on simultaneous loads
+      var _pendingLoads = (!ffmpegLoaded ? 1 : 0) + (!utilLoaded ? 1 : 0);
 
       function _onBothLoaded() {
-        if (window.FFmpeg && window.FFmpegUtil) _runFFmpeg(clips, setProgress, resetBtn);
+        _pendingLoads--;
+        if (_pendingLoads <= 0 && window.FFmpeg && window.FFmpegUtil) {
+          _runFFmpeg(clips, setProgress, resetBtn);
+        }
       }
       function _onScriptError() {
         resetBtn();
