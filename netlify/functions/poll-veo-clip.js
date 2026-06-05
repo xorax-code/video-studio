@@ -236,13 +236,38 @@ exports.handler = async (event) => {
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ done: false }) };
   }
-  const samples = pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.generatedSamples;
-  if (!samples || !samples.length) {
+  // Log the raw Vertex AI response so we can see the actual structure
+  console.log('poll-veo-clip: Vertex done response:', JSON.stringify(pd).slice(0, 800));
+
+  // Try all known response structures for Veo fetchPredictOperation
+  var samples =
+    (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.generatedSamples) ||
+    (pd.generateVideoResponse && pd.generateVideoResponse.generatedSamples) ||
+    (pd.response && pd.response.generatedSamples) ||
+    null;
+
+  // Also try 'videos' field variant
+  var videosList =
+    (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.videos) ||
+    (pd.generateVideoResponse && pd.generateVideoResponse.videos) ||
+    (pd.response && pd.response.videos) ||
+    null;
+
+  var allItems = (samples && samples.length) ? samples : (videosList && videosList.length ? videosList : null);
+
+  if (!allItems) {
+    var debugKeys = JSON.stringify({ pdKeys: Object.keys(pd), responseKeys: pd.response ? Object.keys(pd.response) : null, raw: JSON.stringify(pd).slice(0, 300) });
+    console.log('poll-veo-clip: no video found, structure:', debugKeys);
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: false, error: 'Generation finished but no video returned.' }) };
+      body: JSON.stringify({ done: false, error: 'Generation finished but no video returned.', debug: debugKeys }) };
   }
-  const gcsUri  = (samples[0] && samples[0].video && samples[0].video.gcsUri) || '';
-  const mimeType = (samples[0] && samples[0].video && samples[0].video.mimeType) || 'video/mp4';
+
+  var firstItem = allItems[0];
+  // Support both gcsUri and uri field names
+  const gcsUri = (firstItem && firstItem.video && (firstItem.video.gcsUri || firstItem.video.uri)) ||
+                 (firstItem && (firstItem.gcsUri || firstItem.uri)) || '';
+  const mimeType = (firstItem && firstItem.video && firstItem.video.mimeType) ||
+                   (firstItem && firstItem.mimeType) || 'video/mp4';
   if (!gcsUri) {
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ done: false, error: 'Video GCS URI missing from response.' }) };
