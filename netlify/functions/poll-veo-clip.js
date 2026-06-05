@@ -97,20 +97,12 @@ function createSignedUrl(gcsUri, sa, expiresInSeconds) {
 }
 
 // Poll Vertex AI operation
-// FIX: predictLongRunning returns operationName like:
-//   projects/{p}/locations/{l}/publishers/google/models/{m}/operations/{id}
-// Polling via the model-scoped path returns 404. Use the standard
-// location-level operations endpoint:
-//   /v1/projects/{p}/locations/{l}/operations/{id}
+// Veo uses UUID-format operation IDs scoped to the model path:
+//   projects/{p}/locations/{l}/publishers/google/models/{m}/operations/{uuid}
+// Poll using the full path as returned — DO NOT strip to location-level operations
+// (that endpoint only accepts numeric Long IDs, not UUIDs).
 function pollOperation(operationName, accessToken) {
-  let path;
-  const opIdMatch = operationName.match(/\/operations\/([^/]+)$/);
-  if (opIdMatch) {
-    const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-    path = '/v1/projects/' + projectId + '/locations/' + LOCATION + '/operations/' + opIdMatch[1];
-  } else {
-    path = '/v1/' + operationName;
-  }
+  const path = '/v1/' + operationName;
   console.log('poll-veo-clip: polling path:', path);
   return new Promise((resolve, reject) => {
     const req = https.request({
