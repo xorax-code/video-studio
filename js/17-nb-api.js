@@ -218,10 +218,13 @@
       card.id = 'nb-approval-card-' + idx;
       card.style.cssText = 'border:2px solid ' + (approved ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.5)')
         + ';border-radius:8px;overflow:hidden;background:var(--surface-2);cursor:pointer;';
-      card.innerHTML = '<img src="' + seg.nbPreviewDataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
-        + '<div style="padding:8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">'
+      card.innerHTML = '<img id="nb-approval-img-' + idx + '" src="' + seg.nbPreviewDataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
+        + '<div style="padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">'
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
-          + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
+          + '<div style="display:flex;align-items:center;gap:5px;">'
+            + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
+            + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
+          + '</div>'
         + '</div>';
       card.onclick = function() { toggleNbApproval(idx); };
       grid.appendChild(card);
@@ -276,3 +279,33 @@
     saveSegments();
   }
   window.approveAllNbComposites = approveAllNbComposites;
+
+  // ── Regenerate a single NB frame in-place inside the approval modal ────────
+  window.regenNbFrame = async function(segIdx) {
+    var btn  = document.getElementById('nb-regen-btn-' + segIdx);
+    var img  = document.getElementById('nb-approval-img-' + segIdx);
+    var card = document.getElementById('nb-approval-card-' + segIdx);
+
+    if (btn) { btn.disabled = true; btn.textContent = '…'; btn.style.opacity = '0.5'; }
+    if (img) { img.style.opacity = '0.4'; }
+
+    var ok = await generateNbComposite(segIdx);
+
+    if (ok) {
+      var seg = segments[segIdx];
+      // Swap image in-place — no modal close/reopen needed
+      if (img && seg.nbPreviewDataUrl) {
+        img.src = seg.nbPreviewDataUrl;
+        img.style.opacity = '1';
+      }
+      // Auto-approve the fresh frame
+      seg.nbApproved = true;
+      var badge = document.getElementById('nb-approval-badge-' + segIdx);
+      if (card)  card.style.borderColor = 'rgba(52,211,153,0.7)';
+      if (badge) { badge.textContent = '✓'; badge.style.background = 'rgba(52,211,153,0.9)'; }
+    } else {
+      if (img) img.style.opacity = '1';
+    }
+
+    if (btn) { btn.disabled = false; btn.textContent = '↺ Redo'; btn.style.opacity = '1'; }
+  };
