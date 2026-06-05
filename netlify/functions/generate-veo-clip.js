@@ -27,9 +27,9 @@ const CREDIT_COSTS = {
 
 // Vertex AI model IDs — fast is GA (-001), lite and standard are preview
 const MODEL_IDS = {
-  lite:     'veo-3.1-lite-generate-preview',
+  lite:     'veo-3.1-lite-generate-001',
   fast:     'veo-3.1-fast-generate-001',
-  standard: 'veo-3.1-generate-preview',
+  standard: 'veo-3.1-generate-001',
 };
 
 const LOCATION = 'us-central1';
