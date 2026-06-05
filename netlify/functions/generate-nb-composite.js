@@ -98,19 +98,19 @@ exports.handler = async (event) => {
   }
 
   // ── Build Gemini request ───────────────────────────────────────────────────
-  // system_instruction is kept separate from contents so the model treats
-  // the user turn as an image-generation command, not a conversation.
-  const systemInstruction = {
-    parts: [{
-      text: `You are a creative lifestyle photo editor. Your job is to generate a single vertical 9:16 lifestyle photograph.
-Photo 1 is the person reference — match their clothing, accessories, and overall look in the scene.
-${frameB64 ? 'Photo 2 is the scene/background reference — match its location, lighting, and composition.' : ''}
-Output ONLY the image. No text, no commentary, no watermarks.`,
-    }],
-  };
+  // gemini-3.1-flash-image REST API only supports bare `contents` — no
+  // system_instruction, no generationConfig.responseModalities.
+  // Start with "Generate an image of" so the model outputs an image, not text.
+  const sceneRef = frameB64
+    ? 'Use Photo 2 as the background and scene reference.'
+    : '';
+  const userText = `Generate an image of: ${instruction}
+
+Use Photo 1 as the style reference for the person's appearance, clothing, and accessories. ${sceneRef}
+Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
 
   const userParts = [
-    { text: instruction },
+    { text: userText },
     { inline_data: { mime_type: avatarMime, data: avatarB64 } },
   ];
 
@@ -119,7 +119,6 @@ Output ONLY the image. No text, no commentary, no watermarks.`,
   }
 
   const requestBody = JSON.stringify({
-    system_instruction: systemInstruction,
     contents: [{ role: 'user', parts: userParts }],
   });
 
