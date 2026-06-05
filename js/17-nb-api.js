@@ -100,12 +100,15 @@
 
       if (!res.ok || data.error) {
         var msg = data.error || ('HTTP ' + res.status);
-        showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 7000);
+        console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed — HTTP ' + res.status + ' | Error:', msg, '| Full response:', JSON.stringify(data));
+        showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
         return false;
       }
 
       if (!data.imageB64) {
-        showToast('NB gen returned no image for Scene ' + (segIdx + 1) + '.', 'error', 5000);
+        var noImgMsg = data.error || data.message || 'No image returned (safety filter or bad response)';
+        console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image in response. Full response:', JSON.stringify(data));
+        showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
         return false;
       }
 

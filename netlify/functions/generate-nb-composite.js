@@ -116,9 +116,6 @@ Output a single photorealistic image. No text, no watermarks, no collages.`;
 
   const requestBody = JSON.stringify({
     contents: [{ role: 'user', parts }],
-    generationConfig: {
-      responseModalities: ['IMAGE', 'TEXT'],
-    },
   });
 
   // gemini-3.1-flash-image (Nano Banana 2) — stable image-in/image-out model, uses v1
