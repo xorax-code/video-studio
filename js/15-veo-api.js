@@ -268,7 +268,7 @@
     var prompt = _veoJsonToPrompt(veoJsonStr);
     var dur    = parseInt(durationSecs, 10) || 6;
     if (dur !== 6 && dur !== 8) dur = 6;
-    var model  = (modelKey === 'fast') ? 'fast' : 'lite';
+    var model  = (modelKey === 'fast') ? 'fast' : (modelKey === 'standard') ? 'standard' : 'lite';
 
     // ── Strip data URL prefix to get raw base64 + mimeType ───────────────
     var startImageB64  = null;
@@ -421,7 +421,8 @@
     }
 
     var adm = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-    var modelKey = (adm.defaultModel || 'Veo 3.1 Fast').toLowerCase().includes('fast') ? 'fast' : 'lite';
+    var _dm = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
+    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
     var total = toGenerate.length;
 
     _openVeoAPIModal(total);
@@ -504,5 +505,4 @@
   }
   window.clearSegmentApiVideo = clearSegmentApiVideo;
 
-  // ── Apply mode UI on page load (restores pill + step3 button state) ───────
-  document.addEventListener('DOMContentLoaded', function() { _applyModeUI(); });
+  // ── Apply mode UI on page load (restores pi

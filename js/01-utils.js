@@ -545,7 +545,7 @@
     veoWaitMin: 6,
     maxTabRefresh: 0,
     cooldownSec: 120,
-    defaultModel: 'Veo 3.1 Fast',
+    defaultModel: 'Veo 3.1 Lite',
     creditBudget: 0,
     nbPromptDefault: '',
     veoPromptDefault: '',

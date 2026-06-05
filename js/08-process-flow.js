@@ -204,8 +204,8 @@
 
   function initVideoStudio(forcedMode) {
     _restoreCtaState();
-    // Sync the Fast/Quality toggle to whatever model is saved
-    _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Fast');
+    // Sync the Lite/Fast/Standard toggle to whatever model is saved
+    _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Lite');
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();

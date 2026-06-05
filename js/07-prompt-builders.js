@@ -712,7 +712,7 @@
           + '<div style="width:36px;height:36px;border-radius:9px;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">&#x1F3AC;</div>'
           + '<div>'
             + '<div style="font-size:14px;font-weight:800;color:var(--text-1);">Video Producer</div>'
-            + '<div style="font-size:11px;color:var(--text-3);">' + n + ' ' + sceneWord + ' ready &mdash; NanoBanana &rarr; Veo 3.1 Fast</div>'
+            + '<div style="font-size:11px;color:var(--text-3);">' + n + ' ' + sceneWord + ' ready &mdash; NanoBanana &rarr; ' + (getAdminSettings().defaultModel || 'Veo 3.1 Lite') + '</div>'
           + '</div>'
         + '</div>'
 
@@ -998,8 +998,9 @@
     var hasStartFrames = segments.filter(function(s) { return s.nbCompositeDataUrl || s.frameDataUrl; }).length;
     var lines = [];
 
+    var _curModel = (typeof getAdminSettings === 'function') ? (getAdminSettings().defaultModel || 'Veo 3.1 Lite') : 'Veo 3.1 Lite';
     lines.push(
-      'Using Veo 3.1 Fast in Google Flow, generate ' + n + ' video clip' + (n !== 1 ? 's' : '') + ' — one per scene. '
+      'Using ' + _curModel + ' in Google Flow, generate ' + n + ' video clip' + (n !== 1 ? 's' : '') + ' — one per scene. '
       + (hasStartFrames > 0
         ? 'Upload the matching NanoBanana start frame for each clip — each was generated from the master reference, so character and scene stay consistent across all clips. '
         : 'Upload the master reference image as the start frame for each clip. ')
@@ -1014,7 +1015,7 @@
     withPrompts.forEach(function(seg, idx) {
       var duration = Math.round((seg.endTime - seg.startTime) * 10) / 10;
       lines.push('--- Scene ' + (idx + 1) + ' of ' + n + ' ---');
-      lines.push('Model: Veo 3.1 Fast');
+      lines.push('Model: ' + _curModel);
       lines.push(seg.veoPrompt.trim());
       var speechText = '';
       try { speechText = JSON.parse(seg.veoPrompt).speech || seg.script || ''; }
@@ -1144,8 +1145,7 @@
           + 'background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.4);border-radius:4px;'
           + 'color:#f87171;cursor:pointer;">Try again</button></div>';
       }
-      showToast('Auto-Plan failed — ' + e.message, 'error');
     } finally {
-      if (btn) { btn.textContent = "⚡ Auto-Plan from Script"; btn.disabled = false; }
+      if (btn) { btn.textContent = '✨ Parse to Storyboard'; btn.disabled = false; }
     }
   }

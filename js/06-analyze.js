@@ -1241,8 +1241,8 @@ Production rules:
     const qualBtn = document.getElementById('veoModelQualBtn');
     if (!fastBtn || !qualBtn) return;
     const isFast  = model === 'Veo 3.1 Fast';
-    const isLite  = model === 'Veo 3.1 Light';
-    const isQual  = model === 'Veo 3.1 Quality';
+    const isLite  = model === 'Veo 3.1 Lite';
+    const isQual  = model === 'Veo 3.1 Standard';
     fastBtn.style.background = isFast ? 'rgba(34,197,94,0.18)'  : 'var(--surface)';
     fastBtn.style.color      = isFast ? '#4ade80'               : 'var(--text-3)';
     if (liteBtn) {
@@ -1595,7 +1595,7 @@ Production rules:
     const nbWaitSec = _adm.nbWaitSec || 180;
     const veoWaitMin = _adm.veoWaitMin || 6;
     const cooldownSec = _adm.cooldownSec || 120;
-    const defaultModel = _adm.defaultModel || 'Veo 3.1 Fast';
+    const defaultModel = _adm.defaultModel || 'Veo 3.1 Lite';
 
     // Avatar appearance inventory — embedded into CHECK 1 so the verification is
     // specific to this avatar. Falls back to the generic check when empty.
@@ -1811,8 +1811,8 @@ Use these javascript_tool one-liners — faster than find tool, no searching nee
   4. Switch bar to Video mode (click media button → Video)
 
 ── MODEL SELECTOR (bottom bar, right side) ──
-  Shows current model name (e.g. "Nano Banana Pro" or "Veo 3.1 Fast")
-  find text="${defaultModel}"  to confirm Veo 3.1 Fast is active in Phase 2.
+  Shows current model name (e.g. "Nano Banana Pro" or "${defaultModel}")
+  find text="${defaultModel}"  to confirm ${defaultModel} is active in Phase 2.
   If the wrong model is shown, click the model name → select the correct one from the dropdown.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2311,7 +2311,7 @@ Report back: how many scenes completed successfully, and note any that had issue
     const _sadm = getAdminSettings() || {};
     const _snbWait = _sadm.nbWaitSec || 180;
     const _sveoWait = _sadm.veoWaitMin || 6;
-    const _sModel = _sadm.defaultModel || 'Veo 3.1 Fast';
+    const _sModel = _sadm.defaultModel || 'Veo 3.1 Lite';
     const _sClaudeBrowser = _susr.claudeBrowserMode !== false;
 
     // Avatar appearance inventory — embedded into CHECK 1 below so verification
@@ -2519,6 +2519,7 @@ ${veoPrompt}
   }
 
   function showClaudeBrowserModal(sceneNum, hasFiles, duration, wordCount, isManual) {
+    const defaultModel = (getAdminSettings() || {}).defaultModel || 'Veo 3.1 Lite';
     if (isManual) {
       const existing = document.getElementById('claudeBrowserModal');
       if (existing) existing.remove();
@@ -2586,7 +2587,7 @@ ${veoPrompt}
             <div style="font-size:10px;font-weight:700;color:var(--accent-2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">Step 2 — Veo 3</div>
             <div style="font-size:11px;color:var(--text-2);line-height:1.7;">
               NB Pro image becomes the starting frame<br>
-              Select <strong style="color:var(--text-1);">Veo 3.1 Fast</strong> · Set duration to <strong style="color:var(--text-1);">${duration} seconds</strong><br>
+              Select <strong style="color:var(--text-1);">${defaultModel}</strong> · Set duration to <strong style="color:var(--text-1);">${duration} seconds</strong><br>
               <span style="font-size:10px;color:var(--text-3);">(${wordCount} words ≈ ${Math.round(wordCount / WORDS_PER_SEC)}s of speech)</span><br>
               Paste Veo 3 prompt · Generate
             </div>
@@ -4298,6 +4299,6 @@ TECHNICAL SPECS:
     if (typeof openVeoAgentPanel === 'function') {
       openVeoAgentPanel();
     } else {
-      showToast('Agent panel not available — use the Run button in the workflow bar.', 'warning');
+      showToast('Open the Video Studio → Agent Brief tab to access all prompts.', 'info');
     }
   }

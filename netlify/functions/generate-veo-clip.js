@@ -20,14 +20,16 @@ const crypto = require('crypto');
 
 // ── Credit costs ──────────────────────────────────────────────────────────────
 const CREDIT_COSTS = {
-  lite: 15,
-  fast: 30,
+  lite:     15,
+  fast:     30,
+  standard: 80,
 };
 
-// Vertex AI model IDs — fast is GA (-001), lite is still preview
+// Vertex AI model IDs — fast is GA (-001), lite and standard are preview
 const MODEL_IDS = {
-  lite: 'veo-3.1-lite-generate-preview',
-  fast: 'veo-3.1-fast-generate-001',
+  lite:     'veo-3.1-lite-generate-preview',
+  fast:     'veo-3.1-fast-generate-001',
+  standard: 'veo-3.1-generate-preview',
 };
 
 const LOCATION = 'us-central1';
@@ -227,7 +229,7 @@ exports.handler = async (event) => {
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
   const dur      = (durationSecs === 8) ? 8 : 6;
-  const modelKey = (model === 'fast') ? 'fast' : 'lite';
+  const modelKey = (model === 'fast') ? 'fast' : (model === 'standard') ? 'standard' : 'lite';
   const cost     = CREDIT_COSTS[modelKey];
   const modelId  = MODEL_IDS[modelKey];
 

@@ -59,7 +59,7 @@
     _set('adm-veoWait', s.veoWaitMin || 6);
     _set('adm-maxRetry', s.maxTabRefresh || 0);
     _set('adm-cooldown', s.cooldownSec || 120);
-    _set('adm-model', s.defaultModel || 'Veo 3.1 Fast');
+    _set('adm-model', s.defaultModel || 'Veo 3.1 Lite');
     _set('adm-creditBudget', s.creditBudget || 0);
     // Prompts
     _set('adm-nbDefault', s.nbPromptDefault || '');
@@ -82,7 +82,7 @@
       s.veoWaitMin   = parseInt(_get('adm-veoWait',     s.veoWaitMin   || 6))   || 6;
       s.maxTabRefresh= parseInt(_get('adm-maxRetry',    s.maxTabRefresh|| 0))   || 0;
       s.cooldownSec  = parseInt(_get('adm-cooldown',    s.cooldownSec  || 120)) || 120;
-      s.defaultModel =         _get('adm-model',        s.defaultModel || 'Veo 3.1 Fast');
+      s.defaultModel =         _get('adm-model',        s.defaultModel || 'Veo 3.1 Lite');
       s.creditBudget = parseInt(_get('adm-creditBudget',s.creditBudget || 0))   || 0;
     } else if (tab === 'prompts') {
       s.nbPromptDefault  = _get('adm-nbDefault',  s.nbPromptDefault  || '').trim();

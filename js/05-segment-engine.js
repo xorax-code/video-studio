@@ -837,7 +837,7 @@
     var hasExtras  = clips.some(function(c){ return c.isExtra; });
     var lines = [];
 
-    var _veoModel = (getAdminSettings().defaultModel || 'Veo 3.1 Fast');
+    var _veoModel = (getAdminSettings().defaultModel || 'Veo 3.1 Lite');
     if (!hasExtras) {
       lines.push('I have ' + n + ' swapped NB Pro composite' + (n !== 1 ? 's' : '') + ' ready in order' + batchLabel + '. Using ' + _veoModel + ', generate one clip per frame in sequence — Frame 1 \u2192 Clip 1, Frame 2 \u2192 Clip 2, and so on. ' + totalClips + ' clips total.');
     } else {
@@ -903,7 +903,7 @@
     const hasExtras  = clips.some(c => c.isExtra);
     const lines = [];
 
-    const _veoModelAll = getAdminSettings().defaultModel || 'Veo 3.1 Fast';
+    const _veoModelAll = getAdminSettings().defaultModel || 'Veo 3.1 Lite';
     if (!hasExtras) {
       lines.push(`I have ${n} swapped NB Pro composite${n !== 1 ? 's' : ''} ready in order. Using ${_veoModelAll}, generate one clip per frame in sequence \u2014 Frame 1 \u2192 Clip 1, Frame 2 \u2192 Clip 2, and so on. ${totalClips} clips total.`);
     } else {
@@ -3463,4 +3463,3 @@ If 0 or 3+ people visible: {"person_count":0}`
     if (typeof saveSegments === 'function') saveSegments();
     if (skipped > 0) showToast(skipped + ' scene' + (skipped !== 1 ? 's' : '') + ' skipped.', 'warning');
   }
-
