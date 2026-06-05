@@ -5,7 +5,7 @@
  *
  * Required env vars:
  *   GOOGLE_SERVICE_ACCOUNT_JSON   — full service account key JSON (as a string)
- *   GOOGLE_CLOUD_PROJECT_ID       — e.g. gen-lang-client-0657577212
+ *   GOOGLE_CLOUD_PROJECT_ID       — your GCP project ID
  *   SUPABASE_URL                  — https://xxx.supabase.co
  *   SUPABASE_ANON                 — anon/public key
  *
