@@ -1533,7 +1533,10 @@ Production rules:
       pushUndo('Process Everything');
       const btn = document.getElementById('processEverythingBtn');
       const origText = btn ? btn.textContent : '';
-      const _totalSteps = _apiMode ? 3 : 2;
+      // Count steps: always 2 base + NB step if avatar loaded + Veo step if API mode
+      const _hasAvatar = !!window.avatarImageDataUrl;
+      const _hasNbStep = _apiMode && _hasAvatar;
+      const _totalSteps = _apiMode ? (_hasNbStep ? 4 : 3) : 2;
       const _setStep = (n, label) => {
         if (btn) btn.textContent = `⏳ Step ${n}/${_totalSteps} — ${label}`;
         showToast(`Step ${n} of ${_totalSteps}: ${label}`, 'info', 2000);
@@ -1562,8 +1565,33 @@ Production rules:
         return;
       }
 
-      // API mode — Step 3: auto-generate all clips
-      _setStep(3, 'Generating clips via API…');
+      // Step 3 (API mode) — Generate NB composite frames if avatar is loaded
+      if (_hasNbStep) {
+        _setStep(3, 'Generating NB frames…');
+        const _nbSegs = segments.filter(s => (s.nbPrompt || '').trim());
+        if (_nbSegs.length > 0) {
+          try {
+            // Generate all NB composites silently (no auto-modal from generateAllNbComposites)
+            for (var _ni = 0; _ni < _nbSegs.length; _ni++) {
+              var _nIdx = segments.indexOf(_nbSegs[_ni]);
+              try { await generateNbComposite(_nIdx); } catch(e) { /* per-segment non-fatal */ }
+              if (_ni < _nbSegs.length - 1) await new Promise(r => setTimeout(r, 1200));
+            }
+          } catch(e) { /* non-fatal — fall through to approval modal */ }
+        }
+        // Re-enable button and open NB approval modal — user reviews then clicks "Generate Approved"
+        if (btn) { btn.disabled = false; btn.textContent = origText; }
+        if (typeof openNbApprovalModal === 'function') {
+          openNbApprovalModal(true); // true = called from processEverything (API mode)
+        } else if (typeof openNBReviewModal === 'function') {
+          openNBReviewModal();
+        }
+        // Stop here — the modal's "Generate Approved" button handles Step 4
+        return;
+      }
+
+      // Step 3/4 — No NB step, go straight to Veo API generation
+      _setStep(_totalSteps, 'Generating clips via API…');
       if (btn) btn.textContent = '⏳ Generating clips…';
       try {
         await generateAllScenesViaAPI();

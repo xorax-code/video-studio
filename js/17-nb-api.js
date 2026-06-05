@@ -172,7 +172,7 @@
   // ── NB Approval Modal ─────────────────────────────────────────────────────
   // Shows all generated NB composites side-by-side with approve/reject toggles.
   // Approved composites become the start frame for Veo generation.
-  function openNbApprovalModal() {
+  function openNbApprovalModal(fromProcessEverything) {
     var withComposites = segments.filter(function(s) { return s.nbPreviewDataUrl; });
     if (!withComposites.length) {
       showToast('Generate NB composites first.', 'warning');
@@ -226,8 +226,16 @@
     // Footer
     var footer = document.createElement('div');
     footer.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--border);';
+    // "Run Approved Scenes" action depends on mode:
+    // - API mode (or called from processEverything): call generateAllScenesViaAPI directly
+    // - Manual mode: open preflight modal for Google Flow
+    var _isApiMode = fromProcessEverything || (typeof getGenerateMode === 'function' && getGenerateMode() === 'api');
+    var _runAction = _isApiMode
+      ? "document.getElementById('nbApprovalModal').remove();if(typeof generateAllScenesViaAPI==='function')generateAllScenesViaAPI();"
+      : "document.getElementById('nbApprovalModal').remove();if(typeof showPreflightModal==='function')showPreflightModal(false);";
+
     footer.innerHTML = '<button onclick="document.getElementById(\'nbApprovalModal\').remove()" style="padding:7px 16px;font-size:12px;font-family:inherit;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;color:var(--text-2);cursor:pointer;">Done</button>'
-      + '<button onclick="document.getElementById(\'nbApprovalModal\').remove();showPreflightModal(false);" style="padding:7px 16px;font-size:12px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.5);border-radius:7px;color:#34d399;cursor:pointer;">▶ Run Approved Scenes →</button>';
+      + '<button onclick="' + _runAction.replace(/"/g, '&quot;') + '" style="padding:7px 16px;font-size:12px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.5);border-radius:7px;color:#34d399;cursor:pointer;">⚡ Generate Approved →</button>';
 
     inner.appendChild(header);
     inner.appendChild(subtext);
