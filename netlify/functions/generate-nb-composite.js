@@ -98,12 +98,11 @@ exports.handler = async (event) => {
   }
 
   // ── Build Gemini request ───────────────────────────────────────────────────
-  // System instruction: keep character consistent, photorealistic 9:16
-  const systemText = `You are a photorealistic image compositor. Generate a single vertical 9:16 image exactly as instructed.
-The person in Photo 1 is the avatar — preserve their face, skin tone, hair, clothing, and accessories EXACTLY as shown.
-Do not alter their appearance in any way.
-If a reference frame (Photo 2) is provided, match its background, lighting, and scene composition.
-Output a single photorealistic image. No text, no watermarks, no collages.`;
+  // System instruction: creative lifestyle image generation
+  const systemText = `You are a creative lifestyle photo editor. Generate a single vertical 9:16 image based on the instructions below.
+Photo 1 shows a person — use their visual style, clothing, and overall look as a style reference for the scene.
+If Photo 2 is provided, use it as a background and scene composition reference.
+Create a natural, high-quality lifestyle photograph. Output a single image only. No text overlays, no watermarks, no collages.`;
 
   const parts = [
     { text: systemText + '\n\n' + instruction },
@@ -172,12 +171,14 @@ Output a single photorealistic image. No text, no watermarks, no collages.`;
     }
   }
 
-  // No image in response — log what we got
+  // No image in response — log full details for debugging
+  const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
   const textParts = candidates.flatMap(c => (c.content?.parts || []).filter(p => p.text).map(p => p.text)).join(' ');
-  console.error('generate-nb-composite: no image in response. Text:', textParts.slice(0, 300));
+  console.error('generate-nb-composite: no image in response. finishReasons:', finishReasons, '| Text:', textParts.slice(0, 300));
+  const errDetail = finishReasons ? `(finishReason: ${finishReasons})` : '';
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: 'Gemini did not return an image. Response: ' + textParts.slice(0, 200) }),
+    body: JSON.stringify({ error: `Gemini returned no image ${errDetail}. ${textParts.slice(0, 150)}`.trim() }),
   };
 };
