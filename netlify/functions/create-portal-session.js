@@ -43,8 +43,14 @@ function getAuthUser(jwt) {
 }
 
 exports.handler = async (event) => {
-  const headers = { 'Content-Type': 'application/json' };
+  const CORS = {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+  const headers = { 'Content-Type': 'application/json', ...CORS };
 
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
   }

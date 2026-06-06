@@ -548,7 +548,6 @@
     bar.innerHTML =
       '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">'
         + '<div style="font-size:10px;font-weight:700;color:var(--text-2);white-space:nowrap;">⚡ Generating ' + total + ' clips</div>'
-        + (runTxt ? '<div style="font-size:10px;">' + runTxt + '</div>' : '')
         + (chips  ? '<div style="font-size:10px;">' + chips  + '</div>' : '')
       + '</div>'
       + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
