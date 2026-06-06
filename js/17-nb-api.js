@@ -309,3 +309,301 @@
 
     if (btn) { btn.disabled = false; btn.textContent = '↺ Redo'; btn.style.opacity = '1'; }
   };
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRODUCER PHASE 1 — Generate Master Reference via NB API
+  // ─────────────────────────────────────────────────────────────────────────
+  // Calls generate-nb-composite with the avatar only (no reference frame) to
+  // establish the scene, background, and character anchor for all clips.
+  // Result stored as window._sbEstFrameDataUrl and distributed to segments.
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ─── helper: get JWT ─────────────────────────────────────────────────────
+  async function _nbGetJwt() {
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) {
+        var sess = await _sbRef.auth.getSession();
+        return (sess && sess.data && sess.data.session && sess.data.session.access_token) || null;
+      }
+    } catch(_) {}
+    return null;
+  }
+
+  // ─── helper: GPT vision scene description ────────────────────────────────
+  async function _nbDescribeScene(imageDataUrl, fallback) {
+    var apiKey = (typeof getApiKey === 'function') ? getApiKey() : null;
+    if (!apiKey) return fallback;
+    try {
+      var vRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + apiKey },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [{ role: 'user', content: [
+            { type: 'text', text: 'Describe this scene in 2-3 specific sentences for use as a consistent video background reference. Focus on: the exact surface or counter type, visible props and objects, the background environment, lighting quality and direction, and distinctive visual elements. Be concrete and visual.' },
+            { type: 'image_url', image_url: { url: imageDataUrl, detail: 'low' } },
+          ]}],
+          max_tokens: 200,
+        }),
+      });
+      if (!vRes.ok) return fallback;
+      var vData = await vRes.json();
+      return ((((vData.choices || [])[0] || {}).message || {}).content || '').trim() || fallback;
+    } catch(_) { return fallback; }
+  }
+
+  // ─── helper: distribute master frame to all Producer segments ────────────
+  function _nbDistributeMaster(masterDataUrl, avatarDesc, sceneRef) {
+    segments.forEach(function(seg) {
+      if (!seg._scriptOnly) return;
+      seg.frameDataUrl = masterDataUrl;
+      var action = seg.action || 'speaks naturally to camera with confident eye contact';
+      seg.nbPrompt = 'NanoBanana start frame variation from master reference image. '
+        + 'INPUT: use the master reference as the input image. '
+        + 'Keep IDENTICAL to reference: character face, hair, outfit, background, props, lighting. '
+        + 'Change ONLY the starting pose and expression: '
+        + avatarDesc + ' is now ' + action + '. '
+        + 'Scene: ' + sceneRef + ' '
+        + 'Photorealistic, vertical 9:16, single person only, no text, no watermarks.';
+    });
+    if (typeof saveSegments === 'function') saveSegments();
+  }
+
+  // ─── Step 1: Setting confirmation modal ──────────────────────────────────
+  // Shows before any API call — user edits setting, then hits Generate.
+  window.generateNBMasterViaAPI = function() {
+    if (!avatarImageDataUrl) {
+      showToast('Upload your avatar photo first.', 'warning');
+      return;
+    }
+
+    var kit         = (typeof getBrandKit === 'function') ? getBrandKit() : {};
+    var avatarDesc  = (document.getElementById('avatarDesc')    ? document.getElementById('avatarDesc').value.trim()    : '') || kit.avatarDesc    || 'the presenter';
+    var setting     = (document.getElementById('studioSetting') ? document.getElementById('studioSetting').value.trim() : '') || kit.setting       || '';
+    var productName = (document.getElementById('sbProduct')     ? document.getElementById('sbProduct').value.trim()     : '') || kit.productName   || '';
+
+    var existing = document.getElementById('nbMasterSetupModal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'nbMasterSetupModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.78);backdrop-filter:blur(6px);padding:16px;';
+
+    overlay.innerHTML = ''
+      + '<div style="background:var(--surface);border:1px solid rgba(251,146,60,0.4);border-radius:14px;padding:24px;width:100%;max-width:420px;box-shadow:0 24px 80px rgba(0,0,0,0.6);font-family:inherit;">'
+        + '<button onclick="document.getElementById(\'nbMasterSetupModal\').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;">&#x2715;</button>'
+        + '<div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;">'
+          + '<div style="width:36px;height:36px;border-radius:9px;background:rgba(251,146,60,0.15);border:1px solid rgba(251,146,60,0.35);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">&#x1F3A8;</div>'
+          + '<div>'
+            + '<div style="font-size:13px;font-weight:800;color:var(--text-1);">Phase 1 — Master Reference</div>'
+            + '<div style="font-size:11px;color:var(--text-3);">Set the scene before generating</div>'
+          + '</div>'
+        + '</div>'
+
+        + '<div style="margin-bottom:14px;">'
+          + '<label style="font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Setting / Background</label>'
+          + '<textarea id="nbMasterSettingInput" rows="3" placeholder="e.g. bright modern kitchen with white marble countertop, natural window light, small plant in background..." style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:10px;resize:vertical;font-family:inherit;line-height:1.5;">' + (setting || '') + '</textarea>'
+          + '<div style="font-size:10px;color:var(--text-4);margin-top:4px;">Be specific — this locks the background for every scene in your video.</div>'
+        + '</div>'
+
+        + '<div style="margin-bottom:18px;">'
+          + '<label style="font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Your Avatar Description <span style="color:var(--text-4);font-weight:400;text-transform:none;">(optional)</span></label>'
+          + '<input id="nbMasterAvatarInput" type="text" placeholder="e.g. young woman with long dark hair wearing a white t-shirt..." value="' + avatarDesc.replace(/"/g, '&quot;') + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:9px 10px;font-family:inherit;">'
+        + '</div>'
+
+        + '<button id="nbMasterGenBtn" onclick="_nbRunMasterGeneration()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s;" onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x26A1; Generate Master Reference</button>'
+        + '<div id="nbMasterGenStatus" style="display:none;text-align:center;padding:10px 0 0;font-size:11px;color:var(--text-3);"></div>'
+      + '</div>';
+
+    document.body.appendChild(overlay);
+    var ta = document.getElementById('nbMasterSettingInput');
+    if (ta) setTimeout(function(){ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }, 80);
+  };
+
+  // ─── Step 2: Run generation (called from setup modal's Generate button) ───
+  window._nbRunMasterGeneration = async function() {
+    var settingVal  = (document.getElementById('nbMasterSettingInput')  ? document.getElementById('nbMasterSettingInput').value.trim()  : '') || 'a clean well-lit indoor space';
+    var avatarVal   = (document.getElementById('nbMasterAvatarInput')   ? document.getElementById('nbMasterAvatarInput').value.trim()   : '') || 'the presenter';
+    var kit         = (typeof getBrandKit === 'function') ? getBrandKit() : {};
+    var productName = (document.getElementById('sbProduct') ? document.getElementById('sbProduct').value.trim() : '') || kit.productName || '';
+
+    var genBtn    = document.getElementById('nbMasterGenBtn');
+    var statusDiv = document.getElementById('nbMasterGenStatus');
+
+    if (genBtn)    { genBtn.disabled = true; genBtn.textContent = 'Generating…'; }
+    if (statusDiv) { statusDiv.style.display = 'block'; statusDiv.textContent = 'Calling Nano Banana API — this takes ~15s…'; }
+
+    var jwt = await _nbGetJwt();
+    if (!jwt) {
+      showToast('Please log in first.', 'warning');
+      if (genBtn)    { genBtn.disabled = false; genBtn.textContent = 'Generate Master Reference'; }
+      if (statusDiv) { statusDiv.style.display = 'none'; }
+      return;
+    }
+
+    var instruction = 'Photorealistic UGC video still — master establishing reference. '
+      + avatarVal + ' stands or sits in ' + settingVal
+      + ', facing camera directly with a natural relaxed expression and soft confident eye contact. '
+      + (productName ? productName + ' may be visible on the surface nearby. ' : '')
+      + 'Camera: medium shot, vertical 9:16 aspect ratio, soft cinematic key lighting from one side. '
+      + 'Style: authentic UGC creator content, single person only, no text overlays, no watermarks, no AI artifacts. '
+      + 'This is the MASTER REFERENCE — all other scenes will use this exact background and lighting.';
+
+    try {
+      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 768, 0.80);
+      var avatarParts      = _nbSplitDataUrl(avatarCompressed);
+
+      var res = await fetch('/.netlify/functions/generate-nb-composite', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({
+          instruction,
+          avatarB64:  avatarParts.b64,
+          avatarMime: avatarParts.mime,
+          frameB64:   null,
+          frameMime:  'image/jpeg',
+        }),
+      });
+
+      var data;
+      try { data = await res.json(); } catch(_) { data = {}; }
+
+      if (!res.ok || data.error || !data.imageB64) {
+        var errMsg = data.error || ('HTTP ' + res.status);
+        if (statusDiv) { statusDiv.style.color = 'var(--danger)'; statusDiv.textContent = 'Failed: ' + errMsg; }
+        if (genBtn)    { genBtn.disabled = false; genBtn.textContent = 'Retry'; }
+        return;
+      }
+
+      var masterDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+
+      // Close setup modal and show approval modal
+      var setupModal = document.getElementById('nbMasterSetupModal');
+      if (setupModal) setupModal.remove();
+
+      _nbShowMasterApproval(masterDataUrl, settingVal, avatarVal, productName);
+
+    } catch(e) {
+      console.error('[NB Master] error:', e);
+      if (statusDiv) { statusDiv.style.color = 'var(--danger)'; statusDiv.textContent = 'Error: ' + (e.message || e); }
+      if (genBtn)    { genBtn.disabled = false; genBtn.textContent = 'Retry'; }
+    }
+  };
+
+  // ─── Step 3: Approval modal — see result, approve or regenerate ───────────
+  function _nbShowMasterApproval(masterDataUrl, setting, avatarDesc, productName) {
+    var existing = document.getElementById('nbMasterApprovalModal');
+    if (existing) existing.remove();
+
+    var overlay = document.createElement('div');
+    overlay.id = 'nbMasterApprovalModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:100000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.82);backdrop-filter:blur(8px);padding:16px;';
+
+    overlay.innerHTML = ''
+      + '<div style="background:var(--surface);border:1px solid rgba(52,211,153,0.4);border-radius:14px;padding:22px;width:100%;max-width:460px;box-shadow:0 24px 80px rgba(0,0,0,0.65);font-family:inherit;max-height:90vh;overflow-y:auto;">'
+
+        // Header
+        + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">'
+          + '<div>'
+            + '<div style="font-size:13px;font-weight:800;color:var(--text-1);">&#x1F3A8; Review Master Reference</div>'
+            + '<div style="font-size:11px;color:var(--text-3);margin-top:2px;">Approve to lock this scene for all clips, or regenerate.</div>'
+          + '</div>'
+          + '<button onclick="document.getElementById(\'nbMasterApprovalModal\').remove()" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;padding:2px 6px;">&#x2715;</button>'
+        + '</div>'
+
+        // Generated image — 9:16 preview
+        + '<div style="width:100%;max-width:220px;margin:0 auto 16px;border-radius:10px;overflow:hidden;border:2px solid rgba(52,211,153,0.5);box-shadow:0 0 24px rgba(52,211,153,0.2);">'
+          + '<img src="' + masterDataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
+        + '</div>'
+
+        // Setting used
+        + '<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:16px;">'
+          + '<div style="font-size:9px;font-weight:700;color:var(--text-4);letter-spacing:0.1em;text-transform:uppercase;margin-bottom:4px;">Setting used</div>'
+          + '<div style="font-size:12px;color:var(--text-2);line-height:1.5;">' + setting + '</div>'
+        + '</div>'
+
+        // Action buttons
+        + '<div style="display:flex;flex-direction:column;gap:8px;">'
+
+          // Approve
+          + '<button onclick="_nbApproveMaster(\'' + masterDataUrl.replace(/'/g, "\\'") + '\', \'' + setting.replace(/'/g, "\\'") + '\', \'' + avatarDesc.replace(/'/g, "\\'") + '\')" '
+            + 'style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#00e5bc,#00c4a3);border:none;color:#001a14;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter 0.15s;" '
+            + 'onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x2705; Approve &amp; Lock Scene for All Clips</button>'
+
+          // Regenerate with same settings
+          + '<button onclick="document.getElementById(\'nbMasterApprovalModal\').remove();generateNBMasterViaAPI()" '
+            + 'style="width:100%;padding:11px;border-radius:10px;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.35);color:#fb923c;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;" '
+            + 'onmouseenter="this.style.background=\'rgba(251,146,60,0.2)\'" onmouseleave="this.style.background=\'rgba(251,146,60,0.1)\'">&#x21BA; Edit Setting &amp; Regenerate</button>'
+
+        + '</div>'
+      + '</div>';
+
+    document.body.appendChild(overlay);
+  }
+  window._nbShowMasterApproval = _nbShowMasterApproval;
+
+  // ─── Step 4: User approves — distribute master to segments ───────────────
+  window._nbApproveMaster = async function(masterDataUrl, setting, avatarDesc) {
+    var modal = document.getElementById('nbMasterApprovalModal');
+    if (modal) modal.remove();
+
+    // GPT-4o-mini vision: get precise scene description from the image
+    showToast('Analyzing scene...', 'info', 4000);
+    var sceneDesc = await _nbDescribeScene(masterDataUrl, setting);
+    window._sbSceneDesc       = sceneDesc;
+    window._sbEstFrameDataUrl = masterDataUrl;
+
+    // Distribute to all Producer segments
+    _nbDistributeMaster(masterDataUrl, avatarDesc, sceneDesc);
+
+    var n = segments.filter(function(s){ return s._scriptOnly; }).length;
+    showToast('Scene locked for all ' + n + ' clips — ready for Phase 2.', 'success', 5000);
+
+    // Refresh the producer modal to show Phase 1 complete
+    var producerModal = document.getElementById('sbProducerModal');
+    if (producerModal) { producerModal.remove(); if (typeof sbCopyBrief === 'function') sbCopyBrief(); }
+
+    // Also update Phase 1 button to show success
+    var ph1btn = document.getElementById('nbAPIPhase1Btn');
+    if (ph1btn) ph1btn.innerHTML = '&#x2705; Master Reference Locked';
+  };
+
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PRODUCER PHASE 2 — Generate All Per-Scene Start Frames via NB API
+  // ─────────────────────────────────────────────────────────────────────────
+  // Ensures the master reference is set as frameDataUrl on each Producer
+  // segment (so NB treats it as the input image), then calls the existing
+  // generateAllNbComposites() loop which handles progress, approval modal, etc.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // PRODUCER PHASE 2 - Generate All Per-Scene Start Frames via NB API
+  // Ensures master reference is on each segment as frameDataUrl, then
+  // delegates to generateAllNbComposites() which handles progress + approval.
+  window.generateAllNBFramesViaAPI = async function() {
+    if (!avatarImageDataUrl) {
+      showToast('Upload your avatar photo first.', 'warning');
+      return;
+    }
+    var producerSegs = segments.filter(function(s) {
+      return s._scriptOnly && (s.nbPrompt || '').trim();
+    });
+    if (!producerSegs.length) {
+      showToast('Build prompts in Video Producer first.', 'warning');
+      return;
+    }
+    // Distribute master reference frame to segments that don't have one yet
+    if (window._sbEstFrameDataUrl) {
+      segments.forEach(function(seg) {
+        if (seg._scriptOnly && !seg.frameDataUrl) {
+          seg.frameDataUrl = window._sbEstFrameDataUrl;
+        }
+      });
+    } else {
+      showToast('Tip: run Phase 1 first to lock the background for all scenes. Generating anyway...', 'info', 5000);
+    }
+    // Delegate to existing loop - handles per-segment calls + approval modal
+    if (typeof generateAllNbComposites === 'function') {
+      await generateAllNbComposites();
+    }
+  };

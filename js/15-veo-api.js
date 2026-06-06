@@ -500,10 +500,11 @@
     }
 
     var pct    = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
-    var runTxt = running > 0 ? '<span style="color:#38bdf8;font-weight:700;">⟳ ' + running + ' generating in parallel…</span>' : '';
     var chips  = [
-      done   > 0 ? '<span style="color:#34d399;">✅ ' + done   + ' done</span>'    : '',
-      failed > 0 ? '<span style="color:#f87171;">❌ ' + failed + ' failed</span>'  : '',
+      running > 0 ? '<span style="color:#38bdf8;font-weight:700;">⟳ ' + running + ' generating</span>' : '',
+      queued  > 0 ? '<span style="color:rgba(251,146,60,0.9);">⏳ ' + queued  + ' queued</span>'       : '',
+      done    > 0 ? '<span style="color:#34d399;">✅ ' + done    + ' done</span>'                       : '',
+      failed  > 0 ? '<span style="color:#f87171;">❌ ' + failed  + ' failed</span>'                    : '',
     ].filter(Boolean).join('<span style="color:var(--border-2);">  ·  </span>');
 
     bar.innerHTML =
@@ -521,32 +522,10 @@
   }
 
   // ── Single-clip worker — called in parallel for each segment ─────────────
-  async function _generateOneClip(seg, segIdx, sceneNum, total, modelKey) {
-    _setCardStatus(segIdx, 'generating', 'Generating… (~1 min)');
-    _updateVeoAPIScene(sceneNum, total, 'generating');
-
-    var durSecs = 6;
-    try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
-
-    var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-    var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
-
-    seg.apiVideoUrl  = result.videoUrl;
-    seg.apiVideoMime = result.mimeType || 'video/mp4';
-    var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
-    if (blobUrl) seg.apiVideoRaw = blobUrl;
-
-    _updateVeoAPIScene(sceneNum, total, 'done');
-    _setCardStatus(segIdx, 'done', 'Done!');
-
-    // Render this card immediately so the video appears as soon as it's ready
-    if (typeof saveSegments   === 'function') saveSegments();
-    if (typeof renderSegments === 'function') renderSegments();
-    _reapplyAllCardStatuses();
-    if (typeof renderGallery  === 'function') renderGallery();
-  }
-
-  // ── Generate all scenes via API — PARALLEL ────────────────────────────────
+  // ── Generate all scenes via API — concurrent worker pool ─────────────────
+  // Runs up to MAX_CONCURRENT clips simultaneously (Vertex AI allows 10).
+  // Any clips beyond that limit sit in "queued" state and auto-start as
+  // slots free up — no manual batching needed regardless of segment count.
   async function generateAllScenesViaAPI() {
     var toGenerate = segments.filter(function(s) { return s.veoPrompt && s.veoPrompt.trim() && s.nbApproved !== false; });
     if (!toGenerate.length) {
@@ -559,39 +538,84 @@
     var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
     var total    = toGenerate.length;
 
+    // Concurrency limit — Vertex AI allows 10 concurrent video gen operations
+    var MAX_CONCURRENT = 10;
+    var concurrency    = Math.min(MAX_CONCURRENT, total);
+
     _openVeoAPIModal(total);
 
-    // Mark every segment as generating upfront — they all fire simultaneously
+    // Mark ALL clips as queued upfront so users see the full picture immediately
     _veoGenStatuses = {};
-    toGenerate.forEach(function(seg, _i) {
-      var idx = segments.indexOf(seg);
-      _setCardStatus(idx, 'generating', 'Generating… (~1 min)');
-      _updateVeoAPIScene(_i + 1, total, 'generating');
+    toGenerate.forEach(function(seg) {
+      _setCardStatus(segments.indexOf(seg), 'queued', 'In queue…');
     });
 
-    // ── Fire all clips in parallel ─────────────────────────────────────────
-    var clipPromises = toGenerate.map(function(seg, _i) {
-      var segIdx   = segments.indexOf(seg);
-      var sceneNum = _i + 1;
-      return _generateOneClip(seg, segIdx, sceneNum, total, modelKey)
-        .then(function() { return { segIdx: segIdx, sceneNum: sceneNum, ok: true }; })
-        .catch(function(e) {
+    // Shared state — safe in JS (single-threaded event loop)
+    var nextIdx  = 0;
+    var succeeded = 0;
+    var failed    = 0;
+    var aborted   = false;
+
+    // Each worker loops through available tasks until the queue is empty
+    async function worker() {
+      while (!aborted) {
+        var i = nextIdx;
+        if (i >= toGenerate.length) break;
+        nextIdx++;  // claim this task before any await
+
+        var seg      = toGenerate[i];
+        var segIdx   = segments.indexOf(seg);
+        var sceneNum = i + 1;
+
+        _updateVeoAPIScene(sceneNum, total, 'generating');
+        _setCardStatus(segIdx, 'generating', 'Generating… (~1 min)');
+
+        var durSecs = 6;
+        try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+
+        try {
+          var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
+          var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
+
+          seg.apiVideoUrl  = result.videoUrl;
+          seg.apiVideoMime = result.mimeType || 'video/mp4';
+          var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
+          if (blobUrl) seg.apiVideoRaw = blobUrl;
+
+          _updateVeoAPIScene(sceneNum, total, 'done');
+          _setCardStatus(segIdx, 'done', 'Done!');
+          succeeded++;
+
+          if (typeof saveSegments   === 'function') saveSegments();
+          if (typeof renderSegments === 'function') renderSegments();
+          _reapplyAllCardStatuses();
+          if (typeof renderGallery  === 'function') renderGallery();
+
+        } catch(e) {
           console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
           _updateVeoAPIScene(sceneNum, total, 'error');
           _setCardStatus(segIdx, 'error', 'Failed: ' + (e.message || 'Unknown').slice(0, 45));
           showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown'), 'error', 7000);
+          failed++;
+
           if (typeof renderSegments === 'function') renderSegments();
           _reapplyAllCardStatuses();
-          return { segIdx: segIdx, sceneNum: sceneNum, ok: false, err: e.message };
-        });
-    });
 
-    var results  = await Promise.allSettled(clipPromises);
-    var succeeded = results.filter(function(r) { return r.status === 'fulfilled' && r.value && r.value.ok; }).length;
-    var failed    = total - succeeded;
+          // Credit failure — stop all workers
+          if (e.message && (e.message.toLowerCase().includes('insufficient_credits') || e.message.toLowerCase().includes('credit'))) {
+            aborted = true;
+          }
+        }
 
-    _updateVeoAPIProgress(total, total, succeeded, failed);
-    if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+        _updateVeoAPIProgress(succeeded + failed, total, succeeded, failed);
+        if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      }
+    }
+
+    // Launch the worker pool — each worker self-feeds until queue is empty
+    var workers = [];
+    for (var w = 0; w < concurrency; w++) workers.push(worker());
+    await Promise.all(workers);
 
     // Final toast
     if (failed === 0) {
@@ -609,7 +633,6 @@
       if (nudge) nudge.style.display = 'flex';
     }
 
-    // Clear status badges after 4 seconds
     setTimeout(function() {
       _clearAllCardStatuses();
       if (typeof renderSegments === 'function') renderSegments();
