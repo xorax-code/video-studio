@@ -3032,8 +3032,11 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       /the other (person|man|woman|guy|girl|one)\b/.test(t) ||
       // "another [gender]"
       /another (person|man|woman|guy|girl)\b/.test(t) ||
-      // "[gender] in the [color/clothing]" — identifies one of several people
-      /\b(man|woman|guy|girl)\s+in\s+the\b/.test(t) ||
+      // "[gender] in the [color/clothing]" — identifies one of several people by what they're wearing.
+      // Must NOT match single-person location phrases like "woman in the kitchen / background / park".
+      // Require a color word OR a clothing noun after "in the".
+      /\b(man|woman|guy|girl)\s+in\s+the\s+(red|blue|green|white|black|yellow|orange|pink|purple|gray|grey|brown|tan|navy|dark|light|bright|striped|floral)\b/.test(t) ||
+      /\b(man|woman|guy|girl)\s+in\s+the\s+\w+\s*(shirt|top|jacket|dress|hoodie|sweater|coat|hat|jeans|pants|shorts|vest|blouse|skirt|tee)\b/.test(t) ||
       // "[gender] on the left/right"
       /\b(person|man|woman|guy|girl)\s+on\s+the\s+(left|right)\b/.test(t) ||
       // "the [gender] to the left/right"

@@ -290,16 +290,23 @@ exports.handler = async (event) => {
     return null;
   }
 
-  // Try all known explicit response structures first, then fall back to recursive search
-  var samples =
-    (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.generatedSamples) ||
-    (pd.generateVideoResponse && pd.generateVideoResponse.generatedSamples) ||
-    (pd.response && pd.response.generatedSamples) ||
-    null;
+  // Try all known explicit response structures first, then fall back to recursive search.
+  // IMPORTANT: do NOT use || chaining — empty array [] is falsy in JS, so [] || nextPath
+  // would skip right over a content-filtered response (generatedSamples: []) and land on null.
+  // Use explicit != null checks so empty arrays are preserved as "found".
+  var _samplesRaw =
+    (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.generatedSamples != null)
+      ? pd.response.generateVideoResponse.generatedSamples
+    : (pd.generateVideoResponse && pd.generateVideoResponse.generatedSamples != null)
+      ? pd.generateVideoResponse.generatedSamples
+    : (pd.response && pd.response.generatedSamples != null)
+      ? pd.response.generatedSamples
+    : undefined;
 
-  // samples is an ARRAY (possibly empty) when the known path exists, or null when path missing.
-  // Empty array = content filter confirmed. null = unknown response format.
-  var samplesFound = Array.isArray(samples); // true even if empty
+  // samplesFound = true means Vertex returned the expected response shape (even if empty array).
+  // Empty array = content filter blocked it. undefined = unknown response format.
+  var samplesFound = Array.isArray(_samplesRaw);
+  var samples = samplesFound ? _samplesRaw : null;
 
   var raiFilteredCount =
     (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.raiFilteredCount) ||
@@ -346,13 +353,12 @@ exports.handler = async (event) => {
     }
 
     // ── Unknown response format ───────────────────────────────────────────────
-    // done:true but the response doesn't match any known Veo structure.
-    // Return done:false so the client polls once more — this handles the rare
-    // race where Vertex AI marks the operation done before the video is populated.
-    // The client will eventually time out if the video never appears.
-    console.warn('poll-veo-clip: unknown done response — returning done:false for one more retry');
+    // done:true but no video URI anywhere in the response. Vertex AI won't change
+    // its answer on re-poll, so stop immediately rather than burning 10 minutes.
+    console.warn('poll-veo-clip: unknown done response — stopping immediately');
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: false, _retryHint: 'no_video_in_response' }) };
+      body: JSON.stringify({ done: true,
+        error: 'Generation completed but no video was returned. This is usually a content filter or a Vertex AI error — try regenerating this clip.' }) };
   }
 
   let signedUrl;

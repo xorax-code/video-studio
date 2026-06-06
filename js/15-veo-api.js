@@ -4,7 +4,7 @@
   // No Gemini API key needed in the browser.
 
   var _GEMINI_POLL_MS  = 6000;   // poll every 6s
-  var _GEMINI_TIMEOUT  = 360000; // 6 min max
+  var _GEMINI_TIMEOUT  = 600000; // 10 min max — Veo 3 under load can exceed 6 min
 
   // ── Generate mode: 'api' (server-side, credits) | 'flow' (manual Google Flow) ──
   function getGenerateMode() {
@@ -391,7 +391,7 @@
         return { videoUrl: pollData.videoUrl, mimeType: pollData.mimeType || 'video/mp4' };
       }
     }
-    throw new Error('Generation timed out (6 min). Try again or use a shorter clip.');
+    throw new Error('Generation timed out (10 min). Veo may be under high load — try again or reduce clip duration.');
   }
 
   // ── Fetch video as blob URL for in-browser playback ──────────────────────
