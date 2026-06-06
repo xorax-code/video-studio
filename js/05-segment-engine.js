@@ -3025,7 +3025,27 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
   function detectsTwoPeople(text) {
     if (!text) return false;
     const t = text.toLowerCase();
-    return /another person|the other person|points? (at|toward|to) (someone|a person|them|their|his|her)|standing next to|beside (them|a person|someone)|two people|both people|person on the (left|right)|the (man|woman|guy|girl) (on the|to the)|pointing (at|toward|near)|extends?.*(hand|finger).*(toward|at|near|to)|finger (near|at|toward) (their|his|her|the)/.test(t);
+    return (
+      // Generic two-person phrases
+      /two people|both people|two (women|men|girls|guys|persons)|standing next to|beside (them|a person|someone)/.test(t) ||
+      // "the other [gender]" — e.g. "the other woman stands still"
+      /the other (person|man|woman|guy|girl|one)\b/.test(t) ||
+      // "another [gender]"
+      /another (person|man|woman|guy|girl)\b/.test(t) ||
+      // "[gender] in the [color/clothing]" — identifies one of several people
+      /\b(man|woman|guy|girl)\s+in\s+the\b/.test(t) ||
+      // "[gender] on the left/right"
+      /\b(person|man|woman|guy|girl)\s+on\s+the\s+(left|right)\b/.test(t) ||
+      // "the [gender] to the left/right"
+      /the\s+(man|woman|guy|girl)\s+(on\s+the|to\s+the)\b/.test(t) ||
+      // "while [she/he/they/the other] stands/sits/looks" — temporal coordination of two subjects
+      /while\s+(she|he|they|the\s+other)\b/.test(t) ||
+      // Pointing/gesturing at another person
+      /points?\s+(at|toward|to)\s+(someone|a\s+person|them|their|his|her)/.test(t) ||
+      /pointing\s+(at|toward|near)/.test(t) ||
+      /extends?.*(hand|finger).*(toward|at|near|to)/.test(t) ||
+      /finger\s+(near|at|toward)\s+(their|his|her|the)/.test(t)
+    );
   }
 
   // ── Product CTA Segment helpers ──────────────────────────────
@@ -3171,8 +3191,8 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     // from the negative_prompt — it will cause Veo 3 to flip or drop one person
     const twoPersonScene = detectsTwoPeople(scriptSlice) || detectsTwoPeople(analyzedAction);
     const negativePrompt = twoPersonScene
-      ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, flipped composition, mirrored subjects, solo person, disappeared person'
-      : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions';
+      ? 'text overlays, subtitles, watermarks, AI artifacts, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, flipped composition, mirrored subjects, solo person, disappeared person'
+      : 'text overlays, subtitles, watermarks, AI artifacts, multiple people, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change';
     // Duration: must be exactly 6 or 8 seconds — Veo 3 only supports these two.
     // Always check BOTH the actual clip length AND the speech word count, then take
     // the larger of the two. This prevents short clips with long speech from being

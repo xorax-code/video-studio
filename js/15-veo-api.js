@@ -249,17 +249,53 @@
   window.refreshCreditBalance = refreshCreditBalance;
 
   // ── Convert Veo JSON object → flat text prompt ────────────────────────────
+  // Anti-transition terms injected on every single prompt regardless of source.
+  var _ANTI_TRANSITION_NEG = 'cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, transition effect, scene change, hard cut, smash cut';
+
+  // ── Left/right screen-space anchor ───────────────────────────────────────
+  // Veo interprets "left/right" from the subject's POV (mirror perspective),
+  // which is the opposite of the viewer's left/right. Force screen-space
+  // language so Veo places people where the user actually intends.
+  function _anchorLeftRight(text) {
+    if (!text || !/\b(left|right)\b/i.test(text)) return text;
+    // Single-pass replacer — avoids double-matching when one substitution
+    // introduces text that would match a later pattern (e.g. "on the left of frame").
+    return text.replace(
+      /\bon\s+the\s+(left|right)\s+of\s+frame\b|\b(left|right)\s+of\s+frame\b|\b(left|right)\s+side\b|\bon\s+the\s+(left|right)\b|\bto\s+the\s+(left|right)\b/gi,
+      function(match) {
+        var m   = match.toLowerCase();
+        var isL = /left/.test(m);
+        var dir = isL ? 'left' : 'right';
+        var DIR = isL ? 'LEFT' : 'RIGHT';
+        var tag = '(screen-' + dir + ', viewer\'s ' + dir + ')';
+        if (/of\s+frame/.test(m))   return 'on the ' + DIR + ' of frame ' + tag;
+        if (/\bside\b/.test(m))     return DIR + ' side of screen (viewer\'s ' + dir + ')';
+        if (/^on\s+the/.test(m))    return 'on the ' + DIR + ' of screen ' + tag;
+        if (/^to\s+the/.test(m))    return 'to the ' + DIR + ' ' + tag;
+        return match;
+      }
+    );
+  }
+
   function _veoJsonToPrompt(veoJsonStr) {
     var obj;
     try { obj = typeof veoJsonStr === 'string' ? JSON.parse(veoJsonStr) : veoJsonStr; }
     catch(e) { return String(veoJsonStr || ''); }
     var parts = [];
-    if (obj.action) parts.push(obj.action);
+    // Anchor left/right in action before adding to prompt
+    if (obj.action) parts.push(_anchorLeftRight(obj.action));
     if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech + '"');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');
-    if (obj.negative_prompt) parts.push('Do not include: ' + obj.negative_prompt);
+    // Explicit positive instruction — always enforce single continuous shot
+    parts.push('Single continuous smooth shot from start to finish, no transitions, no cuts, no fades, no scene changes');
+    // If any left/right positioning is mentioned, add composition lock
+    var _hasPosition = /\b(left|right)\b/i.test(obj.action || '');
+    // Negative prompt: strip duplicate transition terms, append full list + optional position lock
+    var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
+    var _negExtra = _ANTI_TRANSITION_NEG + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '');
+    parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
 
@@ -340,16 +376,18 @@
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
         continue;
       }
-      // FIX M-8: terminal error (404/403 op not found) returns done:true with error — throw the real message
+      // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
-        throw new Error(pollData.error);
+        // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
+        var _errMsg = pollData.filtered ? ('🚫 ' + pollData.error) : pollData.error;
+        throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
         console.warn('[VeoAPI] poll warning:', pollData.error);
         continue;
       }
       if (pollData.done) {
-        if (!pollData.videoUrl) throw new Error('Generation finished but no video URL returned.');
+        if (!pollData.videoUrl) throw new Error('Generation finished but no video URL returned. Try regenerating this clip.');
         return { videoUrl: pollData.videoUrl, mimeType: pollData.mimeType || 'video/mp4' };
       }
     }

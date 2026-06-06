@@ -531,7 +531,7 @@
       camera:          cameraMap[beat.camera] || beat.camera,
       duration:        beat.duration + ' seconds',
       audio:           'clear natural voice, slight ambient room tone, no background music',
-      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, distorted hands',
+      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, text overlays, subtitles, watermarks, AI artifacts, distorted hands',
     };
     if (productName && beat.type !== 'HOOK' && beat.type !== 'PROBLEM') {
       obj.product = productName;

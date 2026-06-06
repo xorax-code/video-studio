@@ -297,6 +297,15 @@ exports.handler = async (event) => {
     (pd.response && pd.response.generatedSamples) ||
     null;
 
+  // samples is an ARRAY (possibly empty) when the known path exists, or null when path missing.
+  // Empty array = content filter confirmed. null = unknown response format.
+  var samplesFound = Array.isArray(samples); // true even if empty
+
+  var raiFilteredCount =
+    (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.raiFilteredCount) ||
+    (pd.generateVideoResponse && pd.generateVideoResponse.raiFilteredCount) ||
+    (pd.response && pd.response.raiFilteredCount) || 0;
+
   var videosList =
     (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.videos) ||
     (pd.generateVideoResponse && pd.generateVideoResponse.videos) ||
@@ -324,10 +333,26 @@ exports.handler = async (event) => {
 
   if (!gcsUri) {
     var debugInfo = JSON.stringify({ pdKeys: Object.keys(pd), responseKeys: pd.response ? Object.keys(pd.response) : null, raw: rawStr.slice(0, 400) });
-    console.error('poll-veo-clip: no GCS URI found anywhere in response. Debug:', debugInfo);
-    // Return done:true with error so client stops polling immediately instead of looping for 6 min
+    console.error('poll-veo-clip: no GCS URI found. samplesFound=' + samplesFound + ' raiFilteredCount=' + raiFilteredCount + ' debug:', debugInfo);
+
+    // ── Content filter confirmed ──────────────────────────────────────────────
+    // Vertex AI returned the known response structure but generatedSamples is
+    // empty (or raiFilteredCount > 0), meaning Google's safety system blocked it.
+    // Stop polling immediately — retrying the same prompt will get the same result.
+    if (samplesFound || raiFilteredCount > 0) {
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ done: true, filtered: true,
+          error: "Google's safety filter blocked this scene. Try rewording the scene description — avoid specific people, brand names, or violent/explicit actions." }) };
+    }
+
+    // ── Unknown response format ───────────────────────────────────────────────
+    // done:true but the response doesn't match any known Veo structure.
+    // Return done:false so the client polls once more — this handles the rare
+    // race where Vertex AI marks the operation done before the video is populated.
+    // The client will eventually time out if the video never appears.
+    console.warn('poll-veo-clip: unknown done response — returning done:false for one more retry');
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: true, error: 'Generation completed but no video file was returned. The model may have filtered this prompt — try regenerating.', debug: debugInfo }) };
+      body: JSON.stringify({ done: false, _retryHint: 'no_video_in_response' }) };
   }
 
   let signedUrl;
@@ -338,7 +363,10 @@ exports.handler = async (event) => {
     console.log('poll-veo-clip: signed URL created (48h) for', gcsUri.slice(0, 80));
   } catch(e) {
     console.error('poll-veo-clip: signed URL failed:', e.message);
-    signedUrl = gcsUri; // fall back to raw gs:// URI (won't play in browser but won't crash)
+    // Signed URL creation failed — return error rather than a useless gs:// URI
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ done: true,
+        error: 'Video generated but could not create a download link. Please try regenerating this clip.' }) };
   }
   return {
     statusCode: 200,
