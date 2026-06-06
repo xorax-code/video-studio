@@ -2372,6 +2372,12 @@
           <button onclick="addVeoExtra(${i})" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:${(seg.veoExtras && seg.veoExtras.length > 0) ? '0' : '4px'};">＋ Add Continuation Clip</button>
         </div>
 
+        <!-- Inline generation status — driven by _setCardStatus() in 15-veo-api.js -->
+        <div id="seg-gen-status-${i}" style="display:none;margin-top:6px;padding:5px 9px;border-radius:6px;border:1px solid transparent;align-items:center;gap:7px;font-size:10px;font-weight:700;">
+          <div id="seg-gen-spinner-${i}" style="flex-shrink:0;"></div>
+          <span id="seg-gen-msg-${i}"></span>
+        </div>
+
         <!-- Generated video (Gemini API) -->
         ${seg.apiVideoUrl ? `
         <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">

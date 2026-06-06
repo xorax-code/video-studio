@@ -425,60 +425,177 @@
     if (label) label.textContent = done + ' / ' + total + ' done  ·  ' + succeeded + ' ✅  ' + (failed > 0 ? failed + ' ❌' : '');
   }
 
+  // ── Inline card status management ────────────────────────────────────────
+  // Drives the seg-gen-status-{i} elements added to each segment card.
+  var _veoGenStatuses = {}; // { segIdx: { status, msg } }
+
+  function _setCardStatus(idx, status, msg) {
+    _veoGenStatuses[idx] = { status: status, msg: msg };
+    _applyCardStatus(idx);
+    _updateSummaryBar();
+  }
+
+  function _applyCardStatus(idx) {
+    var wrap    = document.getElementById('seg-gen-status-' + idx);
+    var spinner = document.getElementById('seg-gen-spinner-' + idx);
+    var msgEl   = document.getElementById('seg-gen-msg-' + idx);
+    if (!wrap) return;
+    var s = _veoGenStatuses[idx];
+    if (!s) { wrap.style.display = 'none'; return; }
+
+    var cfgs = {
+      queued:     { bg: 'rgba(120,120,120,0.1)',  border: 'rgba(120,120,120,0.25)', color: 'var(--text-3)',  spin: false, icon: '⏳' },
+      generating: { bg: 'rgba(56,189,248,0.12)',  border: 'rgba(56,189,248,0.4)',   color: '#38bdf8',        spin: true,  icon: ''   },
+      done:       { bg: 'rgba(52,211,153,0.12)',  border: 'rgba(52,211,153,0.4)',   color: '#34d399',        spin: false, icon: '✅' },
+      error:      { bg: 'rgba(239,68,68,0.10)',   border: 'rgba(239,68,68,0.35)',   color: '#f87171',        spin: false, icon: '❌' },
+    };
+    var cfg = cfgs[s.status] || cfgs.queued;
+
+    wrap.style.cssText = 'display:flex;margin-top:6px;padding:5px 9px;border-radius:6px;border:1px solid '
+      + cfg.border + ';background:' + cfg.bg + ';align-items:center;gap:7px;font-size:10px;font-weight:700;';
+
+    if (spinner) {
+      if (cfg.spin) {
+        spinner.innerHTML = '<div style="width:10px;height:10px;border:2px solid rgba(56,189,248,0.25);border-top-color:#38bdf8;border-radius:50%;animation:spin 0.7s linear infinite;flex-shrink:0;"></div>';
+      } else {
+        spinner.innerHTML = '<span style="font-size:11px;">' + cfg.icon + '</span>';
+      }
+    }
+    if (msgEl) { msgEl.textContent = s.msg || ''; msgEl.style.color = cfg.color; }
+  }
+
+  function _reapplyAllCardStatuses() {
+    Object.keys(_veoGenStatuses).forEach(function(idx) { _applyCardStatus(parseInt(idx, 10)); });
+    _updateSummaryBar();
+  }
+
+  function _clearAllCardStatuses() {
+    Object.keys(_veoGenStatuses).forEach(function(idx) {
+      _veoGenStatuses[idx] = null;
+      _applyCardStatus(parseInt(idx, 10));
+    });
+    _veoGenStatuses = {};
+    var bar = document.getElementById('veoGenSummaryBar');
+    if (bar) bar.remove();
+  }
+
+  // ── Summary bar above the segments strip ──────────────────────────────────
+  function _updateSummaryBar() {
+    var statuses  = Object.values(_veoGenStatuses).filter(Boolean);
+    var total     = statuses.length;
+    var done      = statuses.filter(function(s) { return s.status === 'done';       }).length;
+    var failed    = statuses.filter(function(s) { return s.status === 'error';      }).length;
+    var running   = statuses.filter(function(s) { return s.status === 'generating'; }).length;
+    var queued    = statuses.filter(function(s) { return s.status === 'queued';     }).length;
+
+    var bar = document.getElementById('veoGenSummaryBar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'veoGenSummaryBar';
+      bar.style.cssText = 'margin:6px 0 4px;padding:8px 14px;border-radius:8px;background:rgba(16,185,129,0.08);border:1px solid rgba(52,211,153,0.3);display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0;';
+      var container = document.getElementById('segmentsContainer');
+      if (container && container.parentNode) {
+        container.parentNode.insertBefore(bar, container);
+      }
+    }
+
+    var pct    = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
+    var runTxt = running > 0 ? '<span style="color:#38bdf8;font-weight:700;">⟳ Scene ' + _currentGeneratingScene + ' generating…</span>' : '';
+    var chips  = [
+      done    > 0 ? '<span style="color:#34d399;">✅ ' + done    + ' done</span>'    : '',
+      failed  > 0 ? '<span style="color:#f87171;">❌ ' + failed  + ' failed</span>'  : '',
+      queued  > 0 ? '<span style="color:var(--text-3);">⏳ ' + queued + ' queued</span>' : '',
+    ].filter(Boolean).join('<span style="color:var(--border-2);">  ·  </span>');
+
+    bar.innerHTML =
+      '<div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">'
+        + '<div style="font-size:10px;font-weight:700;color:var(--text-2);white-space:nowrap;">⚡ Generating ' + total + ' clips</div>'
+        + (runTxt ? '<div style="font-size:10px;">' + runTxt + '</div>' : '')
+        + (chips  ? '<div style="font-size:10px;">' + chips  + '</div>' : '')
+      + '</div>'
+      + '<div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">'
+        + '<div style="width:120px;height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;">'
+          + '<div style="height:100%;width:' + pct + '%;background:linear-gradient(90deg,#34d399,#10b981);border-radius:3px;transition:width 0.4s;"></div>'
+        + '</div>'
+        + '<span style="font-size:10px;font-weight:700;color:#34d399;min-width:30px;">' + pct + '%</span>'
+      + '</div>';
+  }
+
+  var _currentGeneratingScene = 0;
+
   // ── Generate all scenes via API ───────────────────────────────────────────
   async function generateAllScenesViaAPI() {
-    // Only include segments that have a prompt AND are approved (nbApproved !== false)
     var toGenerate = segments.filter(function(s) { return s.veoPrompt && s.veoPrompt.trim() && s.nbApproved !== false; });
     if (!toGenerate.length) {
       showToast('Generate prompts first before running via API.', 'warning');
       return;
     }
 
-    var adm = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-    var _dm = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
+    var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
+    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
     var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
-    var total = toGenerate.length;
+    var total    = toGenerate.length;
 
     _openVeoAPIModal(total);
+
+    // ── Set all scenes to "queued" upfront so user sees the full list ─────
+    _veoGenStatuses = {};
+    toGenerate.forEach(function(seg) {
+      var idx = segments.indexOf(seg);
+      _setCardStatus(idx, 'queued', 'In queue…');
+    });
 
     var succeeded = 0;
     var failed    = 0;
 
     for (var _i = 0; _i < toGenerate.length; _i++) {
       var seg      = toGenerate[_i];
+      var segIdx   = segments.indexOf(seg);
       var sceneNum = _i + 1;
+      _currentGeneratingScene = sceneNum;
 
       _updateVeoAPIScene(sceneNum, total, 'generating');
       _updateVeoAPIProgress(_i, total, succeeded, failed);
+      _setCardStatus(segIdx, 'generating', 'Generating… (up to 1 min)');
+
+      // Scroll this segment card into view
+      var card = document.getElementById('seg-card-' + segIdx);
+      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
 
       var durSecs = 6;
       try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(e) {}
 
       try {
-        // Use NB composite as starting frame; fall back to raw video frame if no composite
         var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-        var result = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
+        var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
 
-        // Store the raw URI and fetch a blob URL for local playback
+        // Persist video URL on the segment object
         seg.apiVideoUrl  = result.videoUrl;
         seg.apiVideoMime = result.mimeType || 'video/mp4';
         var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
-        if (blobUrl) { seg.apiVideoRaw = blobUrl; }
+        if (blobUrl) seg.apiVideoRaw = blobUrl;
 
         _updateVeoAPIScene(sceneNum, total, 'done');
+        _setCardStatus(segIdx, 'done', 'Done! ✅');
         succeeded++;
 
-        if (typeof saveSegments   === 'function') saveSegments();
-        if (typeof renderSegments === 'function') renderSegments();
-        if (typeof renderGallery  === 'function') renderGallery();
+        // Save + re-render, then re-apply status badges (renderSegments wipes DOM)
+        if (typeof saveSegments    === 'function') saveSegments();
+        if (typeof renderSegments  === 'function') renderSegments();
+        _reapplyAllCardStatuses();
+        if (typeof renderGallery   === 'function') renderGallery();
         if (typeof renderAssembler === 'function') renderAssembler();
+
       } catch(e) {
         console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
         _updateVeoAPIScene(sceneNum, total, 'error');
+        _setCardStatus(segIdx, 'error', 'Failed: ' + (e.message || 'Unknown').slice(0, 45));
         showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown error'), 'error', 7000);
         failed++;
 
-        // Insufficient credits — abort the whole run, modal already shown
+        if (typeof renderSegments === 'function') renderSegments();
+        _reapplyAllCardStatuses();
+
         if (e.message && (e.message.toLowerCase().includes('insufficient_credits') || e.message.toLowerCase().includes('credit'))) break;
       }
 
@@ -486,26 +603,27 @@
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
     }
 
-    // Final summary toast
+    // Final state
     if (failed === 0) {
       showToast('All ' + succeeded + ' clips generated!', 'success', 5000);
     } else if (succeeded > 0) {
-      showToast(succeeded + ' clips done, ' + failed + ' failed. See the API modal for details.', 'warning', 6000);
+      showToast(succeeded + ' done · ' + failed + ' failed.', 'warning', 6000);
     } else {
       showToast('Generation failed. Check credits or API status.', 'error', 6000);
     }
 
-    // Refresh gallery one final time after all clips are done
     if (succeeded > 0) {
       if (typeof renderGallery   === 'function') renderGallery();
       if (typeof renderAssembler === 'function') renderAssembler();
-    }
-
-    // Show "Open Video Editor" nudge after at least one clip succeeds
-    if (succeeded > 0) {
       var nudge = document.getElementById('openEditorNudge');
       if (nudge) nudge.style.display = 'flex';
     }
+
+    // Clear status badges after 4 seconds
+    setTimeout(function() {
+      _clearAllCardStatuses();
+      if (typeof renderSegments === 'function') renderSegments();
+    }, 4000);
   }
   window.generateAllScenesViaAPI = generateAllScenesViaAPI;
 

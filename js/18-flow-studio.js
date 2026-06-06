@@ -11,6 +11,10 @@
   var _fsGenImgUrl   = null;                     // generated image data URL
   var _fsGenVideoSrc = null;                     // generated video src
 
+  // Expose state checkers for inline HTML onmouseleave handlers
+  window._fsSlotFilled = function(idx) { return !!_fsImgSlots[idx]; };
+  window._fsVidFilled  = function()    { return !!_fsVidFrame; };
+
   // ── Switch mode ────────────────────────────────────────────────────────────
   window.switchFsMode = function(mode) {
     _fsMode = mode;
