@@ -42,17 +42,10 @@
     if (!seg) { showToast('Segment not found.', 'error'); return false; }
 
     var nbPromptRaw = (seg.nbPrompt || '').trim();
-    if (!nbPromptRaw) {
+    if (!nbPromptRaw && !seg.frameDataUrl) {
       showToast('Generate prompts first — Scene ' + (segIdx + 1) + ' has no NB prompt yet.', 'warning');
       return false;
     }
-
-    // Parse NB prompt JSON to extract instruction
-    var instruction = nbPromptRaw;
-    try {
-      var parsed = JSON.parse(nbPromptRaw);
-      instruction = parsed.instruction || nbPromptRaw;
-    } catch(_) { /* use raw string */ }
 
     if (!avatarImageDataUrl) {
       showToast('Upload your avatar photo first.', 'warning');
@@ -75,11 +68,45 @@
     var avatarParts = _nbSplitDataUrl(avatarCompressed);
 
     var frameB64 = null, frameMime = 'image/jpeg';
-    if (seg.frameDataUrl) {
+    var hasFrame = !!seg.frameDataUrl;
+    if (hasFrame) {
       var frameCompressed = await _nbCompressImage(seg.frameDataUrl, 768, 0.80);
       var frameParts = _nbSplitDataUrl(frameCompressed);
       frameB64 = frameParts.b64;
       frameMime = frameParts.mime;
+    }
+
+    // ── Build instruction for Gemini based on what photos are available ────────
+    // When a video frame (Photo 2) exists: do a person swap.
+    // When avatar only: generate a fresh lifestyle frame.
+    var instruction;
+    if (hasFrame) {
+      // Person-swap mode: Photo 2 is the source scene (e.g. extracted frame from original video).
+      // Tell Gemini explicitly to replace the person in Photo 2 with the avatar from Photo 1.
+      var _action = (seg.action || '').trim();
+      instruction = 'Photo 1 is the creator/avatar — the new person to place in the scene.'
+        + ' Photo 2 is a video frame from the source video — this is the scene reference.'
+        + '\n\nTask: Replace the person in Photo 2 with the person from Photo 1.'
+        + ' Keep EVERYTHING else from Photo 2 IDENTICAL: background, environment, lighting, shadows, props, objects, camera angle, and framing.'
+        + ' Only the person\'s face and identity should change to match Photo 1.'
+        + ' The replacement must look photorealistic and seamless — like the Photo 1 person was always in that scene.'
+        + (_action ? ' The person\'s pose/action: ' + _action + '.' : '')
+        + '\n\nOutput: single photorealistic vertical 9:16 image. No text overlays, no watermarks.';
+    } else {
+      // Generate mode: no reference frame, create a fresh lifestyle photo of the avatar.
+      // Try to use a meaningful description from nbPrompt if available.
+      var _nbInstr = nbPromptRaw;
+      try {
+        var _nbParsed = JSON.parse(nbPromptRaw);
+        _nbInstr = _nbParsed.instruction || nbPromptRaw;
+        // Strip any residual NanoBanana-specific language that confuses Gemini
+        _nbInstr = _nbInstr.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+      } catch(_) {
+        // Plain string — strip NanoBanana references
+        _nbInstr = _nbInstr.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+      }
+      // Prepend clear subject reference so Gemini knows Photo 1 is the person to use
+      instruction = 'Photo 1 is the creator/avatar. ' + (_nbInstr || 'Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression. Medium close-up, warm natural light. No text, no watermarks.');
     }
 
     try {
@@ -130,9 +157,10 @@
 
   // ── Generate NB composites for ALL segments ───────────────────────────────
   async function generateAllNbComposites() {
-    var toGen = segments.filter(function(s) { return (s.nbPrompt || '').trim(); });
+    // Include segments that either have an NB prompt OR have a frameDataUrl (person-swap path)
+    var toGen = segments.filter(function(s) { return (s.nbPrompt || '').trim() || s.frameDataUrl; });
     if (!toGen.length) {
-      showToast('Generate prompts first — no NB prompts found.', 'warning');
+      showToast('No scenes ready — generate prompts first or ensure frames are extracted.', 'warning');
       return;
     }
     if (!avatarImageDataUrl) {
@@ -358,13 +386,11 @@
       if (!seg._scriptOnly) return;
       seg.frameDataUrl = masterDataUrl;
       var action = seg.action || 'speaks naturally to camera with confident eye contact';
-      seg.nbPrompt = 'NanoBanana start frame variation from master reference image. '
-        + 'INPUT: use the master reference as the input image. '
-        + 'Keep IDENTICAL to reference: character face, hair, outfit, background, props, lighting. '
-        + 'Change ONLY the starting pose and expression: '
-        + avatarDesc + ' is now ' + action + '. '
-        + 'Scene: ' + sceneRef + ' '
-        + 'Photorealistic, vertical 9:16, single person only, no text, no watermarks.';
+      // Note: seg.frameDataUrl is set to masterDataUrl above, so at generation time
+      // Photo 1 = avatar, Photo 2 = master reference. The instruction in generateNbComposite
+      // will handle the person-swap + pose-change automatically because hasFrame = true.
+      // We store the pose/action context here so it gets picked up via seg.action.
+      seg.action = action; // ensure action is set for the instruction builder
     });
     if (typeof saveSegments === 'function') saveSegments();
   }
@@ -586,7 +612,7 @@
       return;
     }
     var producerSegs = segments.filter(function(s) {
-      return s._scriptOnly && (s.nbPrompt || '').trim();
+      return s._scriptOnly && ((s.nbPrompt || '').trim() || s.frameDataUrl);
     });
     if (!producerSegs.length) {
       showToast('Build prompts in Video Producer first.', 'warning');

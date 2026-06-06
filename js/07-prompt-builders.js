@@ -566,14 +566,13 @@
     };
     var expression = expressionMap[beat.type] || 'natural engaged expression';
 
-    return 'NanoBanana — start frame variation from master reference image. '
-      + 'INPUT: upload the master reference image into NanoBanana before generating this frame. '
-      + 'Keep IDENTICAL to reference: character face, hair, outfit, background, props, lighting. '
-      + 'Change ONLY the starting pose: ' + (avatarDesc || 'the person') + ' is now ' + actionStart + ', ' + expression + '. '
-      + (setting ? 'Scene setting: ' + setting + ' — match reference exactly. ' : '')
-      + (productName && beat.type !== 'HOOK' && beat.type !== 'PROBLEM' ? productName + ' visible in frame. ' : '')
+    // Photo 1 = avatar photo. No reference frame for Producer beats — generate fresh.
+    return 'Photo 1 is the creator/avatar. Generate a photorealistic lifestyle photo of this exact person. '
+      + (avatarDesc || 'The person') + ' is ' + actionStart + ', ' + expression + '. '
+      + (setting ? 'Setting: ' + setting + '. ' : 'Setting: clean lifestyle environment with warm natural light. ')
+      + (productName && beat.type !== 'HOOK' && beat.type !== 'PROBLEM' ? productName + ' visible nearby on the surface. ' : '')
       + 'Camera: ' + shotDesc + ', vertical 9:16, cinematic soft key lighting. '
-      + 'Style: photorealistic UGC video still, single person only, no text, no watermarks.';
+      + 'Photorealistic UGC video still, single person only, no text, no watermarks. This is the starting frame for a Veo 3 video clip.';
   }
 
 
