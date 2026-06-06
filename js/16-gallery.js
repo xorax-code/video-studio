@@ -60,7 +60,8 @@
             + '<button class="gal-btn gal-btn-add" onclick="galleryAddToAssembler(' + idx + ')" title="Add to assembler">'
               + (inAssembler ? '✓ Added' : '+ Assemble')
             + '</button>'
-            + '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + idx + ')" title="Download clip">⬇</button>'
+            + '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + idx + ')" title="Download clip (original)">⬇</button>'
+            + '<button class="gal-btn gal-btn-hd" id="gal-hd-btn-' + idx + '" onclick="galleryUpscale(' + idx + ')" title="Download 1080p upscaled">HD</button>'
           + '</div>'
         + '</div>';
 
@@ -108,6 +109,96 @@
     // Route through downloadSegmentVideo so we always use a blob URL
     if (typeof window.downloadSegmentVideo === 'function') {
       window.downloadSegmentVideo(segIdx);
+    }
+  };
+
+  // ── 1080p upscale + download ───────────────────────────────────────────────
+  window.galleryUpscale = async function(segIdx) {
+    var segs = window.segments || [];
+    var seg  = segs[segIdx];
+    if (!seg) return;
+    var videoUrl = seg.apiVideoUrl || seg.apiVideoRaw;
+    if (!videoUrl) {
+      if (typeof showToast === 'function') showToast('No video found for this clip.', 'error');
+      return;
+    }
+
+    // Require auth token
+    var jwt = typeof window.getAuthToken === 'function' ? window.getAuthToken() : null;
+    if (!jwt) jwt = localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
+    if (!jwt) {
+      if (typeof showToast === 'function') showToast('Please log in to use 1080p download.', 'warning');
+      return;
+    }
+
+    var btn = document.getElementById('gal-hd-btn-' + segIdx);
+    var originalLabel = 'HD';
+
+    function setBtnState(label, disabled) {
+      if (btn) { btn.textContent = label; btn.disabled = !!disabled; }
+    }
+
+    try {
+      setBtnState('…', true);
+      if (typeof showToast === 'function') showToast('Starting 1080p upscale…', 'info', 4000);
+
+      // Step 1: Create Transcoder job
+      var createRes = await fetch('/.netlify/functions/upscale-video', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify({ videoUrl: videoUrl }),
+      });
+      var createData = await createRes.json();
+      if (!createRes.ok || !createData.jobName) {
+        throw new Error(createData.error || 'Failed to start upscale job.');
+      }
+
+      var jobName      = createData.jobName;
+      var outputGcsUri = createData.outputGcsUri;
+
+      // Step 2: Poll until done
+      var maxAttempts = 60; // 5 minutes at 5s intervals
+      var attempt     = 0;
+      setBtnState('0%', true);
+
+      while (attempt < maxAttempts) {
+        await new Promise(function(r) { setTimeout(r, 5000); });
+        attempt++;
+
+        var pollRes = await fetch('/.netlify/functions/poll-upscale', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body:    JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
+        });
+        var pollData = await pollRes.json();
+
+        if (pollData.state === 'FAILED') {
+          throw new Error(pollData.error || 'Upscale job failed.');
+        }
+
+        if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
+          // Step 3: Download via signed URL
+          setBtnState('↓', true);
+          var a = document.createElement('a');
+          a.href = pollData.downloadUrl;
+          a.download = 'scene-' + (segIdx + 1) + '-1080p.mp4';
+          a.click();
+          if (typeof showToast === 'function') showToast('1080p download started!', 'success', 4000);
+          setBtnState(originalLabel, false);
+          return;
+        }
+
+        // Still PROCESSING
+        var pct = Math.min(95, Math.round((attempt / maxAttempts) * 100));
+        setBtnState(pct + '%', true);
+      }
+
+      throw new Error('Upscale timed out after 5 minutes.');
+
+    } catch(e) {
+      console.error('[galleryUpscale]', e);
+      if (typeof showToast === 'function') showToast('1080p failed: ' + (e.message || e), 'error', 6000);
+      setBtnState(originalLabel, false);
     }
   };
 
