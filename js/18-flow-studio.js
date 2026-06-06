@@ -1,72 +1,138 @@
-// ===== FLOW STUDIO =====
-// Standalone image + video generator.
-// Step 1: Upload reference photo + casual prompt → GPT enhances → Gemini generates image
-// Step 2: Generated image + casual video prompt → GPT builds Veo 3 JSON → Veo 3 generates video
+// ===== STUDIO =====
+// Mode toggle: Generate Image (up to 5 reference photos) | Generate Video (optional start frame)
+// GPT-4o-mini enhances casual prompts → Gemini image gen / Veo 3 video gen
 
 (function() {
 
   // ── State ──────────────────────────────────────────────────────────────────
-  var _fsRefDataUrl      = null;   // uploaded reference image
-  var _fsRefB64          = null;
-  var _fsRefMime         = 'image/jpeg';
-  var _fsGenImageDataUrl = null;   // generated image result
-  var _fsVideoSrc        = null;   // generated video src (blob or remote)
-  var _fsLastImgInstruction = null; // GPT-enhanced instruction shown to user
-  var _fsLastVeoJson        = null; // GPT-built Veo 3 JSON shown to user
+  var _fsMode        = 'image';                  // 'image' | 'video'
+  var _fsImgSlots    = [null,null,null,null,null]; // {dataUrl,b64,mime} per slot
+  var _fsVidFrame    = null;                     // {dataUrl,b64,mime} optional start frame
+  var _fsGenImgUrl   = null;                     // generated image data URL
+  var _fsGenVideoSrc = null;                     // generated video src
 
-  // ── Init ───────────────────────────────────────────────────────────────────
-  window.initFlowStudio = function() {};
-
-  // ── Drag-and-drop + click upload ───────────────────────────────────────────
-  window.onFsRefImageChange = function(e) {
-    var file = e && e.target && e.target.files && e.target.files[0];
-    if (!file) return;
-    _fsLoadRefFile(file);
+  // ── Switch mode ────────────────────────────────────────────────────────────
+  window.switchFsMode = function(mode) {
+    _fsMode = mode;
+    var imgPanel = document.getElementById('fsImgPanel');
+    var vidPanel = document.getElementById('fsVidPanel');
+    var imgBtn   = document.getElementById('fsModeImgBtn');
+    var vidBtn   = document.getElementById('fsModeVidBtn');
+    if (imgPanel) imgPanel.style.display = mode === 'image' ? '' : 'none';
+    if (vidPanel) vidPanel.style.display = mode === 'video' ? '' : 'none';
+    _fsStyleModeBtn(imgBtn, mode === 'image');
+    _fsStyleModeBtn(vidBtn, mode === 'video');
   };
 
-  window.fsDragOver = function(e) {
-    e.preventDefault();
-    var zone = document.getElementById('fsUploadZone');
-    if (zone) zone.style.borderColor = 'rgba(52,211,153,0.8)';
-  };
+  function _fsStyleModeBtn(btn, active) {
+    if (!btn) return;
+    btn.style.background  = active ? 'rgba(52,211,153,0.18)' : 'var(--surface-2)';
+    btn.style.borderColor = active ? 'rgba(52,211,153,0.55)' : 'var(--border-2)';
+    btn.style.color       = active ? '#34d399'               : 'var(--text-3)';
+  }
 
-  window.fsDragLeave = function() {
-    var zone = document.getElementById('fsUploadZone');
-    if (zone) zone.style.borderColor = 'rgba(255,255,255,0.1)';
-  };
-
-  window.fsDrop = function(e) {
-    e.preventDefault();
-    var zone = document.getElementById('fsUploadZone');
-    if (zone) zone.style.borderColor = 'rgba(255,255,255,0.1)';
-    var file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) _fsLoadRefFile(file);
-  };
-
-  window.fsTriggerUpload = function() {
-    var inp = document.getElementById('fsRefImageInput');
+  // ── Image slot upload ──────────────────────────────────────────────────────
+  window.fsTriggerSlot = function(idx) {
+    var inp = document.getElementById('fsSlotInput-' + idx);
     if (inp) inp.click();
   };
 
-  function _fsLoadRefFile(file) {
+  window.onFsSlotChange = function(idx, e) {
+    var file = e && e.target && e.target.files && e.target.files[0];
+    if (!file) return;
+    _fsReadImageFile(file, function(result) {
+      _fsImgSlots[idx] = result;
+      _fsRenderSlot(idx);
+      // Reset file input so same file can be re-selected after clear
+      var inp = document.getElementById('fsSlotInput-' + idx);
+      if (inp) inp.value = '';
+    });
+  };
+
+  window.fsClearSlot = function(idx, e) {
+    if (e) e.stopPropagation();
+    _fsImgSlots[idx] = null;
+    _fsRenderSlot(idx);
+  };
+
+  function _fsRenderSlot(idx) {
+    var slot   = document.getElementById('fsSlot-' + idx);
+    var clearX = document.getElementById('fsSlotClear-' + idx);
+    var label  = document.getElementById('fsSlotLabel-' + idx);
+    if (!slot) return;
+    var img = _fsImgSlots[idx];
+    if (img) {
+      slot.style.backgroundImage = 'url(' + img.dataUrl + ')';
+      slot.style.backgroundSize  = 'cover';
+      slot.style.backgroundPosition = 'center';
+      slot.style.borderColor = 'rgba(52,211,153,0.6)';
+      if (clearX)  clearX.style.display  = 'flex';
+      if (label)   label.style.display   = 'none';
+    } else {
+      slot.style.backgroundImage = '';
+      slot.style.borderColor     = 'rgba(255,255,255,0.1)';
+      if (clearX) clearX.style.display  = 'none';
+      if (label)  label.style.display   = 'flex';
+    }
+  }
+
+  // ── Video start frame upload ───────────────────────────────────────────────
+  window.fsTriggerVidFrame = function() {
+    var inp = document.getElementById('fsVidFrameInput');
+    if (inp) inp.click();
+  };
+
+  window.onFsVidFrameChange = function(e) {
+    var file = e && e.target && e.target.files && e.target.files[0];
+    if (!file) return;
+    _fsReadImageFile(file, function(result) {
+      _fsVidFrame = result;
+      _fsRenderVidFrame();
+      var inp = document.getElementById('fsVidFrameInput');
+      if (inp) inp.value = '';
+    });
+  };
+
+  window.fsClearVidFrame = function(e) {
+    if (e) e.stopPropagation();
+    _fsVidFrame = null;
+    _fsRenderVidFrame();
+  };
+
+  function _fsRenderVidFrame() {
+    var slot   = document.getElementById('fsVidFrameSlot');
+    var clearX = document.getElementById('fsVidFrameClear');
+    var label  = document.getElementById('fsVidFrameLabel');
+    if (!slot) return;
+    if (_fsVidFrame) {
+      slot.style.backgroundImage    = 'url(' + _fsVidFrame.dataUrl + ')';
+      slot.style.backgroundSize     = 'cover';
+      slot.style.backgroundPosition = 'center';
+      slot.style.borderColor = 'rgba(52,211,153,0.6)';
+      if (clearX) clearX.style.display = 'flex';
+      if (label)  label.style.display  = 'none';
+    } else {
+      slot.style.backgroundImage = '';
+      slot.style.borderColor     = 'rgba(255,255,255,0.1)';
+      if (clearX) clearX.style.display = 'none';
+      if (label)  label.style.display  = 'flex';
+    }
+  }
+
+  // ── Read a file into {dataUrl, b64, mime} ──────────────────────────────────
+  function _fsReadImageFile(file, cb) {
     var reader = new FileReader();
     reader.onload = function(ev) {
-      _fsRefDataUrl = ev.target.result;
-      var comma = _fsRefDataUrl.indexOf(',');
-      _fsRefMime = _fsRefDataUrl.slice(5, comma).split(';')[0] || 'image/jpeg';
-      _fsRefB64  = _fsRefDataUrl.slice(comma + 1);
-
-      var prev = document.getElementById('fsRefPreview');
-      if (prev) { prev.src = _fsRefDataUrl; prev.style.display = 'block'; }
-      var zone = document.getElementById('fsUploadZone');
-      if (zone) zone.style.backgroundImage = 'url(' + _fsRefDataUrl + ')';
-      var label = document.getElementById('fsUploadLabel');
-      if (label) label.style.display = 'none';
+      var dataUrl = ev.target.result;
+      var comma   = dataUrl.indexOf(',');
+      var mime    = dataUrl.slice(5, comma).split(';')[0] || 'image/jpeg';
+      var b64     = dataUrl.slice(comma + 1);
+      cb({ dataUrl: dataUrl, b64: b64, mime: mime });
     };
     reader.readAsDataURL(file);
   }
 
-  // ── Compress before sending ────────────────────────────────────────────────
+  // ── Compress image ─────────────────────────────────────────────────────────
   function _fsCompress(dataUrl, maxPx, quality) {
     return new Promise(function(resolve) {
       var img = new Image();
@@ -79,7 +145,7 @@
         var c = document.createElement('canvas');
         c.width = w; c.height = h;
         c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', quality));
+        resolve(c.toDataURL('image/jpeg', quality || 0.80));
       };
       img.onerror = function() { resolve(dataUrl); };
       img.src = dataUrl;
@@ -98,261 +164,144 @@
     return null;
   }
 
-  // ── GPT helper — calls openai-chat proxy ───────────────────────────────────
-  async function _fsGpt(systemPrompt, userContent, jwt, maxTokens) {
+  // ── GPT helper ─────────────────────────────────────────────────────────────
+  async function _fsGpt(system, user, jwt, maxTokens) {
     var res = await fetch('/.netlify/functions/openai-chat', {
       method:  'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
       body: JSON.stringify({
-        model:      'gpt-4o-mini',
-        max_tokens: maxTokens || 600,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user',   content: userContent  },
-        ],
+        model: 'gpt-4o-mini', max_tokens: maxTokens || 500,
+        messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
       }),
     });
-    var data;
-    try { data = await res.json(); } catch(_) { data = {}; }
+    var data; try { data = await res.json(); } catch(_) { data = {}; }
     if (!res.ok || data.error) throw new Error((data.error && (data.error.message || data.error)) || 'GPT error');
     return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   }
 
-  // ── GPT: rewrite casual image prompt → precise instruction string ──────────
-  var _FS_IMG_SYSTEM = `You are a prompt engineer for Gemini AI image editing. The user gives you a casual description of what they want changed in a reference photo of a person. Rewrite it as a single precise instruction string for an AI image editor.
+  // ── GPT system prompts ─────────────────────────────────────────────────────
+  var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay unchanged; if multiple reference photos are described in the user message, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
 
-Rules:
-- Be specific about placement, size, and appearance of any new elements
-- Describe natural lighting and photorealistic integration
-- Explicitly state that the subject's face, expression, skin tone, hair, clothing, and the background must stay completely unchanged
-- Return ONLY a JSON object in this exact format, no extra text:
-{"instruction":"<your detailed instruction here>"}`;
+  var _FS_VID_SYS = 'You are a Veo 3 video prompt engineer. Rewrite the user\'s casual description into a precise clip prompt. Return ONLY: {"action":"<precise physical movement and camera description, under 60 words>","speech":"<exact spoken words, or empty string if none>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, blurry"}';
 
-  async function _fsEnhanceImagePrompt(casual, jwt) {
-    try {
-      var raw = await _fsGpt(_FS_IMG_SYSTEM, casual, jwt, 400);
-      // Strip markdown code fences if present
-      raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-      var parsed = JSON.parse(raw);
-      return parsed.instruction || casual;
-    } catch(_) {
-      // GPT failed or returned bad JSON — fall back to the user's raw prompt
-      return casual;
-    }
-  }
-
-  // ── GPT: rewrite casual video description → Veo 3 JSON ────────────────────
-  var _FS_VID_SYSTEM = `You are a prompt engineer for Veo 3 AI video generation. The user gives you a casual description of what they want to happen in a short video clip. Rewrite it as a precise Veo 3 prompt.
-
-Return ONLY a JSON object in this exact format, no extra text:
-{
-  "action": "<precise description of physical movement and action in this clip>",
-  "speech": "<exact words spoken — empty string if the person is not speaking>",
-  "negative_prompt": "text overlays, captions, watermarks, subtitles, jump cuts, scene changes, blurry, duplicate people"
-}
-
-Rules:
-- action: describe visible body movement, facial expression, eye contact direction, and camera behavior
-- speech: only include if the user's description clearly involves the person speaking; otherwise use ""
-- Keep action under 60 words
-- No duration field — that is set separately`;
-
-  async function _fsEnhanceVideoPrompt(casual, jwt) {
-    try {
-      var raw = await _fsGpt(_FS_VID_SYSTEM, casual || 'The person moves naturally and looks at the camera.', jwt, 400);
-      raw = raw.replace(/```json\s*/gi, '').replace(/```\s*/gi, '').trim();
-      return JSON.parse(raw); // { action, speech, negative_prompt }
-    } catch(_) {
-      return {
-        action: casual || 'The person moves naturally, looking toward the camera with a relaxed expression.',
-        speech: '',
-        negative_prompt: 'text, captions, watermarks, subtitles, blurry',
-      };
-    }
-  }
-
-  // ── Update status label ────────────────────────────────────────────────────
-  function _fsSetStatus(elId, text, color) {
+  // ── Set status text ────────────────────────────────────────────────────────
+  function _fsStatus(elId, text, color) {
     var el = document.getElementById(elId);
     if (!el) return;
     el.textContent = text;
     el.style.color = color || 'var(--text-3)';
-    el.style.display = text ? 'block' : 'none';
+    el.style.display = text ? '' : 'none';
   }
 
-  // ── Show/hide enhanced prompt pill ────────────────────────────────────────
-  function _fsShowEnhanced(containerId, text) {
-    var el = document.getElementById(containerId);
-    if (!el) return;
-    if (!text) { el.style.display = 'none'; return; }
-    el.style.display = '';
-    var inner = el.querySelector('.fs-enhanced-text');
-    if (inner) inner.textContent = text;
-  }
-
-  // ── STEP 1: Generate Image ─────────────────────────────────────────────────
+  // ── GENERATE IMAGE ─────────────────────────────────────────────────────────
   window.generateFsImage = async function() {
-    if (!_fsRefB64) {
-      if (typeof showToast === 'function') showToast('Upload a reference photo first.', 'warning');
-      return;
+    var loaded = _fsImgSlots.filter(Boolean);
+    if (!loaded.length) {
+      if (typeof showToast === 'function') showToast('Upload at least one reference photo.', 'warning'); return;
     }
-    var promptEl = document.getElementById('fsImagePrompt');
-    var casual = promptEl ? promptEl.value.trim() : '';
+    var promptEl = document.getElementById('fsImgPrompt');
+    var casual   = promptEl ? promptEl.value.trim() : '';
     if (!casual) {
-      if (typeof showToast === 'function') showToast('Describe what you want to generate.', 'warning');
-      return;
+      if (typeof showToast === 'function') showToast('Enter a prompt first.', 'warning'); return;
     }
 
     var jwt = await _fsJwt();
-    if (!jwt) {
-      if (typeof showToast === 'function') showToast('Please log in to generate images.', 'warning');
-      return;
-    }
+    if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
 
-    var btn     = document.getElementById('fsBtnGenImage');
-    var spinner = document.getElementById('fsImageSpinner');
-    var statusEl = document.getElementById('fsImageStatus');
-    if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
+    var btn     = document.getElementById('fsBtnGenImg');
+    var spinner = document.getElementById('fsImgSpinner');
+    var result  = document.getElementById('fsImgResult');
+    if (btn)    { btn.disabled = true; btn.textContent = 'Working…'; }
     if (spinner) spinner.style.display = 'flex';
-    _fsShowEnhanced('fsImgEnhancedWrap', null);
-
-    var resultWrap = document.getElementById('fsImageResult');
-    if (resultWrap) resultWrap.style.display = 'none';
+    if (result)  result.style.display  = 'none';
 
     try {
-      // ── Phase 1: GPT rewrites casual prompt → precise instruction ──────────
-      _fsSetStatus('fsImageStatus', '✦ Enhancing prompt with GPT…', 'rgba(139,92,246,0.9)');
-      var instruction = await _fsEnhanceImagePrompt(casual, jwt);
-      _fsLastImgInstruction = instruction;
-      _fsShowEnhanced('fsImgEnhancedWrap', instruction);
+      // GPT enhance
+      _fsStatus('fsImgStatusTxt', '✦ Enhancing prompt…', 'rgba(139,92,246,0.9)');
+      var photoContext = loaded.length > 1
+        ? 'I have ' + loaded.length + ' reference photos (' + loaded.map(function(_,i){return 'Photo '+(i+1);}).join(', ') + ').'
+        : '';
+      var instruction = casual;
+      try {
+        var raw = await _fsGpt(_FS_IMG_SYS, (photoContext ? photoContext + ' ' : '') + casual, jwt, 400);
+        raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
+        instruction = JSON.parse(raw).instruction || casual;
+      } catch(_) { /* fall back to raw prompt */ }
 
-      // ── Phase 2: Gemini generates the image ───────────────────────────────
-      _fsSetStatus('fsImageStatus', '✦ Generating image…', 'rgba(52,211,153,0.9)');
-
-      var compressed = await _fsCompress(_fsRefDataUrl, 768, 0.80);
-      var comma = compressed.indexOf(',');
-      var mime  = compressed.slice(5, comma).split(';')[0] || 'image/jpeg';
-      var b64   = compressed.slice(comma + 1);
+      // Compress all loaded images
+      _fsStatus('fsImgStatusTxt', '✦ Generating image…', 'rgba(52,211,153,0.9)');
+      var images = [];
+      for (var i = 0; i < loaded.length; i++) {
+        var compressed = await _fsCompress(loaded[i].dataUrl, 768, 0.80);
+        var comma = compressed.indexOf(',');
+        images.push({
+          b64:  compressed.slice(comma + 1),
+          mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg',
+        });
+      }
 
       var res = await fetch('/.netlify/functions/generate-nb-composite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({
-          instruction: instruction,
-          avatarB64:   b64,
-          avatarMime:  mime,
-          frameB64:    null,
-          frameMime:   'image/jpeg',
-        }),
+        body: JSON.stringify({ instruction: instruction, images: images }),
       });
+      var data; try { data = await res.json(); } catch(_) { data = {}; }
+      if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
+      if (!data.imageB64) throw new Error('No image returned — try rephrasing your prompt.');
 
-      var data;
-      try { data = await res.json(); } catch(_) { data = {}; }
-
-      if (!res.ok || data.error) {
-        if (typeof showToast === 'function') showToast('Image failed: ' + (data.error || 'HTTP ' + res.status), 'error', 6000);
-        return;
-      }
-      if (!data.imageB64) {
-        if (typeof showToast === 'function') showToast('No image returned — try rephrasing your prompt.', 'warning', 5000);
-        return;
-      }
-
-      _fsGenImageDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
-      _fsSetStatus('fsImageStatus', '', '');
-
-      var img = document.getElementById('fsGenImage');
-      if (img) img.src = _fsGenImageDataUrl;
-      if (resultWrap) resultWrap.style.display = '';
-
-      // Unlock Step 2
-      var vidSection = document.getElementById('fsVideoSection');
-      if (vidSection) vidSection.style.opacity = '1';
-      var vidBtn = document.getElementById('fsBtnGenVideo');
-      if (vidBtn) { vidBtn.disabled = false; vidBtn.style.opacity = '1'; vidBtn.style.cursor = 'pointer'; }
-
-      if (typeof showToast === 'function') showToast('Image generated! Scroll down to create a video from it.', 'success', 4000);
+      _fsGenImgUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var img = document.getElementById('fsGenImg');
+      if (img) img.src = _fsGenImgUrl;
+      if (result) result.style.display = '';
+      _fsStatus('fsImgStatusTxt', '', '');
+      if (typeof showToast === 'function') showToast('Image generated!', 'success', 3000);
 
     } catch(e) {
-      _fsSetStatus('fsImageStatus', '', '');
-      if (typeof showToast === 'function') showToast('Image error: ' + (e.message || e), 'error', 5000);
+      _fsStatus('fsImgStatusTxt', '', '');
+      if (typeof showToast === 'function') showToast('Image error: ' + (e.message || e), 'error', 6000);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '✨ Generate Image'; }
+      if (btn)    { btn.disabled = false; btn.textContent = '✨ Generate Image'; }
       if (spinner) spinner.style.display = 'none';
     }
   };
 
-  window.redoFsImage = function() { window.generateFsImage(); };
-
-  window.downloadFsImage = function() {
-    if (!_fsGenImageDataUrl) return;
-    var a = document.createElement('a');
-    a.href = _fsGenImageDataUrl;
-    a.download = 'flow-studio-image.png';
-    a.click();
+  window.downloadFsImg = function() {
+    if (!_fsGenImgUrl) return;
+    var a = document.createElement('a'); a.href = _fsGenImgUrl; a.download = 'studio-image.png'; a.click();
   };
 
-  // ── Use generated image as new reference ──────────────────────────────────
-  window.useFsImageAsRef = function() {
-    if (!_fsGenImageDataUrl) return;
-    _fsRefDataUrl = _fsGenImageDataUrl;
-    var comma = _fsRefDataUrl.indexOf(',');
-    _fsRefMime = _fsRefDataUrl.slice(5, comma).split(';')[0] || 'image/png';
-    _fsRefB64  = _fsRefDataUrl.slice(comma + 1);
-
-    var prev = document.getElementById('fsRefPreview');
-    if (prev) { prev.src = _fsRefDataUrl; prev.style.display = 'block'; }
-    var zone = document.getElementById('fsUploadZone');
-    if (zone) zone.style.backgroundImage = 'url(' + _fsRefDataUrl + ')';
-    var label = document.getElementById('fsUploadLabel');
-    if (label) label.style.display = 'none';
-
-    _fsGenImageDataUrl = null;
-    var resultWrap = document.getElementById('fsImageResult');
-    if (resultWrap) resultWrap.style.display = 'none';
-    _fsShowEnhanced('fsImgEnhancedWrap', null);
-
-    var promptEl = document.getElementById('fsImagePrompt');
-    if (promptEl) { promptEl.value = ''; promptEl.focus(); }
-
-    if (typeof showToast === 'function') showToast('Generated image set as new reference — enter a new prompt.', 'success', 4000);
-  };
-
-  // ── STEP 2: Generate Video ─────────────────────────────────────────────────
+  // ── GENERATE VIDEO ─────────────────────────────────────────────────────────
   window.generateFsVideo = async function() {
-    if (!_fsGenImageDataUrl) {
-      if (typeof showToast === 'function') showToast('Generate an image first — it becomes the video start frame.', 'warning');
-      return;
+    var promptEl = document.getElementById('fsVidPrompt');
+    var casual   = promptEl ? promptEl.value.trim() : '';
+    if (!casual) {
+      if (typeof showToast === 'function') showToast('Enter a video prompt first.', 'warning'); return;
     }
 
-    var promptEl = document.getElementById('fsVideoPrompt');
-    var casual   = promptEl ? promptEl.value.trim() : '';
-
-    var durEl = document.querySelectorAll('#fsVideoDuration .fs-dur-btn.active');
-    var dur   = durEl.length ? parseInt(durEl[0].dataset.dur) || 6 : 6;
+    var durEl = document.querySelector('#fsVidDuration .fs-dur-btn.active');
+    var dur   = durEl ? parseInt(durEl.dataset.dur) || 6 : 6;
 
     var jwt = await _fsJwt();
-    if (!jwt) {
-      if (typeof showToast === 'function') showToast('Please log in to generate videos.', 'warning');
-      return;
-    }
+    if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
 
-    var btn     = document.getElementById('fsBtnGenVideo');
-    var spinner = document.getElementById('fsVideoSpinner');
-    if (btn) { btn.disabled = true; btn.textContent = 'Working…'; }
-    if (spinner) spinner.style.display = 'flex';
-    _fsShowEnhanced('fsVidEnhancedWrap', null);
-
-    var videoResult = document.getElementById('fsVideoResult');
-    if (videoResult) videoResult.style.display = 'none';
+    var btn     = document.getElementById('fsBtnGenVid');
+    var spinner = document.getElementById('fsVidSpinner');
+    var result  = document.getElementById('fsVidResult');
+    if (btn)     { btn.disabled = true; btn.textContent = 'Working…'; }
+    if (spinner)  spinner.style.display = 'flex';
+    if (result)   result.style.display  = 'none';
 
     try {
       if (typeof generateVeoClipViaAPI !== 'function') throw new Error('Veo API not loaded — refresh the page.');
 
-      // ── Phase 1: GPT builds Veo 3 JSON from casual description ────────────
-      _fsSetStatus('fsVideoStatus', '✦ Building Veo 3 prompt with GPT…', 'rgba(139,92,246,0.9)');
-      var veoFields = await _fsEnhanceVideoPrompt(casual, jwt);
-      _fsLastVeoJson = veoFields;
+      // GPT build Veo 3 JSON
+      _fsStatus('fsVidStatusTxt', '✦ Building prompt with GPT…', 'rgba(139,92,246,0.9)');
+      var veoFields = { action: casual, speech: '', negative_prompt: 'text, captions, watermarks, subtitles, blurry' };
+      try {
+        var raw = await _fsGpt(_FS_VID_SYS, casual, jwt, 400);
+        raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
+        veoFields = Object.assign(veoFields, JSON.parse(raw));
+      } catch(_) { /* fall back */ }
 
       var veoJson = JSON.stringify({
         action:          veoFields.action,
@@ -361,68 +310,64 @@ Rules:
         negative_prompt: veoFields.negative_prompt || 'text, captions, watermarks, subtitles, blurry',
       });
 
-      // Show the enhanced prompt to the user
-      var previewText = '▸ action: ' + veoFields.action
-        + (veoFields.speech ? '\n▸ speech: "' + veoFields.speech + '"' : '');
-      _fsShowEnhanced('fsVidEnhancedWrap', previewText);
-
-      // ── Phase 2: Veo 3 generates the video ────────────────────────────────
-      _fsSetStatus('fsVideoStatus', '✦ Generating video with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
+      _fsStatus('fsVidStatusTxt', '✦ Generating video with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
 
       var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
       var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
       var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
 
-      var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, _fsGenImageDataUrl);
-
-      _fsVideoSrc = result.videoUrl;
-      if (typeof window._fetchVideoAsBlob === 'function') {
-        var blob = await window._fetchVideoAsBlob(result.videoUrl);
-        if (blob) _fsVideoSrc = blob;
+      // Start frame: use uploaded image if present
+      var startImg = null;
+      if (_fsVidFrame) {
+        var cf = await _fsCompress(_fsVidFrame.dataUrl, 1024, 0.85);
+        startImg = cf;
       }
 
-      _fsSetStatus('fsVideoStatus', '', '');
-      var vid = document.getElementById('fsGenVideo');
-      if (vid) { vid.src = _fsVideoSrc; vid.load(); }
-      if (videoResult) videoResult.style.display = '';
+      var res = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg);
+      _fsGenVideoSrc = res.videoUrl;
+      if (typeof window._fetchVideoAsBlob === 'function') {
+        var blob = await window._fetchVideoAsBlob(res.videoUrl);
+        if (blob) _fsGenVideoSrc = blob;
+      }
 
+      _fsStatus('fsVidStatusTxt', '', '');
+      var vid = document.getElementById('fsGenVid');
+      if (vid) { vid.src = _fsGenVideoSrc; vid.load(); }
+      if (result) result.style.display = '';
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
       if (typeof showToast === 'function') showToast('Video generated!', 'success', 4000);
 
     } catch(e) {
-      _fsSetStatus('fsVideoStatus', '', '');
+      _fsStatus('fsVidStatusTxt', '', '');
       if (typeof showToast === 'function') showToast('Video failed: ' + (e.message || e), 'error', 7000);
     } finally {
-      if (btn) { btn.disabled = false; btn.textContent = '⚡ Generate Video'; }
-      if (spinner) spinner.style.display = 'none';
+      if (btn)     { btn.disabled = false; btn.textContent = '⚡ Generate Video'; }
+      if (spinner)  spinner.style.display = 'none';
     }
   };
 
-  window.downloadFsVideo = function() {
-    if (!_fsVideoSrc) return;
-    var a = document.createElement('a');
-    a.href = _fsVideoSrc;
-    a.download = 'flow-studio-video.mp4';
-    a.click();
+  window.downloadFsVid = function() {
+    if (!_fsGenVideoSrc) return;
+    var a = document.createElement('a'); a.href = _fsGenVideoSrc; a.download = 'studio-video.mp4'; a.click();
   };
 
   // ── Duration toggle ────────────────────────────────────────────────────────
-  window.setFsDuration = function(sec, el) {
-    document.querySelectorAll('#fsVideoDuration .fs-dur-btn').forEach(function(b) {
+  window.setFsDur = function(el) {
+    document.querySelectorAll('#fsVidDuration .fs-dur-btn').forEach(function(b) {
       b.classList.remove('active');
-      b.style.background  = 'var(--surface-3)';
+      b.style.background  = 'var(--surface-2)';
       b.style.borderColor = 'var(--border-2)';
       b.style.color       = 'var(--text-3)';
     });
     el.classList.add('active');
     el.style.background  = 'rgba(52,211,153,0.18)';
-    el.style.borderColor = 'rgba(52,211,153,0.5)';
+    el.style.borderColor = 'rgba(52,211,153,0.55)';
     el.style.color       = '#34d399';
   };
 
   window.fsAutoGrow = function(el) {
     el.style.height = 'auto';
-    el.style.height = el.scrollHeight + 'px';
+    el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   };
 
 })();

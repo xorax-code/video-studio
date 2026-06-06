@@ -85,38 +85,38 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const {
-    instruction,
-    avatarB64,
-    avatarMime = 'image/jpeg',
-    frameB64   = null,
-    frameMime  = 'image/jpeg',
-  } = body;
+  const { instruction, avatarB64, avatarMime = 'image/jpeg', frameB64 = null, frameMime = 'image/jpeg' } = body;
 
-  if (!instruction || !avatarB64) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and avatarB64 are required.' }) };
+  // ── Build images array — accept new {images:[{b64,mime}]} OR old avatarB64/frameB64 format ──
+  let images = [];
+  if (Array.isArray(body.images) && body.images.length > 0) {
+    // New format: up to 5 images from Studio tab
+    images = body.images.filter(img => img && img.b64).slice(0, 5);
+  } else if (avatarB64) {
+    // Legacy format: NB composite / replicator calls
+    images = [{ b64: avatarB64, mime: avatarMime }];
+    if (frameB64) images.push({ b64: frameB64, mime: frameMime });
+  }
+
+  if (!instruction || images.length === 0) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and at least one image are required.' }) };
   }
 
   // ── Build Gemini request ───────────────────────────────────────────────────
-  // gemini-3.1-flash-image REST API only supports bare `contents` — no
-  // system_instruction, no generationConfig.responseModalities.
-  // Start with "Generate an image of" so the model outputs an image, not text.
-  const sceneRef = frameB64
-    ? 'Use Photo 2 as the background and scene reference.'
-    : '';
+  const photoLabels = images.map((_, i) => `Photo ${i + 1}`).join(', ');
+  const photoGuide = images.length === 1
+    ? 'Use Photo 1 as the style reference for the person\'s appearance, clothing, and accessories.'
+    : `Reference photos provided: ${photoLabels}. Use Photo 1 as the primary person/character reference. Additional photos are scene, product, or style references — incorporate them as instructed.`;
+
   const userText = `Generate an image of: ${instruction}
 
-Use Photo 1 as the style reference for the person's appearance, clothing, and accessories. ${sceneRef}
+${photoGuide}
 Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
 
-  const userParts = [
-    { text: userText },
-    { inline_data: { mime_type: avatarMime, data: avatarB64 } },
-  ];
-
-  if (frameB64) {
-    userParts.push({ inline_data: { mime_type: frameMime, data: frameB64 } });
-  }
+  const userParts = [{ text: userText }];
+  images.forEach(img => {
+    userParts.push({ inline_data: { mime_type: img.mime || 'image/jpeg', data: img.b64 } });
+  });
 
   const requestBody = JSON.stringify({
     contents: [{ role: 'user', parts: userParts }],
@@ -125,7 +125,7 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
   // gemini-3.1-flash-image (Nano Banana 2) — stable image-in/image-out model, uses v1
   const apiPath = `/v1/models/gemini-3.1-flash-image:generateContent?key=${geminiKey}`;
 
-  console.log(`generate-nb-composite: user=${user.id}, hasFrame=${!!frameB64}, instrLen=${instruction.length}`);
+  console.log(`generate-nb-composite: user=${user.id}, images=${images.length}, instrLen=${instruction.length}`);
 
   let result;
   try {
