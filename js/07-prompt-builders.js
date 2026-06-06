@@ -222,7 +222,7 @@
     }
 
     // Beat Cards
-    html += '<div style="display:flex;flex-direction:column;gap:6px;">';
+    html += '<div style="display:flex;flex-direction:row;gap:10px;overflow-x:auto;padding-bottom:10px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;">';
     beats.forEach(function(beat, idx) { html += _sbRenderBeatCard(beat, idx, beats.length); });
     html += '</div>';
 
@@ -244,16 +244,20 @@
         + ' onmouseleave="this.style.boxShadow=\'0 0 14px rgba(16,185,129,0.2)\'">'
         + '🚀 Build All Prompts'
       + '</button>'
-      + '<div id="sbBriefWrap" style="display:none;flex-direction:column;gap:4px;">'
-        + '<button onclick="sbCopyBrief()"'
-          + ' style="width:100%;padding:9px 0;font-size:11px;font-weight:700;'
-            + 'background:linear-gradient(135deg,rgba(251,146,60,0.18),rgba(249,115,22,0.1));'
-            + 'border:1px solid rgba(251,146,60,0.55);border-radius:6px;color:#fb923c;cursor:pointer;font-family:inherit;">'
-          + '🤖 Open Veo Agent'
+      + '<div id="sbBriefWrap" style="display:none;flex-direction:column;gap:6px;">'
+        + '<button onclick="if(typeof generateNBMasterViaAPI===\'function\'){generateNBMasterViaAPI();}else{showToast(\'Coming soon\',\'info\',3000);}"'
+          + ' style="width:100%;padding:10px 0;font-size:12px;font-weight:700;'
+            + 'background:linear-gradient(135deg,rgba(16,185,129,0.18),rgba(5,150,105,0.10));'
+            + 'border:1px solid rgba(16,185,129,0.5);border-radius:7px;color:#34d399;cursor:pointer;font-family:inherit;letter-spacing:-0.2px;'
+            + 'box-shadow:0 0 12px rgba(16,185,129,0.15);">'
+          + '&#x26A1; Generate Start Frames via API'
         + '</button>'
-        + '<div style="font-size:8.5px;color:var(--text-3);text-align:center;line-height:1.5;">'
-          + 'Download frames ZIP · copy scene prompts for Google Flow'
-        + '</div>'
+        + '<button onclick="sbCopyBrief()"'
+          + ' style="width:100%;padding:8px 0;font-size:10.5px;font-weight:600;'
+            + 'background:none;border:1px solid var(--border-2);border-radius:6px;color:var(--text-3);cursor:pointer;font-family:inherit;">'
+          + '&#x1F3AC; Open Producer'
+        + '</button>'
+      + '</div>'
       + '</div>'
     + '</div>';
 
@@ -281,7 +285,7 @@
 
     return '<div id="sb-card-' + beat.id + '" style="border:1px solid '
       + (beat.locked ? 'rgba(251,146,60,0.5)' : 'var(--border-2)')
-      + ';border-radius:7px;background:var(--surface-2);overflow:hidden;">'
+      + ';border-radius:7px;background:var(--surface-2);overflow:hidden;min-width:270px;flex-shrink:0;scroll-snap-align:start;">'
 
       // Header
       + '<div style="display:flex;align-items:center;gap:6px;padding:7px 10px;border-bottom:1px solid var(--border);cursor:pointer;" onclick="sbToggleCard(\'' + beat.id + '\')">'
