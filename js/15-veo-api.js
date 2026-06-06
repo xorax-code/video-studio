@@ -500,11 +500,10 @@
     }
 
     var pct    = total > 0 ? Math.round(((done + failed) / total) * 100) : 0;
-    var runTxt = running > 0 ? '<span style="color:#38bdf8;font-weight:700;">⟳ Scene ' + _currentGeneratingScene + ' generating…</span>' : '';
+    var runTxt = running > 0 ? '<span style="color:#38bdf8;font-weight:700;">⟳ ' + running + ' generating in parallel…</span>' : '';
     var chips  = [
-      done    > 0 ? '<span style="color:#34d399;">✅ ' + done    + ' done</span>'    : '',
-      failed  > 0 ? '<span style="color:#f87171;">❌ ' + failed  + ' failed</span>'  : '',
-      queued  > 0 ? '<span style="color:var(--text-3);">⏳ ' + queued + ' queued</span>' : '',
+      done   > 0 ? '<span style="color:#34d399;">✅ ' + done   + ' done</span>'    : '',
+      failed > 0 ? '<span style="color:#f87171;">❌ ' + failed + ' failed</span>'  : '',
     ].filter(Boolean).join('<span style="color:var(--border-2);">  ·  </span>');
 
     bar.innerHTML =
@@ -521,9 +520,33 @@
       + '</div>';
   }
 
-  var _currentGeneratingScene = 0;
+  // ── Single-clip worker — called in parallel for each segment ─────────────
+  async function _generateOneClip(seg, segIdx, sceneNum, total, modelKey) {
+    _setCardStatus(segIdx, 'generating', 'Generating… (~1 min)');
+    _updateVeoAPIScene(sceneNum, total, 'generating');
 
-  // ── Generate all scenes via API ───────────────────────────────────────────
+    var durSecs = 6;
+    try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+
+    var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
+    var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
+
+    seg.apiVideoUrl  = result.videoUrl;
+    seg.apiVideoMime = result.mimeType || 'video/mp4';
+    var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
+    if (blobUrl) seg.apiVideoRaw = blobUrl;
+
+    _updateVeoAPIScene(sceneNum, total, 'done');
+    _setCardStatus(segIdx, 'done', 'Done!');
+
+    // Render this card immediately so the video appears as soon as it's ready
+    if (typeof saveSegments   === 'function') saveSegments();
+    if (typeof renderSegments === 'function') renderSegments();
+    _reapplyAllCardStatuses();
+    if (typeof renderGallery  === 'function') renderGallery();
+  }
+
+  // ── Generate all scenes via API — PARALLEL ────────────────────────────────
   async function generateAllScenesViaAPI() {
     var toGenerate = segments.filter(function(s) { return s.veoPrompt && s.veoPrompt.trim() && s.nbApproved !== false; });
     if (!toGenerate.length) {
@@ -538,78 +561,45 @@
 
     _openVeoAPIModal(total);
 
-    // ── Set all scenes to "queued" upfront so user sees the full list ─────
+    // Mark every segment as generating upfront — they all fire simultaneously
     _veoGenStatuses = {};
-    toGenerate.forEach(function(seg) {
+    toGenerate.forEach(function(seg, _i) {
       var idx = segments.indexOf(seg);
-      _setCardStatus(idx, 'queued', 'In queue…');
+      _setCardStatus(idx, 'generating', 'Generating… (~1 min)');
+      _updateVeoAPIScene(_i + 1, total, 'generating');
     });
 
-    var succeeded = 0;
-    var failed    = 0;
-
-    for (var _i = 0; _i < toGenerate.length; _i++) {
-      var seg      = toGenerate[_i];
+    // ── Fire all clips in parallel ─────────────────────────────────────────
+    var clipPromises = toGenerate.map(function(seg, _i) {
       var segIdx   = segments.indexOf(seg);
       var sceneNum = _i + 1;
-      _currentGeneratingScene = sceneNum;
+      return _generateOneClip(seg, segIdx, sceneNum, total, modelKey)
+        .then(function() { return { segIdx: segIdx, sceneNum: sceneNum, ok: true }; })
+        .catch(function(e) {
+          console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
+          _updateVeoAPIScene(sceneNum, total, 'error');
+          _setCardStatus(segIdx, 'error', 'Failed: ' + (e.message || 'Unknown').slice(0, 45));
+          showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown'), 'error', 7000);
+          if (typeof renderSegments === 'function') renderSegments();
+          _reapplyAllCardStatuses();
+          return { segIdx: segIdx, sceneNum: sceneNum, ok: false, err: e.message };
+        });
+    });
 
-      _updateVeoAPIScene(sceneNum, total, 'generating');
-      _updateVeoAPIProgress(_i, total, succeeded, failed);
-      _setCardStatus(segIdx, 'generating', 'Generating… (up to 1 min)');
+    var results  = await Promise.allSettled(clipPromises);
+    var succeeded = results.filter(function(r) { return r.status === 'fulfilled' && r.value && r.value.ok; }).length;
+    var failed    = total - succeeded;
 
-      // Scroll this segment card into view
-      var card = document.getElementById('seg-card-' + segIdx);
-      if (card) card.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    _updateVeoAPIProgress(total, total, succeeded, failed);
+    if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
 
-      var durSecs = 6;
-      try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(e) {}
-
-      try {
-        var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-        var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
-
-        // Persist video URL on the segment object
-        seg.apiVideoUrl  = result.videoUrl;
-        seg.apiVideoMime = result.mimeType || 'video/mp4';
-        var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
-        if (blobUrl) seg.apiVideoRaw = blobUrl;
-
-        _updateVeoAPIScene(sceneNum, total, 'done');
-        _setCardStatus(segIdx, 'done', 'Done! ✅');
-        succeeded++;
-
-        // Save + re-render, then re-apply status badges (renderSegments wipes DOM)
-        if (typeof saveSegments    === 'function') saveSegments();
-        if (typeof renderSegments  === 'function') renderSegments();
-        _reapplyAllCardStatuses();
-        if (typeof renderGallery   === 'function') renderGallery();
-        if (typeof renderAssembler === 'function') renderAssembler();
-
-      } catch(e) {
-        console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
-        _updateVeoAPIScene(sceneNum, total, 'error');
-        _setCardStatus(segIdx, 'error', 'Failed: ' + (e.message || 'Unknown').slice(0, 45));
-        showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown error'), 'error', 7000);
-        failed++;
-
-        if (typeof renderSegments === 'function') renderSegments();
-        _reapplyAllCardStatuses();
-
-        if (e.message && (e.message.toLowerCase().includes('insufficient_credits') || e.message.toLowerCase().includes('credit'))) break;
-      }
-
-      _updateVeoAPIProgress(_i + 1, total, succeeded, failed);
-      if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
-    }
-
-    // Final state
+    // Final toast
     if (failed === 0) {
       showToast('All ' + succeeded + ' clips generated!', 'success', 5000);
     } else if (succeeded > 0) {
       showToast(succeeded + ' done · ' + failed + ' failed.', 'warning', 6000);
     } else {
-      showToast('Generation failed. Check credits or API status.', 'error', 6000);
+      showToast('All clips failed. Check credits or API status.', 'error', 6000);
     }
 
     if (succeeded > 0) {
@@ -626,6 +616,39 @@
     }, 4000);
   }
   window.generateAllScenesViaAPI = generateAllScenesViaAPI;
+
+  // ── Download a segment's video — always via blob so browser saves the file ─
+  // The <a download> attribute is ignored for cross-origin URLs (googleapis.com),
+  // which causes the browser to open a new tab instead of saving. We always fetch
+  // through a local blob URL so the download attribute is honoured.
+  window.downloadSegmentVideo = async function(i) {
+    var seg = (window.segments || [])[i];
+    if (!seg || (!seg.apiVideoRaw && !seg.apiVideoUrl)) {
+      if (typeof showToast === 'function') showToast('No video to download.', 'warning');
+      return;
+    }
+
+    var blobUrl = seg.apiVideoRaw;
+
+    if (!blobUrl && seg.apiVideoUrl) {
+      // Blob expired (e.g. after a page refresh) — re-fetch from Google URL
+      if (typeof showToast === 'function') showToast('Preparing download…', 'info', 3000);
+      blobUrl = await _fetchVideoAsBlob(seg.apiVideoUrl);
+      if (blobUrl) seg.apiVideoRaw = blobUrl; // cache so next download is instant
+    }
+
+    if (!blobUrl) {
+      if (typeof showToast === 'function') showToast('Download failed — the video URL may have expired. Try regenerating.', 'error', 6000);
+      return;
+    }
+
+    var a = document.createElement('a');
+    a.href     = blobUrl;
+    a.download = 'scene-' + (i + 1) + '.mp4';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
 
   // ── Remove API video from a segment ──────────────────────────────────────
   function clearSegmentApiVideo(i) {

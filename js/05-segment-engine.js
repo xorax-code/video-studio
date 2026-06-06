@@ -2388,8 +2388,8 @@
               <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
             </div>
           </div>
-          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoUrl}"></video>
-          <a href="${seg.apiVideoUrl}" download="scene-${i+1}.mp4" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;text-decoration:none;">⬇ Download Scene ${i+1}</a>
+          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+          <button onclick="downloadSegmentVideo(${i})" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;width:100%;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ Download Scene ${i+1}</button>
         </div>` : ''}
 
       </div>

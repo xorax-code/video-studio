@@ -1,21 +1,25 @@
 // ===== STUDIO =====
 // Mode toggle: Generate Image (up to 5 reference photos) | Generate Video (optional start frame)
+// Results are kept in a persistent scrollable strip — new generations appear alongside old ones.
 // GPT-4o-mini enhances casual prompts → Gemini image gen / Veo 3 video gen
 
 (function() {
 
   // ── State ──────────────────────────────────────────────────────────────────
-  var _fsMode        = 'image';                  // 'image' | 'video'
-  var _fsImgSlots    = [null,null,null,null,null]; // {dataUrl,b64,mime} per slot
-  var _fsVidFrame    = null;                     // {dataUrl,b64,mime} optional start frame
-  var _fsGenImgUrl   = null;                     // generated image data URL
-  var _fsGenVideoSrc = null;                     // generated video src
+  var _fsMode     = 'image';
+  var _fsImgSlots = [null,null,null,null,null]; // {dataUrl,b64,mime}
+  var _fsVidFrame = null;                       // {dataUrl,b64,mime}
+
+  // History arrays — results are never replaced, only appended (newest first)
+  var _fsImgHistory = []; // [{dataUrl, id}]
+  var _fsVidHistory = []; // [{src, id}]       src is always a blob URL
+  var _MAX_HISTORY  = 20;
 
   // Expose state checkers for inline HTML onmouseleave handlers
   window._fsSlotFilled = function(idx) { return !!_fsImgSlots[idx]; };
   window._fsVidFilled  = function()    { return !!_fsVidFrame; };
 
-  // ── Switch mode ────────────────────────────────────────────────────────────
+  // ── Mode toggle ────────────────────────────────────────────────────────────
   window.switchFsMode = function(mode) {
     _fsMode = mode;
     var imgPanel = document.getElementById('fsImgPanel');
@@ -47,7 +51,6 @@
     _fsReadImageFile(file, function(result) {
       _fsImgSlots[idx] = result;
       _fsRenderSlot(idx);
-      // Reset file input so same file can be re-selected after clear
       var inp = document.getElementById('fsSlotInput-' + idx);
       if (inp) inp.value = '';
     });
@@ -66,17 +69,17 @@
     if (!slot) return;
     var img = _fsImgSlots[idx];
     if (img) {
-      slot.style.backgroundImage = 'url(' + img.dataUrl + ')';
-      slot.style.backgroundSize  = 'cover';
+      slot.style.backgroundImage    = 'url(' + img.dataUrl + ')';
+      slot.style.backgroundSize     = 'cover';
       slot.style.backgroundPosition = 'center';
       slot.style.borderColor = 'rgba(52,211,153,0.6)';
-      if (clearX)  clearX.style.display  = 'flex';
-      if (label)   label.style.display   = 'none';
+      if (clearX) clearX.style.display = 'flex';
+      if (label)  label.style.display  = 'none';
     } else {
       slot.style.backgroundImage = '';
       slot.style.borderColor     = 'rgba(255,255,255,0.1)';
-      if (clearX) clearX.style.display  = 'none';
-      if (label)  label.style.display   = 'flex';
+      if (clearX) clearX.style.display = 'none';
+      if (label)  label.style.display  = 'flex';
     }
   }
 
@@ -123,20 +126,18 @@
     }
   }
 
-  // ── Read a file into {dataUrl, b64, mime} ──────────────────────────────────
+  // ── Read file ──────────────────────────────────────────────────────────────
   function _fsReadImageFile(file, cb) {
     var reader = new FileReader();
     reader.onload = function(ev) {
       var dataUrl = ev.target.result;
       var comma   = dataUrl.indexOf(',');
-      var mime    = dataUrl.slice(5, comma).split(';')[0] || 'image/jpeg';
-      var b64     = dataUrl.slice(comma + 1);
-      cb({ dataUrl: dataUrl, b64: b64, mime: mime });
+      cb({ dataUrl: dataUrl, b64: dataUrl.slice(comma + 1), mime: dataUrl.slice(5, comma).split(';')[0] || 'image/jpeg' });
     };
     reader.readAsDataURL(file);
   }
 
-  // ── Compress image ─────────────────────────────────────────────────────────
+  // ── Compress ───────────────────────────────────────────────────────────────
   function _fsCompress(dataUrl, maxPx, quality) {
     return new Promise(function(resolve) {
       var img = new Image();
@@ -156,7 +157,7 @@
     });
   }
 
-  // ── Get Supabase JWT ───────────────────────────────────────────────────────
+  // ── Supabase JWT ───────────────────────────────────────────────────────────
   async function _fsJwt() {
     try {
       var sb = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
@@ -183,19 +184,110 @@
     return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
   }
 
-  // ── GPT system prompts ─────────────────────────────────────────────────────
-  var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay unchanged; if multiple reference photos are described in the user message, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
+  var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay completely unchanged; if multiple reference photos are mentioned, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
 
   var _FS_VID_SYS = 'You are a Veo 3 video prompt engineer. Rewrite the user\'s casual description into a precise clip prompt. Return ONLY: {"action":"<precise physical movement and camera description, under 60 words>","speech":"<exact spoken words, or empty string if none>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, blurry"}';
 
-  // ── Set status text ────────────────────────────────────────────────────────
+  // ── Status helper ──────────────────────────────────────────────────────────
   function _fsStatus(elId, text, color) {
     var el = document.getElementById(elId);
     if (!el) return;
-    el.textContent = text;
-    el.style.color = color || 'var(--text-3)';
+    el.textContent  = text;
+    el.style.color  = color || 'var(--text-3)';
     el.style.display = text ? '' : 'none';
   }
+
+  // ── Render image results strip ─────────────────────────────────────────────
+  function _renderImgStrip() {
+    var strip   = document.getElementById('fsImgStrip');
+    var wrapper = document.getElementById('fsImgResults');
+    var countEl = document.getElementById('fsImgResultCount');
+    if (!strip) return;
+    if (countEl) countEl.textContent = _fsImgHistory.length;
+    if (wrapper) wrapper.style.display = _fsImgHistory.length ? '' : 'none';
+
+    strip.innerHTML = '';
+    _fsImgHistory.forEach(function(item, idx) {
+      var card = document.createElement('div');
+      card.style.cssText = 'flex:0 0 130px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;';
+      card.innerHTML =
+        '<img src="' + item.dataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;" title="Click to use as new reference">'
+        + '<div style="padding:5px;display:flex;gap:3px;">'
+          + '<button onclick="downloadFsImgResult(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;" title="Download">⬇</button>'
+          + '<button onclick="useFsImgResultAsRef(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:5px;color:#fb923c;cursor:pointer;" title="Use as new reference">→ Ref</button>'
+        + '</div>';
+      var imgEl = card.querySelector('img');
+      if (imgEl) imgEl.addEventListener('click', function() { useFsImgResultAsRef(idx); });
+      strip.appendChild(card);
+    });
+  }
+
+  // ── Render video results strip ─────────────────────────────────────────────
+  function _renderVidStrip() {
+    var strip   = document.getElementById('fsVidStrip');
+    var wrapper = document.getElementById('fsVidResults');
+    var countEl = document.getElementById('fsVidResultCount');
+    if (!strip) return;
+    if (countEl) countEl.textContent = _fsVidHistory.length;
+    if (wrapper) wrapper.style.display = _fsVidHistory.length ? '' : 'none';
+
+    strip.innerHTML = '';
+    _fsVidHistory.forEach(function(item, idx) {
+      var card = document.createElement('div');
+      card.style.cssText = 'flex:0 0 150px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;';
+      card.innerHTML =
+        '<video src="' + item.src + '" muted playsinline loop style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;"></video>'
+        + '<div style="padding:5px;">'
+          + '<button onclick="downloadFsVidResult(' + idx + ')" style="width:100%;padding:5px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;">⬇ Download</button>'
+        + '</div>';
+      var vid = card.querySelector('video');
+      if (vid) {
+        card.addEventListener('mouseenter', function() { vid.play().catch(function(){}); });
+        card.addEventListener('mouseleave', function() { vid.pause(); vid.currentTime = 0; });
+      }
+      strip.appendChild(card);
+    });
+  }
+
+  // ── Download functions ─────────────────────────────────────────────────────
+  window.downloadFsImgResult = function(idx) {
+    var item = _fsImgHistory[idx];
+    if (!item) return;
+    var a = document.createElement('a');
+    a.href = item.dataUrl; // base64 data URL — same-origin, download works fine
+    a.download = 'studio-image-' + (idx + 1) + '.png';
+    a.click();
+  };
+
+  window.downloadFsVidResult = async function(idx) {
+    var item = _fsVidHistory[idx];
+    if (!item || !item.src) return;
+    // item.src is always a blob URL — download works without cross-origin issues
+    var a = document.createElement('a');
+    a.href = item.src;
+    a.download = 'studio-video-' + (idx + 1) + '.mp4';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  // ── Use image result as new reference ─────────────────────────────────────
+  window.useFsImgResultAsRef = function(idx) {
+    var item = _fsImgHistory[idx];
+    if (!item) return;
+
+    var dataUrl = item.dataUrl;
+    var comma   = dataUrl.indexOf(',');
+    _fsImgSlots[0] = { dataUrl: dataUrl, b64: dataUrl.slice(comma + 1), mime: dataUrl.slice(5, comma).split(';')[0] || 'image/png' };
+    // Clear slots 1-4 so the generated image is cleanly in slot 0
+    for (var i = 1; i < 5; i++) { _fsImgSlots[i] = null; _fsRenderSlot(i); }
+    _fsRenderSlot(0);
+
+    var promptEl = document.getElementById('fsImgPrompt');
+    if (promptEl) { promptEl.value = ''; promptEl.focus(); }
+
+    if (typeof showToast === 'function') showToast('Set as Photo 1 — enter a new prompt to continue editing.', 'success', 3500);
+  };
 
   // ── GENERATE IMAGE ─────────────────────────────────────────────────────────
   window.generateFsImage = async function() {
@@ -214,34 +306,28 @@
 
     var btn     = document.getElementById('fsBtnGenImg');
     var spinner = document.getElementById('fsImgSpinner');
-    var result  = document.getElementById('fsImgResult');
     if (btn)    { btn.disabled = true; btn.textContent = 'Working…'; }
     if (spinner) spinner.style.display = 'flex';
-    if (result)  result.style.display  = 'none';
 
     try {
-      // GPT enhance
       _fsStatus('fsImgStatusTxt', '✦ Enhancing prompt…', 'rgba(139,92,246,0.9)');
       var photoContext = loaded.length > 1
-        ? 'I have ' + loaded.length + ' reference photos (' + loaded.map(function(_,i){return 'Photo '+(i+1);}).join(', ') + ').'
+        ? 'I have ' + loaded.length + ' reference photos (' + loaded.map(function(_,i){ return 'Photo '+(i+1); }).join(', ') + '). '
         : '';
       var instruction = casual;
       try {
-        var raw = await _fsGpt(_FS_IMG_SYS, (photoContext ? photoContext + ' ' : '') + casual, jwt, 400);
+        var raw = await _fsGpt(_FS_IMG_SYS, photoContext + casual, jwt, 400);
         raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
         instruction = JSON.parse(raw).instruction || casual;
-      } catch(_) { /* fall back to raw prompt */ }
+      } catch(_) {}
 
-      // Compress all loaded images
       _fsStatus('fsImgStatusTxt', '✦ Generating image…', 'rgba(52,211,153,0.9)');
+
       var images = [];
       for (var i = 0; i < loaded.length; i++) {
         var compressed = await _fsCompress(loaded[i].dataUrl, 768, 0.80);
         var comma = compressed.indexOf(',');
-        images.push({
-          b64:  compressed.slice(comma + 1),
-          mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg',
-        });
+        images.push({ b64: compressed.slice(comma + 1), mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg' });
       }
 
       var res = await fetch('/.netlify/functions/generate-nb-composite', {
@@ -253,10 +339,17 @@
       if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
       if (!data.imageB64) throw new Error('No image returned — try rephrasing your prompt.');
 
-      _fsGenImgUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
-      var img = document.getElementById('fsGenImg');
-      if (img) img.src = _fsGenImgUrl;
-      if (result) result.style.display = '';
+      var dataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+
+      // Add to history (newest first), cap at max
+      _fsImgHistory.unshift({ dataUrl: dataUrl, id: Date.now() });
+      if (_fsImgHistory.length > _MAX_HISTORY) _fsImgHistory.length = _MAX_HISTORY;
+      _renderImgStrip();
+
+      // Scroll the strip to show the newest result
+      var strip = document.getElementById('fsImgStrip');
+      if (strip) strip.scrollLeft = 0;
+
       _fsStatus('fsImgStatusTxt', '', '');
       if (typeof showToast === 'function') showToast('Image generated!', 'success', 3000);
 
@@ -264,14 +357,9 @@
       _fsStatus('fsImgStatusTxt', '', '');
       if (typeof showToast === 'function') showToast('Image error: ' + (e.message || e), 'error', 6000);
     } finally {
-      if (btn)    { btn.disabled = false; btn.textContent = '✨ Generate Image'; }
-      if (spinner) spinner.style.display = 'none';
+      if (btn)     { btn.disabled = false; btn.textContent = '✨ Generate Image'; }
+      if (spinner)  spinner.style.display = 'none';
     }
-  };
-
-  window.downloadFsImg = function() {
-    if (!_fsGenImgUrl) return;
-    var a = document.createElement('a'); a.href = _fsGenImgUrl; a.download = 'studio-image.png'; a.click();
   };
 
   // ── GENERATE VIDEO ─────────────────────────────────────────────────────────
@@ -290,22 +378,19 @@
 
     var btn     = document.getElementById('fsBtnGenVid');
     var spinner = document.getElementById('fsVidSpinner');
-    var result  = document.getElementById('fsVidResult');
-    if (btn)     { btn.disabled = true; btn.textContent = 'Working…'; }
-    if (spinner)  spinner.style.display = 'flex';
-    if (result)   result.style.display  = 'none';
+    if (btn)    { btn.disabled = true; btn.textContent = 'Working…'; }
+    if (spinner) spinner.style.display = 'flex';
 
     try {
       if (typeof generateVeoClipViaAPI !== 'function') throw new Error('Veo API not loaded — refresh the page.');
 
-      // GPT build Veo 3 JSON
       _fsStatus('fsVidStatusTxt', '✦ Building prompt with GPT…', 'rgba(139,92,246,0.9)');
       var veoFields = { action: casual, speech: '', negative_prompt: 'text, captions, watermarks, subtitles, blurry' };
       try {
         var raw = await _fsGpt(_FS_VID_SYS, casual, jwt, 400);
         raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
         veoFields = Object.assign(veoFields, JSON.parse(raw));
-      } catch(_) { /* fall back */ }
+      } catch(_) {}
 
       var veoJson = JSON.stringify({
         action:          veoFields.action,
@@ -314,30 +399,37 @@
         negative_prompt: veoFields.negative_prompt || 'text, captions, watermarks, subtitles, blurry',
       });
 
-      _fsStatus('fsVidStatusTxt', '✦ Generating video with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
+      _fsStatus('fsVidStatusTxt', '✦ Generating with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
 
       var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
       var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
       var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
 
-      // Start frame: use uploaded image if present
+      // Compress start frame if provided
       var startImg = null;
       if (_fsVidFrame) {
         var cf = await _fsCompress(_fsVidFrame.dataUrl, 1024, 0.85);
         startImg = cf;
       }
 
-      var res = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg);
-      _fsGenVideoSrc = res.videoUrl;
+      var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg);
+
+      // Always resolve to a blob URL — download attribute only works same-origin
+      var blobSrc = null;
       if (typeof window._fetchVideoAsBlob === 'function') {
-        var blob = await window._fetchVideoAsBlob(res.videoUrl);
-        if (blob) _fsGenVideoSrc = blob;
+        blobSrc = await window._fetchVideoAsBlob(result.videoUrl);
       }
+      var finalSrc = blobSrc || result.videoUrl;
+
+      // Add to history (newest first)
+      _fsVidHistory.unshift({ src: finalSrc, id: Date.now() });
+      if (_fsVidHistory.length > _MAX_HISTORY) _fsVidHistory.length = _MAX_HISTORY;
+      _renderVidStrip();
+
+      var strip = document.getElementById('fsVidStrip');
+      if (strip) strip.scrollLeft = 0;
 
       _fsStatus('fsVidStatusTxt', '', '');
-      var vid = document.getElementById('fsGenVid');
-      if (vid) { vid.src = _fsGenVideoSrc; vid.load(); }
-      if (result) result.style.display = '';
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
       if (typeof showToast === 'function') showToast('Video generated!', 'success', 4000);
 
@@ -345,14 +437,9 @@
       _fsStatus('fsVidStatusTxt', '', '');
       if (typeof showToast === 'function') showToast('Video failed: ' + (e.message || e), 'error', 7000);
     } finally {
-      if (btn)     { btn.disabled = false; btn.textContent = '⚡ Generate Video'; }
-      if (spinner)  spinner.style.display = 'none';
+      if (btn)    { btn.disabled = false; btn.textContent = '⚡ Generate Video'; }
+      if (spinner) spinner.style.display = 'none';
     }
-  };
-
-  window.downloadFsVid = function() {
-    if (!_fsGenVideoSrc) return;
-    var a = document.createElement('a'); a.href = _fsGenVideoSrc; a.download = 'studio-video.mp4'; a.click();
   };
 
   // ── Duration toggle ────────────────────────────────────────────────────────

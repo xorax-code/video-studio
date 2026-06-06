@@ -90,7 +90,7 @@
         start:  0,
         end:    dur,
         dur:    dur,
-        blobUrl: seg.apiVideoUrl || seg.apiVideoRaw || '',
+        blobUrl: seg.apiVideoRaw || seg.apiVideoUrl || '',  // prefer local blob over expiring Google URL
         mime:   seg.apiVideoMime || 'video/mp4',
         label:  'Scene ' + (segIdx + 1)
       });
@@ -105,15 +105,10 @@
   };
 
   window.galleryDownload = function(segIdx) {
-    var segs = window.segments || [];
-    var seg = segs[segIdx];
-    if (!seg) return;
-    var url = seg.apiVideoUrl || seg.apiVideoRaw;
-    if (!url) return;
-    var a = document.createElement('a');
-    a.href = url;
-    a.download = 'scene-' + (segIdx + 1) + '.mp4';
-    a.click();
+    // Route through downloadSegmentVideo so we always use a blob URL
+    if (typeof window.downloadSegmentVideo === 'function') {
+      window.downloadSegmentVideo(segIdx);
+    }
   };
 
   window.galleryAddAllToAssembler = function() {
@@ -125,7 +120,7 @@
       try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
       window._assemblerClips.push({
         segIdx: idx, start: 0, end: dur, dur: dur,
-        blobUrl: seg.apiVideoUrl || seg.apiVideoRaw || '',
+        blobUrl: seg.apiVideoRaw || seg.apiVideoUrl || '',  // prefer local blob over expiring Google URL
         mime: seg.apiVideoMime || 'video/mp4',
         label: 'Scene ' + (idx + 1)
       });
@@ -142,6 +137,110 @@
     if (icon) icon.textContent = _galleryCollapsed ? '▶' : '▼';
   };
 
+  // ── Timeline helpers ───────────────────────────────────────────────────────
+  function _fmtTime(sec) {
+    var m  = Math.floor(sec / 60);
+    var s  = Math.floor(sec % 60);
+    var ms = Math.floor((sec % 1) * 10);
+    return m + ':' + (s < 10 ? '0' : '') + s + '.' + ms;
+  }
+
+  function _updateTimelineUI(asmIdx) {
+    var clip = window._assemblerClips[asmIdx];
+    if (!clip) return;
+    var leftPct  = (clip.start / clip.dur) * 100;
+    var rightPct = ((clip.dur - clip.end) / clip.dur) * 100;
+    var usedSec  = clip.end - clip.start;
+
+    var fill = document.getElementById('asm-tl-fill-' + asmIdx);
+    var dl   = document.getElementById('asm-tl-dl-'   + asmIdx);
+    var dr   = document.getElementById('asm-tl-dr-'   + asmIdx);
+    var hl   = document.getElementById('asm-tl-hl-'   + asmIdx);
+    var hr   = document.getElementById('asm-tl-hr-'   + asmIdx);
+    var ts   = document.getElementById('asm-tl-ts-'   + asmIdx);
+    var td   = document.getElementById('asm-tl-td-'   + asmIdx);
+    var te   = document.getElementById('asm-tl-te-'   + asmIdx);
+
+    if (fill) { fill.style.left = leftPct + '%';  fill.style.right = rightPct + '%'; }
+    if (dl)   dl.style.width    = leftPct + '%';
+    if (dr)   dr.style.width    = rightPct + '%';
+    if (hl)   hl.style.left     = leftPct + '%';
+    if (hr)   hr.style.right    = rightPct + '%';
+    if (ts)   ts.textContent    = _fmtTime(clip.start);
+    if (te)   te.textContent    = _fmtTime(clip.end);
+    if (td)   td.textContent    = usedSec.toFixed(1) + 's';
+  }
+
+  // Global drag state — one handle active at a time
+  var _tlDrag = null; // { asmIdx, side, trackEl, vidEl }
+
+  function _initTimelineDrag(asmIdx, trackEl, vidEl) {
+    var hl = document.getElementById('asm-tl-hl-' + asmIdx);
+    var hr = document.getElementById('asm-tl-hr-' + asmIdx);
+
+    function onHandleDown(side) {
+      return function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        _tlDrag = { asmIdx: asmIdx, side: side, trackEl: trackEl, vidEl: vidEl };
+        document.body.style.cursor = 'ew-resize';
+      };
+    }
+
+    if (hl) hl.addEventListener('mousedown', onHandleDown('start'));
+    if (hr) hr.addEventListener('mousedown', onHandleDown('end'));
+
+    // Click on track (not on handle) → seek preview
+    trackEl.addEventListener('mousedown', function(e) {
+      if (e.target === hl || e.target === hr ||
+          e.target.classList.contains('asm-tl-hl') ||
+          e.target.classList.contains('asm-tl-hr') ||
+          e.target.classList.contains('asm-tl-grip')) return;
+      var rect = trackEl.getBoundingClientRect();
+      var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      var clip = window._assemblerClips[asmIdx];
+      var t    = pct * clip.dur;
+      if (vidEl) { vidEl.currentTime = t; vidEl.play().catch(function(){}); }
+      // Show playhead momentarily
+      var ph = document.getElementById('asm-tl-ph-' + asmIdx);
+      if (ph) { ph.style.display = 'block'; ph.style.left = (pct * 100) + '%'; }
+      setTimeout(function() { if (ph) ph.style.display = 'none'; }, 1200);
+    });
+  }
+
+  // Attach global move/up handlers once
+  document.addEventListener('mousemove', function(e) {
+    if (!_tlDrag) return;
+    var d    = _tlDrag;
+    var clip = window._assemblerClips[d.asmIdx];
+    if (!clip) return;
+    var rect = d.trackEl.getBoundingClientRect();
+    var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    var t    = pct * clip.dur;
+
+    if (d.side === 'start') {
+      clip.start = Math.max(0, Math.min(clip.end - 0.1, t));
+    } else {
+      clip.end = Math.min(clip.dur, Math.max(clip.start + 0.1, t));
+    }
+
+    _updateTimelineUI(d.asmIdx);
+
+    // Seek the thumbnail video to the dragged point for live preview
+    if (d.vidEl) { try { d.vidEl.currentTime = d.side === 'start' ? clip.start : clip.end; } catch(_) {} }
+
+    // Update total duration label
+    var totalEl = document.getElementById('assemblerTotal');
+    if (totalEl) {
+      var total = window._assemblerClips.reduce(function(s, c) { return s + (c.end - c.start); }, 0);
+      totalEl.textContent = window._assemblerClips.length + ' clip' + (window._assemblerClips.length !== 1 ? 's' : '') + ' · ' + total.toFixed(1) + 's total';
+    }
+  });
+
+  document.addEventListener('mouseup', function() {
+    if (_tlDrag) { document.body.style.cursor = ''; _tlDrag = null; }
+  });
+
   // ── Render Assembler ───────────────────────────────────────────────────────
   function renderAssembler() {
     var timeline = document.getElementById('assemblerTimeline') || document.getElementById('assemblerPanel');
@@ -157,12 +256,14 @@
 
     if (emptyEl) emptyEl.style.display = clips.length ? 'none' : 'flex';
 
-    // Build clip rows
     var rows = document.getElementById('assemblerRows');
     if (!rows) return;
     rows.innerHTML = '';
 
     clips.forEach(function(clip, i) {
+      var leftPct  = (clip.start / clip.dur) * 100;
+      var rightPct = ((clip.dur - clip.end) / clip.dur) * 100;
+
       var row = document.createElement('div');
       row.className = 'asm-clip';
       row.draggable = true;
@@ -171,39 +272,50 @@
       row.innerHTML =
         '<div class="asm-drag-handle" title="Drag to reorder">⠿</div>'
         + '<div class="asm-thumb-wrap">'
-          + '<video src="' + clip.blobUrl + '" muted playsinline loop preload="metadata" class="asm-thumb-vid"></video>'
+          + '<video src="' + clip.blobUrl + '" muted playsinline preload="metadata" class="asm-thumb-vid"></video>'
         + '</div>'
         + '<div class="asm-info">'
           + '<div class="asm-clip-label">' + clip.label + '</div>'
-          + '<div class="asm-clip-sub">Original: ' + clip.dur + 's</div>'
+          + '<div class="asm-clip-sub">' + clip.dur + 's original</div>'
         + '</div>'
-        + '<div class="asm-trim">'
-          + '<div class="asm-trim-row">'
-            + '<label class="asm-trim-label">Start</label>'
-            + '<input type="number" class="asm-trim-input" min="0" max="' + clip.dur + '" step="0.1" value="' + clip.start.toFixed(1) + '" '
-              + 'onchange="assemblerSetTrim(' + i + ',\'start\',parseFloat(this.value))" />'
-            + '<span class="asm-trim-unit">s</span>'
+
+        // ── Visual timeline trimmer ───────────────────────────────────────
+        + '<div class="asm-timeline" id="asm-tl-' + i + '">'
+          + '<div class="asm-tl-track" id="asm-tl-track-' + i + '">'
+            + '<div class="asm-tl-dim" id="asm-tl-dl-' + i + '" style="left:0;width:' + leftPct  + '%;"></div>'
+            + '<div class="asm-tl-fill" id="asm-tl-fill-' + i + '" style="left:' + leftPct + '%;right:' + rightPct + '%;"></div>'
+            + '<div class="asm-tl-dim" id="asm-tl-dr-' + i + '" style="right:0;width:' + rightPct + '%;"></div>'
+            + '<div class="asm-tl-hl" id="asm-tl-hl-' + i + '" style="left:' + leftPct  + '%;"><span class="asm-tl-grip">⋮⋮</span></div>'
+            + '<div class="asm-tl-hr" id="asm-tl-hr-' + i + '" style="right:' + rightPct + '%;"><span class="asm-tl-grip">⋮⋮</span></div>'
+            + '<div class="asm-tl-playhead" id="asm-tl-ph-' + i + '"></div>'
           + '</div>'
-          + '<div class="asm-trim-row">'
-            + '<label class="asm-trim-label">End</label>'
-            + '<input type="number" class="asm-trim-input" min="0" max="' + clip.dur + '" step="0.1" value="' + clip.end.toFixed(1) + '" '
-              + 'onchange="assemblerSetTrim(' + i + ',\'end\',parseFloat(this.value))" />'
-            + '<span class="asm-trim-unit">s</span>'
+          + '<div class="asm-tl-times">'
+            + '<span id="asm-tl-ts-' + i + '">' + _fmtTime(clip.start) + '</span>'
+            + '<span id="asm-tl-td-' + i + '" class="asm-tl-dur">' + (clip.end - clip.start).toFixed(1) + 's</span>'
+            + '<span id="asm-tl-te-' + i + '">' + _fmtTime(clip.end) + '</span>'
           + '</div>'
-          + '<div class="asm-trim-dur">= ' + (clip.end - clip.start).toFixed(1) + 's used</div>'
         + '</div>'
+
         + '<div class="asm-clip-actions">'
-          + '<button class="asm-btn asm-btn-prev" onclick="assemblerPreviewClip(' + i + ')" title="Preview this clip">▶</button>'
-          + '<button class="asm-btn asm-btn-rm" onclick="assemblerRemove(' + i + ')" title="Remove">✕</button>'
+          + '<button class="asm-btn asm-btn-prev" onclick="assemblerPreviewClip(' + i + ')" title="Preview clip">▶</button>'
+          + '<button class="asm-btn asm-btn-rm"   onclick="assemblerRemove('      + i + ')" title="Remove">✕</button>'
         + '</div>';
 
-      // Hover-to-play thumb
-      var vid = row.querySelector('.asm-thumb-vid');
-      row.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
-      row.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = 0; } });
+      var vid   = row.querySelector('.asm-thumb-vid');
+      var track = row.querySelector('.asm-tl-track');
 
-      // Drag events
+      // Hover-to-play thumb
+      row.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
+      row.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = clip.start; } });
+
+      rows.appendChild(row);
+
+      // Init drag handles after DOM insertion
+      _initTimelineDrag(i, track, vid);
+
+      // Drag-to-reorder events
       row.addEventListener('dragstart', function(e) {
+        if (_tlDrag) { e.preventDefault(); return; } // don't reorder while trimming
         _dragSrcIdx = i;
         e.dataTransfer.effectAllowed = 'move';
         row.classList.add('asm-dragging');
@@ -212,14 +324,8 @@
         row.classList.remove('asm-dragging');
         document.querySelectorAll('.asm-clip').forEach(function(r) { r.classList.remove('asm-drag-over'); });
       });
-      row.addEventListener('dragover', function(e) {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        row.classList.add('asm-drag-over');
-      });
-      row.addEventListener('dragleave', function() {
-        row.classList.remove('asm-drag-over');
-      });
+      row.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.classList.add('asm-drag-over'); });
+      row.addEventListener('dragleave', function() { row.classList.remove('asm-drag-over'); });
       row.addEventListener('drop', function(e) {
         e.preventDefault();
         row.classList.remove('asm-drag-over');
@@ -232,8 +338,6 @@
         renderAssembler();
         renderGallery();
       });
-
-      rows.appendChild(row);
     });
   }
   window.renderAssembler = renderAssembler;
@@ -243,12 +347,9 @@
     var clip = window._assemblerClips[idx];
     if (!clip) return;
     val = Math.max(0, Math.min(clip.dur, isNaN(val) ? 0 : val));
-    if (field === 'start') {
-      clip.start = Math.min(val, clip.end - 0.1);
-    } else {
-      clip.end = Math.max(val, clip.start + 0.1);
-    }
-    renderAssembler();
+    if (field === 'start') { clip.start = Math.min(val, clip.end - 0.1); }
+    else                   { clip.end   = Math.max(val, clip.start + 0.1); }
+    _updateTimelineUI(idx);
   };
 
   window.assemblerRemove = function(idx) {
@@ -294,21 +395,98 @@
   };
 
   // ── Export ─────────────────────────────────────────────────────────────────
+  // Strategy:
+  //   • 1 clip, no trim  → direct MP4 download (instant)
+  //   • Multiple clips, no trim → ZIP of individual MP4s via JSZip (fast, no WASM)
+  //   • Any clip has trim → FFmpeg.wasm (slow; requires COEP headers — may hang on Netlify)
   window.assemblerExport = function() {
     var clips = window._assemblerClips;
     if (!clips.length) { if (typeof showToast === 'function') showToast('Add clips to the assembler first.', 'warning'); return; }
 
-    // If only 1 clip and no trim needed — direct download
-    if (clips.length === 1 && clips[0].start === 0 && clips[0].end === clips[0].dur) {
+    var needsTrim = clips.some(function(c) { return c.start > 0.01 || c.end < c.dur - 0.01; });
+
+    // Single clip, no trim — direct download
+    if (clips.length === 1 && !needsTrim) {
       var a = document.createElement('a');
       a.href = clips[0].blobUrl;
-      a.download = 'assembled-video.mp4';
+      a.download = 'scene-' + (clips[0].segIdx + 1) + '.mp4';
       a.click();
-      if (typeof showToast === 'function') showToast('Single clip downloaded.', 'success');
+      if (typeof showToast === 'function') showToast('Clip downloaded.', 'success');
       return;
     }
 
+    // Multiple clips, no trim — ZIP (fast, no WASM required)
+    if (!needsTrim) {
+      _exportAsZip(clips);
+      return;
+    }
+
+    // Clips have trim points — need FFmpeg (may be slow / require headers)
     _exportWithFFmpeg(clips);
+  };
+
+  // ── ZIP export — JSZip, no FFmpeg, works without COEP headers ──────────────
+  async function _exportAsZip(clips) {
+    var btn      = document.getElementById('assemblerExportBtn');
+    var prog     = document.getElementById('assemblerExportProgress');
+    var progBar  = document.getElementById('assemblerExportBar');
+    var progLabel = document.getElementById('assemblerExportLabel');
+
+    function setProgress(pct, label) {
+      if (prog)      prog.style.display     = 'flex';
+      if (progBar)   progBar.style.width    = pct + '%';
+      if (progLabel) progLabel.textContent  = label;
+    }
+    function resetBtn(label) {
+      if (btn) { btn.disabled = false; btn.textContent = label || '⬇ Download'; }
+      if (prog) prog.style.display = 'none';
+    }
+
+    if (btn) { btn.disabled = true; btn.textContent = 'Packing…'; }
+    setProgress(5, 'Loading…');
+
+    try {
+      // Load JSZip from cdnjs (pure JS, ~100KB, no WASM)
+      if (!window.JSZip) {
+        await new Promise(function(resolve, reject) {
+          var s = document.createElement('script');
+          s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+          s.onload = resolve;
+          s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+
+      var zip = new window.JSZip();
+
+      for (var i = 0; i < clips.length; i++) {
+        var clip = clips[i];
+        var pct  = 10 + Math.round((i / clips.length) * 80);
+        setProgress(pct, 'Packing clip ' + (i + 1) + ' of ' + clips.length + '…');
+        var res = await fetch(clip.blobUrl);
+        if (!res.ok) throw new Error('Could not fetch clip ' + (i + 1));
+        var buf = await res.arrayBuffer();
+        zip.file('scene-' + (i + 1) + '.mp4', buf);
+      }
+
+      setProgress(92, 'Creating ZIP…');
+      var zipBlob = await zip.generateAsync({ type: 'blob', compression: 'STORE' }); // STORE = no recompression, instant
+      var url = URL.createObjectURL(zipBlob);
+      var a   = document.createElement('a');
+      a.href  = url;
+      a.download = 'video-clips.zip';
+      a.click();
+      setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
+
+      setProgress(100, 'Done!');
+      setTimeout(function() { resetBtn('⬇ Download'); }, 2000);
+      if (typeof showToast === 'function') showToast(clips.length + ' clips saved to ZIP!', 'success', 4000);
+
+    } catch(e) {
+      console.error('[ZIP export]', e);
+      resetBtn('⬇ Download');
+      if (typeof showToast === 'function') showToast('Download failed: ' + (e.message || e), 'error', 5000);
+    }
   };
 
   function _exportWithFFmpeg(clips) {
