@@ -1,6 +1,6 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana composite image using Gemini 2.0 Flash image generation.
+ * Generates a Nano Banana composite image using Gemini image generation via Vertex AI.
  *
  * Takes:
  *   - avatarB64      — base64 avatar photo (Photo 1)
@@ -12,12 +12,17 @@
  * Returns: { imageB64, mime }
  *
  * Required env vars:
- *   GEMINI_API_KEY   — Google Gemini API key
- *   SUPABASE_URL     — for auth
- *   SUPABASE_ANON    — for auth
+ *   GOOGLE_SERVICE_ACCOUNT_JSON  — full service account key JSON (same as Veo functions)
+ *   GOOGLE_CLOUD_PROJECT_ID      — your GCP project ID
+ *   SUPABASE_URL                 — for auth
+ *   SUPABASE_ANON                — for auth
  */
 
-const https = require('https');
+const https  = require('https');
+const crypto = require('crypto');
+
+const LOCATION = 'us-central1';
+const MODEL    = 'gemini-3.1-flash-image';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -34,6 +39,48 @@ function httpsRequest(options, body) {
     });
     req.on('error', reject);
     if (body) req.write(body);
+    req.end();
+  });
+}
+
+// ── Service account → Vertex AI access token ─────────────────────────────────
+async function getAccessToken(saJson) {
+  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  const now = Math.floor(Date.now() / 1000);
+  const claim = {
+    iss:   sa.client_email,
+    scope: 'https://www.googleapis.com/auth/cloud-platform',
+    aud:   'https://oauth2.googleapis.com/token',
+    exp:   now + 3600,
+    iat:   now,
+  };
+  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  const unsigned = header + '.' + payload;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, 'base64url');
+  const jwt = unsigned + '.' + sig;
+  const body = 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + jwt;
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'oauth2.googleapis.com',
+      path:     '/token',
+      method:   'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          if (data.access_token) resolve(data.access_token);
+          else reject(new Error('Token exchange failed: ' + JSON.stringify(data)));
+        } catch(e) { reject(e); }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
     req.end();
   });
 }
@@ -67,9 +114,8 @@ exports.handler = async (event) => {
   }
 
   // ── Env check ──────────────────────────────────────────────────────────────
-  const geminiKey = process.env.GEMINI_API_KEY;
-  if (!geminiKey) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'GEMINI_API_KEY not configured.' }) };
+  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error: Vertex AI credentials not set.' }) };
   }
 
   // ── Auth ───────────────────────────────────────────────────────────────────
@@ -102,7 +148,16 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and at least one image are required.' }) };
   }
 
-  // ── Build Gemini request ───────────────────────────────────────────────────
+  // ── Get Vertex AI access token ─────────────────────────────────────────────
+  let accessToken;
+  try {
+    accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+  } catch(e) {
+    console.error('generate-nb-composite: getAccessToken failed:', e.message);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
+  }
+
+  // ── Build request ──────────────────────────────────────────────────────────
   const photoLabels = images.map((_, i) => `Photo ${i + 1}`).join(', ');
   const photoGuide = images.length === 1
     ? 'Use Photo 1 as the style reference for the person\'s appearance, clothing, and accessories.'
@@ -122,45 +177,46 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
     contents: [{ role: 'user', parts: userParts }],
   });
 
-  // gemini-3.1-flash-image (Nano Banana 2) — stable image-in/image-out model, uses v1
-  const apiPath = `/v1/models/gemini-3.1-flash-image:generateContent?key=${geminiKey}`;
+  // Vertex AI endpoint for Gemini generateContent
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const apiPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+  const hostname = `${LOCATION}-aiplatform.googleapis.com`;
 
   console.log(`generate-nb-composite: user=${user.id}, images=${images.length}, instrLen=${instruction.length}`);
+  console.log(`generate-nb-composite: Vertex AI → ${hostname}${apiPath}`);
 
   let result;
   try {
     result = await httpsRequest({
-      hostname: 'generativelanguage.googleapis.com',
-      path:     apiPath,
-      method:   'POST',
+      hostname,
+      path:   apiPath,
+      method: 'POST',
       headers: {
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(requestBody),
       },
     }, requestBody);
   } catch(e) {
     console.error('generate-nb-composite: fetch error:', e.message);
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
   }
 
-  console.log('generate-nb-composite: Gemini status:', result.status);
+  console.log('generate-nb-composite: Vertex AI status:', result.status);
 
   if (!result.data) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Gemini API. Status: ' + result.status }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status }) };
   }
 
   if (result.status !== 200 || result.data.error) {
-    const errMsg = result.data?.error?.message || `Gemini API error (HTTP ${result.status})`;
-    console.error('generate-nb-composite: Gemini error:', errMsg);
-    // FIX: Normalize upstream error codes to 502 — avoids leaking Gemini's 401/403 to the
-    // frontend where they would be misinterpreted as the user's session being expired.
+    const errMsg = result.data?.error?.message || `Vertex AI error (HTTP ${result.status})`;
+    console.error('generate-nb-composite: Vertex AI error:', errMsg);
     const clientStatus = (result.status === 429) ? 429 : 502;
     return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
   // ── Extract image from response ────────────────────────────────────────────
-  // Gemini REST API returns camelCase keys (inlineData, mimeType) in responses,
-  // but proto3 JSON also accepts snake_case — handle both to be safe.
+  // Vertex AI returns the same generateContent response shape as the Gemini API.
   const candidates = result.data.candidates || [];
   for (const candidate of candidates) {
     for (const part of (candidate.content?.parts || [])) {
@@ -185,6 +241,6 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: `Gemini returned no image ${errDetail}. ${textParts.slice(0, 150)}`.trim() }),
+    body: JSON.stringify({ error: `Image generation returned no image ${errDetail}. ${textParts.slice(0, 150)}`.trim() }),
   };
 };
