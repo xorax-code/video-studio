@@ -234,20 +234,81 @@
     strip.innerHTML = '';
     _fsVidHistory.forEach(function(item, idx) {
       var card = document.createElement('div');
-      card.style.cssText = 'flex:0 0 150px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;';
+      card.style.cssText = 'flex:0 0 150px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;position:relative;';
       card.innerHTML =
-        '<video src="' + item.src + '" muted playsinline loop style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;"></video>'
-        + '<div style="padding:5px;">'
-          + '<button onclick="downloadFsVidResult(' + idx + ')" style="width:100%;padding:5px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;">⬇ Download</button>'
+        '<video src="' + item.src + '" muted playsinline loop style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;" title="Click to preview"></video>'
+        + '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s;background:rgba(0,0,0,0.25);" class="fs-vid-overlay">'
+          + '<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.65);border:2px solid rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;padding-left:2px;">▶</div>'
+        + '</div>'
+        + '<div style="padding:5px;display:flex;gap:3px;">'
+          + '<button onclick="previewFsVid(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;cursor:pointer;">▶ Watch</button>'
+          + '<button onclick="downloadFsVidResult(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;">⬇</button>'
         + '</div>';
-      var vid = card.querySelector('video');
-      if (vid) {
-        card.addEventListener('mouseenter', function() { vid.play().catch(function(){}); });
-        card.addEventListener('mouseleave', function() { vid.pause(); vid.currentTime = 0; });
-      }
+
+      var vid     = card.querySelector('video');
+      var overlay = card.querySelector('.fs-vid-overlay');
+
+      // Hover: show play overlay + silent preview
+      card.addEventListener('mouseenter', function() {
+        if (overlay) overlay.style.opacity = '1';
+        if (vid) vid.play().catch(function(){});
+      });
+      card.addEventListener('mouseleave', function() {
+        if (overlay) overlay.style.opacity = '0';
+        if (vid) { vid.pause(); vid.currentTime = 0; }
+      });
+
+      // Click thumbnail → open preview modal
+      if (vid) vid.addEventListener('click', function() { previewFsVid(idx); });
+      if (overlay) overlay.addEventListener('click', function() { previewFsVid(idx); });
+
       strip.appendChild(card);
     });
   }
+
+  // ── Video preview modal ────────────────────────────────────────────────────
+  window.previewFsVid = function(idx) {
+    var item = _fsVidHistory[idx];
+    if (!item || !item.src) return;
+
+    var existing = document.getElementById('fsVidPreviewModal');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'fsVidPreviewModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;';
+    modal.innerHTML =
+      '<div style="position:relative;width:100%;max-width:380px;">'
+        + '<video src="' + item.src + '" controls autoplay playsinline '
+          + 'style="width:100%;border-radius:12px;background:#000;display:block;max-height:80vh;"></video>'
+        + '<button onclick="document.getElementById(\'fsVidPreviewModal\').remove()" '
+          + 'style="position:absolute;top:-14px;right:-14px;width:32px;height:32px;border-radius:50%;'
+          + 'background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);'
+          + 'color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;'
+          + 'backdrop-filter:blur(4px);">✕</button>'
+        + '<div style="display:flex;gap:8px;margin-top:10px;justify-content:center;">'
+          + '<button onclick="downloadFsVidResult(' + idx + ')" '
+            + 'style="padding:8px 20px;font-size:11px;font-weight:700;font-family:inherit;'
+            + 'background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.45);'
+            + 'border-radius:8px;color:#34d399;cursor:pointer;">⬇ Download</button>'
+          + (idx > 0
+            ? '<button onclick="previewFsVid(' + (idx - 1) + ')" style="padding:8px 14px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--text-2);cursor:pointer;">‹ Prev</button>'
+            : '')
+          + (idx < _fsVidHistory.length - 1
+            ? '<button onclick="previewFsVid(' + (idx + 1) + ')" style="padding:8px 14px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;color:var(--text-2);cursor:pointer;">Next ›</button>'
+            : '')
+        + '</div>'
+        + '<div style="text-align:center;margin-top:6px;font-size:9px;color:var(--text-4);">Video ' + (idx + 1) + ' of ' + _fsVidHistory.length + '</div>'
+      + '</div>';
+
+    // Click backdrop to close
+    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
+    // Escape key to close
+    var _escClose = function(e) { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', _escClose); } };
+    document.addEventListener('keydown', _escClose);
+
+    document.body.appendChild(modal);
+  };
 
   // ── Download functions ─────────────────────────────────────────────────────
   window.downloadFsImgResult = function(idx) {

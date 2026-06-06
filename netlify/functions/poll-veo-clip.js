@@ -237,16 +237,66 @@ exports.handler = async (event) => {
       body: JSON.stringify({ done: false }) };
   }
   // Log the raw Vertex AI response so we can see the actual structure
-  console.log('poll-veo-clip: Vertex done response:', JSON.stringify(pd).slice(0, 800));
+  const rawStr = JSON.stringify(pd);
+  console.log('poll-veo-clip: Vertex done response (first 1200):', rawStr.slice(0, 1200));
 
-  // Try all known response structures for Veo fetchPredictOperation
+  // ── Recursive GCS URI finder ────────────────────────────────────────────────
+  // Walks any depth of the response object and returns the first gs:// URI found.
+  // This is the nuclear fallback — handles any current or future Vertex AI response shape.
+  function findGcsUri(obj, depth) {
+    if (!obj || depth > 8) return null;
+    if (typeof obj === 'string') return obj.startsWith('gs://') ? obj : null;
+    if (Array.isArray(obj)) {
+      for (var i = 0; i < obj.length; i++) {
+        var r = findGcsUri(obj[i], depth + 1);
+        if (r) return r;
+      }
+      return null;
+    }
+    if (typeof obj === 'object') {
+      // Check common URI key names first for speed
+      var priorityKeys = ['gcsUri', 'uri', 'videoUri', 'outputUri', 'resourceUri'];
+      for (var k = 0; k < priorityKeys.length; k++) {
+        var v = obj[priorityKeys[k]];
+        if (v && typeof v === 'string' && v.startsWith('gs://')) return v;
+      }
+      // Fall through to all keys
+      for (var key in obj) {
+        var res = findGcsUri(obj[key], depth + 1);
+        if (res) return res;
+      }
+    }
+    return null;
+  }
+
+  function findMimeType(obj, depth) {
+    if (!obj || depth > 8) return null;
+    if (typeof obj === 'object' && !Array.isArray(obj)) {
+      var mimeKeys = ['mimeType', 'encoding', 'contentType', 'videoMimeType'];
+      for (var k = 0; k < mimeKeys.length; k++) {
+        var v = obj[mimeKeys[k]];
+        if (v && typeof v === 'string' && v.includes('video')) return v;
+      }
+      for (var key in obj) {
+        var r = findMimeType(obj[key], depth + 1);
+        if (r) return r;
+      }
+    } else if (Array.isArray(obj)) {
+      for (var i = 0; i < obj.length; i++) {
+        var rm = findMimeType(obj[i], depth + 1);
+        if (rm) return rm;
+      }
+    }
+    return null;
+  }
+
+  // Try all known explicit response structures first, then fall back to recursive search
   var samples =
     (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.generatedSamples) ||
     (pd.generateVideoResponse && pd.generateVideoResponse.generatedSamples) ||
     (pd.response && pd.response.generatedSamples) ||
     null;
 
-  // Also try 'videos' field variant
   var videosList =
     (pd.response && pd.response.generateVideoResponse && pd.response.generateVideoResponse.videos) ||
     (pd.generateVideoResponse && pd.generateVideoResponse.videos) ||
@@ -255,31 +305,40 @@ exports.handler = async (event) => {
 
   var allItems = (samples && samples.length) ? samples : (videosList && videosList.length ? videosList : null);
 
-  if (!allItems) {
-    var debugKeys = JSON.stringify({ pdKeys: Object.keys(pd), responseKeys: pd.response ? Object.keys(pd.response) : null, raw: JSON.stringify(pd).slice(0, 300) });
-    console.log('poll-veo-clip: no video found, structure:', debugKeys);
-    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: false, error: 'Generation finished but no video returned.', debug: debugKeys }) };
+  var gcsUri, mimeType;
+
+  if (allItems && allItems.length) {
+    var firstItem = allItems[0];
+    gcsUri   = (firstItem && firstItem.video && (firstItem.video.gcsUri || firstItem.video.uri)) ||
+               (firstItem && (firstItem.gcsUri || firstItem.uri)) || '';
+    mimeType = (firstItem && firstItem.video && (firstItem.video.mimeType || firstItem.video.encoding)) ||
+               (firstItem && (firstItem.mimeType || firstItem.encoding)) || 'video/mp4';
   }
 
-  var firstItem = allItems[0];
-  // Support both gcsUri and uri field names
-  const gcsUri = (firstItem && firstItem.video && (firstItem.video.gcsUri || firstItem.video.uri)) ||
-                 (firstItem && (firstItem.gcsUri || firstItem.uri)) || '';
-  const mimeType = (firstItem && firstItem.video && firstItem.video.mimeType) ||
-                   (firstItem && firstItem.mimeType) || 'video/mp4';
+  // Nuclear fallback: recursively search the entire response for any gs:// URI
   if (!gcsUri) {
-    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: false, error: 'Video GCS URI missing from response.' }) };
+    console.log('poll-veo-clip: known paths failed — trying recursive GCS URI search');
+    gcsUri   = findGcsUri(pd, 0) || '';
+    mimeType = mimeType || findMimeType(pd, 0) || 'video/mp4';
   }
+
+  if (!gcsUri) {
+    var debugInfo = JSON.stringify({ pdKeys: Object.keys(pd), responseKeys: pd.response ? Object.keys(pd.response) : null, raw: rawStr.slice(0, 400) });
+    console.error('poll-veo-clip: no GCS URI found anywhere in response. Debug:', debugInfo);
+    // Return done:true with error so client stops polling immediately instead of looping for 6 min
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ done: true, error: 'Generation completed but no video file was returned. The model may have filtered this prompt — try regenerating.', debug: debugInfo }) };
+  }
+
   let signedUrl;
   try {
     const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    signedUrl = createSignedUrl(gcsUri, sa, 3600);
-    console.log('poll-veo-clip: signed URL created for', gcsUri);
+    // 172800 seconds = 48 hours — matches Vertex AI's 2-day video retention window
+    signedUrl = createSignedUrl(gcsUri, sa, 172800);
+    console.log('poll-veo-clip: signed URL created (48h) for', gcsUri.slice(0, 80));
   } catch(e) {
     console.error('poll-veo-clip: signed URL failed:', e.message);
-    signedUrl = gcsUri;
+    signedUrl = gcsUri; // fall back to raw gs:// URI (won't play in browser but won't crash)
   }
   return {
     statusCode: 200,
