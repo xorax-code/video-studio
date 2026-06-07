@@ -326,17 +326,20 @@ exports.handler = async (event) => {
   //
   // If inpainting fails for any reason, fall back to using the original frame
   // in Stage 3 (same as the previous single-stage approach).
-  // Skip inpainting for extreme close-ups (face/head only frames).
-  // When body_in_frame says no torso is visible, inpainting a disembodied face
-  // produces artifacts (floating mouth, teeth, etc.) that ruin the composite.
+  // Skip inpainting ONLY when pose analysis explicitly says the frame is a face/head
+  // close-up (e.g. body_in_frame = "face only"). If pose analysis failed (null),
+  // bodyInFrame is empty and the && short-circuits → isCloseUp = false → inpaint
+  // still runs. This is correct: a failed pose analysis could mean the frame has an
+  // unusual prop (dental model, product box) — we should still try inpaint and use
+  // Photo 3 to reference the prop.
   const bodyInFrame = (poseAnalysis?.body_in_frame || '').toLowerCase();
-  const isCloseUp = bodyInFrame && (
+  const isCloseUp = !!(bodyInFrame && (
     bodyInFrame.includes('face') || bodyInFrame.includes('head') ||
     bodyInFrame.includes('close') || bodyInFrame.includes('mouth') ||
     (!bodyInFrame.includes('torso') && !bodyInFrame.includes('chest') &&
      !bodyInFrame.includes('body') && !bodyInFrame.includes('full') &&
      !bodyInFrame.includes('waist') && !bodyInFrame.includes('shoulder'))
-  );
+  ));
 
   let compositeBackgroundImg = frameImg; // default: original frame
   if (hasFrame && !isCloseUp) {
@@ -400,7 +403,7 @@ RULES:
   }
 
   if (hasFrame && isCloseUp) {
-    console.log('generate-nb-composite: Stage 2 inpaint SKIPPED — close-up frame detected (body_in_frame:', bodyInFrame, ') — using single-stage composite');
+    console.log('generate-nb-composite: Stage 2 inpaint SKIPPED — close-up detected:', bodyInFrame, '— using single-stage composite');
   }
 
   // ── Stage 3: Composite generation ────────────────────────────────────────────

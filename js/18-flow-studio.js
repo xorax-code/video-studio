@@ -466,14 +466,16 @@
       var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
       var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
 
-      // Compress start frame if provided
-      var startImg = null;
+      // Compress start frame if provided; also pass raw frame as reference for scene analysis
+      var startImg   = null;
+      var refFrameUrl = null;
       if (_fsVidFrame) {
         var cf = await _fsCompress(_fsVidFrame.dataUrl, 1024, 0.85);
-        startImg = cf;
+        startImg    = cf;
+        refFrameUrl = _fsVidFrame.dataUrl; // uncompressed original for scene analysis
       }
 
-      var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg);
+      var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg, refFrameUrl);
 
       // Always resolve to a blob URL — download attribute only works same-origin
       var blobSrc = null;

@@ -12,7 +12,9 @@
  *   SUPABASE_SERVICE_ROLE_KEY     — service role key
  *
  * POST body (JSON):
- *   { prompt, durationSecs, model: 'lite'|'fast', startImageB64?, startImageMime? }
+ *   { prompt, durationSecs, model: 'lite'|'fast', startImageB64?, startImageMime?, frameB64?, frameMime? }
+ *   frameB64/frameMime — optional reference video frame; if provided, Gemini 2.0 Flash analyzes
+ *   it and injects a [SCENE GROUND TRUTH] block into the prompt before sending to Veo.
  */
 
 const https  = require('https');
@@ -32,7 +34,94 @@ const MODEL_IDS = {
   standard: 'veo-3.1-generate-001',
 };
 
-const LOCATION = 'us-central1';
+const LOCATION       = 'us-central1';
+const ANALYSIS_MODEL = 'gemini-2.0-flash-001'; // fast vision model for scene analysis (separate quota)
+
+// ── Scene frame analysis ──────────────────────────────────────────────────────
+// Sends the reference video frame to Gemini 2.0 Flash and returns a structured
+// scene description. Injected into the Veo prompt as [SCENE GROUND TRUTH] so Veo
+// matches the original video's visual context: setting, camera, lighting, props.
+// Fails silently — if null, the original prompt is used unchanged.
+async function analyzeSceneFrame(frameB64, frameMime, accessToken) {
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  const prompt = `You are analyzing a video frame for professional video production.
+Examine this image carefully. Return ONLY a valid JSON object with these exact fields (no markdown, no explanation, raw JSON only):
+{
+  "setting": "detailed description of the location/environment — walls, furniture, props on shelves, visible objects, overall space type",
+  "camera_angle": "shot type (close-up/medium/wide/full-body) and camera angle (eye level/slightly below/above/tilted)",
+  "lighting": "lighting direction (left/right/front/overhead/window), quality (soft/hard/diffused), color temperature (warm/cool/neutral)",
+  "subject_position": "where subject stands in frame (center/left/right), approximate vertical coverage (e.g. waist up, full body)",
+  "props": "any objects the subject is holding or prominently displayed — exact description of shape, size, what it is",
+  "color_palette": "dominant colors in the scene — 3 to 5 colors",
+  "visual_style": "overall aesthetic (cinematic/raw/bright/dark/natural/studio etc.)"
+}`;
+
+  const reqBody = JSON.stringify({
+    contents: [{ role: 'user', parts: [
+      { inlineData: { mimeType: frameMime, data: frameB64 } },
+      { text: prompt },
+    ]}],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 500,
+      responseMimeType: 'application/json',
+    },
+  });
+
+  const path = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${ANALYSIS_MODEL}:generateContent`;
+  let res;
+  try {
+    res = await httpsRequest({
+      hostname: `${LOCATION}-aiplatform.googleapis.com`,
+      path,
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type':   'application/json',
+        'Content-Length': Buffer.byteLength(reqBody),
+      },
+    }, reqBody);
+  } catch(e) {
+    console.warn('generate-veo-clip: analyzeSceneFrame request error:', e.message);
+    return null;
+  }
+
+  if (res.status !== 200 || !res.data) {
+    console.warn('generate-veo-clip: analyzeSceneFrame non-200:', res.status,
+      res.data?.error?.message || '');
+    return null;
+  }
+
+  const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!raw) { console.warn('generate-veo-clip: analyzeSceneFrame empty response'); return null; }
+
+  try {
+    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+    const parsed = JSON.parse(cleaned);
+    console.log('generate-veo-clip: scene analysis OK — setting:', (parsed.setting || '').slice(0, 80));
+    return parsed;
+  } catch(e) {
+    console.warn('generate-veo-clip: analyzeSceneFrame JSON parse failed. Raw:', raw.slice(0, 200));
+    return null;
+  }
+}
+
+// ── Build [SCENE GROUND TRUTH] block ─────────────────────────────────────────
+function buildSceneBlock(sa) {
+  return [
+    '[SCENE GROUND TRUTH — EXTRACTED FROM REFERENCE FRAME — READ FIRST]',
+    `SETTING:          ${sa.setting         || 'not specified'}`,
+    `CAMERA ANGLE:     ${sa.camera_angle    || 'not specified'}`,
+    `LIGHTING:         ${sa.lighting        || 'not specified'}`,
+    `SUBJECT POSITION: ${sa.subject_position || 'not specified'}`,
+    `PROPS:            ${sa.props           || 'none'}`,
+    `COLOR PALETTE:    ${sa.color_palette   || 'not specified'}`,
+    `VISUAL STYLE:     ${sa.visual_style    || 'not specified'}`,
+    '!! MATCH THIS SCENE — preserve the setting, lighting, camera angle, and color palette exactly !!',
+    '[END SCENE GROUND TRUTH]',
+    '',
+  ].join('\n');
+}
 
 // ── OAuth2: service account → access token ────────────────────────────────────
 async function getAccessToken(saJson) {
@@ -227,7 +316,15 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const { prompt, durationSecs, model = 'lite', startImageB64 = null, startImageMime = null } = body;
+  const {
+    prompt,
+    durationSecs,
+    model         = 'lite',
+    startImageB64 = null,
+    startImageMime = null,
+    frameB64      = null,   // optional reference frame for scene analysis
+    frameMime     = 'image/jpeg',
+  } = body;
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
   const dur      = (durationSecs === 8) ? 8 : 6;
@@ -267,10 +364,25 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with generation service. Credits refunded.' }) };
   }
 
+  // ── Scene frame analysis (optional) ──────────────────────────────────────
+  // If a reference frame was provided, analyze it with Gemini 2.0 Flash and
+  // prepend a [SCENE GROUND TRUTH] block to the prompt. This grounds Veo in
+  // the original video's setting, camera angle, lighting, and props.
+  let finalPrompt = prompt.trim();
+  if (frameB64) {
+    const sceneAnalysis = await analyzeSceneFrame(frameB64, frameMime, accessToken);
+    if (sceneAnalysis) {
+      finalPrompt = buildSceneBlock(sceneAnalysis) + finalPrompt;
+      console.log('generate-veo-clip: scene analysis injected — prompt now', finalPrompt.length, 'chars');
+    } else {
+      console.log('generate-veo-clip: scene analysis unavailable — using original prompt');
+    }
+  }
+
   // ── Start Vertex AI generation ────────────────────────────────────────────
   let vtxResult;
   try {
-    vtxResult = await startVertexGeneration(prompt.trim(), dur, modelId, startImageB64, startImageMime, accessToken);
+    vtxResult = await startVertexGeneration(finalPrompt, dur, modelId, startImageB64, startImageMime, accessToken);
   } catch(e) {
     const refunded2 = await updateUserMeta(userId, { credits_balance: currentBalance });
     if (!refunded2) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex start error; balance may be wrong`);

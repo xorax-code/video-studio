@@ -307,8 +307,12 @@
   }
 
   // ── Single clip via server-side API ──────────────────────────────────────
-  // imageDataUrl: optional base64 data URL used as starting frame (NB composite or raw frame)
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl) {
+  // imageDataUrl:  optional data URL used as starting frame (NB composite or raw frame)
+  // refFrameDataUrl: optional data URL of the original source video frame, sent to
+  //                  Gemini 2.0 Flash for scene analysis (setting/camera/lighting/props).
+  //                  Separate from imageDataUrl — the start image may be the avatar
+  //                  composite, but scene analysis always needs the raw source frame.
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl) {
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -317,17 +321,22 @@
     if (dur !== 6 && dur !== 8) dur = 6;
     var model  = (modelKey === 'fast') ? 'fast' : (modelKey === 'standard') ? 'standard' : 'lite';
 
-    // ── Strip data URL prefix to get raw base64 + mimeType ───────────────
-    var startImageB64  = null;
-    var startImageMime = null;
-    if (imageDataUrl && imageDataUrl.startsWith('data:')) {
-      var _comma = imageDataUrl.indexOf(',');
-      if (_comma !== -1) {
-        var _meta = imageDataUrl.slice(5, _comma); // e.g. "image/jpeg;base64"
-        startImageMime = _meta.split(';')[0] || 'image/jpeg';
-        startImageB64  = imageDataUrl.slice(_comma + 1);
-      }
+    // ── Strip data URL prefix → raw base64 + mimeType ────────────────────
+    function _splitDataUrl(dataUrl) {
+      if (!dataUrl || !dataUrl.startsWith('data:')) return { b64: null, mime: null };
+      var comma = dataUrl.indexOf(',');
+      if (comma === -1) return { b64: null, mime: null };
+      var mime = dataUrl.slice(5, comma).split(';')[0] || 'image/jpeg';
+      return { b64: dataUrl.slice(comma + 1), mime };
     }
+
+    var _start = _splitDataUrl(imageDataUrl);
+    var startImageB64  = _start.b64;
+    var startImageMime = _start.mime;
+
+    var _ref = _splitDataUrl(refFrameDataUrl);
+    var frameB64  = _ref.b64;
+    var frameMime = _ref.mime || 'image/jpeg';
 
     // ── Step 1: Start generation (credits deducted here) ─────────────────
     var startRes = await fetch('/.netlify/functions/generate-veo-clip', {
@@ -339,6 +348,8 @@
         model:           model,
         startImageB64:   startImageB64,
         startImageMime:  startImageMime,
+        frameB64:        frameB64,    // reference frame for Gemini scene analysis
+        frameMime:       frameMime,
       }),
     });
 
@@ -619,7 +630,8 @@
 
         try {
           var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-          var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg);
+          // Pass seg.frameDataUrl as the reference frame for scene analysis (separate from start image)
+          var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg, seg.frameDataUrl || null);
 
           seg.apiVideoUrl  = result.videoUrl;
           seg.apiVideoMime = result.mimeType || 'video/mp4';
@@ -750,7 +762,7 @@
 
     try {
       var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-      var result   = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, startImg);
+      var result   = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, startImg, seg.frameDataUrl || null);
 
       seg.apiVideoUrl  = result.videoUrl;
       seg.apiVideoMime = result.mimeType || 'video/mp4';
