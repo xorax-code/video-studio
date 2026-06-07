@@ -121,6 +121,9 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
+  // ── Top-level safety net — catch any unhandled exception ───────────────────
+  try {
+
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
@@ -136,7 +139,13 @@ exports.handler = async (event) => {
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!jwt) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
 
-  const user = await getAuthUser(jwt);
+  let user;
+  try {
+    user = await getAuthUser(jwt);
+  } catch(authErr) {
+    console.error('generate-nb-composite: getAuthUser threw:', authErr.message);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Auth check failed: ' + authErr.message }) };
+  }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
   // ── Parse body ─────────────────────────────────────────────────────────────
@@ -303,4 +312,38 @@ Do not blend, merge, or average skin tones. Treat this as a compositing operatio
     headers: CORS,
     body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
   };
+
+  } catch(topErr) {
+    // Catch any unhandled exception so we always return a readable error instead of {}
+    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
+    };
+  }
+};
+eB64: part.inlineData.data, mime }),
+        };
+      }
+    }
+  }
+
+  // No image — log full response for debugging
+  console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
+  return {
+    statusCode: 502,
+    headers: CORS,
+    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
+  };
+
+  } catch(topErr) {
+    // Catch any unhandled exception so we always return a readable error instead of {}
+    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
+    };
+  }
 };
