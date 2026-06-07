@@ -1,15 +1,22 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana composite image using Imagen 3 via Vertex AI.
+ * Generates a Nano Banana composite image using Gemini 2.5 Flash Image via Vertex AI.
+ *
+ * Uses generateContent (not predict) with interleaved text + inlineData parts.
+ * Photo 1 = avatar identity to PLACE into the scene.
+ * Photo 2 = source video frame — background/scene to PRESERVE.
+ *
+ * The model sees both images with explicit role labels and generates a new image
+ * where the avatar person is composited into the scene background.
  *
  * Takes:
- *   - avatarB64      — base64 avatar photo (SUBJECT reference — person identity)
+ *   - avatarB64      — base64 avatar photo (person identity)
  *   - avatarMime     — MIME type of avatar (default: image/jpeg)
- *   - frameB64       — base64 reference frame (STYLE reference — background/environment, optional)
+ *   - frameB64       — base64 source video frame (scene background, optional)
  *   - frameMime      — MIME type of frame (default: image/jpeg)
- *   - instruction    — full generation instruction built from all NB prompt JSON fields
- *   - avatarDesc     — text description of the avatar (reinforces SUBJECT reference)
- *   - negativePrompt — negative prompt from NB prompt JSON
+ *   - instruction    — full NB Pro generation instruction (all scene/pose/framing detail)
+ *   - avatarDesc     — text description of avatar (reinforces identity in prompt)
+ *   - negativePrompt — things to avoid (folded into prompt text — Gemini has no native neg prompt)
  *
  * Returns: { imageB64, mime }
  *
@@ -24,7 +31,9 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-const MODEL    = 'imagen-3.0-generate-001';
+// gemini-2.5-flash-image supports generateContent with image input/output
+// and multi-image reference for character consistency.
+const MODEL    = 'gemini-2.5-flash-image';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -143,7 +152,7 @@ exports.handler = async (event) => {
     frameMime     = 'image/jpeg',
   } = body;
 
-  // ── Build images array — accept new {images:[{b64,mime}]} OR old avatarB64/frameB64 format ──
+  // ── Resolve images — support both {images:[]} and old avatarB64/frameB64 ──
   let avatarImg = null, frameImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
@@ -167,61 +176,84 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build Imagen 3 request ─────────────────────────────────────────────────
-  // Avatar → SUBJECT reference: Imagen 3 uses this to lock the person's identity.
-  // Frame  → STYLE reference: applies the background environment's aesthetic/lighting.
-  // The prompt text drives pose, scene, framing, and expression.
+  // ── Build Gemini generateContent request ───────────────────────────────────
+  //
+  // Strategy: interleave text labels + inlineData images so the model knows
+  // EXACTLY what each photo is for — not blending, not merging, but compositing.
+  //
+  // Photo 1 (avatar): the person whose face/body/appearance must be preserved.
+  // Photo 2 (frame):  the source video frame — background scene to keep intact.
+  //
+  // The prompt is the control mechanism. It must be crystal clear:
+  //   "Avatar FROM Photo 1 → placed INTO Scene FROM Photo 2"
+  //   "Do NOT use the original person from Photo 2"
+  //   "Do NOT blend these images"
 
-  const referenceImages = [
-    {
-      referenceType:  'REFERENCE_TYPE_SUBJECT',
-      referenceId:    1,
-      referenceImage: {
-        bytesBase64Encoded: avatarImg.b64,
-        mimeType:           avatarImg.mime || 'image/jpeg',
-      },
-    },
-  ];
+  const avDesc = avatarDesc ? ` (${avatarDesc})` : '';
+  const hasFrame = !!frameImg;
 
-  if (frameImg) {
-    referenceImages.push({
-      referenceType:  'REFERENCE_TYPE_STYLE',
-      referenceId:    2,
-      referenceImage: {
-        bytesBase64Encoded: frameImg.b64,
-        mimeType:           frameImg.mime || 'image/jpeg',
-      },
-    });
+  // Build preamble — strict compositing framing
+  const preamble = [
+    'You are a photorealistic image compositor. You will generate ONE new image.',
+    '',
+    hasFrame
+      ? `PHOTO 1 — AVATAR IDENTITY: This is the person${avDesc} you must place into the scene. Preserve their face, skin tone, hair color, hair texture, and body exactly. This is WHO appears in the output.`
+      : `AVATAR IDENTITY: The person${avDesc} to generate.`,
+  ].join('\n');
+
+  const sceneLabel = hasFrame
+    ? 'PHOTO 2 — BACKGROUND SCENE: This is the source video frame. Preserve the background environment, set design, props, lighting, and camera angle exactly as shown. This is WHERE the Avatar appears in the output.'
+    : null;
+
+  const compositeRule = hasFrame
+    ? [
+        '',
+        'COMPOSITING RULE (CRITICAL):',
+        '- Place the Avatar (Photo 1) INTO the Scene (Photo 2).',
+        '- The Avatar REPLACES the original person from the Scene — do NOT use the original person from Photo 2.',
+        '- Do NOT blend, merge, or double-expose these two images.',
+        '- Do NOT carry over the Avatar\'s background — use the Scene background only.',
+        '- The Avatar\'s face and appearance must look exactly like Photo 1.',
+        '- The Scene background must look exactly like Photo 2.',
+        '',
+      ].join('\n')
+    : '\n';
+
+  const avoid = negativePrompt
+    ? `\nAVOID: ${negativePrompt}`
+    : '';
+
+  const fullPrompt = [preamble, compositeRule, instruction, avoid].filter(Boolean).join('\n');
+
+  // Assemble parts: text → avatar image → (optional) scene label text → frame image → instruction
+  const parts = [];
+
+  parts.push({ text: preamble + '\n' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime || 'image/jpeg', data: avatarImg.b64 } });
+
+  if (hasFrame && sceneLabel) {
+    parts.push({ text: '\n' + sceneLabel + '\n' });
+    parts.push({ inlineData: { mimeType: frameImg.mime || 'image/jpeg', data: frameImg.b64 } });
   }
 
-  // Build the prompt — instruction carries all scene/pose/framing detail;
-  // avatarDesc reinforces the SUBJECT reference in text.
-  const promptParts = [];
-  if (avatarDesc) promptParts.push('Person to generate: ' + avatarDesc + '.');
-  promptParts.push(instruction);
-  if (negativePrompt) promptParts.push('Do not include: ' + negativePrompt);
-  const promptText = promptParts.join('\n\n');
-
-  const parameters = {
-    sampleCount:    1,
-    aspectRatio:    '9:16',
-    outputMimeType: 'image/jpeg',
-  };
-  if (negativePrompt) parameters.negativePrompt = negativePrompt;
+  parts.push({ text: compositeRule + instruction + avoid });
 
   const requestBody = JSON.stringify({
-    instances:  [{ prompt: promptText, referenceImages }],
-    parameters,
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      responseModalities: ['IMAGE'],
+    },
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:predict`;
+  // generateContent endpoint (not :predict — that's for Imagen)
+  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${!!frameImg}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}`);
+  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}`);
 
-  // ── Vertex AI call — no server-side sleep/retry; client handles 429 backoff ─
-  const _vertexOptions = {
+  // ── Vertex AI call — no server-side retry; client handles 429 backoff ─────
+  const vertexOptions = {
     hostname,
     path:   apiPath,
     method: 'POST',
@@ -234,7 +266,7 @@ exports.handler = async (event) => {
 
   let result;
   try {
-    result = await httpsRequest(_vertexOptions, requestBody);
+    result = await httpsRequest(vertexOptions, requestBody);
   } catch(e) {
     console.error('generate-nb-composite: fetch error:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
@@ -243,7 +275,7 @@ exports.handler = async (event) => {
   console.log('generate-nb-composite: Vertex AI status:', result.status);
 
   if (!result.data) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status + (result.raw ? ' Raw: ' + result.raw.slice(0,200) : '') }) };
   }
 
   if (result.status !== 200 || result.data.error) {
@@ -253,27 +285,30 @@ exports.handler = async (event) => {
     return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  // ── Extract image from Imagen 3 response ───────────────────────────────────
-  // Imagen 3 returns { predictions: [{ bytesBase64Encoded, mimeType }] }
-  const predictions = result.data.predictions || [];
-  for (const pred of predictions) {
-    if (pred.bytesBase64Encoded) {
-      const mime = pred.mimeType || 'image/jpeg';
-      console.log('generate-nb-composite: image generated, mime:', mime);
-      return {
-        statusCode: 200,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageB64: pred.bytesBase64Encoded, mime }),
-      };
+  // ── Extract image from Gemini generateContent response ────────────────────
+  // Response shape: { candidates: [{ content: { parts: [{ inlineData: { data, mimeType } }] } }] }
+  const candidates = result.data.candidates || [];
+  for (const candidate of candidates) {
+    for (const part of (candidate.content?.parts || [])) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || 'image/jpeg';
+        console.log('generate-nb-composite: image generated, mime:', mime);
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
+        };
+      }
     }
   }
 
-  // No image — log details
-  const filterReasons = predictions.map(p => p.raiFilteredReason || p.safetyAttributes?.categories || 'unknown').join(', ');
-  console.error('generate-nb-composite: no image in predictions. filterReasons:', filterReasons, '| predictions:', JSON.stringify(predictions).slice(0, 300));
+  // No image — log details for debugging
+  const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
+  const safetyRatings = candidates.map(c => JSON.stringify(c.safetyRatings || [])).join(', ');
+  console.error('generate-nb-composite: no image in candidates. finishReasons:', finishReasons, '| safetyRatings:', safetyRatings.slice(0, 300));
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: `Image generation returned no image. ${filterReasons ? '(Filtered: ' + filterReasons + ')' : ''}`.trim() }),
+    body: JSON.stringify({ error: `Image generation returned no image. FinishReason: ${finishReasons}`.trim() }),
   };
 };
