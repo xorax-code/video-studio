@@ -103,46 +103,40 @@
 
     if (hasFrame) {
       // ── Compositing mode ────────────────────────────────────────────────────
-      // Photo 1 = avatar (the person to generate). Photo 2 = source video frame (background + scene reference ONLY).
-      // Gemini must: take Photo 1's person, place them into Photo 2's environment, and output that composite.
-      // Critical: Photo 2 has its own person (the original creator) — Gemini must NOT generate that person.
+      // Photo 1 = avatar (person to generate). Photo 2 = source video frame (background only).
       var _hfParts = [];
 
-      // 1. Subject identity — loudest, first
+      // 1. Subject — avatar from Photo 1
       _hfParts.push(
-        'SUBJECT: Reproduce the person from Photo 1 exactly — their face, skin tone, hair, clothing, body shape, and style. ' +
-        'This is a lifestyle composite: take Photo 1\'s person and place them into Photo 2\'s scene.\n' +
-        'CRITICAL — Photo 2 contains a different person: DO NOT generate that person. ' +
-        'Erase and completely replace any person visible in Photo 2. ' +
-        'The ONLY human in the output must be the person from Photo 1.'
+        'SUBJECT: Generate the person from [IMAGE 1 - AVATAR] exactly — ' +
+        'their face, skin tone, hair, clothing, body shape, and style. ' +
+        'This is the ONLY person that should appear in the output.'
       );
 
       // 2. Core generation instruction from NB prompt
       if (_nbCore) _hfParts.push(_nbCore);
 
-      // 3. Background / environment — taken from Photo 2
+      // 3. Background from Photo 2 (image + text description)
       _hfParts.push(
-        'BACKGROUND: Use Photo 2\'s room, environment, furniture, props, and lighting as the backdrop. ' +
-        'Keep Photo 2\'s spatial composition — walls, decor, depth — exactly as-is.'
+        'BACKGROUND: Use the room, environment, props, furniture, and lighting from [IMAGE 2 - BACKGROUND SCENE] as the backdrop. ' +
+        'Do NOT generate the person visible in [IMAGE 2 - BACKGROUND SCENE] — use only that image\'s environment.'
       );
-      if (_nbBgRef) _hfParts.push(_nbBgRef);
-      if (_nbVisualDesc) _hfParts.push('Visual reference: ' + _nbVisualDesc);
+      if (_nbVisualDesc) _hfParts.push('Scene description: ' + _nbVisualDesc);
+      if (_nbSetting)    _hfParts.push('Setting: ' + _nbSetting);
+      if (_nbBgRef)      _hfParts.push(_nbBgRef);
 
-      // 4. Scene / setting context
-      if (_nbSetting) _hfParts.push('Scene: ' + _nbSetting);
-
-      // 5. Pose / action for this clip
+      // 4. Pose / action
       if (_segAction) _hfParts.push('Pose/action: ' + _segAction + '.');
 
-      // 6. Expression
+      // 5. Expression
       if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression);
 
-      // 7. Technical specs
+      // 6. Technical specs
       _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field'));
       _hfParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor'));
 
-      // 8. Output requirements (reinforce single person)
-      _hfParts.push('Output: single photorealistic vertical 9:16 image. Exactly ONE person — the Photo 1 person. No second person, no ghost of original, no text overlays, no watermarks.');
+      // 7. Output requirements
+      _hfParts.push('Output: single photorealistic vertical 9:16 image. ONE person only — the [IMAGE 1 - AVATAR] person. No text overlays, no watermarks.');
 
       instruction = _hfParts.join('\n\n');
 

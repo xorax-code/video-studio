@@ -158,33 +158,28 @@ exports.handler = async (event) => {
   }
 
   // ── Build request ──────────────────────────────────────────────────────────
-  const hasFrameRef = images.length >= 2;
-
-  const photoGuide = hasFrameRef
-    ? [
-        'PHOTO REFERENCE RULES:',
-        '• Photo 1 = the avatar/person to generate. Copy this person\'s face, hair, skin tone, clothing, and body exactly.',
-        '• Photo 2 = the background scene reference ONLY. Use its room, environment, furniture, props, and lighting as the backdrop.',
-        '• The person visible in Photo 2 is the ORIGINAL creator — do NOT generate them. Completely replace any person in Photo 2 with the Photo 1 person.',
-        '• Do NOT use Photo 1\'s background — only Photo 2\'s background.',
-      ].join('\n')
-    : 'PHOTO REFERENCE RULES:\n• Photo 1 = the avatar/person to generate. Reproduce their face, hair, clothing, and appearance exactly.';
-
   const negSection = negativePrompt
-    ? `\n\nDo NOT include in the output: ${negativePrompt}, original person from background photo, multiple people, second person`
-    : '\n\nDo NOT include: multiple people, second person, original person from background';
+    ? `Do NOT include: ${negativePrompt}, multiple people, second person, person from background image`
+    : 'Do NOT include: multiple people, second person, person from background image';
 
-  const userText = [
-    instruction,
-    '',
-    photoGuide,
-    negSection,
-  ].join('\n').trim();
+  // Interleave text labels with images so Gemini clearly ties each label to its image.
+  // This is the correct multi-image prompting pattern — all-text-then-all-images
+  // causes the model to lose the association between label and image.
+  const userParts = [];
 
-  const userParts = [{ text: userText }];
-  images.forEach(img => {
-    userParts.push({ inline_data: { mime_type: img.mime || 'image/jpeg', data: img.b64 } });
-  });
+  if (images.length >= 2) {
+    // Two-image compositing: avatar + background scene
+    userParts.push({ text: '[IMAGE 1 - AVATAR] This is the avatar. Generate this exact person:' });
+    userParts.push({ inline_data: { mime_type: images[0].mime || 'image/jpeg', data: images[0].b64 } });
+    userParts.push({ text: '[IMAGE 2 - BACKGROUND SCENE] This is the background/environment reference only. Use this room, lighting, and props as the backdrop — do NOT generate the person visible in this image:' });
+    userParts.push({ inline_data: { mime_type: images[1].mime || 'image/jpeg', data: images[1].b64 } });
+    userParts.push({ text: `\nInstructions:\n${instruction}\n\n${negSection}` });
+  } else {
+    // Single image: avatar only
+    userParts.push({ text: '[IMAGE 1 - AVATAR] Generate this exact person:' });
+    userParts.push({ inline_data: { mime_type: images[0].mime || 'image/jpeg', data: images[0].b64 } });
+    userParts.push({ text: `\nInstructions:\n${instruction}\n\n${negSection}` });
+  }
 
   const requestBody = JSON.stringify({
     contents: [{ role: 'user', parts: userParts }],
