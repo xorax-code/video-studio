@@ -1,22 +1,26 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana composite image using Gemini 2.5 Flash Image via Vertex AI.
+ * Generates a Nano Banana scene image using Imagen 3 via Vertex AI.
  *
- * Uses generateContent (not predict) with interleaved text + inlineData parts.
- * Photo 1 = avatar identity to PLACE into the scene.
- * Photo 2 = source video frame — background/scene to PRESERVE.
+ * Model: imagen-3.0-capability-001 (Imagen 3 editing/capability endpoint)
+ * Endpoint: :predict (NOT :generateContent — that's Gemini)
  *
- * The model sees both images with explicit role labels and generates a new image
- * where the avatar person is composited into the scene background.
+ * Reference image strategy (replicates how Google Flow generates NB scenes):
+ *   SUBJECT reference — avatar photo → locks NanaBanana's face, skin, hair, clothing
+ *   LAYOUT reference  — source video frame → locks scene structure, background, props,
+ *                       camera angle, lighting (exact pixel-level spatial preservation)
+ *
+ * The model GENERATES NanaBanana into the scene — it does NOT composite or blend.
+ * The instruction from 17-nb-api.js is passed through as-is (already structured for Imagen 3).
  *
  * Takes:
- *   - avatarB64      — base64 avatar photo (person identity)
+ *   - avatarB64      — base64 avatar photo (NanaBanana identity reference)
  *   - avatarMime     — MIME type of avatar (default: image/jpeg)
- *   - frameB64       — base64 source video frame (scene background, optional)
+ *   - frameB64       — base64 source video frame (scene layout reference, optional)
  *   - frameMime      — MIME type of frame (default: image/jpeg)
- *   - instruction    — full NB Pro generation instruction (all scene/pose/framing detail)
- *   - avatarDesc     — text description of avatar (reinforces identity in prompt)
- *   - negativePrompt — things to avoid (folded into prompt text — Gemini has no native neg prompt)
+ *   - instruction    — NB Pro generation instruction (scene/pose/action/framing detail)
+ *   - avatarDesc     — text description of NanaBanana (reinforces SUBJECT reference)
+ *   - negativePrompt — things to avoid
  *
  * Returns: { imageB64, mime }
  *
@@ -31,9 +35,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-// gemini-2.5-flash-image supports generateContent with image input/output
-// and multi-image reference for character consistency.
-const MODEL    = 'gemini-2.5-flash-image';
+const MODEL    = 'imagen-3.0-capability-001';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -144,12 +146,12 @@ exports.handler = async (event) => {
 
   const {
     instruction,
-    avatarDesc    = '',
+    avatarDesc     = '',
     negativePrompt = '',
     avatarB64,
-    avatarMime    = 'image/jpeg',
-    frameB64      = null,
-    frameMime     = 'image/jpeg',
+    avatarMime     = 'image/jpeg',
+    frameB64       = null,
+    frameMime      = 'image/jpeg',
   } = body;
 
   // ── Resolve images — support both {images:[]} and old avatarB64/frameB64 ──
@@ -176,83 +178,79 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build Gemini generateContent request ───────────────────────────────────
+  // ── Build Imagen 3 :predict request ───────────────────────────────────────
   //
-  // Strategy: interleave text labels + inlineData images so the model knows
-  // EXACTLY what each photo is for — not blending, not merging, but compositing.
+  // Strategy: dual reference images replicating Google Flow's NB generation.
   //
-  // Photo 1 (avatar): the person whose face/body/appearance must be preserved.
-  // Photo 2 (frame):  the source video frame — background scene to keep intact.
+  // SUBJECT reference (avatar photo):
+  //   Locks NanaBanana's identity — face, skin tone, hair color/texture, clothing.
+  //   subjectType: PERSON tells Imagen 3 this is a human identity reference.
   //
-  // The prompt is the control mechanism. It must be crystal clear:
-  //   "Avatar FROM Photo 1 → placed INTO Scene FROM Photo 2"
-  //   "Do NOT use the original person from Photo 2"
-  //   "Do NOT blend these images"
+  // LAYOUT reference (source video frame):
+  //   Locks the scene structure — exact background, prop positions, camera angle,
+  //   lighting direction. This is why Flow produces pixel-exact backgrounds.
+  //   Unlike STYLE (which preserves color/mood loosely), LAYOUT preserves spatial
+  //   composition precisely.
+  //
+  // The instruction from 17-nb-api.js is already formatted for Imagen 3 with
+  // NB Pro structured sections (LOCK, ARM, HAIR LOCK, etc.) — pass through as-is.
 
-  const avDesc = avatarDesc ? ` (${avatarDesc})` : '';
   const hasFrame = !!frameImg;
 
-  // Build preamble — strict compositing framing
-  const preamble = [
-    'You are a photorealistic image compositor. You will generate ONE new image.',
-    '',
-    hasFrame
-      ? `PHOTO 1 — AVATAR IDENTITY: This is the person${avDesc} you must place into the scene. Preserve their face, skin tone, hair color, hair texture, and body exactly. This is WHO appears in the output.`
-      : `AVATAR IDENTITY: The person${avDesc} to generate.`,
-  ].join('\n');
+  // Build the text prompt:
+  // Lead with subject description, then the full structured instruction,
+  // then scene lock reminder if we have a frame, then negatives.
+  const subjectLine = avatarDesc
+    ? `Photorealistic portrait of ${avatarDesc}.`
+    : 'Photorealistic portrait of the person in the subject reference image.';
 
-  const sceneLabel = hasFrame
-    ? 'PHOTO 2 — BACKGROUND SCENE: This is the source video frame. Preserve the background environment, set design, props, lighting, and camera angle exactly as shown. This is WHERE the Avatar appears in the output.'
-    : null;
-
-  const compositeRule = hasFrame
-    ? [
-        '',
-        'COMPOSITING RULE (CRITICAL):',
-        '- Place the Avatar (Photo 1) INTO the Scene (Photo 2).',
-        '- The Avatar REPLACES the original person from the Scene — do NOT use the original person from Photo 2.',
-        '- Do NOT blend, merge, or double-expose these two images.',
-        '- Do NOT carry over the Avatar\'s background — use the Scene background only.',
-        '- The Avatar\'s face and appearance must look exactly like Photo 1.',
-        '- The Scene background must look exactly like Photo 2.',
-        '',
-      ].join('\n')
-    : '\n';
-
-  const avoid = negativePrompt
-    ? `\nAVOID: ${negativePrompt}`
+  const layoutReminder = hasFrame
+    ? 'Replicate the exact background, props, lighting, and spatial composition from the layout reference image. Do not alter or remove any background elements.'
     : '';
 
-  const fullPrompt = [preamble, compositeRule, instruction, avoid].filter(Boolean).join('\n');
+  const negLine = negativePrompt ? `Avoid: ${negativePrompt}` : '';
 
-  // Assemble parts: text → avatar image → (optional) scene label text → frame image → instruction
-  const parts = [];
+  const prompt = [subjectLine, instruction, layoutReminder, negLine]
+    .filter(Boolean)
+    .join(' ');
 
-  parts.push({ text: preamble + '\n' });
-  parts.push({ inlineData: { mimeType: avatarImg.mime || 'image/jpeg', data: avatarImg.b64 } });
+  // Build referenceImages array
+  const referenceImages = [
+    {
+      referenceType: 'SUBJECT',
+      referenceId:   1,
+      referenceImage: { bytesBase64Encoded: avatarImg.b64 },
+      subjectImageConfig: { subjectType: 'PERSON' },
+    },
+  ];
 
-  if (hasFrame && sceneLabel) {
-    parts.push({ text: '\n' + sceneLabel + '\n' });
-    parts.push({ inlineData: { mimeType: frameImg.mime || 'image/jpeg', data: frameImg.b64 } });
+  if (hasFrame) {
+    referenceImages.push({
+      referenceType: 'LAYOUT',
+      referenceId:   2,
+      referenceImage: { bytesBase64Encoded: frameImg.b64 },
+    });
   }
 
-  parts.push({ text: compositeRule + instruction + avoid });
-
   const requestBody = JSON.stringify({
-    contents: [{ role: 'user', parts }],
-    generationConfig: {
-      responseModalities: ['IMAGE'],
+    instances: [{
+      prompt,
+      referenceImages,
+    }],
+    parameters: {
+      sampleCount:      1,
+      aspectRatio:      '9:16',
+      personGeneration: 'allow_all',
     },
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-  // generateContent endpoint (not :predict — that's for Imagen)
-  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:predict`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}`);
+  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}, promptLen=${prompt.length}`);
 
-  // ── Vertex AI call — no server-side retry; client handles 429 backoff ─────
+  // ── Vertex AI call ────────────────────────────────────────────────────────
   const vertexOptions = {
     hostname,
     path:   apiPath,
@@ -275,40 +273,36 @@ exports.handler = async (event) => {
   console.log('generate-nb-composite: Vertex AI status:', result.status);
 
   if (!result.data) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status + (result.raw ? ' Raw: ' + result.raw.slice(0,200) : '') }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status + (result.raw ? ' Raw: ' + result.raw.slice(0, 300) : '') }) };
   }
 
   if (result.status !== 200 || result.data.error) {
     const errMsg = result.data?.error?.message || `Vertex AI error (HTTP ${result.status})`;
     console.error('generate-nb-composite: Vertex AI error:', errMsg);
-    const clientStatus = (result.status === 429) ? 429 : 502;
+    const clientStatus = result.status === 429 ? 429 : 502;
     return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  // ── Extract image from Gemini generateContent response ────────────────────
-  // Response shape: { candidates: [{ content: { parts: [{ inlineData: { data, mimeType } }] } }] }
-  const candidates = result.data.candidates || [];
-  for (const candidate of candidates) {
-    for (const part of (candidate.content?.parts || [])) {
-      if (part.inlineData?.data) {
-        const mime = part.inlineData.mimeType || 'image/jpeg';
-        console.log('generate-nb-composite: image generated, mime:', mime);
-        return {
-          statusCode: 200,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
-        };
-      }
+  // ── Extract image from Imagen 3 :predict response ─────────────────────────
+  // Response shape: { predictions: [{ bytesBase64Encoded: "...", mimeType: "image/png" }] }
+  const predictions = result.data.predictions || [];
+  for (const pred of predictions) {
+    if (pred.bytesBase64Encoded) {
+      const mime = pred.mimeType || 'image/png';
+      console.log('generate-nb-composite: image generated, mime:', mime);
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageB64: pred.bytesBase64Encoded, mime }),
+      };
     }
   }
 
-  // No image — log details for debugging
-  const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
-  const safetyRatings = candidates.map(c => JSON.stringify(c.safetyRatings || [])).join(', ');
-  console.error('generate-nb-composite: no image in candidates. finishReasons:', finishReasons, '| safetyRatings:', safetyRatings.slice(0, 300));
+  // No image in predictions — log for debugging
+  console.error('generate-nb-composite: no image in predictions. Full response:', JSON.stringify(result.data).slice(0, 500));
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: `Image generation returned no image. FinishReason: ${finishReasons}`.trim() }),
+    body: JSON.stringify({ error: 'Imagen 3 returned no image. Check Vertex AI logs.' }),
   };
 };
