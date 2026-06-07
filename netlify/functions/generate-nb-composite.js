@@ -408,8 +408,10 @@ RULES:
   // The model's only job is to place the Photo 1 avatar naturally into the scene.
   // This is dramatically simpler than simultaneous replace — ghosting is impossible
   // because there is no longer a second person in the background image.
-  const cleanBgNote = (hasFrame && compositeBackgroundImg !== frameImg)
-    ? 'IMPORTANT: Photo 2 is a CLEAN background — the original person has already been removed from it. There is NO person in Photo 2. Your ONLY job is to place the Photo 1 avatar into the scene shown in Photo 2.'
+  const inpaintSucceeded = hasFrame && compositeBackgroundImg !== frameImg;
+
+  const cleanBgNote = inpaintSucceeded
+    ? 'IMPORTANT: Photo 2 is a CLEAN background — the original person has been removed. Photo 3 is the ORIGINAL scene — use it ONLY to identify the exact product/prop the person was holding and reproduce it faithfully in the avatar\'s hand. Do NOT copy the person from Photo 3.'
     : 'Photo 2 = Scene reference frame (background/composition to match).';
 
   const photo_guide = hasFrame
@@ -425,8 +427,13 @@ RULES:
   parts.push({ text: 'Photo 1 (avatar — the person to place into the scene):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    parts.push({ text: 'Photo 2 (background scene — no person is in this photo):' });
+    parts.push({ text: 'Photo 2 (clean background — person already removed, ready for avatar placement):' });
     parts.push({ inlineData: { mimeType: compositeBackgroundImg.mime, data: compositeBackgroundImg.b64 } });
+    if (inpaintSucceeded) {
+      // Send original frame as Photo 3 for prop/product reference only
+      parts.push({ text: 'Photo 3 (original scene — reference ONLY for the product/prop being held; do NOT copy the person from this photo):' });
+      parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
+    }
   }
   parts.push({ text: fullPrompt });
 
@@ -434,15 +441,16 @@ RULES:
     ? `You are a professional photo compositor. Your task is PERSON PLACEMENT — not person replacement.
 
 Photo 2 is a CLEAN background with NO person in it. The scene is empty, ready to receive the avatar.
+Photo 3 is the ORIGINAL scene (before the person was removed) — use it ONLY to identify the exact product or prop the person was holding. Copy that product exactly into the avatar's hand. Do NOT copy the person from Photo 3 into the output.
 
 MANDATORY RULES:
-1. PLACE: Insert the Photo 1 person naturally into the Photo 2 scene. They should appear to have always been standing there.
-2. POSE MATCH: The avatar's arms, hands, and body MUST match the pose described in the [POSE GROUND TRUTH] block above. Arms NEVER default to sides.
-3. PROP MATCH: If a prop is described in the pose data, the avatar MUST hold it in the correct hand at the correct position.
+1. PLACE: Insert the Photo 1 avatar naturally into the Photo 2 scene at the same position and scale as the person in Photo 3.
+2. POSE MATCH: The avatar's arms, hands, and body MUST match the pose described in the [POSE GROUND TRUTH] block. Arms NEVER default to sides.
+3. PROP MATCH: Look at Photo 3 — identify the exact product/object the person is holding. The avatar MUST hold that same product in the same hand, same position, same orientation. Copy the label, shape, and color of the product faithfully from Photo 3.
 4. BACKGROUND LOCK: The Photo 2 background must be preserved exactly — same lighting, colors, objects, walls, everything.
-5. NO TEXT: Do NOT add any text, labels, watermarks, or graphical overlays.
+5. NO TEXT TRANSFER: Do NOT reproduce any text, labels, or overlays from Photo 2 or Photo 3 — EXCEPT text that is physically ON the product label itself (that is part of the product).
 6. ONE PERSON: Only the Photo 1 avatar appears in the output. No other people.
-7. NATURAL INTEGRATION: The avatar should look naturally lit and grounded in the scene — match the Photo 2 lighting direction and color temperature.`
+7. NATURAL INTEGRATION: The avatar should look naturally lit — match the lighting direction and color temperature from Photo 2.`
     : `You are a professional photo compositor performing a PERSON REPLACEMENT task.
 
 TASK: Completely replace the person in Photo 2 with the person from Photo 1.

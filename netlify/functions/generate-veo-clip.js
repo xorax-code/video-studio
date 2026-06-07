@@ -205,9 +205,9 @@ exports.handler = async (event) => {
   // ── Env check ─────────────────────────────────────────────────────────────
   const required = ['GOOGLE_SERVICE_ACCOUNT_JSON','GOOGLE_CLOUD_PROJECT_ID','GOOGLE_CLOUD_STORAGE_BUCKET',
                     'SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'];
+  const missing  = required.filter(k => !process.env[k]);
   // SUPABASE_ANON is optional — SUPABASE_ANON_KEY is the fallback; at least one must be set
   if (!process.env.SUPABASE_ANON_KEY && !process.env.SUPABASE_ANON) missing.push('SUPABASE_ANON / SUPABASE_ANON_KEY');
-  const missing  = required.filter(k => !process.env[k]);
   if (missing.length) {
     console.error('generate-veo-clip: missing env vars:', missing.join(', '));
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error.' }) };
