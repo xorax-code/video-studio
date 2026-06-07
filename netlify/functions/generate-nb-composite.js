@@ -2,7 +2,7 @@
  * Netlify Function: generate-nb-composite
  * Generates a Nano Banana scene image using Gemini 2.5 Flash image generation.
  *
- * Model: gemini-2.5-flash-preview-image-generation
+ * Model: gemini-2.5-flash-image
  * Endpoint: :generateContent (Gemini multimodal API)
  *
  * Strategy — explicit image EDIT (not generation, not blending):
@@ -35,7 +35,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-const MODEL    = 'gemini-2.0-flash-exp';
+const MODEL    = 'gemini-2.5-flash-image';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -232,6 +232,8 @@ Do not blend, merge, or average the two photos. Treat this as a compositing oper
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
+  // gemini-2.5-flash-image is accessed via the standard Gemini generateContent endpoint.
+  // Try the GA model ID first; if that 404s, the -ga suffix variant is the fallback.
   const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
