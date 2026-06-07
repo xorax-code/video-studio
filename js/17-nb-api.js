@@ -76,11 +76,14 @@
       frameMime = frameParts.mime;
     }
 
-    // ── Build instruction for Gemini based on what photos are available ────────
-    // When a video frame (Photo 2) exists: place avatar into source frame's scene.
-    // When avatar only: generate a fresh lifestyle frame.
+    // ── Build instruction for Imagen 3 based on what photos are available ──────
+    // When a video frame exists: avatar (SUBJECT ref) + frame (STYLE ref for background).
+    // When avatar only: generate a fresh lifestyle frame from the NB prompt context.
     var instruction;
     var _nbNegativePrompt = '';
+
+    // Read avatar text description — reinforces the SUBJECT image reference in text
+    var _avatarDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
 
     // Parse NB prompt JSON once — used by both paths
     var _nbParsedObj = {};
@@ -102,78 +105,95 @@
     var _segAction = (seg.action || '').trim();
 
     if (hasFrame) {
-      // ── Compositing mode ────────────────────────────────────────────────────
-      // Photo 1 = avatar (person to generate). Photo 2 = source video frame (background only).
+      // ── Compositing mode — NB Pro structured format ──────────────────────────
+      // Mirrors the labeled-section format used by NanaBanana Pro in Flow.
+      // Avatar = SUBJECT reference (Imagen 3 identity lock).
+      // Frame  = STYLE reference (background environment/lighting).
       var _hfParts = [];
 
-      // 1. Subject — avatar from Photo 1
-      _hfParts.push(
-        'SUBJECT: Generate the person from [IMAGE 1 - AVATAR] exactly — ' +
-        'their face, skin tone, hair, clothing, body shape, and style. ' +
-        'This is the ONLY person that should appear in the output.'
-      );
+      // [FULL PERSON] header + REPLACE with spatial anchoring
+      _hfParts.push('[FULL PERSON] REPLACE: avatar person — same position, scale, and vertical height as the original person in the reference frame (STYLE image). The avatar\'s torso and head must be at the same height relative to any table or surface as the original person.');
 
-      // 2. Core generation instruction from NB prompt
+      // Camera angle
+      _hfParts.push('Camera angle: straight-on, chest height.');
+
+      // LOCK: background from the STYLE reference frame
+      var _lockLine = 'LOCK: background — use the environment, room, props, and lighting from the STYLE reference image exactly as-is.';
+      if (_nbVisualDesc) _lockLine += ' Scene: ' + _nbVisualDesc + '.';
+      if (_nbSetting)    _lockLine += ' Setting: ' + _nbSetting + '.';
+      if (_nbBgRef)      _lockLine += ' ' + _nbBgRef + '.';
+      _lockLine += ' Do NOT alter, move, or add any background elements. Do NOT generate the original person from the reference frame.';
+      _hfParts.push(_lockLine);
+
+      // ARM + PROP STATE — from seg.action (hand/holding specifics)
+      if (_segAction) {
+        _hfParts.push('ARM: ' + _segAction + '.');
+        _hfParts.push('PROP STATE: The avatar\'s hand positions and prop interactions must match the described action exactly — same reach, same hand, same object. Replicate the scale and proximity to the surface as shown in the reference frame.');
+      }
+
+      // LIGHT
+      _hfParts.push('LIGHT: ' + (_nbStyle || 'warm ambient') + '. Match the color temperature, direction, and shadow quality of the reference frame exactly.');
+
+      // HAIR LOCK — avatar description + explicit warning
+      if (_avatarDesc) {
+        _hfParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. The reference frame may contain a person with different hair, skin tone, or features — DO NOT apply any of those attributes to the avatar under any circumstances.');
+      }
+
+      // Outfit from NB prompt core instruction (already contains clothing/accessory detail)
       if (_nbCore) _hfParts.push(_nbCore);
 
-      // 3. Background from Photo 2 (image + text description)
-      _hfParts.push(
-        'BACKGROUND: Use the room, environment, props, furniture, and lighting from [IMAGE 2 - BACKGROUND SCENE] as the backdrop. ' +
-        'Do NOT generate the person visible in [IMAGE 2 - BACKGROUND SCENE] — use only that image\'s environment.'
-      );
-      if (_nbVisualDesc) _hfParts.push('Scene description: ' + _nbVisualDesc);
-      if (_nbSetting)    _hfParts.push('Setting: ' + _nbSetting);
-      if (_nbBgRef)      _hfParts.push(_nbBgRef);
+      // Standard locks (always included)
+      _hfParts.push('CRITICAL: Do NOT copy or add any hair accessories, headbands, hats, clips, bows, or wearable items from the reference frame person that are NOT in the avatar profile. The avatar wears ONLY the items described — nothing extra from the reference.');
+      _hfParts.push('GENDER LOCK: The avatar must match the exact gender, approximate age, and ethnicity of the person in the SUBJECT reference. Do NOT change the avatar\'s gender, age, or ethnicity — even if the reference frame contains a person of a different gender.');
+      _hfParts.push('TRANSFER BLOCK: Do NOT copy any text, numbers, dates, labels, logos, or graphical overlays from the reference frame into the output. Do NOT copy any props or accessories from the reference frame person unless explicitly described in the ARM section.');
+      _hfParts.push('LIGHTING MATCH: Adjust the avatar\'s lighting to exactly match the color temperature, direction, and shadow quality of the reference frame — no generic studio lighting.');
 
-      // 4. Pose / action
-      if (_segAction) _hfParts.push('Pose/action: ' + _segAction + '.');
+      // Expression + framing
+      if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
+      _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single photorealistic image. ONE person only. No text overlays, no watermarks.');
 
-      // 5. Expression
-      if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression);
-
-      // 6. Technical specs
-      _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field'));
-      _hfParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor'));
-
-      // 7. Output requirements
-      _hfParts.push('Output: single photorealistic vertical 9:16 image. ONE person only — the [IMAGE 1 - AVATAR] person. No text overlays, no watermarks.');
-
-      instruction = _hfParts.join('\n\n');
+      instruction = _hfParts.join(' ');
 
     } else {
-      // ── Generate mode ───────────────────────────────────────────────────────
-      // No reference frame — create a fresh lifestyle photo of the avatar using the NB prompt context.
+      // ── Generate mode — NB Pro structured format ─────────────────────────────
+      // No reference frame — generate a fresh lifestyle starting frame for the avatar.
       var _gParts = [];
 
-      // Subject
-      _gParts.push('SUBJECT: Generate the person from Photo 1 — use their face, hair, clothing, skin tone, and appearance exactly.');
+      // Header
+      _gParts.push('[FULL PERSON] Generate the avatar from the SUBJECT reference image in a lifestyle scene.');
 
-      // Core instruction
+      // Avatar description reinforcement
+      if (_avatarDesc) _gParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. Reproduce this person\'s face, skin tone, hair, and clothing exactly.');
+
+      // Core instruction from NB prompt
       if (_nbCore) {
         _gParts.push(_nbCore);
       } else {
         _gParts.push('Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression.');
       }
 
-      // Scene / setting
-      if (_nbSetting) _gParts.push('Scene: ' + _nbSetting);
-      if (_nbBgRef)   _gParts.push(_nbBgRef);
-      if (_nbVisualDesc) _gParts.push('Visual reference: ' + _nbVisualDesc);
+      // Scene / setting / background
+      if (_nbSetting)    _gParts.push('Setting: ' + _nbSetting + '.');
+      if (_nbBgRef)      _gParts.push(_nbBgRef);
+      if (_nbVisualDesc) _gParts.push('Scene: ' + _nbVisualDesc + '.');
 
-      // Pose / action
-      if (_segAction) _gParts.push('Pose/action: ' + _segAction + '.');
+      // ARM / pose
+      if (_segAction) {
+        _gParts.push('ARM: ' + _segAction + '.');
+      }
 
       // Expression
-      if (_nbExpression) _gParts.push('Expression: ' + _nbExpression);
+      if (_nbExpression) _gParts.push('Expression: ' + _nbExpression + '.');
+
+      // Standard locks
+      _gParts.push('GENDER LOCK: The avatar must match the exact gender, approximate age, and ethnicity of the person in the SUBJECT reference. Do NOT change the avatar\'s gender, age, or ethnicity.');
+      _gParts.push('TRANSFER BLOCK: Do NOT add any text, logos, dates, or labels to the output.');
 
       // Technical
-      _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field'));
-      _gParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor'));
+      _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '.');
+      _gParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor') + '. Single image. ONE person only. No text overlays, no watermarks.');
 
-      // Output
-      _gParts.push('Output: single photorealistic vertical 9:16 image. ONE person only. No text overlays, no watermarks.');
-
-      instruction = _gParts.join('\n\n');
+      instruction = _gParts.join(' ');
     }
 
     // ── Request with 429 retry-backoff ───────────────────────────────────────
@@ -189,9 +209,10 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
           body: JSON.stringify({
             instruction,
+            avatarDesc:     _avatarDesc,
             negativePrompt: _nbNegativePrompt,
-            avatarB64:  avatarParts.b64,
-            avatarMime: avatarParts.mime,
+            avatarB64:      avatarParts.b64,
+            avatarMime:     avatarParts.mime,
             frameB64,
             frameMime,
           }),

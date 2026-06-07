@@ -437,47 +437,89 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     const total = segments.length;
     const isFirst = sceneIndex === 0;
     const sceneNum = sceneIndex + 1;
-    const settingNote = setting ? `Setting: ${setting}.` : 'Setting: clean neutral background or lifestyle environment.';
 
-    // Pose hint — no script text, just a natural expression cue
-    const poseHint = 'The person is looking confidently at the camera with a natural expression, mid-conversation.';
-
-    const avatarNote = avatarDesc ? `Person description from Photo 1: ${avatarDesc}.` : '';
     const clothingNote = getAvatarAccessoryNote(); // clothing + jewelry from Appearance Inventory
 
-    // Creator-supplied visual description
-    const visualNote = frameDesc ? ` Visual scene description from creator: ${frameDesc}.` : '';
+    // ── Build structured NB Pro-style instruction ─────────────────────────────
+    // Follows the labeled-section format used by NanaBanana Pro in Flow:
+    // [FULL PERSON] → REPLACE → Camera → LOCK → ARM → PROP STATE → LIGHT →
+    // HAIR LOCK → OUTFIT → GENDER LOCK → TRANSFER BLOCK → LIGHTING MATCH
+    const _instrParts = [];
 
-    // Photo guide: tells the agent exactly which upload slot is which for this scene
+    // Header — full person replacement
+    _instrParts.push('[FULL PERSON] REPLACE: avatar person — same position and scale as original person in reference frame.');
+
+    // Camera angle
+    _instrParts.push(`Camera angle: straight-on, ${isFirst ? 'chest height' : 'medium close-up'}.`);
+
+    // Background lock — from frameDesc if available, otherwise generic
+    if (frameDesc) {
+      _instrParts.push(`LOCK: background — ${frameDesc}. Do not alter, move, or add any background elements.`);
+    } else if (setting) {
+      _instrParts.push(`LOCK: background — ${setting}. Do not alter, move, or add any background elements.`);
+    } else {
+      _instrParts.push('LOCK: background — use the reference frame environment exactly as shown. Do not alter, move, or add any background elements.');
+    }
+
+    // Products/props (from Appearance Inventory product instructions)
+    const _productInstr = getProductNBInstruction();
+    if (_productInstr) _instrParts.push(_productInstr);
+
+    // Light
+    _instrParts.push('LIGHT: match the color temperature, direction, and shadow quality of the reference frame exactly.');
+
+    // Hair lock — avatar's hair explicitly stated, warn against reference frame hair bleed
+    if (avatarDesc) {
+      _instrParts.push(`HAIR LOCK: Avatar description — ${avatarDesc}. The reference frame person may have different hair, skin tone, or facial features — DO NOT apply any of those attributes to the avatar under any circumstances.`);
+    }
+
+    // Outfit — from Appearance Inventory clothing note
+    if (clothingNote) {
+      _instrParts.push(`OUTFIT: The avatar must be wearing exactly this outfit as shown in the avatar reference: ${clothingNote}. Do not change any part of the clothing.`);
+    }
+
+    // Avatar accessories warning
+    _instrParts.push('CRITICAL: Do NOT copy or add any hair accessories, headbands, hats, clips, bows, or wearable items from the reference frame person that are NOT listed in the avatar profile. The avatar wears ONLY the items described — nothing extra from the reference.');
+
+    // Gender/age/ethnicity lock
+    _instrParts.push('GENDER LOCK: The avatar must match the exact gender, approximate age, and ethnicity of the person in the avatar reference photo (Photo 1). Do NOT change the avatar\'s gender, age group, or ethnicity — even if the reference frame contains a person of a different gender or age.');
+
+    // Transfer block — prevent text/overlay/prop bleed from source frame
+    _instrParts.push('TRANSFER BLOCK: Do NOT copy any text, numbers, dates, labels, logos, words, or graphical overlays from the reference frame into the output. Do NOT copy any props, objects, or accessories held or worn by the reference frame person unless explicitly described in the scene action.');
+
+    // Lighting match
+    _instrParts.push('LIGHTING MATCH: Adjust the avatar\'s lighting to exactly match the color temperature, direction, and shadow quality of the reference frame — no generic studio lighting.');
+
+    // Final quality note
+    _instrParts.push('Vertical 9:16, photorealistic lifestyle editorial. This image will be used as the first frame of a Veo 3 video clip.');
+
+    // ── Photo guide ───────────────────────────────────────────────────────────
     const _soPhotoGuide = (bgFromAvatar
       ? `Photo 1 = your avatar (person + background source for Scene ${sceneNum}). No video frame reference for this scene.`
       : bgDataUrl
-        ? `Photo 1 = your avatar (person to composite). Photo 2 = background reference photo (used as backdrop for all scenes).`
+        ? `Photo 1 = your avatar (person to composite). Photo 2 = Scene ${sceneNum} reference frame (background/composition to match).`
         : `Photo 1 = your avatar — used to generate a synthetic starting frame for Scene ${sceneNum}.`) + getProductPhotoGuide();
 
     const obj = {
-      scene: `Scene ${sceneNum} of ${total}`,
+      scene:       `Scene ${sceneNum} of ${total}`,
       photo_guide: _soPhotoGuide,
-      seed: Math.floor(Math.random() * 99999),
-      instruction: `Using the person from reference Photo 1 as the subject, generate a photorealistic lifestyle-photography starting frame for Scene ${sceneNum} of ${total}. ${poseHint}. ${settingNote} ${avatarNote}${clothingNote}${getProductNBInstruction()}${visualNote} Any food, ingredients, products, or objects mentioned in the scene description must appear as physical props sitting on the surface DIRECTLY IN FRONT OF the presenter in the lower foreground — like a real cooking or wellness video where the items are always on the counter in front of the creator. The background must look like a REAL interior space photographed by a lifestyle photographer — real walls, real decor, real lighting. Not AI-generated, not a studio set, not a blurred gradient. Think Pinterest home, editorial lifestyle shoot. The frame should feel like a natural video freeze-frame — vertical 9:16, shallow depth of field on 85mm equivalent, warm natural light. This image will be used as the first frame of a Veo 3 video clip.`,
-      framing: 'vertical 9:16, medium close-up, person centered, 85mm equivalent, f/1.8 shallow depth of field',
-      expression: isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
-      style: 'photorealistic lifestyle editorial — real room, real light, real decor. Pinterest home aesthetic. NOT AI art, NOT studio backdrop, NOT blurred gradient',
+      seed:        Math.floor(Math.random() * 99999),
+      instruction: _instrParts.join(' '),
+      framing:     'vertical 9:16, medium close-up, person centered, 85mm equivalent, f/1.8 shallow depth of field',
+      expression:  isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
+      style:       'photorealistic lifestyle editorial — real room, real light, real decor. NOT AI art, NOT studio backdrop, NOT blurred gradient',
       remove_captions: true,
-      negative_prompt: 'AI art style, fake background, blurred gradient backdrop, studio seamless, painterly, illustration, cartoon, render, CGI, unrealistic lighting, perfect symmetry, captions, watermarks, logos, multiple people, distorted hands, extra limbs',
+      negative_prompt: 'changed clothing, changed skin tone, changed face, wrong hair, hair color change, hairstyle from reference frame, hair bleed, extra hair accessories from reference, wrong gender avatar, gender swap, age change, ethnicity change, ghosting, double exposure, transparency, semi-transparent person, composite seam, edge halo, color fringing, mismatched lighting, text overlay from reference, numbers on body, date on clothing, labels from reference frame, captions, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face, multiple people, AI artifacts',
     };
-    if (frameDesc) {
-      obj.visual_description = frameDesc;
-    }
+
+    if (frameDesc) obj.visual_description = frameDesc;
+
     if (bgDataUrl) {
-      if (bgFromAvatar) {
-        // Background is already inside Photo 1 — no extra photo needed
-        obj.background_reference = 'Recreate the background/environment visible in Photo 1 as the scene backdrop. Keep it realistic and consistent — do not replace or reimagine it.';
-      } else {
-        // Uploaded background photo → attach as Photo 2 in NB Pro, applied to every scene
-        obj.background_reference = 'Use the environment / background from reference Photo 2 as the scene backdrop. Keep the background realistic and consistent across scenes — do not alter or reimagine it.';
-      }
+      obj.background_reference = bgFromAvatar
+        ? 'Recreate the background/environment visible in Photo 1 as the scene backdrop. Keep it realistic and consistent — do not replace or reimagine it.'
+        : 'Use the environment and background from the reference frame as the scene backdrop. Keep it consistent — do not alter or reimagine it.';
     }
+
     return JSON.stringify(obj, null, 2);
   }
 
@@ -610,10 +652,10 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
 
 A background image has already been provided (attached). The room, walls, surfaces, lighting, and decor ARE ALREADY DECIDED by that image. You must NOT describe the room. You must NOT mention the kitchen, walls, decor, or any setting details — the background is locked in.
 
-Your ONLY job is to describe what PROPS are sitting on the surface directly in front of the presenter for each scene.
+Your ONLY job is to describe what PROPS are sitting on the surface directly in front of the presenter for each scene, AND precisely how the presenter is positioned and using those props.
 
 For each scene output two fields:
-- action: what the presenter is physically doing — gestures, posture, eye contact, facial expression. Match the emotional tone of the script. Max 1 sentence. Third person.
+- action: Describe PRECISELY what the presenter is physically doing. You MUST include: (1) what each hand is doing — specifically what it is holding, touching, or resting on; (2) the presenter's vertical position relative to the table/surface — are they leaning forward, standing upright, chest above the table; (3) facial expression and eye contact. Be concrete: "holds a halved lemon in right hand, left hand resting flat on the counter, upper body upright with chest above table level, looks directly at camera with a slight smile." Max 2 sentences. Third person.
 - visual: ONLY describe the foreground props that sit on the surface directly in front of the presenter. These props must match what the script is talking about. Nothing else. Do not describe the room. Do not describe the background. Do not name a setting.
 
 PROP RULES:
@@ -622,17 +664,17 @@ PROP RULES:
 - If the script is a hook, transition, or doesn't mention a specific item → describe simple neutral props that fit the video's topic (e.g. a glass of water, a small bowl, a bottle)
 - Keep it concise: 1–2 sentences, props only, no room description whatsoever
 
-BAD (describes room): "Warm kitchen with marble counter, floating shelves with plants, afternoon window light."
-GOOD (props only): "A halved lemon and a tall glass of water with floating lemon slices sitting on the surface directly in front of her."
-BAD (no props): "Clean, minimal setting."
-GOOD: "A supplement bottle and an open glass of water placed on the surface in front of her, label facing the camera."`
+BAD action: "stands confidently, gestures to camera"
+GOOD action: "holds a halved lemon in right hand raised near chest height, left hand open on the counter, upper body upright with torso above table level, direct eye contact, slight smile"
+BAD visual (describes room): "Warm kitchen with marble counter, floating shelves with plants, afternoon window light."
+GOOD visual (props only): "A halved lemon and a tall glass of water with floating lemon slices sitting on the surface directly in front of her."`
 
       : `You are an expert lifestyle photography art director and AI image prompt writer. You create starting-frame descriptions for short-form social media videos that look like they were shot by a real photographer in a real space — not AI-generated.
 
 ${bgFromAvatar ? 'The avatar photo is attached — use it to identify the room aesthetic, surface type, wall decor style, and lighting. Your visual descriptions must match THIS aesthetic and setting. Do NOT invent a different room.' : ''}
 
 For each scene output two fields:
-- action: what the presenter is physically doing — gestures, posture, eye contact, facial expression. Match the emotional tone of the script. Max 1 sentence. Third person.
+- action: Describe PRECISELY what the presenter is physically doing. You MUST include: (1) what each hand is doing — specifically what it is holding, touching, or resting on; (2) the presenter's vertical position relative to the table/surface — are they leaning forward, standing upright, chest above the table; (3) facial expression and eye contact. Be concrete: "holds a glass of water in right hand at chest height, left hand resting on counter, upper body upright with chest above table level, looks directly at camera." Max 2 sentences. Third person.
 - visual: a Pinterest-quality scene description grounded in the real space. Describe the room aesthetic (matching the avatar photo if provided), then the foreground props, then the lighting. Must look like a real photographed room.
 
 RULES:
@@ -644,8 +686,10 @@ RULES:
 6. Keep the room consistent across all scenes. Only props change per scene.
 7. Max 3 sentences. Never describe the person's face, skin, or hair.
 
-BAD: "Warm kitchen, herb jars in background."
-GOOD: "Warm Japandi kitchen matching the reference photo — honed marble counter, floating oak shelves with ceramic canisters and a small pothos in the background. A halved lemon and a glass of water with lemon slices sit directly on the counter in front of her. Shot on 85mm f/1.8, shallow depth of field, lifestyle editorial, real kitchen not a set."`;
+BAD action: "stands confidently, gestures broadly"
+GOOD action: "holds a supplement bottle in right hand at chest height, left hand open palm-up on the counter, torso upright with chest above table level, direct eye contact, confident expression"
+BAD visual: "Warm kitchen, herb jars in background."
+GOOD visual: "Warm Japandi kitchen matching the reference photo — honed marble counter, floating oak shelves with ceramic canisters and a small pothos in the background. A halved lemon and a glass of water with lemon slices sit directly on the counter in front of her. Shot on 85mm f/1.8, shallow depth of field, lifestyle editorial, real kitchen not a set."`;
 
     const userPromptText = `Presenter: ${avatarDesc || 'a confident health/wellness creator'}.${setting ? '\nSetting preference: ' + setting + '.' : ''}
 Total scenes: ${segments.length}. Keep setting consistent across scenes — only foreground props change.

@@ -1,18 +1,20 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana composite image using Gemini image generation via Vertex AI.
+ * Generates a Nano Banana composite image using Imagen 3 via Vertex AI.
  *
  * Takes:
- *   - avatarB64      — base64 avatar photo (Photo 1)
+ *   - avatarB64      — base64 avatar photo (SUBJECT reference — person identity)
  *   - avatarMime     — MIME type of avatar (default: image/jpeg)
- *   - frameB64       — base64 reference frame (Photo 2, optional)
+ *   - frameB64       — base64 reference frame (STYLE reference — background/environment, optional)
  *   - frameMime      — MIME type of frame (default: image/jpeg)
- *   - instruction    — NB Pro instruction text from the segment's nbPrompt
+ *   - instruction    — full generation instruction built from all NB prompt JSON fields
+ *   - avatarDesc     — text description of the avatar (reinforces SUBJECT reference)
+ *   - negativePrompt — negative prompt from NB prompt JSON
  *
  * Returns: { imageB64, mime }
  *
  * Required env vars:
- *   GOOGLE_SERVICE_ACCOUNT_JSON  — full service account key JSON (same as Veo functions)
+ *   GOOGLE_SERVICE_ACCOUNT_JSON  — full service account key JSON
  *   GOOGLE_CLOUD_PROJECT_ID      — your GCP project ID
  *   SUPABASE_URL                 — for auth
  *   SUPABASE_ANON                — for auth
@@ -22,7 +24,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-const MODEL    = 'gemini-2.5-flash-image';
+const MODEL    = 'imagen-3.0-generate-001';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -131,21 +133,29 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const { instruction, negativePrompt = '', avatarB64, avatarMime = 'image/jpeg', frameB64 = null, frameMime = 'image/jpeg' } = body;
+  const {
+    instruction,
+    avatarDesc    = '',
+    negativePrompt = '',
+    avatarB64,
+    avatarMime    = 'image/jpeg',
+    frameB64      = null,
+    frameMime     = 'image/jpeg',
+  } = body;
 
   // ── Build images array — accept new {images:[{b64,mime}]} OR old avatarB64/frameB64 format ──
-  let images = [];
+  let avatarImg = null, frameImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
-    // New format: up to 5 images from Studio tab
-    images = body.images.filter(img => img && img.b64).slice(0, 5);
+    const imgs = body.images.filter(img => img && img.b64);
+    if (imgs[0]) avatarImg = imgs[0];
+    if (imgs[1]) frameImg  = imgs[1];
   } else if (avatarB64) {
-    // Legacy format: NB composite / replicator calls
-    images = [{ b64: avatarB64, mime: avatarMime }];
-    if (frameB64) images.push({ b64: frameB64, mime: frameMime });
+    avatarImg = { b64: avatarB64, mime: avatarMime };
+    if (frameB64) frameImg = { b64: frameB64, mime: frameMime };
   }
 
-  if (!instruction || images.length === 0) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and at least one image are required.' }) };
+  if (!instruction || !avatarImg) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and avatar image are required.' }) };
   }
 
   // ── Get Vertex AI access token ─────────────────────────────────────────────
@@ -157,45 +167,60 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build request ──────────────────────────────────────────────────────────
-  const negSection = negativePrompt
-    ? `Do NOT include: ${negativePrompt}, multiple people, second person, person from background image`
-    : 'Do NOT include: multiple people, second person, person from background image';
+  // ── Build Imagen 3 request ─────────────────────────────────────────────────
+  // Avatar → SUBJECT reference: Imagen 3 uses this to lock the person's identity.
+  // Frame  → STYLE reference: applies the background environment's aesthetic/lighting.
+  // The prompt text drives pose, scene, framing, and expression.
 
-  // Interleave text labels with images so Gemini clearly ties each label to its image.
-  // This is the correct multi-image prompting pattern — all-text-then-all-images
-  // causes the model to lose the association between label and image.
-  const userParts = [];
+  const referenceImages = [
+    {
+      referenceType:  'SUBJECT',
+      referenceId:    1,
+      referenceImage: {
+        bytesBase64Encoded: avatarImg.b64,
+        mimeType:           avatarImg.mime || 'image/jpeg',
+      },
+    },
+  ];
 
-  if (images.length >= 2) {
-    // Two-image compositing: avatar + background scene
-    userParts.push({ text: '[IMAGE 1 - AVATAR] This is the avatar. Generate this exact person:' });
-    userParts.push({ inline_data: { mime_type: images[0].mime || 'image/jpeg', data: images[0].b64 } });
-    userParts.push({ text: '[IMAGE 2 - BACKGROUND SCENE] This is the background/environment reference only. Use this room, lighting, and props as the backdrop — do NOT generate the person visible in this image:' });
-    userParts.push({ inline_data: { mime_type: images[1].mime || 'image/jpeg', data: images[1].b64 } });
-    userParts.push({ text: `\nInstructions:\n${instruction}\n\n${negSection}` });
-  } else {
-    // Single image: avatar only
-    userParts.push({ text: '[IMAGE 1 - AVATAR] Generate this exact person:' });
-    userParts.push({ inline_data: { mime_type: images[0].mime || 'image/jpeg', data: images[0].b64 } });
-    userParts.push({ text: `\nInstructions:\n${instruction}\n\n${negSection}` });
+  if (frameImg) {
+    referenceImages.push({
+      referenceType:  'STYLE',
+      referenceId:    2,
+      referenceImage: {
+        bytesBase64Encoded: frameImg.b64,
+        mimeType:           frameImg.mime || 'image/jpeg',
+      },
+    });
   }
 
+  // Build the prompt — instruction carries all scene/pose/framing detail;
+  // avatarDesc reinforces the SUBJECT reference in text.
+  const promptParts = [];
+  if (avatarDesc) promptParts.push('Person to generate: ' + avatarDesc + '.');
+  promptParts.push(instruction);
+  if (negativePrompt) promptParts.push('Do not include: ' + negativePrompt);
+  const promptText = promptParts.join('\n\n');
+
+  const parameters = {
+    sampleCount:    1,
+    aspectRatio:    '9:16',
+    outputMimeType: 'image/jpeg',
+  };
+  if (negativePrompt) parameters.negativePrompt = negativePrompt;
+
   const requestBody = JSON.stringify({
-    contents: [{ role: 'user', parts: userParts }],
+    instances:  [{ prompt: promptText, referenceImages }],
+    parameters,
   });
 
-  // Vertex AI endpoint for Gemini generateContent
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-  const apiPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-  const hostname = `${LOCATION}-aiplatform.googleapis.com`;
+  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:predict`;
+  const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
-  console.log(`generate-nb-composite: user=${user.id}, images=${images.length}, instrLen=${instruction.length}`);
-  console.log(`generate-nb-composite: Vertex AI → ${hostname}${apiPath}`);
+  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${!!frameImg}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}`);
 
   // ── Vertex AI call — no server-side sleep/retry; client handles 429 backoff ─
-  // Function timeout is 26s. A 12s sleep + second call would exceed it.
-  // The client (js/17-nb-api.js) already retries up to 3× with 30s/60s/120s backoff.
   const _vertexOptions = {
     hostname,
     path:   apiPath,
@@ -228,32 +253,27 @@ exports.handler = async (event) => {
     return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  // ── Extract image from response ────────────────────────────────────────────
-  // Vertex AI returns the same generateContent response shape as the Gemini API.
-  const candidates = result.data.candidates || [];
-  for (const candidate of candidates) {
-    for (const part of (candidate.content?.parts || [])) {
-      const blob = part.inlineData || part.inline_data;
-      if (blob?.data) {
-        const mime = blob.mimeType || blob.mime_type || 'image/png';
-        console.log('generate-nb-composite: image generated, mime:', mime);
-        return {
-          statusCode: 200,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageB64: blob.data, mime }),
-        };
-      }
+  // ── Extract image from Imagen 3 response ───────────────────────────────────
+  // Imagen 3 returns { predictions: [{ bytesBase64Encoded, mimeType }] }
+  const predictions = result.data.predictions || [];
+  for (const pred of predictions) {
+    if (pred.bytesBase64Encoded) {
+      const mime = pred.mimeType || 'image/jpeg';
+      console.log('generate-nb-composite: image generated, mime:', mime);
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageB64: pred.bytesBase64Encoded, mime }),
+      };
     }
   }
 
-  // No image in response — log full details for debugging
-  const finishReasons = candidates.map(c => c.finishReason || 'unknown').join(', ');
-  const textParts = candidates.flatMap(c => (c.content?.parts || []).filter(p => p.text).map(p => p.text)).join(' ');
-  console.error('generate-nb-composite: no image. finishReasons:', finishReasons, '| parts:', JSON.stringify(candidates.flatMap(c => (c.content?.parts || []).map(p => Object.keys(p))).slice(0,5)), '| text:', textParts.slice(0, 300));
-  const errDetail = finishReasons ? `(finishReason: ${finishReasons})` : '';
+  // No image — log details
+  const filterReasons = predictions.map(p => p.raiFilteredReason || p.safetyAttributes?.categories || 'unknown').join(', ');
+  console.error('generate-nb-composite: no image in predictions. filterReasons:', filterReasons, '| predictions:', JSON.stringify(predictions).slice(0, 300));
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: `Image generation returned no image ${errDetail}. ${textParts.slice(0, 150)}`.trim() }),
+    body: JSON.stringify({ error: `Image generation returned no image. ${filterReasons ? '(Filtered: ' + filterReasons + ')' : ''}`.trim() }),
   };
 };
