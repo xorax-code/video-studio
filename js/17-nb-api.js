@@ -125,10 +125,11 @@
       _lockLine += ' Do NOT alter, move, or add any background elements. Do NOT generate the original person from the reference frame.';
       _hfParts.push(_lockLine);
 
-      // ARM + PROP STATE — from seg.action (hand/holding specifics)
+      // ARM + POSE LOCK + PROP STATE — from seg.action (hand/holding specifics)
       if (_segAction) {
         _hfParts.push('ARM: ' + _segAction + '.');
-        _hfParts.push('PROP STATE: The avatar\'s hand positions and prop interactions must match the described action exactly — same reach, same hand, same object. Replicate the scale and proximity to the surface as shown in the reference frame.');
+        _hfParts.push('POSE LOCK: Study the exact arm and hand POSITION in Photo 2. The avatar\'s arms must be at the exact same height, angle, and reach as the person in Photo 2 — same elbow bend, same wrist orientation, same arm extension. If Photo 2 shows an arm raised or extended outward, the avatar\'s arm must be raised or extended in that exact same way. Do NOT default to a neutral resting position or arms-at-sides if Photo 2 shows the arms in any other position.');
+        _hfParts.push('PROP STATE: The prop must appear in the avatar\'s hand at the exact position, scale, and orientation shown in Photo 2 — same hand, same grip, same distance from body.');
       }
 
       // LIGHT
