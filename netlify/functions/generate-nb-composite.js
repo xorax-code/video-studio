@@ -198,8 +198,9 @@ exports.handler = async (event) => {
   console.log(`generate-nb-composite: user=${user.id}, images=${images.length}, instrLen=${instruction.length}`);
   console.log(`generate-nb-composite: Vertex AI → ${hostname}${apiPath}`);
 
-  // ── Vertex AI call with one server-side retry on 429 ──────────────────────
-  // Function timeout is 26s; one 12s sleep + two fast calls fits comfortably.
+  // ── Vertex AI call — no server-side sleep/retry; client handles 429 backoff ─
+  // Function timeout is 26s. A 12s sleep + second call would exceed it.
+  // The client (js/17-nb-api.js) already retries up to 3× with 30s/60s/120s backoff.
   const _vertexOptions = {
     hostname,
     path:   apiPath,
@@ -212,23 +213,14 @@ exports.handler = async (event) => {
   };
 
   let result;
-  for (let _attempt = 0; _attempt <= 1; _attempt++) {
-    try {
-      result = await httpsRequest(_vertexOptions, requestBody);
-    } catch(e) {
-      console.error('generate-nb-composite: fetch error:', e.message);
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
-    }
-
-    console.log(`generate-nb-composite: Vertex AI status (attempt ${_attempt + 1}):`, result.status);
-
-    if (result.status === 429 && _attempt === 0) {
-      console.warn('generate-nb-composite: 429 rate limit — sleeping 12s before retry');
-      await new Promise(r => setTimeout(r, 12000));
-      continue;
-    }
-    break;
+  try {
+    result = await httpsRequest(_vertexOptions, requestBody);
+  } catch(e) {
+    console.error('generate-nb-composite: fetch error:', e.message);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
   }
+
+  console.log('generate-nb-composite: Vertex AI status:', result.status);
 
   if (!result.data) {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status }) };
