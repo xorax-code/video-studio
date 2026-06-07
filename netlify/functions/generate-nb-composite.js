@@ -180,17 +180,19 @@ exports.handler = async (event) => {
 
   // ── Build Imagen 3 :predict request ───────────────────────────────────────
   //
-  // Strategy: dual reference images replicating Google Flow's NB generation.
+  // Strategy: dual reference images for identity + scene guidance.
   //
-  // SUBJECT reference (avatar photo):
-  //   Locks NanaBanana's identity — face, skin tone, hair color/texture, clothing.
-  //   subjectType: PERSON tells Imagen 3 this is a human identity reference.
+  // REFERENCE_TYPE_SUBJECT (avatar photo, referenceId: 1):
+  //   Locks NanaBanana's identity — face, skin tone, hair, clothing.
+  //   subjectType: SUBJECT_TYPE_PERSON → human identity mode.
+  //   Referenced in prompt as "[1]".
   //
-  // LAYOUT reference (source video frame):
-  //   Locks the scene structure — exact background, prop positions, camera angle,
-  //   lighting direction. This is why Flow produces pixel-exact backgrounds.
-  //   Unlike STYLE (which preserves color/mood loosely), LAYOUT preserves spatial
-  //   composition precisely.
+  // REFERENCE_TYPE_STYLE (source video frame, referenceId: 2):
+  //   Guides the scene composition, lighting, color palette, background aesthetic.
+  //   LAYOUT is NOT a valid Imagen 3 reference type — STYLE is the closest available.
+  //   Referenced in prompt as "[2]".
+  //
+  // The prompt MUST include [referenceId] bracket notation to tie images to text.
   //
   // The instruction from 17-nb-api.js is already formatted for Imagen 3 with
   // NB Pro structured sections (LOCK, ARM, HAIR LOCK, etc.) — pass through as-is.
@@ -198,35 +200,56 @@ exports.handler = async (event) => {
   const hasFrame = !!frameImg;
 
   // Build the text prompt:
-  // Lead with subject description, then the full structured instruction,
-  // then scene lock reminder if we have a frame, then negatives.
-  const subjectLine = avatarDesc
-    ? `Photorealistic portrait of ${avatarDesc}.`
-    : 'Photorealistic portrait of the person in the subject reference image.';
+  // Imagen 3 Customization requires referenceId bracket notation in the prompt.
+  // Format: "the person [1]" ties text to referenceImage with referenceId: 1.
+  // Lead with subject ref [1], then the full structured instruction,
+  // then scene lock reminder if we have a frame ref [2], then negatives.
+  const subjectDesc = avatarDesc || 'the person';
+  // Imagen 3 Customization requires [referenceId] bracket notation in the prompt.
+  // We only send SUBJECT reference [1]; scene composition comes from the text instruction.
+  const subjectRef = `Photorealistic image of ${subjectDesc} [1].`;
 
+  // Scene reminder uses text from the instruction (17-nb-api.js provides full scene analysis).
   const layoutReminder = hasFrame
-    ? 'Replicate the exact background, props, lighting, and spatial composition from the layout reference image. Do not alter or remove any background elements.'
+    ? 'Match the exact background, setting, props, and lighting described in the instruction.'
     : '';
 
   const negLine = negativePrompt ? `Avoid: ${negativePrompt}` : '';
 
-  const prompt = [subjectLine, instruction, layoutReminder, negLine]
+  const prompt = [subjectRef, instruction, layoutReminder, negLine]
     .filter(Boolean)
     .join(' ');
 
-  // Build referenceImages array
+  // Build referenceImages array.
+  //
+  // Valid referenceType values for imagen-3.0-capability-001:
+  //   REFERENCE_TYPE_SUBJECT  — person/product identity lock
+  //   REFERENCE_TYPE_STYLE    — scene/style visual guide
+  //   REFERENCE_TYPE_CONTROL  — structural control (face mesh only)
+  //   REFERENCE_TYPE_MASK     — inpainting mask
+  //
+  // REFERENCE_TYPE_LAYOUT does NOT exist in the Vertex AI API.
+  // We use REFERENCE_TYPE_STYLE for the source frame to guide scene composition.
   const referenceImages = [
     {
-      referenceType: 'SUBJECT',
+      referenceType: 'REFERENCE_TYPE_SUBJECT',
       referenceId:   1,
       referenceImage: { bytesBase64Encoded: avatarImg.b64 },
-      subjectImageConfig: { subjectType: 'PERSON' },
+      subjectImageConfig: {
+        subjectType:        'SUBJECT_TYPE_PERSON',
+        subjectDescription: subjectDesc,
+      },
     },
   ];
 
-  if (hasFrame) {
+  // NOTE: REFERENCE_TYPE_STYLE may require a styleImageConfig object.
+  // Until the capability model's style config schema is confirmed, we skip
+  // the frame reference to avoid "invalid argument" errors.
+  // The scene is guided by the detailed text instruction from 17-nb-api.js.
+  // TODO: add back REFERENCE_TYPE_STYLE once styleImageConfig format is known.
+  if (false && hasFrame) { // eslint-disable-line no-constant-condition
     referenceImages.push({
-      referenceType: 'LAYOUT',
+      referenceType: 'REFERENCE_TYPE_STYLE',
       referenceId:   2,
       referenceImage: { bytesBase64Encoded: frameImg.b64 },
     });
@@ -238,9 +261,10 @@ exports.handler = async (event) => {
       referenceImages,
     }],
     parameters: {
-      sampleCount:      1,
-      aspectRatio:      '9:16',
-      personGeneration: 'allow_all',
+      // imagen-3.0-capability-001 only supports sampleCount in parameters.
+      // aspectRatio and personGeneration are generation-model params and
+      // cause "invalid argument" on the capability/editing model.
+      sampleCount: 1,
     },
   });
 
