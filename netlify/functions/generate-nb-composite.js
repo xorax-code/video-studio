@@ -174,7 +174,7 @@ exports.handler = async (event) => {
 
   const referenceImages = [
     {
-      referenceType:  'SUBJECT',
+      referenceType:  'REFERENCE_TYPE_SUBJECT',
       referenceId:    1,
       referenceImage: {
         bytesBase64Encoded: avatarImg.b64,
@@ -185,7 +185,7 @@ exports.handler = async (event) => {
 
   if (frameImg) {
     referenceImages.push({
-      referenceType:  'STYLE',
+      referenceType:  'REFERENCE_TYPE_STYLE',
       referenceId:    2,
       referenceImage: {
         bytesBase64Encoded: frameImg.b64,
