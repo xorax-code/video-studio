@@ -121,7 +121,6 @@ exports.handler = async (event) => {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
   };
 
-  // ── Top-level safety net — catch any unhandled exception ───────────────────
   try {
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
@@ -129,12 +128,10 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  // ── Env check ──────────────────────────────────────────────────────────────
   if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_CLOUD_PROJECT_ID) {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error: Vertex AI credentials not set.' }) };
   }
 
-  // ── Auth ───────────────────────────────────────────────────────────────────
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!jwt) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
@@ -148,7 +145,6 @@ exports.handler = async (event) => {
   }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
-  // ── Parse body ─────────────────────────────────────────────────────────────
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
@@ -163,7 +159,6 @@ exports.handler = async (event) => {
     frameMime      = 'image/jpeg',
   } = body;
 
-  // ── Resolve images ─────────────────────────────────────────────────────────
   let avatarImg = null, frameImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
@@ -178,7 +173,6 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and avatar image are required.' }) };
   }
 
-  // ── Get Vertex AI access token ─────────────────────────────────────────────
   let accessToken;
   try {
     accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
@@ -187,23 +181,9 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build Gemini generateContent request ──────────────────────────────────
-  //
-  // EDIT FRAMING — critical to get identity-accurate person replacement:
-  //
-  //   This is NOT a generation request. This is a surgical IMAGE EDIT.
-  //   Photo 1 = the person (avatar identity) to place into the scene.
-  //   Photo 2 = the master scene canvas. Background stays identical.
-  //   The model must ONLY replace the person. Nothing else changes.
-  //
-  // Order matters: Photo 2 (scene) first so the model treats it as the base.
-  // Photo 1 (avatar) second as the identity replacement reference.
-
   const hasFrame = !!frameImg;
   const subjectDesc = avatarDesc || 'the person shown in Photo 1';
 
-  // Build the edit instruction prefix — explicitly frames this as an image edit,
-  // not creative generation, to prevent the model from blending or reinterpreting.
   const editPrefix = hasFrame
     ? `IMAGE EDIT TASK — do not generate a new image. Edit Photo 2 exactly as instructed.
 
@@ -216,21 +196,15 @@ Photo 1 shows the REPLACEMENT PERSON: ${subjectDesc}. All human elements (face, 
 Do not blend, merge, or average skin tones. Treat this as a compositing operation: Photo 2's inanimate background/products + Photo 1's complete person identity (including all body parts) = output.`
     : `IMAGE GENERATION TASK — generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
 
-  const negLine = negativePrompt
-    ? `\n\nAVOID IN OUTPUT: ${negativePrompt}`
-    : '';
-
+  const negLine = negativePrompt ? `\n\nAVOID IN OUTPUT: ${negativePrompt}` : '';
   const fullPrompt = `${editPrefix}\n\n${instruction}${negLine}`;
 
-  // Build the parts array — Photo 2 (scene) first, then Photo 1 (avatar)
   const parts = [];
-
   if (hasFrame) {
-    parts.push({ text: 'Photo 2 — MASTER SCENE CANVAS (keep all non-human elements identical; replace ALL human body parts — including any hands, arms, or skin visible — with Photo 1\'s person):' });
+    parts.push({ text: "Photo 2 — MASTER SCENE CANVAS (keep all non-human elements identical; replace ALL human body parts — including any hands, arms, or skin visible — with Photo 1's person):" });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-
-  parts.push({ text: hasFrame ? 'Photo 1 — REPLACEMENT PERSON IDENTITY (use this person\'s face, hands, arms, skin tone, and body for ALL human elements in the output):' : 'Photo 1 — PERSON TO GENERATE:' });
+  parts.push({ text: hasFrame ? "Photo 1 — REPLACEMENT PERSON IDENTITY (use this person's face, hands, arms, skin tone, and body for ALL human elements in the output):" : 'Photo 1 — PERSON TO GENERATE:' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
 
@@ -243,15 +217,12 @@ Do not blend, merge, or average skin tones. Treat this as a compositing operatio
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-  // gemini-2.5-flash-image is accessed via the standard Gemini generateContent endpoint.
-  // Try the GA model ID first; if that 404s, the -ga suffix variant is the fallback.
   const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
   const mode = hasFrame ? 'edit-swap' : 'generate-only';
   console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, hasFrame=${hasFrame}, promptLen=${fullPrompt.length}`);
 
-  // ── Vertex AI call ────────────────────────────────────────────────────────
   const vertexOptions = {
     hostname,
     path:   apiPath,
@@ -287,8 +258,6 @@ Do not blend, merge, or average skin tones. Treat this as a compositing operatio
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  // ── Extract image from Gemini generateContent response ────────────────────
-  // Response shape: { candidates: [{ content: { parts: [{ inlineData: { data, mimeType } }] } }] }
   const candidates = result.data.candidates || [];
   for (const candidate of candidates) {
     const parts = candidate?.content?.parts || [];
@@ -305,7 +274,6 @@ Do not blend, merge, or average skin tones. Treat this as a compositing operatio
     }
   }
 
-  // No image — log full response for debugging
   console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
   return {
     statusCode: 502,
@@ -314,31 +282,6 @@ Do not blend, merge, or average skin tones. Treat this as a compositing operatio
   };
 
   } catch(topErr) {
-    // Catch any unhandled exception so we always return a readable error instead of {}
-    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
-    return {
-      statusCode: 500,
-      headers: CORS,
-      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
-    };
-  }
-};
-eB64: part.inlineData.data, mime }),
-        };
-      }
-    }
-  }
-
-  // No image — log full response for debugging
-  console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
-  return {
-    statusCode: 502,
-    headers: CORS,
-    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
-  };
-
-  } catch(topErr) {
-    // Catch any unhandled exception so we always return a readable error instead of {}
     console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
     return {
       statusCode: 500,
