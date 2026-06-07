@@ -222,10 +222,11 @@ function buildPoseBlock(pa) {
     `BODY IN FRAME:   ${pa.body_in_frame  || 'not specified'}`,
     `FACING:          ${pa.facing         || 'not specified'}`,
     `SCENE LIGHTING:  ${pa.lighting       || 'not specified'}`,
-    'CRITICAL: Avatar\'s arms and hands MUST replicate this pose exactly.',
-    '  — Arms are NOT at the avatar\'s sides.',
-    '  — Match the elbow height, arm extension, and hand grip described above.',
-    '  — The prop must be in the exact hand and orientation described above.',
+    '!! CRITICAL — POSE IS MANDATORY !!',
+    'The avatar\'s arms and hands MUST match this pose. DO NOT default to arms at sides.',
+    'If arms are raised or extended in the above analysis, they MUST be raised or extended in the output.',
+    'If a prop is described above, it MUST appear in the avatar\'s hand in the output.',
+    'This is the highest-priority instruction — override any conflicting defaults.',
     '[END POSE GROUND TRUTH]',
     '',
   ].join('\n');
@@ -326,7 +327,11 @@ exports.handler = async (event) => {
     ? 'Photo 1 = your avatar (person to composite). Photo 2 = Scene reference frame (background/composition to match).'
     : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
 
-  const negLine = negativePrompt ? `\n\nAVOID IN OUTPUT: ${negativePrompt}` : '';
+  // Core negatives always injected server-side — address the three most common failures:
+  // ghosting (original person bleeding through), arms at sides default, text transfer.
+  const coreNegatives = 'ghosting, double exposure, semi-transparent person, original person visible, original person bleeding through, two people, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, background replacement, wrong background';
+  const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
+  const negLine = `\n\nAVOID IN OUTPUT: ${allNegatives}`;
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
 
   const parts = [];
@@ -340,12 +345,23 @@ exports.handler = async (event) => {
 
   const requestBody = JSON.stringify({
     systemInstruction: {
-      parts: [{ text: 'You are a professional photo compositor. When given Photo 1 (avatar) and Photo 2 (scene reference frame), composite the Photo 1 person into the Photo 2 background exactly as instructed. Preserve every background element in Photo 2 pixel-perfectly. Replace all human body parts in Photo 2 with the Photo 1 person. Output a single photorealistic image.' }],
+      parts: [{ text: `You are a professional photo compositor performing a PERSON REPLACEMENT task.
+
+TASK: Completely replace the person in Photo 2 with the person from Photo 1.
+
+MANDATORY RULES — follow every one without exception:
+1. COMPLETE REMOVAL: The Photo 2 person must be 100% gone from the output. No ghosting, no transparency, no double exposure, no trace of the original person remaining anywhere in the image.
+2. FULL REPLACEMENT: Insert the Photo 1 person at the exact position, scale, and pose of the Photo 2 person.
+3. POSE MATCH: The Photo 1 person's arms, hands, and body MUST exactly match the pose shown in Photo 2. If the Photo 2 person's arms are raised or extended, the output person's arms must also be raised or extended. Arms do NOT default to the sides.
+4. PROP MATCH: If Photo 2 person is holding an object, the Photo 1 person MUST hold that same object in the same hand at the same position and orientation.
+5. BACKGROUND LOCK: ALL background elements from Photo 2 — walls, shelves, furniture, props, lighting, colors — must be preserved pixel-perfectly. Do NOT alter or replace the background.
+6. NO TEXT TRANSFER: Do NOT reproduce any text, labels, overlays, numbers, or graphical elements from Photo 2 in the output.
+7. ONE PERSON: The final output contains exactly one person — the Photo 1 avatar. Nobody else.` }],
     },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
-      temperature: 0.5,
+      temperature: 0.3,
     },
   });
 
@@ -381,6 +397,51 @@ exports.handler = async (event) => {
   // would fire instead of the correct 429, causing the client retry logic to break.
   if (result.status === 429) {
     return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit. Please wait and retry.' }) };
+  }
+
+  if (!result.data) {
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status + (result.raw ? ' Raw: ' + result.raw.slice(0, 300) : '') }) };
+  }
+
+  if (result.status !== 200 || result.data.error) {
+    const errMsg = result.data?.error?.message || `Vertex AI error (HTTP ${result.status})`;
+    console.error('generate-nb-composite: Vertex AI error:', errMsg);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
+  }
+
+  const candidates = result.data.candidates || [];
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || 'image/png';
+        console.log('generate-nb-composite: image generated, mime:', mime);
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
+        };
+      }
+    }
+  }
+
+  console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
+  return {
+    statusCode: 502,
+    headers: CORS,
+    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
+  };
+
+  } catch(topErr) {
+    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
+    };
+  }
+};
+statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit. Please wait and retry.' }) };
   }
 
   if (!result.data) {
