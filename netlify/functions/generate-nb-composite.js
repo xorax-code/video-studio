@@ -442,12 +442,3 @@ MANDATORY RULES — follow every one without exception:
     };
   }
 };
-atch(topErr) {
-    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
-    return {
-      statusCode: 500,
-      headers: CORS,
-      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
-    };
-  }
-};
