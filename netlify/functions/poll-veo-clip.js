@@ -164,7 +164,7 @@ function validateJwt(jwt) {
       hostname: url.hostname,
       path:     url.pathname,
       method:   'GET',
-      headers: { 'Authorization': 'Bearer ' + jwt, 'apikey': process.env.SUPABASE_ANON || '' },
+      headers: { 'Authorization': 'Bearer ' + jwt, 'apikey': process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || '' },
     }, (res) => {
       const chunks = [];
       res.on('data', c => chunks.push(c));
@@ -229,8 +229,12 @@ exports.handler = async (event) => {
       body: JSON.stringify({ done: isTerminal, error: errMsg }) };
   }
   if (pd.error) {
+    // FIX: Google LRO spec sets done:true when an operation fails with an error field.
+    // Returning done:false here caused the frontend to keep polling forever on a terminal
+    // Vertex AI error (e.g. quota exceeded, invalid request, model error).
+    // Now we respect pd.done — if Vertex marked the op done, we stop polling immediately.
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: false, error: pd.error.message || 'Generation failed on server.' }) };
+      body: JSON.stringify({ done: !!pd.done, error: pd.error.message || 'Generation failed on server.' }) };
   }
   if (!pd.done) {
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
@@ -370,13 +374,4 @@ exports.handler = async (event) => {
   } catch(e) {
     console.error('poll-veo-clip: signed URL failed:', e.message);
     // Signed URL creation failed — return error rather than a useless gs:// URI
-    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: true,
-        error: 'Video generated but could not create a download link. Please try regenerating this clip.' }) };
-  }
-  return {
-    statusCode: 200,
-    headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ done: true, videoUrl: signedUrl, mimeType }),
-  };
-};
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' 
