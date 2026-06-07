@@ -198,11 +198,13 @@ exports.handler = async (event) => {
   const editPrefix = hasFrame
     ? `IMAGE EDIT TASK — do not generate a new image. Edit Photo 2 exactly as instructed.
 
-Photo 2 is the MASTER CANVAS. Its background, props, lighting, shadows, camera angle, and all non-person elements must remain pixel-identical in the output.
+Photo 2 is the MASTER CANVAS. Every non-human element — background surfaces, products, props, food, containers, lighting, shadows, camera angle — must remain pixel-identical in the output.
 
-Photo 1 shows the REPLACEMENT PERSON: ${subjectDesc}. Replace ONLY the person visible in Photo 2 with the person from Photo 1. The replacement person must match the pose, position, framing, and scale of the original person in Photo 2.
+CRITICAL: ANY human body part visible in Photo 2 — hands, arms, fingers, skin, face, body — must be REPLACED with the equivalent body part from Photo 1's person. Do NOT keep any skin, hands, or body parts from Photo 2. If Photo 2 shows hands holding a product, replace those hands with Photo 1's person's hands at the same position.
 
-Do not blend, merge, or average the two photos. Treat this as a compositing operation: Photo 2's background + Photo 1's person identity = output.`
+Photo 1 shows the REPLACEMENT PERSON: ${subjectDesc}. All human elements (face, hands, arms, body, skin tone, hair) come from Photo 1 only.
+
+Do not blend, merge, or average skin tones. Treat this as a compositing operation: Photo 2's inanimate background/products + Photo 1's complete person identity (including all body parts) = output.`
     : `IMAGE GENERATION TASK — generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
 
   const negLine = negativePrompt
@@ -215,11 +217,11 @@ Do not blend, merge, or average the two photos. Treat this as a compositing oper
   const parts = [];
 
   if (hasFrame) {
-    parts.push({ text: 'Photo 2 — MASTER SCENE CANVAS (keep background identical):' });
+    parts.push({ text: 'Photo 2 — MASTER SCENE CANVAS (keep all non-human elements identical; replace ALL human body parts — including any hands, arms, or skin visible — with Photo 1\'s person):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
 
-  parts.push({ text: hasFrame ? 'Photo 1 — REPLACEMENT PERSON IDENTITY:' : 'Photo 1 — PERSON TO GENERATE:' });
+  parts.push({ text: hasFrame ? 'Photo 1 — REPLACEMENT PERSON IDENTITY (use this person\'s face, hands, arms, skin tone, and body for ALL human elements in the output):' : 'Photo 1 — PERSON TO GENERATE:' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
 
