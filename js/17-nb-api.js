@@ -77,43 +77,109 @@
     }
 
     // ── Build instruction for Gemini based on what photos are available ────────
-    // When a video frame (Photo 2) exists: do a person swap.
+    // When a video frame (Photo 2) exists: place avatar into source frame's scene.
     // When avatar only: generate a fresh lifestyle frame.
     var instruction;
+    var _nbNegativePrompt = '';
+
+    // Parse NB prompt JSON once — used by both paths
+    var _nbParsedObj = {};
+    try { _nbParsedObj = JSON.parse(nbPromptRaw); } catch(_) { _nbParsedObj = {}; }
+    var _cleanStr = function(s) {
+      return (s || '').replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+    };
+
+    // Extract all NB prompt fields
+    var _nbCore        = _cleanStr(_nbParsedObj.instruction || (typeof nbPromptRaw === 'string' && !nbPromptRaw.startsWith('{') ? nbPromptRaw : ''));
+    var _nbSetting     = _cleanStr(_nbParsedObj.setting || '');
+    var _nbFraming     = _cleanStr(_nbParsedObj.framing || '');
+    var _nbExpression  = _cleanStr(_nbParsedObj.expression || '');
+    var _nbStyle       = _cleanStr(_nbParsedObj.style || '');
+    var _nbBgRef       = _cleanStr(_nbParsedObj.background_reference || '');
+    var _nbVisualDesc  = _cleanStr(_nbParsedObj.visual_description || '');
+    _nbNegativePrompt  = _cleanStr(_nbParsedObj.negative_prompt || '');
+
+    var _segAction = (seg.action || '').trim();
+
     if (hasFrame) {
-      // Compositing mode: Photo 1 = avatar (person to generate), Photo 2 = background scene reference.
-      // We use the same NB prompt text as the generate path — the prompt already describes
-      // the scene and pose. Photo 2 gives Gemini the actual visual background to match.
-      var _action = (seg.action || '').trim();
-      var _nbInstr2 = nbPromptRaw;
-      try {
-        var _nbParsed2 = JSON.parse(nbPromptRaw);
-        _nbInstr2 = _nbParsed2.instruction || nbPromptRaw;
-        _nbInstr2 = _nbInstr2.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
-      } catch(_) {
-        _nbInstr2 = _nbInstr2.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
-      }
-      instruction = 'Photo 1 is the creator/avatar — generate this exact person in the scene.'
-        + ' Photo 2 is the background and environment reference — use its setting, props, lighting, and backdrop exactly.'
-        + ' IMPORTANT: use Photo 2\'s background only. Do NOT use any background or environment from Photo 1.'
-        + '\n\n' + (_nbInstr2 || 'Photorealistic lifestyle photo of the avatar in the reference scene, facing camera with natural expression.')
-        + (_action ? '\n\nPose/action for this scene: ' + _action + '.' : '')
-        + '\n\nOutput: single photorealistic vertical 9:16 image. Single person only. No text overlays, no watermarks.';
+      // ── Compositing mode ────────────────────────────────────────────────────
+      // Photo 1 = avatar (the person to generate). Photo 2 = source video frame (background + scene reference ONLY).
+      // Gemini must: take Photo 1's person, place them into Photo 2's environment, and output that composite.
+      // Critical: Photo 2 has its own person (the original creator) — Gemini must NOT generate that person.
+      var _hfParts = [];
+
+      // 1. Subject identity — loudest, first
+      _hfParts.push(
+        'SUBJECT: Reproduce the person from Photo 1 exactly — their face, skin tone, hair, clothing, body shape, and style. ' +
+        'This is a lifestyle composite: take Photo 1\'s person and place them into Photo 2\'s scene.\n' +
+        'CRITICAL — Photo 2 contains a different person: DO NOT generate that person. ' +
+        'Erase and completely replace any person visible in Photo 2. ' +
+        'The ONLY human in the output must be the person from Photo 1.'
+      );
+
+      // 2. Core generation instruction from NB prompt
+      if (_nbCore) _hfParts.push(_nbCore);
+
+      // 3. Background / environment — taken from Photo 2
+      _hfParts.push(
+        'BACKGROUND: Use Photo 2\'s room, environment, furniture, props, and lighting as the backdrop. ' +
+        'Keep Photo 2\'s spatial composition — walls, decor, depth — exactly as-is.'
+      );
+      if (_nbBgRef) _hfParts.push(_nbBgRef);
+      if (_nbVisualDesc) _hfParts.push('Visual reference: ' + _nbVisualDesc);
+
+      // 4. Scene / setting context
+      if (_nbSetting) _hfParts.push('Scene: ' + _nbSetting);
+
+      // 5. Pose / action for this clip
+      if (_segAction) _hfParts.push('Pose/action: ' + _segAction + '.');
+
+      // 6. Expression
+      if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression);
+
+      // 7. Technical specs
+      _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field'));
+      _hfParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor'));
+
+      // 8. Output requirements (reinforce single person)
+      _hfParts.push('Output: single photorealistic vertical 9:16 image. Exactly ONE person — the Photo 1 person. No second person, no ghost of original, no text overlays, no watermarks.');
+
+      instruction = _hfParts.join('\n\n');
+
     } else {
-      // Generate mode: no reference frame, create a fresh lifestyle photo of the avatar.
-      // Try to use a meaningful description from nbPrompt if available.
-      var _nbInstr = nbPromptRaw;
-      try {
-        var _nbParsed = JSON.parse(nbPromptRaw);
-        _nbInstr = _nbParsed.instruction || nbPromptRaw;
-        // Strip any residual NanoBanana-specific language that confuses Gemini
-        _nbInstr = _nbInstr.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
-      } catch(_) {
-        // Plain string — strip NanoBanana references
-        _nbInstr = _nbInstr.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+      // ── Generate mode ───────────────────────────────────────────────────────
+      // No reference frame — create a fresh lifestyle photo of the avatar using the NB prompt context.
+      var _gParts = [];
+
+      // Subject
+      _gParts.push('SUBJECT: Generate the person from Photo 1 — use their face, hair, clothing, skin tone, and appearance exactly.');
+
+      // Core instruction
+      if (_nbCore) {
+        _gParts.push(_nbCore);
+      } else {
+        _gParts.push('Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression.');
       }
-      // Prepend clear subject reference so Gemini knows Photo 1 is the person to use
-      instruction = 'Photo 1 is the creator/avatar. ' + (_nbInstr || 'Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression. Medium close-up, warm natural light. No text, no watermarks.');
+
+      // Scene / setting
+      if (_nbSetting) _gParts.push('Scene: ' + _nbSetting);
+      if (_nbBgRef)   _gParts.push(_nbBgRef);
+      if (_nbVisualDesc) _gParts.push('Visual reference: ' + _nbVisualDesc);
+
+      // Pose / action
+      if (_segAction) _gParts.push('Pose/action: ' + _segAction + '.');
+
+      // Expression
+      if (_nbExpression) _gParts.push('Expression: ' + _nbExpression);
+
+      // Technical
+      _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field'));
+      _gParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor'));
+
+      // Output
+      _gParts.push('Output: single photorealistic vertical 9:16 image. ONE person only. No text overlays, no watermarks.');
+
+      instruction = _gParts.join('\n\n');
     }
 
     // ── Request with 429 retry-backoff ───────────────────────────────────────
@@ -129,6 +195,7 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
           body: JSON.stringify({
             instruction,
+            negativePrompt: _nbNegativePrompt,
             avatarB64:  avatarParts.b64,
             avatarMime: avatarParts.mime,
             frameB64,

@@ -131,7 +131,7 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const { instruction, avatarB64, avatarMime = 'image/jpeg', frameB64 = null, frameMime = 'image/jpeg' } = body;
+  const { instruction, negativePrompt = '', avatarB64, avatarMime = 'image/jpeg', frameB64 = null, frameMime = 'image/jpeg' } = body;
 
   // ── Build images array — accept new {images:[{b64,mime}]} OR old avatarB64/frameB64 format ──
   let images = [];
@@ -158,15 +158,28 @@ exports.handler = async (event) => {
   }
 
   // ── Build request ──────────────────────────────────────────────────────────
-  const photoLabels = images.map((_, i) => `Photo ${i + 1}`).join(', ');
-  const photoGuide = images.length === 1
-    ? 'Use Photo 1 as the style reference for the person\'s appearance, clothing, and accessories.'
-    : `Reference photos provided: ${photoLabels}. Photo 1 = the avatar/person to generate. Photo 2 = the background scene and environment to use as the backdrop. Use Photo 2's background and setting — do NOT use Photo 1's background.`;
+  const hasFrameRef = images.length >= 2;
 
-  const userText = `Generate an image of: ${instruction}
+  const photoGuide = hasFrameRef
+    ? [
+        'PHOTO REFERENCE RULES:',
+        '• Photo 1 = the avatar/person to generate. Copy this person\'s face, hair, skin tone, clothing, and body exactly.',
+        '• Photo 2 = the background scene reference ONLY. Use its room, environment, furniture, props, and lighting as the backdrop.',
+        '• The person visible in Photo 2 is the ORIGINAL creator — do NOT generate them. Completely replace any person in Photo 2 with the Photo 1 person.',
+        '• Do NOT use Photo 1\'s background — only Photo 2\'s background.',
+      ].join('\n')
+    : 'PHOTO REFERENCE RULES:\n• Photo 1 = the avatar/person to generate. Reproduce their face, hair, clothing, and appearance exactly.';
 
-${photoGuide}
-Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
+  const negSection = negativePrompt
+    ? `\n\nDo NOT include in the output: ${negativePrompt}, original person from background photo, multiple people, second person`
+    : '\n\nDo NOT include: multiple people, second person, original person from background';
+
+  const userText = [
+    instruction,
+    '',
+    photoGuide,
+    negSection,
+  ].join('\n').trim();
 
   const userParts = [{ text: userText }];
   images.forEach(img => {
