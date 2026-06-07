@@ -81,19 +81,24 @@
     // When avatar only: generate a fresh lifestyle frame.
     var instruction;
     if (hasFrame) {
-      // Person-swap mode: Photo 2 is the source scene (e.g. extracted frame from original video).
-      // Tell Gemini explicitly to replace the person in Photo 2 with the avatar from Photo 1.
+      // Compositing mode: Photo 1 = avatar (person to generate), Photo 2 = background scene reference.
+      // We use the same NB prompt text as the generate path — the prompt already describes
+      // the scene and pose. Photo 2 gives Gemini the actual visual background to match.
       var _action = (seg.action || '').trim();
-      instruction = 'TASK: Person replacement — do NOT generate a new scene.'
-        + '\n\nPhoto 1 = the new person (avatar). Use their exact face, skin tone, hair, and visible clothing as the replacement identity.'
-        + '\nPhoto 2 = the source scene. This is your canvas. Replace ONLY the person in it.'
-        + '\n\nRules:'
-        + '\n• Background, wall, furniture, props, products, table surface, lighting, shadows, and camera angle from Photo 2 must be pixel-perfect preserved.'
-        + '\n• Do not invent, add, remove, or alter any element of the environment from Photo 2.'
-        + '\n• Only the person\'s face and body identity changes — everything else is locked.'
-        + '\n• The result must look photorealistic and seamless, as if Photo 1\'s person was always standing in Photo 2\'s scene.'
-        + (_action ? '\n• The replaced person\'s pose/action: ' + _action : '')
-        + '\n\nOutput: single photorealistic vertical 9:16 image. No text overlays, no watermarks, no compositing artifacts.';
+      var _nbInstr2 = nbPromptRaw;
+      try {
+        var _nbParsed2 = JSON.parse(nbPromptRaw);
+        _nbInstr2 = _nbParsed2.instruction || nbPromptRaw;
+        _nbInstr2 = _nbInstr2.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+      } catch(_) {
+        _nbInstr2 = _nbInstr2.replace(/NanoBanana[^.]*\.\s*/gi, '').replace(/INPUT:[^.]*\.\s*/gi, '').trim();
+      }
+      instruction = 'Photo 1 is the creator/avatar — generate this exact person in the scene.'
+        + ' Photo 2 is the background and environment reference — use its setting, props, lighting, and backdrop exactly.'
+        + ' IMPORTANT: use Photo 2\'s background only. Do NOT use any background or environment from Photo 1.'
+        + '\n\n' + (_nbInstr2 || 'Photorealistic lifestyle photo of the avatar in the reference scene, facing camera with natural expression.')
+        + (_action ? '\n\nPose/action for this scene: ' + _action + '.' : '')
+        + '\n\nOutput: single photorealistic vertical 9:16 image. Single person only. No text overlays, no watermarks.';
     } else {
       // Generate mode: no reference frame, create a fresh lifestyle photo of the avatar.
       // Try to use a meaningful description from nbPrompt if available.

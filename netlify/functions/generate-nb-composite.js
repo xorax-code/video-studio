@@ -159,26 +159,14 @@ exports.handler = async (event) => {
 
   // ── Build request ──────────────────────────────────────────────────────────
   const photoLabels = images.map((_, i) => `Photo ${i + 1}`).join(', ');
+  const photoGuide = images.length === 1
+    ? 'Use Photo 1 as the style reference for the person\'s appearance, clothing, and accessories.'
+    : `Reference photos provided: ${photoLabels}. Photo 1 = the avatar/person to generate. Photo 2 = the background scene and environment to use as the backdrop. Use Photo 2's background and setting — do NOT use Photo 1's background.`;
 
-  let userText;
-  if (images.length >= 2) {
-    // Person-swap mode — Photo 1 is the avatar, Photo 2 is the scene reference.
-    // Do NOT wrap with "Generate an image of:" or "lifestyle photograph" — those give
-    // the model too much creative latitude and cause it to invent a new background
-    // instead of preserving the one from Photo 2.
-    userText = `${instruction}
-
-Photo 1 = the replacement person/avatar (face, body, clothing identity to transplant).
-Photo 2 = the source scene — its background, environment, props, lighting, shadows, and framing must be preserved EXACTLY. Do not invent or alter any part of the scene from Photo 2.
-Output: single vertical 9:16 image, no text overlays, no watermarks.`.trim();
-  } else {
-    // Generation mode — no reference scene, so creative latitude is fine.
-    const photoGuide = 'Use Photo 1 as the style reference for the person\'s appearance, clothing, and accessories.';
-    userText = `Generate an image of: ${instruction}
+  const userText = `Generate an image of: ${instruction}
 
 ${photoGuide}
 Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
-  }
 
   const userParts = [{ text: userText }];
   images.forEach(img => {
