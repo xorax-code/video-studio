@@ -35,7 +35,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-const MODEL    = 'gemini-2.5-flash-preview-image-generation';
+const MODEL    = 'gemini-2.0-flash-exp';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
