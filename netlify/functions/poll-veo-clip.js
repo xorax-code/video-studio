@@ -374,4 +374,10 @@ exports.handler = async (event) => {
   } catch(e) {
     console.error('poll-veo-clip: signed URL failed:', e.message);
     // Signed URL creation failed — return error rather than a useless gs:// URI
-    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' 
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ done: true, error: 'Video generated but download link failed: ' + e.message }) };
+  }
+
+  return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+    body: JSON.stringify({ done: true, videoUrl: signedUrl, mime: mimeType }) };
+};
