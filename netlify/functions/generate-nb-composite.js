@@ -326,8 +326,20 @@ exports.handler = async (event) => {
   //
   // If inpainting fails for any reason, fall back to using the original frame
   // in Stage 3 (same as the previous single-stage approach).
+  // Skip inpainting for extreme close-ups (face/head only frames).
+  // When body_in_frame says no torso is visible, inpainting a disembodied face
+  // produces artifacts (floating mouth, teeth, etc.) that ruin the composite.
+  const bodyInFrame = (poseAnalysis?.body_in_frame || '').toLowerCase();
+  const isCloseUp = bodyInFrame && (
+    bodyInFrame.includes('face') || bodyInFrame.includes('head') ||
+    bodyInFrame.includes('close') || bodyInFrame.includes('mouth') ||
+    (!bodyInFrame.includes('torso') && !bodyInFrame.includes('chest') &&
+     !bodyInFrame.includes('body') && !bodyInFrame.includes('full') &&
+     !bodyInFrame.includes('waist') && !bodyInFrame.includes('shoulder'))
+  );
+
   let compositeBackgroundImg = frameImg; // default: original frame
-  if (hasFrame) {
+  if (hasFrame && !isCloseUp) {
     const inpaintBody = JSON.stringify({
       systemInstruction: {
         parts: [{ text: `You are a photo inpainting expert. Your ONLY job is to remove the person from this photo and fill the space naturally with the surrounding background.
@@ -385,6 +397,10 @@ RULES:
         console.warn('generate-nb-composite: Stage 2 inpaint returned no image — falling back to original frame');
       }
     }
+  }
+
+  if (hasFrame && isCloseUp) {
+    console.log('generate-nb-composite: Stage 2 inpaint SKIPPED — close-up frame detected (body_in_frame:', bodyInFrame, ') — using single-stage composite');
   }
 
   // ── Stage 3: Composite generation ────────────────────────────────────────────
