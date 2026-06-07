@@ -282,6 +282,13 @@
     try { obj = typeof veoJsonStr === 'string' ? JSON.parse(veoJsonStr) : veoJsonStr; }
     catch(e) { return String(veoJsonStr || ''); }
     var parts = [];
+    // Scene context first — sets the visual environment before action/speech
+    // These fields exist when the prompt was built from an NB composite start frame.
+    // In API mode they were previously dropped; Flow agents read the full JSON so they
+    // always had them. Adding them here makes API output match Flow quality.
+    if (obj.starting_frame)   parts.push('Starting frame: ' + obj.starting_frame);
+    if (obj.background)       parts.push('Background: ' + obj.background);
+    if (obj.foreground_props) parts.push('Foreground and props: ' + obj.foreground_props);
     // Anchor left/right in action before adding to prompt
     if (obj.action) parts.push(_anchorLeftRight(obj.action));
     if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech + '"');

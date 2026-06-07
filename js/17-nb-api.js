@@ -84,14 +84,16 @@
       // Person-swap mode: Photo 2 is the source scene (e.g. extracted frame from original video).
       // Tell Gemini explicitly to replace the person in Photo 2 with the avatar from Photo 1.
       var _action = (seg.action || '').trim();
-      instruction = 'Photo 1 is the creator/avatar — the new person to place in the scene.'
-        + ' Photo 2 is a video frame from the source video — this is the scene reference.'
-        + '\n\nTask: Replace the person in Photo 2 with the person from Photo 1.'
-        + ' Keep EVERYTHING else from Photo 2 IDENTICAL: background, environment, lighting, shadows, props, objects, camera angle, and framing.'
-        + ' Only the person\'s face and identity should change to match Photo 1.'
-        + ' The replacement must look photorealistic and seamless — like the Photo 1 person was always in that scene.'
-        + (_action ? ' The person\'s pose/action: ' + _action + '.' : '')
-        + '\n\nOutput: single photorealistic vertical 9:16 image. No text overlays, no watermarks.';
+      instruction = 'TASK: Person replacement — do NOT generate a new scene.'
+        + '\n\nPhoto 1 = the new person (avatar). Use their exact face, skin tone, hair, and visible clothing as the replacement identity.'
+        + '\nPhoto 2 = the source scene. This is your canvas. Replace ONLY the person in it.'
+        + '\n\nRules:'
+        + '\n• Background, wall, furniture, props, products, table surface, lighting, shadows, and camera angle from Photo 2 must be pixel-perfect preserved.'
+        + '\n• Do not invent, add, remove, or alter any element of the environment from Photo 2.'
+        + '\n• Only the person\'s face and body identity changes — everything else is locked.'
+        + '\n• The result must look photorealistic and seamless, as if Photo 1\'s person was always standing in Photo 2\'s scene.'
+        + (_action ? '\n• The replaced person\'s pose/action: ' + _action : '')
+        + '\n\nOutput: single photorealistic vertical 9:16 image. No text overlays, no watermarks, no compositing artifacts.';
     } else {
       // Generate mode: no reference frame, create a fresh lifestyle photo of the avatar.
       // Try to use a meaningful description from nbPrompt if available.

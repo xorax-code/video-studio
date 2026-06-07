@@ -930,6 +930,11 @@ No markdown. Return only the JSON object.`
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      // Guard: model returned a refusal / plain-text instead of JSON
+      if (!raw.startsWith('{')) {
+        console.warn('[buildVeo3FromNBImage] model returned non-JSON for seg', i, '— skipping. Response:', raw.slice(0, 120));
+        return false;
+      }
       // Validate it's parseable JSON
       const _parsed = JSON.parse(raw);
       if (_parsed.action) {
