@@ -184,35 +184,41 @@ exports.handler = async (event) => {
   const hasFrame = !!frameImg;
   const subjectDesc = avatarDesc || 'the person shown in Photo 1';
 
+  // Photo 1 = Avatar (SUBJECT identity) — sent FIRST in parts array so model's natural
+  //           "first image = Photo 1" mapping aligns with the NB Pro instruction convention.
+  // Photo 2 = Scene frame (background canvas) — sent SECOND.
+  // This order fixes the previous "label crosses wire" bug where Frame was first but
+  // labeled "Photo 2", confusing the model into treating the frame person as the identity.
   const editPrefix = hasFrame
-    ? `IMAGE EDIT TASK — do not generate a new image. Edit Photo 2 exactly as instructed.
+    ? `Generate a single photorealistic image of the person from Photo 1 placed into the scene from Photo 2.
 
-Photo 2 is the MASTER CANVAS. Every non-human element — background surfaces, products, props, food, containers, lighting, shadows, camera angle — must remain pixel-identical in the output.
+Photo 1 is the PERSON — ${subjectDesc}. Reproduce this exact person: same face, same skin tone, same hair color and style, same hands and arms.
+Photo 2 is the SCENE — keep every non-human element from Photo 2 exactly unchanged: background, furniture, walls, floor, products, food, props, containers, lighting, shadows, camera angle, composition.
 
-CRITICAL: ANY human body part visible in Photo 2 — hands, arms, fingers, skin, face, body — must be REPLACED with the equivalent body part from Photo 1's person. Do NOT keep any skin, hands, or body parts from Photo 2. If Photo 2 shows hands holding a product, replace those hands with Photo 1's person's hands at the same position.
+The Photo 1 person must appear at the same position, scale, and pose as whoever is visible in Photo 2 — performing the same action, holding the same items in the same hands.
 
-Photo 1 shows the REPLACEMENT PERSON: ${subjectDesc}. All human elements (face, hands, arms, body, skin tone, hair) come from Photo 1 only.
-
-Do not blend, merge, or average skin tones. Treat this as a compositing operation: Photo 2's inanimate background/products + Photo 1's complete person identity (including all body parts) = output.`
-    : `IMAGE GENERATION TASK — generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
+CRITICAL: Everywhere a human body part (hands, arms, fingers, skin, face) is visible in Photo 2, replace it with Photo 1's person's equivalent body part. Do NOT keep any skin tone, hands, or body features from Photo 2's original person. Do NOT blend or average skin tones.`
+    : `Generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
 
   const negLine = negativePrompt ? `\n\nAVOID IN OUTPUT: ${negativePrompt}` : '';
   const fullPrompt = `${editPrefix}\n\n${instruction}${negLine}`;
 
   const parts = [];
+  // Photo 1 FIRST: avatar = identity reference (SUBJECT)
+  parts.push({ text: hasFrame ? 'Photo 1 — THE PERSON (reproduce this exact face, skin tone, hair, and hands in the output):' : 'Photo 1 — PERSON TO GENERATE:' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    parts.push({ text: "Photo 2 — MASTER SCENE CANVAS (keep all non-human elements identical; replace ALL human body parts — including any hands, arms, or skin visible — with Photo 1's person):" });
+    // Photo 2 SECOND: scene frame = background canvas (STYLE)
+    parts.push({ text: 'Photo 2 — THE SCENE (keep all non-human elements — background, props, products, lighting — exactly as-is; replace the person with Photo 1):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-  parts.push({ text: hasFrame ? "Photo 1 — REPLACEMENT PERSON IDENTITY (use this person's face, hands, arms, skin tone, and body for ALL human elements in the output):" : 'Photo 1 — PERSON TO GENERATE:' });
-  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
 
   const requestBody = JSON.stringify({
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
-      temperature: 1,
+      temperature: 0.5,
     },
   });
 
