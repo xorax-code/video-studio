@@ -303,14 +303,13 @@ exports.handler = async (event) => {
 
   const hasFrame = !!frameImg;
 
-  // ── Stage 1: Pose analysis (only when compositing into a scene frame) ─────────
+  // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
   // Uses gemini-2.0-flash-001 to extract a text map of the scene pose.
-  // Result is prepended to the instruction so Stage 2 reads explicit pose data
-  // before it encounters the ARM section — same internal logic as NARWHAL.
-  // Fails silently: if null, Stage 2 proceeds with the original instruction.
+  // Fails silently: if null, Stage 3 proceeds with the original instruction.
   let enrichedInstruction = instruction;
+  let poseAnalysis = null;
   if (hasFrame) {
-    const poseAnalysis = await analyzeFramePose(frameImg, accessToken, projectId);
+    poseAnalysis = await analyzeFramePose(frameImg, accessToken, projectId);
     if (poseAnalysis) {
       enrichedInstruction = buildPoseBlock(poseAnalysis) + instruction;
       console.log('generate-nb-composite: Stage 1 pose analysis injected — instruction now', enrichedInstruction.length, 'chars');
@@ -319,33 +318,116 @@ exports.handler = async (event) => {
     }
   }
 
-  // ── Stage 2: Composite generation (mirrors Google Flow's Nano Banana 2 format) ─
-  // Photo 1 = avatar (identity) FIRST, Photo 2 = scene frame (canvas) SECOND.
-  // photo_guide matches the Flow JSON convention exactly.
-  // No editPrefix — it conflicts with the NB Pro instruction format.
+  // ── Stage 2: Background inpainting ───────────────────────────────────────────
+  // When a scene frame exists, FIRST erase the person from it to get a clean
+  // background. This eliminates the root cause of ghosting: the model no longer
+  // has to simultaneously erase one person AND place another — those are now two
+  // separate, simpler tasks.
+  //
+  // If inpainting fails for any reason, fall back to using the original frame
+  // in Stage 3 (same as the previous single-stage approach).
+  let compositeBackgroundImg = frameImg; // default: original frame
+  if (hasFrame) {
+    const inpaintBody = JSON.stringify({
+      systemInstruction: {
+        parts: [{ text: `You are a photo inpainting expert. Your ONLY job is to remove the person from this photo and fill the space naturally with the surrounding background.
+
+RULES:
+1. Identify the person in the image (any human body — face, torso, arms, legs, hands).
+2. Remove them completely. Every pixel of skin, clothing, or body part must be gone.
+3. Fill the space they occupied with a natural, seamless continuation of the background — walls, shelves, counters, furniture, floor, whatever is visible around them.
+4. Do NOT add any new people or objects.
+5. Preserve ALL other elements of the image exactly as they are.
+6. The output should look like a photograph taken in the same room with nobody in it.` }],
+      },
+      contents: [{ role: 'user', parts: [
+        { text: 'Remove the person from this photo and fill the background naturally:' },
+        { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
+        { text: 'Output: the same scene with the person completely removed and the background filled in seamlessly. No person should remain anywhere in the image.' },
+      ]}],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.1 },
+    });
+
+    const inpaintPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+    let inpaintResult;
+    try {
+      inpaintResult = await httpsRequest({
+        hostname: `${LOCATION}-aiplatform.googleapis.com`,
+        path:     inpaintPath,
+        method:   'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type':   'application/json',
+          'Content-Length': Buffer.byteLength(inpaintBody),
+        },
+      }, inpaintBody);
+    } catch(e) {
+      console.warn('generate-nb-composite: Stage 2 inpaint fetch error:', e.message, '— falling back to original frame');
+    }
+
+    if (inpaintResult) {
+      if (inpaintResult.status === 429) {
+        // Rate-limited on inpaint — return 429 so client retries the whole request
+        return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit (inpaint stage). Please wait and retry.' }) };
+      }
+      const inpaintCandidates = inpaintResult.data?.candidates || [];
+      let inpaintImage = null;
+      for (const c of inpaintCandidates) {
+        for (const p of (c?.content?.parts || [])) {
+          if (p.inlineData?.data) { inpaintImage = p.inlineData; break; }
+        }
+        if (inpaintImage) break;
+      }
+      if (inpaintImage) {
+        compositeBackgroundImg = { b64: inpaintImage.data, mime: inpaintImage.mimeType || 'image/png' };
+        console.log('generate-nb-composite: Stage 2 inpaint success — clean background ready');
+      } else {
+        console.warn('generate-nb-composite: Stage 2 inpaint returned no image — falling back to original frame');
+      }
+    }
+  }
+
+  // ── Stage 3: Composite generation ────────────────────────────────────────────
+  // Now Photo 2 is a CLEAN background (person already removed).
+  // The model's only job is to place the Photo 1 avatar naturally into the scene.
+  // This is dramatically simpler than simultaneous replace — ghosting is impossible
+  // because there is no longer a second person in the background image.
+  const cleanBgNote = (hasFrame && compositeBackgroundImg !== frameImg)
+    ? 'IMPORTANT: Photo 2 is a CLEAN background — the original person has already been removed from it. There is NO person in Photo 2. Your ONLY job is to place the Photo 1 avatar into the scene shown in Photo 2.'
+    : 'Photo 2 = Scene reference frame (background/composition to match).';
+
   const photo_guide = hasFrame
-    ? 'Photo 1 = your avatar (person to composite). Photo 2 = Scene reference frame (background/composition to match).'
+    ? cleanBgNote
     : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
 
-  // Core negatives always injected server-side — address the three most common failures:
-  // ghosting (original person bleeding through), arms at sides default, text transfer.
-  const coreNegatives = 'ghosting, double exposure, semi-transparent person, original person visible, original person bleeding through, two people, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, background replacement, wrong background';
+  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, background replacement, wrong background';
   const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
   const negLine = `\n\nAVOID IN OUTPUT: ${allNegatives}`;
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
 
   const parts = [];
-  parts.push({ text: 'Photo 1:' });
+  parts.push({ text: 'Photo 1 (avatar — the person to place into the scene):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    parts.push({ text: 'Photo 2:' });
-    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
+    parts.push({ text: 'Photo 2 (background scene — no person is in this photo):' });
+    parts.push({ inlineData: { mimeType: compositeBackgroundImg.mime, data: compositeBackgroundImg.b64 } });
   }
   parts.push({ text: fullPrompt });
 
-  const requestBody = JSON.stringify({
-    systemInstruction: {
-      parts: [{ text: `You are a professional photo compositor performing a PERSON REPLACEMENT task.
+  const systemRules = hasFrame && compositeBackgroundImg !== frameImg
+    ? `You are a professional photo compositor. Your task is PERSON PLACEMENT — not person replacement.
+
+Photo 2 is a CLEAN background with NO person in it. The scene is empty, ready to receive the avatar.
+
+MANDATORY RULES:
+1. PLACE: Insert the Photo 1 person naturally into the Photo 2 scene. They should appear to have always been standing there.
+2. POSE MATCH: The avatar's arms, hands, and body MUST match the pose described in the [POSE GROUND TRUTH] block above. Arms NEVER default to sides.
+3. PROP MATCH: If a prop is described in the pose data, the avatar MUST hold it in the correct hand at the correct position.
+4. BACKGROUND LOCK: The Photo 2 background must be preserved exactly — same lighting, colors, objects, walls, everything.
+5. NO TEXT: Do NOT add any text, labels, watermarks, or graphical overlays.
+6. ONE PERSON: Only the Photo 1 avatar appears in the output. No other people.
+7. NATURAL INTEGRATION: The avatar should look naturally lit and grounded in the scene — match the Photo 2 lighting direction and color temperature.`
+    : `You are a professional photo compositor performing a PERSON REPLACEMENT task.
 
 TASK: Completely replace the person in Photo 2 with the person from Photo 1.
 
@@ -357,8 +439,10 @@ MANDATORY RULES — follow every one without exception:
 5. BACKGROUND LOCK: ALL background elements from Photo 2 — walls, shelves, furniture, props, lighting, colors — must be preserved exactly. The background comes ONLY from Photo 2, never from Photo 1.
 6. NO TEXT TRANSFER: Do NOT reproduce any text, labels, overlays, numbers, or graphical elements from Photo 2 in the output.
 7. ONE PERSON ONLY: The output contains exactly one visible person — the Photo 1 avatar. If any other person is visible anywhere in the image, you have failed this task.
-8. NO BLENDING: Do NOT blend or average the two people together. This is a hard cut replacement, not a morph or blend.` }],
-    },
+8. NO BLENDING: Do NOT blend or average the two people together. This is a hard cut replacement, not a morph or blend.`;
+
+  const requestBody = JSON.stringify({
+    systemInstruction: { parts: [{ text: systemRules }] },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
