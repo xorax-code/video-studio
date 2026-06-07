@@ -1,25 +1,25 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana scene image using Imagen 3 via Vertex AI.
+ * Generates a Nano Banana scene image using Gemini 2.5 Flash image generation.
  *
- * Model: imagen-3.0-capability-001 (Imagen 3 editing/capability endpoint)
- * Endpoint: :predict (NOT :generateContent — that's Gemini)
+ * Model: gemini-2.5-flash-preview-image-generation
+ * Endpoint: :generateContent (Gemini multimodal API)
  *
- * Reference image strategy (replicates how Google Flow generates NB scenes):
- *   SUBJECT reference — avatar photo → locks NanaBanana's face, skin, hair, clothing
- *   LAYOUT reference  — source video frame → locks scene structure, background, props,
- *                       camera angle, lighting (exact pixel-level spatial preservation)
+ * Strategy — explicit image EDIT (not generation, not blending):
+ *   Photo 1 (avatar)  → the IDENTITY to place into the scene
+ *   Photo 2 (frame)   → the MASTER CANVAS — background stays pixel-identical
+ *   Instruction       → NB Pro structured edit command (LOCK, HAIR LOCK, GENDER LOCK, etc.)
  *
- * The model GENERATES NanaBanana into the scene — it does NOT composite or blend.
- * The instruction from 17-nb-api.js is passed through as-is (already structured for Imagen 3).
+ * The prompt explicitly frames this as a surgical edit on Photo 2, not creative generation.
+ * "Keep Photo 2's background, props, and lighting exactly as-is. Replace ONLY the person."
  *
  * Takes:
- *   - avatarB64      — base64 avatar photo (NanaBanana identity reference)
+ *   - avatarB64      — base64 avatar photo (NanaBanana identity)
  *   - avatarMime     — MIME type of avatar (default: image/jpeg)
- *   - frameB64       — base64 source video frame (scene layout reference, optional)
+ *   - frameB64       — base64 source video frame (scene canvas)
  *   - frameMime      — MIME type of frame (default: image/jpeg)
- *   - instruction    — NB Pro generation instruction (scene/pose/action/framing detail)
- *   - avatarDesc     — text description of NanaBanana (reinforces SUBJECT reference)
+ *   - instruction    — NB Pro generation instruction from 17-nb-api.js
+ *   - avatarDesc     — text description of NanaBanana
  *   - negativePrompt — things to avoid
  *
  * Returns: { imageB64, mime }
@@ -35,7 +35,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
-const MODEL    = 'imagen-3.0-capability-001';
+const MODEL    = 'gemini-2.5-flash-preview-image-generation';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -154,7 +154,7 @@ exports.handler = async (event) => {
     frameMime      = 'image/jpeg',
   } = body;
 
-  // ── Resolve images — support both {images:[]} and old avatarB64/frameB64 ──
+  // ── Resolve images ─────────────────────────────────────────────────────────
   let avatarImg = null, frameImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
@@ -178,100 +178,65 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build Imagen 3 inpainting request ────────────────────────────────────
+  // ── Build Gemini generateContent request ──────────────────────────────────
   //
-  // INPAINTING PIPELINE (replicates what Google Flow does with Nano Banana 2):
+  // EDIT FRAMING — critical to get identity-accurate person replacement:
   //
-  //   Frame as RAW base image  → the pixel-exact canvas we preserve
-  //   Frame as MASK source     → MASK_MODE_FOREGROUND auto-detects the person
-  //                              region in the frame as the area to replace
-  //   Avatar as SUBJECT ref    → NanaBanana's identity painted into the mask area
-  //   Edit mode                → INPAINT_INSERTION replaces only the mask pixels;
-  //                              everything outside the mask is the original frame
+  //   This is NOT a generation request. This is a surgical IMAGE EDIT.
+  //   Photo 1 = the person (avatar identity) to place into the scene.
+  //   Photo 2 = the master scene canvas. Background stays identical.
+  //   The model must ONLY replace the person. Nothing else changes.
   //
-  // This is why Flow produces pixel-exact backgrounds: the background pixels
-  // are never regenerated — they're the original frame. Only the person area
-  // is replaced with NanaBanana.
-  //
-  // Without a frame, fall back to SUBJECT-only generation from text prompt.
+  // Order matters: Photo 2 (scene) first so the model treats it as the base.
+  // Photo 1 (avatar) second as the identity replacement reference.
 
   const hasFrame = !!frameImg;
+  const subjectDesc = avatarDesc || 'the person shown in Photo 1';
 
-  const subjectDesc = avatarDesc || 'the person';
+  // Build the edit instruction prefix — explicitly frames this as an image edit,
+  // not creative generation, to prevent the model from blending or reinterpreting.
+  const editPrefix = hasFrame
+    ? `IMAGE EDIT TASK — do not generate a new image. Edit Photo 2 exactly as instructed.
 
-  let referenceImages;
-  let parameters;
+Photo 2 is the MASTER CANVAS. Its background, props, lighting, shadows, camera angle, and all non-person elements must remain pixel-identical in the output.
+
+Photo 1 shows the REPLACEMENT PERSON: ${subjectDesc}. Replace ONLY the person visible in Photo 2 with the person from Photo 1. The replacement person must match the pose, position, framing, and scale of the original person in Photo 2.
+
+Do not blend, merge, or average the two photos. Treat this as a compositing operation: Photo 2's background + Photo 1's person identity = output.`
+    : `IMAGE GENERATION TASK — generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
+
+  const negLine = negativePrompt
+    ? `\n\nAVOID IN OUTPUT: ${negativePrompt}`
+    : '';
+
+  const fullPrompt = `${editPrefix}\n\n${instruction}${negLine}`;
+
+  // Build the parts array — Photo 2 (scene) first, then Photo 1 (avatar)
+  const parts = [];
 
   if (hasFrame) {
-    // ── Inpainting mode ──────────────────────────────────────────────────
-    // referenceId 0: RAW — the source frame as the base canvas
-    // referenceId 1: MASK — same frame, FOREGROUND mode auto-masks the person
-    // referenceId 2: SUBJECT — avatar identity to paint into the masked area
-    referenceImages = [
-      {
-        referenceType: 'REFERENCE_TYPE_RAW',
-        referenceId:   0,
-        referenceImage: { bytesBase64Encoded: frameImg.b64 },
-      },
-      {
-        referenceType: 'REFERENCE_TYPE_MASK',
-        referenceId:   1,
-        referenceImage: { bytesBase64Encoded: frameImg.b64 },
-        maskImageConfig: { maskMode: 'MASK_MODE_FOREGROUND' },
-      },
-      {
-        referenceType: 'REFERENCE_TYPE_SUBJECT',
-        referenceId:   2,
-        referenceImage: { bytesBase64Encoded: avatarImg.b64 },
-        subjectImageConfig: {
-          subjectType:        'SUBJECT_TYPE_PERSON',
-          subjectDescription: subjectDesc,
-        },
-      },
-    ];
-
-    parameters = {
-      sampleCount: 1,
-      editMode:    'EDIT_MODE_INPAINT_INSERTION',
-    };
-  } else {
-    // ── No frame: SUBJECT-only generation ───────────────────────────────
-    // Generate NanaBanana from scratch using avatar as identity reference.
-    // Scene comes entirely from the text instruction.
-    referenceImages = [
-      {
-        referenceType: 'REFERENCE_TYPE_SUBJECT',
-        referenceId:   1,
-        referenceImage: { bytesBase64Encoded: avatarImg.b64 },
-        subjectImageConfig: {
-          subjectType:        'SUBJECT_TYPE_PERSON',
-          subjectDescription: subjectDesc,
-        },
-      },
-    ];
-
-    parameters = { sampleCount: 1 };
+    parts.push({ text: 'Photo 2 — MASTER SCENE CANVAS (keep background identical):' });
+    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
 
-  // Prompt — must include [referenceId] bracket notation for Imagen 3 Customization.
-  // In inpainting mode: reference [2] is the subject (avatar). [0] and [1] are structural.
-  // In subject-only mode: reference [1] is the subject.
-  const subjectRefId = hasFrame ? 2 : 1;
-  const subjectLine  = `Photorealistic image of ${subjectDesc} [${subjectRefId}].`;
-  const negLine      = negativePrompt ? `Avoid: ${negativePrompt}` : '';
-  const prompt       = [subjectLine, instruction, negLine].filter(Boolean).join(' ');
+  parts.push({ text: hasFrame ? 'Photo 1 — REPLACEMENT PERSON IDENTITY:' : 'Photo 1 — PERSON TO GENERATE:' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
+  parts.push({ text: fullPrompt });
 
   const requestBody = JSON.stringify({
-    instances: [{ prompt, referenceImages }],
-    parameters,
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      responseModalities: ['IMAGE', 'TEXT'],
+      temperature: 1,
+    },
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:predict`;
+  const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
-  const mode = hasFrame ? 'inpaint-foreground' : 'subject-only';
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}, promptLen=${prompt.length}`);
+  const mode = hasFrame ? 'edit-swap' : 'generate-only';
+  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, hasFrame=${hasFrame}, promptLen=${fullPrompt.length}`);
 
   // ── Vertex AI call ────────────────────────────────────────────────────────
   const vertexOptions = {
@@ -299,33 +264,39 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status + (result.raw ? ' Raw: ' + result.raw.slice(0, 300) : '') }) };
   }
 
+  if (result.status === 429) {
+    return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit. Please wait and retry.' }) };
+  }
+
   if (result.status !== 200 || result.data.error) {
     const errMsg = result.data?.error?.message || `Vertex AI error (HTTP ${result.status})`;
     console.error('generate-nb-composite: Vertex AI error:', errMsg);
-    const clientStatus = result.status === 429 ? 429 : 502;
-    return { statusCode: clientStatus, headers: CORS, body: JSON.stringify({ error: errMsg }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  // ── Extract image from Imagen 3 :predict response ─────────────────────────
-  // Response shape: { predictions: [{ bytesBase64Encoded: "...", mimeType: "image/png" }] }
-  const predictions = result.data.predictions || [];
-  for (const pred of predictions) {
-    if (pred.bytesBase64Encoded) {
-      const mime = pred.mimeType || 'image/png';
-      console.log('generate-nb-composite: image generated, mime:', mime);
-      return {
-        statusCode: 200,
-        headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ imageB64: pred.bytesBase64Encoded, mime }),
-      };
+  // ── Extract image from Gemini generateContent response ────────────────────
+  // Response shape: { candidates: [{ content: { parts: [{ inlineData: { data, mimeType } }] } }] }
+  const candidates = result.data.candidates || [];
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts || [];
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || 'image/png';
+        console.log('generate-nb-composite: image generated, mime:', mime);
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
+        };
+      }
     }
   }
 
-  // No image in predictions — log for debugging
-  console.error('generate-nb-composite: no image in predictions. Full response:', JSON.stringify(result.data).slice(0, 500));
+  // No image — log full response for debugging
+  console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: 'Imagen 3 returned no image. Check Vertex AI logs.' }),
+    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
   };
 };
