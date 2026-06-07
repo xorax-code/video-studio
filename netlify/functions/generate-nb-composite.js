@@ -5,13 +5,13 @@
  * Model: gemini-2.5-flash-image
  * Endpoint: :generateContent (Gemini multimodal API)
  *
- * Strategy — explicit image EDIT (not generation, not blending):
- *   Photo 1 (avatar)  → the IDENTITY to place into the scene
- *   Photo 2 (frame)   → the MASTER CANVAS — background stays pixel-identical
- *   Instruction       → NB Pro structured edit command (LOCK, HAIR LOCK, GENDER LOCK, etc.)
- *
- * The prompt explicitly frames this as a surgical edit on Photo 2, not creative generation.
- * "Keep Photo 2's background, props, and lighting exactly as-is. Replace ONLY the person."
+ * Strategy — mirrors Google Flow's Nano Banana 2 agent format exactly:
+ *   Photo 1 (avatar)  → FIRST in parts array — the identity to composite
+ *   Photo 2 (frame)   → SECOND in parts array — the background scene to preserve
+ *   photo_guide       → "Photo 1 = your avatar. Photo 2 = Scene reference frame."
+ *   instruction       → NB Pro structured command (LOCK, HAIR LOCK, GENDER LOCK, etc.)
+ *                       from 17-nb-api.js — sent as-is, no editPrefix stacked on top
+ *   systemInstruction → primes the model for compositing before any user content
  *
  * Takes:
  *   - avatarB64      — base64 avatar photo (NanaBanana identity)
@@ -182,43 +182,48 @@ exports.handler = async (event) => {
   }
 
   const hasFrame = !!frameImg;
-  const subjectDesc = avatarDesc || 'the person shown in Photo 1';
 
-  // Photo 1 = Avatar (SUBJECT identity) — sent FIRST in parts array so model's natural
-  //           "first image = Photo 1" mapping aligns with the NB Pro instruction convention.
-  // Photo 2 = Scene frame (background canvas) — sent SECOND.
-  // This order fixes the previous "label crosses wire" bug where Frame was first but
-  // labeled "Photo 2", confusing the model into treating the frame person as the identity.
-  const editPrefix = hasFrame
-    ? `Generate a single photorealistic image of the person from Photo 1 placed into the scene from Photo 2.
+  // ── Mirror the exact format Flow's Nano Banana 2 agent uses ─────────────────
+  // Photo 1 = avatar (SUBJECT identity) — FIRST in parts array.
+  // Photo 2 = scene frame (background canvas) — SECOND.
+  // The NB Pro instruction from 17-nb-api.js is self-contained (LOCK/ARM/HAIR LOCK/
+  // GENDER LOCK/TRANSFER BLOCK/LIGHTING MATCH). We do NOT stack any editPrefix on
+  // top of it — that was causing two conflicting instruction formats to fight each
+  // other and produce wrong results. The photo_guide is the only context header needed.
 
-Photo 1 is the PERSON — ${subjectDesc}. Reproduce this exact person: same face, same skin tone, same hair color and style, same hands and arms.
-Photo 2 is the SCENE — keep every non-human element from Photo 2 exactly unchanged: background, furniture, walls, floor, products, food, props, containers, lighting, shadows, camera angle, composition.
-
-The Photo 1 person must appear at the same position, scale, and pose as whoever is visible in Photo 2 — performing the same action, holding the same items in the same hands.
-
-CRITICAL: Everywhere a human body part (hands, arms, fingers, skin, face) is visible in Photo 2, replace it with Photo 1's person's equivalent body part. Do NOT keep any skin tone, hands, or body features from Photo 2's original person. Do NOT blend or average skin tones.`
-    : `Generate a photorealistic portrait of ${subjectDesc} as shown in Photo 1.`;
+  const photo_guide = hasFrame
+    ? 'Photo 1 = your avatar (person to composite). Photo 2 = Scene reference frame (background/composition to match).'
+    : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
 
   const negLine = negativePrompt ? `\n\nAVOID IN OUTPUT: ${negativePrompt}` : '';
-  const fullPrompt = `${editPrefix}\n\n${instruction}${negLine}`;
+
+  // fullPrompt = photo_guide + NB Pro instruction + negative prompt
+  // (no editPrefix — same structure as the Flow JSON: photo_guide + instruction + negative_prompt)
+  const fullPrompt = `${photo_guide}\n\n${instruction}${negLine}`;
 
   const parts = [];
-  // Photo 1 FIRST: avatar = identity reference (SUBJECT)
-  parts.push({ text: hasFrame ? 'Photo 1 — THE PERSON (reproduce this exact face, skin tone, hair, and hands in the output):' : 'Photo 1 — PERSON TO GENERATE:' });
+  // Photo 1 FIRST: avatar
+  parts.push({ text: 'Photo 1:' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    // Photo 2 SECOND: scene frame = background canvas (STYLE)
-    parts.push({ text: 'Photo 2 — THE SCENE (keep all non-human elements — background, props, products, lighting — exactly as-is; replace the person with Photo 1):' });
+    // Photo 2 SECOND: scene frame
+    parts.push({ text: 'Photo 2:' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
   parts.push({ text: fullPrompt });
 
   const requestBody = JSON.stringify({
+    // systemInstruction primes the model for person-replacement compositing —
+    // mirrors the system prompt Nano Banana 2 has baked in as an agent.
+    systemInstruction: {
+      parts: [{ text: 'You are a professional photo compositor. When given Photo 1 (avatar) and Photo 2 (scene reference frame), composite the Photo 1 person into the Photo 2 background exactly as instructed. Preserve every background element in Photo 2 pixel-perfectly. Replace all human body parts in Photo 2 with the Photo 1 person. Output a single photorealistic image.' }],
+    },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
       temperature: 0.5,
+      // NOTE: seed is NOT a valid Gemini generationConfig field (that's Imagen 3).
+      // Including it would cause Vertex AI to return a 400, breaking all generation.
     },
   });
 
