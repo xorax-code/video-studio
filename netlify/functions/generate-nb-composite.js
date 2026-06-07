@@ -178,101 +178,100 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  // ── Build Imagen 3 :predict request ───────────────────────────────────────
+  // ── Build Imagen 3 inpainting request ────────────────────────────────────
   //
-  // Strategy: dual reference images for identity + scene guidance.
+  // INPAINTING PIPELINE (replicates what Google Flow does with Nano Banana 2):
   //
-  // REFERENCE_TYPE_SUBJECT (avatar photo, referenceId: 1):
-  //   Locks NanaBanana's identity — face, skin tone, hair, clothing.
-  //   subjectType: SUBJECT_TYPE_PERSON → human identity mode.
-  //   Referenced in prompt as "[1]".
+  //   Frame as RAW base image  → the pixel-exact canvas we preserve
+  //   Frame as MASK source     → MASK_MODE_FOREGROUND auto-detects the person
+  //                              region in the frame as the area to replace
+  //   Avatar as SUBJECT ref    → NanaBanana's identity painted into the mask area
+  //   Edit mode                → INPAINT_INSERTION replaces only the mask pixels;
+  //                              everything outside the mask is the original frame
   //
-  // REFERENCE_TYPE_STYLE (source video frame, referenceId: 2):
-  //   Guides the scene composition, lighting, color palette, background aesthetic.
-  //   LAYOUT is NOT a valid Imagen 3 reference type — STYLE is the closest available.
-  //   Referenced in prompt as "[2]".
+  // This is why Flow produces pixel-exact backgrounds: the background pixels
+  // are never regenerated — they're the original frame. Only the person area
+  // is replaced with NanaBanana.
   //
-  // The prompt MUST include [referenceId] bracket notation to tie images to text.
-  //
-  // The instruction from 17-nb-api.js is already formatted for Imagen 3 with
-  // NB Pro structured sections (LOCK, ARM, HAIR LOCK, etc.) — pass through as-is.
+  // Without a frame, fall back to SUBJECT-only generation from text prompt.
 
   const hasFrame = !!frameImg;
 
-  // Build the text prompt:
-  // Imagen 3 Customization requires referenceId bracket notation in the prompt.
-  // Format: "the person [1]" ties text to referenceImage with referenceId: 1.
-  // Lead with subject ref [1], then the full structured instruction,
-  // then scene lock reminder if we have a frame ref [2], then negatives.
   const subjectDesc = avatarDesc || 'the person';
-  // Imagen 3 Customization requires [referenceId] bracket notation in the prompt.
-  // We only send SUBJECT reference [1]; scene composition comes from the text instruction.
-  const subjectRef = `Photorealistic image of ${subjectDesc} [1].`;
 
-  // Scene reminder uses text from the instruction (17-nb-api.js provides full scene analysis).
-  const layoutReminder = hasFrame
-    ? 'Match the exact background, setting, props, and lighting described in the instruction.'
-    : '';
+  let referenceImages;
+  let parameters;
 
-  const negLine = negativePrompt ? `Avoid: ${negativePrompt}` : '';
-
-  const prompt = [subjectRef, instruction, layoutReminder, negLine]
-    .filter(Boolean)
-    .join(' ');
-
-  // Build referenceImages array.
-  //
-  // Valid referenceType values for imagen-3.0-capability-001:
-  //   REFERENCE_TYPE_SUBJECT  — person/product identity lock
-  //   REFERENCE_TYPE_STYLE    — scene/style visual guide
-  //   REFERENCE_TYPE_CONTROL  — structural control (face mesh only)
-  //   REFERENCE_TYPE_MASK     — inpainting mask
-  //
-  // REFERENCE_TYPE_LAYOUT does NOT exist in the Vertex AI API.
-  // We use REFERENCE_TYPE_STYLE for the source frame to guide scene composition.
-  const referenceImages = [
-    {
-      referenceType: 'REFERENCE_TYPE_SUBJECT',
-      referenceId:   1,
-      referenceImage: { bytesBase64Encoded: avatarImg.b64 },
-      subjectImageConfig: {
-        subjectType:        'SUBJECT_TYPE_PERSON',
-        subjectDescription: subjectDesc,
+  if (hasFrame) {
+    // ── Inpainting mode ──────────────────────────────────────────────────
+    // referenceId 0: RAW — the source frame as the base canvas
+    // referenceId 1: MASK — same frame, FOREGROUND mode auto-masks the person
+    // referenceId 2: SUBJECT — avatar identity to paint into the masked area
+    referenceImages = [
+      {
+        referenceType: 'REFERENCE_TYPE_RAW',
+        referenceId:   0,
+        referenceImage: { bytesBase64Encoded: frameImg.b64 },
       },
-    },
-  ];
+      {
+        referenceType: 'REFERENCE_TYPE_MASK',
+        referenceId:   1,
+        referenceImage: { bytesBase64Encoded: frameImg.b64 },
+        maskImageConfig: { maskMode: 'MASK_MODE_FOREGROUND' },
+      },
+      {
+        referenceType: 'REFERENCE_TYPE_SUBJECT',
+        referenceId:   2,
+        referenceImage: { bytesBase64Encoded: avatarImg.b64 },
+        subjectImageConfig: {
+          subjectType:        'SUBJECT_TYPE_PERSON',
+          subjectDescription: subjectDesc,
+        },
+      },
+    ];
 
-  // NOTE: REFERENCE_TYPE_STYLE may require a styleImageConfig object.
-  // Until the capability model's style config schema is confirmed, we skip
-  // the frame reference to avoid "invalid argument" errors.
-  // The scene is guided by the detailed text instruction from 17-nb-api.js.
-  // TODO: add back REFERENCE_TYPE_STYLE once styleImageConfig format is known.
-  if (false && hasFrame) { // eslint-disable-line no-constant-condition
-    referenceImages.push({
-      referenceType: 'REFERENCE_TYPE_STYLE',
-      referenceId:   2,
-      referenceImage: { bytesBase64Encoded: frameImg.b64 },
-    });
+    parameters = {
+      sampleCount: 1,
+      editMode:    'EDIT_MODE_INPAINT_INSERTION',
+    };
+  } else {
+    // ── No frame: SUBJECT-only generation ───────────────────────────────
+    // Generate NanaBanana from scratch using avatar as identity reference.
+    // Scene comes entirely from the text instruction.
+    referenceImages = [
+      {
+        referenceType: 'REFERENCE_TYPE_SUBJECT',
+        referenceId:   1,
+        referenceImage: { bytesBase64Encoded: avatarImg.b64 },
+        subjectImageConfig: {
+          subjectType:        'SUBJECT_TYPE_PERSON',
+          subjectDescription: subjectDesc,
+        },
+      },
+    ];
+
+    parameters = { sampleCount: 1 };
   }
 
+  // Prompt — must include [referenceId] bracket notation for Imagen 3 Customization.
+  // In inpainting mode: reference [2] is the subject (avatar). [0] and [1] are structural.
+  // In subject-only mode: reference [1] is the subject.
+  const subjectRefId = hasFrame ? 2 : 1;
+  const subjectLine  = `Photorealistic image of ${subjectDesc} [${subjectRefId}].`;
+  const negLine      = negativePrompt ? `Avoid: ${negativePrompt}` : '';
+  const prompt       = [subjectLine, instruction, negLine].filter(Boolean).join(' ');
+
   const requestBody = JSON.stringify({
-    instances: [{
-      prompt,
-      referenceImages,
-    }],
-    parameters: {
-      // imagen-3.0-capability-001 only supports sampleCount in parameters.
-      // aspectRatio and personGeneration are generation-model params and
-      // cause "invalid argument" on the capability/editing model.
-      sampleCount: 1,
-    },
+    instances: [{ prompt, referenceImages }],
+    parameters,
   });
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:predict`;
   const hostname  = `${LOCATION}-aiplatform.googleapis.com`;
 
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}, promptLen=${prompt.length}`);
+  const mode = hasFrame ? 'inpaint-foreground' : 'subject-only';
+  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, hasFrame=${hasFrame}, avatarDescLen=${avatarDesc.length}, instrLen=${instruction.length}, promptLen=${prompt.length}`);
 
   // ── Vertex AI call ────────────────────────────────────────────────────────
   const vertexOptions = {
