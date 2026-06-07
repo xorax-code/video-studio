@@ -350,18 +350,19 @@ exports.handler = async (event) => {
 TASK: Completely replace the person in Photo 2 with the person from Photo 1.
 
 MANDATORY RULES — follow every one without exception:
-1. COMPLETE REMOVAL: The Photo 2 person must be 100% gone from the output. No ghosting, no transparency, no double exposure, no trace of the original person remaining anywhere in the image.
-2. FULL REPLACEMENT: Insert the Photo 1 person at the exact position, scale, and pose of the Photo 2 person.
-3. POSE MATCH: The Photo 1 person's arms, hands, and body MUST exactly match the pose shown in Photo 2. If the Photo 2 person's arms are raised or extended, the output person's arms must also be raised or extended. Arms do NOT default to the sides.
-4. PROP MATCH: If Photo 2 person is holding an object, the Photo 1 person MUST hold that same object in the same hand at the same position and orientation.
-5. BACKGROUND LOCK: ALL background elements from Photo 2 — walls, shelves, furniture, props, lighting, colors — must be preserved pixel-perfectly. Do NOT alter or replace the background.
+1. COMPLETE REMOVAL: The Photo 2 person must be 100% erased from the output. Scan every pixel — if you see any trace of the original person (face, body, hair, hands, clothing), erase it. No ghosting, no transparency, no double exposure, no blending of the two people.
+2. FULL REPLACEMENT: Paint the Photo 1 person into the exact position, scale, and pose where the Photo 2 person stood.
+3. POSE MATCH: The Photo 1 person's arms, hands, and body MUST exactly match the pose shown in Photo 2. If arms are raised or extended, they MUST be raised or extended in the output. Arms NEVER default to sides.
+4. PROP MATCH: If the Photo 2 person holds an object, the Photo 1 person MUST hold that same object in the same hand at the same position and orientation.
+5. BACKGROUND LOCK: ALL background elements from Photo 2 — walls, shelves, furniture, props, lighting, colors — must be preserved exactly. The background comes ONLY from Photo 2, never from Photo 1.
 6. NO TEXT TRANSFER: Do NOT reproduce any text, labels, overlays, numbers, or graphical elements from Photo 2 in the output.
-7. ONE PERSON: The final output contains exactly one person — the Photo 1 avatar. Nobody else.` }],
+7. ONE PERSON ONLY: The output contains exactly one visible person — the Photo 1 avatar. If any other person is visible anywhere in the image, you have failed this task.
+8. NO BLENDING: Do NOT blend or average the two people together. This is a hard cut replacement, not a morph or blend.` }],
     },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
-      temperature: 0.3,
+      temperature: 0.1,
     },
   });
 
@@ -433,6 +434,15 @@ MANDATORY RULES — follow every one without exception:
   };
 
   } catch(topErr) {
+    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
+    };
+  }
+};
+atch(topErr) {
     console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
     return {
       statusCode: 500,
