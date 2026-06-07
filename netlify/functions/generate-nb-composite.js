@@ -131,21 +131,19 @@ async function getAuthUser(jwt) {
 // Uses gemini-2.0-flash-001 (separate DSQ quota from gemini-2.5-flash-image).
 // Returns null on any failure — caller falls back to original instruction.
 async function analyzeFramePose(frameImg, accessToken, projectId) {
-  const prompt = `You are analyzing a scene reference frame for professional photo compositing.
-Examine this image carefully. A person is visible — describe their exact physical pose.
+  const prompt = `You are analyzing a video frame for professional photo compositing. A person is visible.
+Extract precise details in the exact format used by compositing software.
 
 Return ONLY a valid JSON object with these exact fields (no markdown, no explanation, raw JSON only):
 {
-  "left_arm": "left arm position — angle from body (e.g. 45° forward), bent or extended, raised or lowered",
-  "right_arm": "right arm position — angle from body, bent or extended, raised or lowered",
-  "left_hand": "what left hand is doing — gripping/supporting/open/at side, describe any object held and how",
-  "right_hand": "what right hand is doing — gripping/supporting/open/at side, describe any object held and how",
-  "elbow_height": "height of elbows — below waist / at waist / at chest / at shoulder / above shoulder",
-  "arms_extended": "are arms stretched away from body or held close to torso",
-  "prop": "any object being held or interacted with — exact shape, size, which hand holds it, orientation facing camera",
-  "body_in_frame": "person placement in frame — left/center/right, approximate % of vertical frame height they fill",
-  "facing": "body orientation — straight toward camera / angled left / angled right / profile",
-  "lighting": "main light — direction (left/right/above/front/window), color temperature (warm/cool/neutral)"
+  "person_position": "where the person stands in frame and how much they fill it — e.g. 'center, ~80% frame height' or 'center-left, waist-up'",
+  "camera_angle": "shot description — e.g. 'straight-on chest height' or 'slightly below eye level, medium shot'",
+  "background": "precise description of everything visible behind the person — room type, wall color/material, shelves, objects on shelves, furniture, window position, any flags, signs, or decor",
+  "arm_instruction": "single sentence describing both arms and hands for compositing — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports it from below' or 'both arms at sides, hands relaxed'",
+  "prop": "if a prop/object is held: exact name, shape, size, color, which hand, how gripped, orientation toward camera. If none: 'none'",
+  "prop_state": "visible state of the prop — e.g. 'mouth model open, facing camera, showing teeth and tongue' or 'dark glass bottle with label facing camera'. If no prop: 'none'",
+  "lighting": "lighting description — e.g. 'warm ambient, soft shadows from above' or 'bright natural light from right window, cool tone'",
+  "body_in_frame": "simple tag for close-up detection only — e.g. 'torso up' or 'full body' or 'face only'"
 }`;
 
   const reqBody = JSON.stringify({
@@ -158,7 +156,7 @@ Return ONLY a valid JSON object with these exact fields (no markdown, no explana
     }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 600,
+      maxOutputTokens: 800,
       responseMimeType: 'application/json', // forces valid JSON output, no markdown wrapping
     },
   });
@@ -206,30 +204,19 @@ Return ONLY a valid JSON object with these exact fields (no markdown, no explana
   }
 }
 
-// ── Build pose injection block from analysis result ───────────────────────────
-// Prepended to the NB Pro instruction so the model reads ground-truth pose
-// data BEFORE it encounters the ARM section. Mirrors NARWHAL's internal flow.
+// ── Build scene-grounded instruction prefix from analysis result ──────────────
+// Produces LOCK / ARM / PROP STATE lines in the same format the Veo agent uses.
+// Prepended to the incoming instruction so compositing keywords appear first.
 function buildPoseBlock(pa) {
-  return [
-    '[POSE GROUND TRUTH — EXTRACTED FROM SCENE FRAME — READ FIRST, OVERRIDE ANY DEFAULTS]',
-    `LEFT ARM:        ${pa.left_arm  || 'not specified'}`,
-    `RIGHT ARM:       ${pa.right_arm || 'not specified'}`,
-    `LEFT HAND:       ${pa.left_hand  || 'not specified'}`,
-    `RIGHT HAND:      ${pa.right_hand || 'not specified'}`,
-    `ELBOW HEIGHT:    ${pa.elbow_height    || 'not specified'}`,
-    `ARMS EXTENDED:   ${pa.arms_extended   || 'not specified'}`,
-    `PROP IN HANDS:   ${pa.prop           || 'none'}`,
-    `BODY IN FRAME:   ${pa.body_in_frame  || 'not specified'}`,
-    `FACING:          ${pa.facing         || 'not specified'}`,
-    `SCENE LIGHTING:  ${pa.lighting       || 'not specified'}`,
-    '!! CRITICAL — POSE IS MANDATORY !!',
-    'The avatar\'s arms and hands MUST match this pose. DO NOT default to arms at sides.',
-    'If arms are raised or extended in the above analysis, they MUST be raised or extended in the output.',
-    'If a prop is described above, it MUST appear in the avatar\'s hand in the output.',
-    'This is the highest-priority instruction — override any conflicting defaults.',
-    '[END POSE GROUND TRUTH]',
-    '',
-  ].join('\n');
+  const lines = [];
+  if (pa.person_position) lines.push(`[FULL PERSON] REPLACE: target person — ${pa.person_position}. Camera angle: ${pa.camera_angle || 'straight-on'}.`);
+  if (pa.background)      lines.push(`LOCK: background — ${pa.background}.`);
+  if (pa.arm_instruction) lines.push(`ARM: ${pa.arm_instruction}.`);
+  if (pa.prop && pa.prop !== 'none') lines.push(`PROP: ${pa.prop}.`);
+  if (pa.prop_state && pa.prop_state !== 'none') lines.push(`PROP STATE: ${pa.prop_state}.`);
+  if (pa.lighting)        lines.push(`LIGHT: ${pa.lighting}.`);
+  lines.push('');
+  return lines.join('\n');
 }
 
 exports.handler = async (event) => {
@@ -318,155 +305,42 @@ exports.handler = async (event) => {
     }
   }
 
-  // ── Stage 2: Background inpainting ───────────────────────────────────────────
-  // When a scene frame exists, FIRST erase the person from it to get a clean
-  // background. This eliminates the root cause of ghosting: the model no longer
-  // has to simultaneously erase one person AND place another — those are now two
-  // separate, simpler tasks.
-  //
-  // If inpainting fails for any reason, fall back to using the original frame
-  // in Stage 3 (same as the previous single-stage approach).
-  // Skip inpainting ONLY when pose analysis explicitly says the frame is a face/head
-  // close-up (e.g. body_in_frame = "face only"). If pose analysis failed (null),
-  // bodyInFrame is empty and the && short-circuits → isCloseUp = false → inpaint
-  // still runs. This is correct: a failed pose analysis could mean the frame has an
-  // unusual prop (dental model, product box) — we should still try inpaint and use
-  // Photo 3 to reference the prop.
-  const bodyInFrame = (poseAnalysis?.body_in_frame || '').toLowerCase();
-  const isCloseUp = !!(bodyInFrame && (
-    bodyInFrame.includes('face') || bodyInFrame.includes('head') ||
-    bodyInFrame.includes('close') || bodyInFrame.includes('mouth') ||
-    (!bodyInFrame.includes('torso') && !bodyInFrame.includes('chest') &&
-     !bodyInFrame.includes('body') && !bodyInFrame.includes('full') &&
-     !bodyInFrame.includes('waist') && !bodyInFrame.includes('shoulder'))
-  ));
-
-  let compositeBackgroundImg = frameImg; // default: original frame
-  if (hasFrame && !isCloseUp) {
-    const inpaintBody = JSON.stringify({
-      systemInstruction: {
-        parts: [{ text: `You are a photo inpainting expert. Your ONLY job is to remove the person from this photo and fill the space naturally with the surrounding background.
-
-RULES:
-1. Identify the person in the image (any human body — face, torso, arms, legs, hands).
-2. Remove them completely. Every pixel of skin, clothing, or body part must be gone.
-3. Fill the space they occupied with a natural, seamless continuation of the background — walls, shelves, counters, furniture, floor, whatever is visible around them.
-4. Do NOT add any new people or objects.
-5. Preserve ALL other elements of the image exactly as they are.
-6. The output should look like a photograph taken in the same room with nobody in it.` }],
-      },
-      contents: [{ role: 'user', parts: [
-        { text: 'Remove the person from this photo and fill the background naturally:' },
-        { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
-        { text: 'Output: the same scene with the person completely removed and the background filled in seamlessly. No person should remain anywhere in the image.' },
-      ]}],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.1 },
-    });
-
-    const inpaintPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-    let inpaintResult;
-    try {
-      inpaintResult = await httpsRequest({
-        hostname: `${LOCATION}-aiplatform.googleapis.com`,
-        path:     inpaintPath,
-        method:   'POST',
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Content-Type':   'application/json',
-          'Content-Length': Buffer.byteLength(inpaintBody),
-        },
-      }, inpaintBody);
-    } catch(e) {
-      console.warn('generate-nb-composite: Stage 2 inpaint fetch error:', e.message, '— falling back to original frame');
-    }
-
-    if (inpaintResult) {
-      if (inpaintResult.status === 429) {
-        // Rate-limited on inpaint — return 429 so client retries the whole request
-        return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit (inpaint stage). Please wait and retry.' }) };
-      }
-      const inpaintCandidates = inpaintResult.data?.candidates || [];
-      let inpaintImage = null;
-      for (const c of inpaintCandidates) {
-        for (const p of (c?.content?.parts || [])) {
-          if (p.inlineData?.data) { inpaintImage = p.inlineData; break; }
-        }
-        if (inpaintImage) break;
-      }
-      if (inpaintImage) {
-        compositeBackgroundImg = { b64: inpaintImage.data, mime: inpaintImage.mimeType || 'image/png' };
-        console.log('generate-nb-composite: Stage 2 inpaint success — clean background ready');
-      } else {
-        console.warn('generate-nb-composite: Stage 2 inpaint returned no image — falling back to original frame');
-      }
-    }
-  }
-
-  if (hasFrame && isCloseUp) {
-    console.log('generate-nb-composite: Stage 2 inpaint SKIPPED — close-up detected:', bodyInFrame, '— using single-stage composite');
-  }
-
-  // ── Stage 3: Composite generation ────────────────────────────────────────────
-  // Now Photo 2 is a CLEAN background (person already removed).
-  // The model's only job is to place the Photo 1 avatar naturally into the scene.
-  // This is dramatically simpler than simultaneous replace — ghosting is impossible
-  // because there is no longer a second person in the background image.
-  const inpaintSucceeded = hasFrame && compositeBackgroundImg !== frameImg;
-
-  const cleanBgNote = inpaintSucceeded
-    ? 'IMPORTANT: Photo 2 is a CLEAN background — the original person has been removed. Photo 3 is the ORIGINAL scene — use it ONLY to identify the exact product/prop the person was holding and reproduce it faithfully in the avatar\'s hand. Do NOT copy the person from Photo 3.'
-    : 'Photo 2 = Scene reference frame (background/composition to match).';
-
+  // ── Stage 2: Composite generation (single-stage, original frame as reference) ─
+  // Photo 2 is always the original scene frame — never inpainted. The pose analysis
+  // block (LOCK / ARM / PROP STATE format) gives the model explicit text instructions
+  // so it knows exactly what to preserve vs. replace without needing a clean background.
   const photo_guide = hasFrame
-    ? cleanBgNote
+    ? 'Photo 1 = your avatar (person to composite). Photo 2 = Scene reference frame (background/composition to match).'
     : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
 
-  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, background replacement, wrong background';
+  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, disembodied arms, extra hands, ghost limbs, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
   const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
   const negLine = `\n\nAVOID IN OUTPUT: ${allNegatives}`;
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
 
   const parts = [];
-  parts.push({ text: 'Photo 1 (avatar — the person to place into the scene):' });
+  parts.push({ text: 'Photo 1 (avatar — the person to composite):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    parts.push({ text: 'Photo 2 (clean background — person already removed, ready for avatar placement):' });
-    parts.push({ inlineData: { mimeType: compositeBackgroundImg.mime, data: compositeBackgroundImg.b64 } });
-    if (inpaintSucceeded) {
-      // Send original frame as Photo 3 for prop/product reference only
-      parts.push({ text: 'Photo 3 (original scene — reference ONLY for the product/prop being held; do NOT copy the person from this photo):' });
-      parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
-    }
+    parts.push({ text: 'Photo 2 (scene reference frame — background and composition to match):' });
+    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
   parts.push({ text: fullPrompt });
 
-  const systemRules = hasFrame && compositeBackgroundImg !== frameImg
-    ? `You are a professional photo compositor. Your task is PERSON PLACEMENT — not person replacement.
+  const systemRules = hasFrame
+    ? `You are a professional photo compositor. Your task is PERSON REPLACEMENT.
 
-Photo 2 is a CLEAN background with NO person in it. The scene is empty, ready to receive the avatar.
-Photo 3 is the ORIGINAL scene (before the person was removed) — use it ONLY to identify the exact product or prop the person was holding. Copy that product exactly into the avatar's hand. Do NOT copy the person from Photo 3 into the output.
+Photo 1 = the avatar (replacement person — face, body, clothing, accessories).
+Photo 2 = the scene reference frame (background, props, lighting, composition to preserve).
 
 MANDATORY RULES:
-1. PLACE: Insert the Photo 1 avatar naturally into the Photo 2 scene at the same position and scale as the person in Photo 3.
-2. POSE MATCH: The avatar's arms, hands, and body MUST match the pose described in the [POSE GROUND TRUTH] block. Arms NEVER default to sides.
-3. PROP MATCH: Look at Photo 3 — identify the exact product/object the person is holding. The avatar MUST hold that same product in the same hand, same position, same orientation. Copy the label, shape, and color of the product faithfully from Photo 3.
-4. BACKGROUND LOCK: The Photo 2 background must be preserved exactly — same lighting, colors, objects, walls, everything.
-5. NO TEXT TRANSFER: Do NOT reproduce any text, labels, or overlays from Photo 2 or Photo 3 — EXCEPT text that is physically ON the product label itself (that is part of the product).
-6. ONE PERSON: Only the Photo 1 avatar appears in the output. No other people.
-7. NATURAL INTEGRATION: The avatar should look naturally lit — match the lighting direction and color temperature from Photo 2.`
-    : `You are a professional photo compositor performing a PERSON REPLACEMENT task.
-
-TASK: Completely replace the person in Photo 2 with the person from Photo 1.
-
-MANDATORY RULES — follow every one without exception:
-1. COMPLETE REMOVAL: The Photo 2 person must be 100% erased from the output. Scan every pixel — if you see any trace of the original person (face, body, hair, hands, clothing), erase it. No ghosting, no transparency, no double exposure, no blending of the two people.
-2. FULL REPLACEMENT: Paint the Photo 1 person into the exact position, scale, and pose where the Photo 2 person stood.
-3. POSE MATCH: The Photo 1 person's arms, hands, and body MUST exactly match the pose shown in Photo 2. If arms are raised or extended, they MUST be raised or extended in the output. Arms NEVER default to sides.
-4. PROP MATCH: If the Photo 2 person holds an object, the Photo 1 person MUST hold that same object in the same hand at the same position and orientation.
-5. BACKGROUND LOCK: ALL background elements from Photo 2 — walls, shelves, furniture, props, lighting, colors — must be preserved exactly. The background comes ONLY from Photo 2, never from Photo 1.
-6. NO TEXT TRANSFER: Do NOT reproduce any text, labels, overlays, numbers, or graphical elements from Photo 2 in the output.
-7. ONE PERSON ONLY: The output contains exactly one visible person — the Photo 1 avatar. If any other person is visible anywhere in the image, you have failed this task.
-8. NO BLENDING: Do NOT blend or average the two people together. This is a hard cut replacement, not a morph or blend.`;
+1. BACKGROUND LOCK: Preserve ALL background elements from Photo 2 exactly — walls, shelves, furniture, objects, colors, flags, windows, lighting. The background comes ONLY from Photo 2, never from Photo 1.
+2. REPLACE PERSON: Remove the person in Photo 2 completely and paint in the Photo 1 avatar at the same position and scale. No ghosting, no blending, no transparency.
+3. FOLLOW LOCK INSTRUCTIONS: The instruction contains explicit LOCK, ARM, PROP STATE, and LIGHT directives extracted from the scene. Follow each one exactly.
+4. PROP: If the PROP or PROP STATE lines describe an object being held, the avatar MUST hold that same object in the same hand at the same position and orientation.
+5. ONE PERSON ONLY: Only the Photo 1 avatar in the output. No other people, no floating hands, no ghost limbs.
+6. LIGHTING: Match the avatar's lighting to Photo 2's scene exactly.`
+    : `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
 
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: systemRules }] },
@@ -479,7 +353,7 @@ MANDATORY RULES — follow every one without exception:
 
   const apiPath  = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname = `${LOCATION}-aiplatform.googleapis.com`;
-  const mode     = hasFrame ? 'composite' : 'generate-only';
+  const mode = hasFrame ? (poseAnalysis ? 'composite+analysis' : 'composite') : 'generate-only';
 
   console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, promptLen=${fullPrompt.length}`);
 
