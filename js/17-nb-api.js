@@ -105,55 +105,39 @@
     var _segAction = (seg.action || '').trim();
 
     if (hasFrame) {
-      // ── Compositing mode — NB Pro structured format ──────────────────────────
-      // Mirrors the labeled-section format used by NanaBanana Pro in Flow.
-      // Avatar = SUBJECT reference (Imagen 3 identity lock).
-      // Frame  = STYLE reference (background environment/lighting).
-      var _hfParts = [];
+      // ── Compositing mode ──────────────────────────────────────────────────────
+      // The NB prompt JSON's `instruction` field (_nbCore) is a complete NB Pro
+      // instruction in Flow format (REPLACE / LOCK / ARM / PROP STATE / HAIR LOCK /
+      // GENDER LOCK / TRANSFER BLOCK / LIGHTING MATCH). Use it directly.
+      // Do NOT wrap it in another instruction layer — that causes every section to
+      // appear twice, which confuses the model and produces wrong results.
 
-      // [FULL PERSON] header + REPLACE with spatial anchoring
-      _hfParts.push('[FULL PERSON] REPLACE: avatar person — same position, scale, and vertical height as the original person in the reference frame (STYLE image). The avatar\'s torso and head must be at the same height relative to any table or surface as the original person.');
-
-      // Camera angle
-      _hfParts.push('Camera angle: straight-on, chest height.');
-
-      // LOCK: background from the STYLE reference frame
-      var _lockLine = 'LOCK: background — use the environment, room, props, and lighting from the STYLE reference image exactly as-is.';
-      if (_nbVisualDesc) _lockLine += ' Scene: ' + _nbVisualDesc + '.';
-      if (_nbSetting)    _lockLine += ' Setting: ' + _nbSetting + '.';
-      if (_nbBgRef)      _lockLine += ' ' + _nbBgRef + '.';
-      _lockLine += ' Do NOT alter, move, or add any background elements. Do NOT generate the original person from the reference frame.';
-      _hfParts.push(_lockLine);
-
-      // ARM + POSE LOCK + PROP STATE — from seg.action (hand/holding specifics)
-      if (_segAction) {
-        _hfParts.push('ARM: ' + _segAction + '.');
-        _hfParts.push('POSE LOCK: Study the exact arm and hand POSITION in Photo 2. The avatar\'s arms must be at the exact same height, angle, and reach as the person in Photo 2 — same elbow bend, same wrist orientation, same arm extension. If Photo 2 shows an arm raised or extended outward, the avatar\'s arm must be raised or extended in that exact same way. Do NOT default to a neutral resting position or arms-at-sides if Photo 2 shows the arms in any other position.');
-        _hfParts.push('PROP STATE: The prop must appear in the avatar\'s hand at the exact position, scale, and orientation shown in Photo 2 — same hand, same grip, same distance from body.');
+      if (_nbCore) {
+        // Complete Flow-format instruction: use as-is.
+        instruction = _nbCore;
+      } else {
+        // No instruction field — build minimal fallback from the other NB prompt fields.
+        var _hfParts = [];
+        _hfParts.push('[FULL PERSON] REPLACE: target person — match position and scale from Photo 2. Camera angle: straight-on, chest height.');
+        var _lockLine = 'LOCK: background — preserve the environment, props, and lighting from Photo 2 exactly.';
+        if (_nbVisualDesc) _lockLine += ' Scene: ' + _nbVisualDesc + '.';
+        if (_nbSetting)    _lockLine += ' Setting: ' + _nbSetting + '.';
+        if (_nbBgRef)      _lockLine += ' ' + _nbBgRef + '.';
+        _hfParts.push(_lockLine);
+        if (_segAction) {
+          _hfParts.push('ARM: ' + _segAction + '.');
+          _hfParts.push('POSE LOCK: Match the arm height, angle, and reach from Photo 2 exactly — do NOT default to arms at sides.');
+          _hfParts.push('PROP STATE: Prop must be in avatar\'s hand at exact position shown in Photo 2.');
+        }
+        _hfParts.push('LIGHT: ' + (_nbStyle || 'warm ambient') + '. Match Photo 2 lighting exactly.');
+        if (_avatarDesc) _hfParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. Do NOT copy hair or features from Photo 2 person.');
+        _hfParts.push('GENDER LOCK: Match Photo 1 person\'s gender, age, and ethnicity exactly. Do NOT change under any circumstances.');
+        _hfParts.push('TRANSFER BLOCK: No text, logos, labels, or graphical overlays from Photo 2 in the output.');
+        _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
+        if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
+        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single photorealistic image. ONE person only.');
+        instruction = _hfParts.join(' ');
       }
-
-      // LIGHT
-      _hfParts.push('LIGHT: ' + (_nbStyle || 'warm ambient') + '. Match the color temperature, direction, and shadow quality of the reference frame exactly.');
-
-      // HAIR LOCK — avatar description + explicit warning
-      if (_avatarDesc) {
-        _hfParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. The reference frame may contain a person with different hair, skin tone, or features — DO NOT apply any of those attributes to the avatar under any circumstances.');
-      }
-
-      // Outfit from NB prompt core instruction (already contains clothing/accessory detail)
-      if (_nbCore) _hfParts.push(_nbCore);
-
-      // Standard locks (always included)
-      _hfParts.push('CRITICAL: Do NOT copy or add any hair accessories, headbands, hats, clips, bows, or wearable items from the reference frame person that are NOT in the avatar profile. The avatar wears ONLY the items described — nothing extra from the reference.');
-      _hfParts.push('GENDER LOCK: The avatar must match the exact gender, approximate age, and ethnicity of the person in the SUBJECT reference. Do NOT change the avatar\'s gender, age, or ethnicity — even if the reference frame contains a person of a different gender.');
-      _hfParts.push('TRANSFER BLOCK: Do NOT copy any text, numbers, dates, labels, logos, or graphical overlays from the reference frame into the output. Do NOT copy any props or accessories from the reference frame person unless explicitly described in the ARM section.');
-      _hfParts.push('LIGHTING MATCH: Adjust the avatar\'s lighting to exactly match the color temperature, direction, and shadow quality of the reference frame — no generic studio lighting.');
-
-      // Expression + framing
-      if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
-      _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single photorealistic image. ONE person only. No text overlays, no watermarks.');
-
-      instruction = _hfParts.join(' ');
 
     } else {
       // ── Generate mode — NB Pro structured format ─────────────────────────────
