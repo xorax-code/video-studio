@@ -109,49 +109,80 @@
       instruction = 'Photo 1 is the creator/avatar. ' + (_nbInstr || 'Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression. Medium close-up, warm natural light. No text, no watermarks.');
     }
 
-    try {
-      var res = await fetch('/.netlify/functions/generate-nb-composite', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({
-          instruction,
-          avatarB64:  avatarParts.b64,
-          avatarMime: avatarParts.mime,
-          frameB64,
-          frameMime,
-        }),
-      });
+    // ── Request with 429 retry-backoff ───────────────────────────────────────
+    // Vertex AI image generation has a tight QPM quota (~5/min).
+    // On 429 "Resource exhausted" we wait and retry up to 3 times.
+    var _NB_MAX_RETRIES = 3;
+    var _NB_RETRY_BASE  = 30000; // 30s initial wait; doubles each retry
 
-      var data;
-      try { data = await res.json(); } catch(_) { data = {}; }
+    for (var _attempt = 0; _attempt <= _NB_MAX_RETRIES; _attempt++) {
+      try {
+        var res = await fetch('/.netlify/functions/generate-nb-composite', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body: JSON.stringify({
+            instruction,
+            avatarB64:  avatarParts.b64,
+            avatarMime: avatarParts.mime,
+            frameB64,
+            frameMime,
+          }),
+        });
 
-      if (!res.ok || data.error) {
-        var msg = data.error || ('HTTP ' + res.status);
-        console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed — HTTP ' + res.status + ' | Error:', msg, '| Full response:', JSON.stringify(data));
-        showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
+        var data;
+        try { data = await res.json(); } catch(_) { data = {}; }
+
+        // 429 = Vertex AI rate limit — wait and retry
+        if (res.status === 429) {
+          if (_attempt < _NB_MAX_RETRIES) {
+            var _waitMs = _NB_RETRY_BASE * Math.pow(2, _attempt);
+            var _waitSec = Math.round(_waitMs / 1000);
+            console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' — 429 rate limit, waiting ' + _waitSec + 's before retry ' + (_attempt + 1) + '/' + _NB_MAX_RETRIES);
+            showToast('Scene ' + (segIdx + 1) + ': Vertex AI rate limit — retrying in ' + _waitSec + 's…', 'warning', _waitMs);
+            await new Promise(function(r) { setTimeout(r, _waitMs); });
+            continue; // retry
+          }
+          // Exhausted retries
+          var _rateMsg = (data && data.error) || 'Vertex AI rate limit exceeded. Try again in a minute.';
+          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — 429 after ' + _NB_MAX_RETRIES + ' retries:', _rateMsg);
+          showToast('NB gen failed (Scene ' + (segIdx + 1) + '): rate limit — try again in ~1 min.', 'error', 12000);
+          return false;
+        }
+
+        if (!res.ok || data.error) {
+          var msg = data.error || ('HTTP ' + res.status);
+          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed — HTTP ' + res.status + ' | Error:', msg, '| Full response:', JSON.stringify(data));
+          showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
+          return false;
+        }
+
+        if (!data.imageB64) {
+          var noImgMsg = data.error || data.message || 'No image returned (safety filter or bad response)';
+          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image in response. Full response:', JSON.stringify(data));
+          showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
+          return false;
+        }
+
+        // Store composite in segment
+        segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+        segments[segIdx].nbApproved = null; // reset approval — needs re-review
+
+        saveSegments();
+        if (typeof renderSegments === 'function') renderSegments();
+
+        return true;
+
+      } catch(e) {
+        if (_attempt < _NB_MAX_RETRIES) {
+          console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' fetch error, retrying:', e.message);
+          await new Promise(function(r) { setTimeout(r, 5000); });
+          continue;
+        }
+        showToast('NB gen error (Scene ' + (segIdx + 1) + '): ' + (e.message || e), 'error', 6000);
         return false;
       }
-
-      if (!data.imageB64) {
-        var noImgMsg = data.error || data.message || 'No image returned (safety filter or bad response)';
-        console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image in response. Full response:', JSON.stringify(data));
-        showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
-        return false;
-      }
-
-      // Store composite in segment
-      segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
-      segments[segIdx].nbApproved = null; // reset approval — needs re-review
-
-      saveSegments();
-      if (typeof renderSegments === 'function') renderSegments();
-
-      return true;
-
-    } catch(e) {
-      showToast('NB gen error (Scene ' + (segIdx + 1) + '): ' + (e.message || e), 'error', 6000);
-      return false;
     }
+    return false;
   }
   window.generateNbComposite = generateNbComposite;
 
@@ -185,8 +216,9 @@
       var ok = await generateNbComposite(segIdx);
       if (ok) succeeded++; else failed++;
 
-      // Small delay between requests to avoid rate limiting
-      if (i < n - 1) await new Promise(function(r) { setTimeout(r, 1200); });
+      // Delay between requests — Vertex AI image generation quota is ~5 QPM.
+      // 15s spacing keeps us well under the limit regardless of generation time.
+      if (i < n - 1) await new Promise(function(r) { setTimeout(r, 15000); });
     }
 
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }

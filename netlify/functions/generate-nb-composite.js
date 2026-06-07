@@ -185,24 +185,37 @@ Output a single vertical 9:16 lifestyle photograph. No text overlays.`.trim();
   console.log(`generate-nb-composite: user=${user.id}, images=${images.length}, instrLen=${instruction.length}`);
   console.log(`generate-nb-composite: Vertex AI → ${hostname}${apiPath}`);
 
-  let result;
-  try {
-    result = await httpsRequest({
-      hostname,
-      path:   apiPath,
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(requestBody),
-      },
-    }, requestBody);
-  } catch(e) {
-    console.error('generate-nb-composite: fetch error:', e.message);
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
-  }
+  // ── Vertex AI call with one server-side retry on 429 ──────────────────────
+  // Function timeout is 26s; one 12s sleep + two fast calls fits comfortably.
+  const _vertexOptions = {
+    hostname,
+    path:   apiPath,
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type':   'application/json',
+      'Content-Length': Buffer.byteLength(requestBody),
+    },
+  };
 
-  console.log('generate-nb-composite: Vertex AI status:', result.status);
+  let result;
+  for (let _attempt = 0; _attempt <= 1; _attempt++) {
+    try {
+      result = await httpsRequest(_vertexOptions, requestBody);
+    } catch(e) {
+      console.error('generate-nb-composite: fetch error:', e.message);
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
+    }
+
+    console.log(`generate-nb-composite: Vertex AI status (attempt ${_attempt + 1}):`, result.status);
+
+    if (result.status === 429 && _attempt === 0) {
+      console.warn('generate-nb-composite: 429 rate limit — sleeping 12s before retry');
+      await new Promise(r => setTimeout(r, 12000));
+      continue;
+    }
+    break;
+  }
 
   if (!result.data) {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status }) };
