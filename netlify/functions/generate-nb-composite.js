@@ -211,7 +211,7 @@ function buildPoseBlock(pa) {
   const lines = [];
   if (pa.person_position) lines.push(`[FULL PERSON] REPLACE: target person — ${pa.person_position}. Camera angle: ${pa.camera_angle || 'straight-on'}.`);
   if (pa.background)      lines.push(`LOCK: background — ${pa.background}.`);
-  if (pa.arm_instruction) lines.push(`ARM: ${pa.arm_instruction}.`);
+  if (pa.arm_instruction) lines.push(`REPOSE ARMS (override Photo 1 pose): ${pa.arm_instruction}. Arms must NOT be at sides.`);
   if (pa.prop && pa.prop !== 'none') lines.push(`PROP: ${pa.prop}.`);
   if (pa.prop_state && pa.prop_state !== 'none') lines.push(`PROP STATE: ${pa.prop_state}.`);
   if (pa.lighting)        lines.push(`LIGHT: ${pa.lighting}.`);
@@ -382,10 +382,11 @@ Photo 3 = ORIGINAL SCENE — reference only for how large/close the subject was 
 MANDATORY RULES:
 1. BACKGROUND: Use Photo 2 as the entire background. Preserve every wall, shelf, flag, window, and the floating prop exactly as-is. Never use Photo 1's background.
 2. SCALE: Match the subject's scale and camera distance from Photo 3. If Photo 3 shows a medium-close shot where the person fills most of the frame height, the avatar must appear at the same scale and distance — not smaller.
-3. PLACE AVATAR: Insert the Photo 1 avatar at the same position as the person in Photo 3, so that her hand(s) naturally reach the floating prop in Photo 2.
-4. GRIP THE PROP: The prop/product already floating in Photo 2 is the real object — do NOT redraw or replace it. Render the avatar's hand(s) gripping it naturally. The prop stays exactly where it is; only the hand wraps around it.
-5. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands disconnected from her body.
-6. LIGHTING: Match Photo 2's scene lighting exactly.`;
+3. PLACE AVATAR: Insert the Photo 1 avatar at the same position as the person in Photo 3.
+4. REPOSE ARMS — CRITICAL: Do NOT keep the avatar's natural arm/hand position from Photo 1. Her arms must be repositioned to grip the floating prop in Photo 2. Read the ARM instruction in the user prompt — that describes exactly how her arms must be raised and positioned. This is a pose override, not optional.
+5. GRIP THE PROP: The prop/product already floating in Photo 2 is the real object — do NOT redraw or replace it. Render the avatar's hand(s) gripping it naturally where it floats. The prop stays exactly where it is; only the hands wrap around it.
+6. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands disconnected from her body.
+7. LIGHTING: Match Photo 2's scene lighting exactly.`;
   } else {
     // 2-photo fallback mode (inpaint failed): avatar | original frame
     // Can't pretend Photo 2 is clean — it's not. Use it as scene reference only.
@@ -399,9 +400,10 @@ MANDATORY RULES:
 1. BACKGROUND: Preserve Photo 2's background exactly — walls, shelves, objects, colors, flags, windows. Never use Photo 1's background.
 2. SCALE: The avatar must appear at the same size and camera distance as the person in Photo 2. Match their scale exactly — not smaller, not farther away.
 3. REPLACE PERSON: Remove the person in Photo 2 completely. Place the Photo 1 avatar at the same position and scale.
-4. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object at the same position. Her hands must be physically connected to her body gripping the prop — no floating hands.
-5. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting of the original person, no floating limbs.
-6. LIGHTING: Match Photo 2's scene lighting.`;
+4. REPOSE ARMS — CRITICAL: Do NOT keep the avatar's natural arm/hand position from Photo 1. Read the REPOSE ARMS instruction in the user prompt — her arms must be repositioned exactly as described. This is mandatory.
+5. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object. Her hands must grip it naturally — connected to her body, not floating.
+6. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting, no floating limbs.
+7. LIGHTING: Match Photo 2's scene lighting.`;
   }
 
   const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, severed hands, hands not connected to body, disembodied arms, extra hands, ghost limbs, hands copied from reference photo, arms at sides when they should be raised, arms hanging down, subject too small, subject far away, wide shot when original was medium-close, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
