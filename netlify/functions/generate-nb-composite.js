@@ -196,7 +196,7 @@ Return ONLY a valid JSON object with these exact fields (no markdown, no explana
     // Strip any markdown fences in case responseMimeType hint was ignored
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const parsed = JSON.parse(cleaned);
-    console.log('analyzeFramePose: OK — prop:', parsed.prop, '| right_arm:', parsed.right_arm);
+    console.log('analyzeFramePose: OK — prop:', parsed.prop, '| arm:', parsed.arm_instruction);
     return parsed;
   } catch (e) {
     console.warn('analyzeFramePose: JSON parse failed. Raw:', raw.slice(0, 300));
@@ -310,8 +310,8 @@ exports.handler = async (event) => {
   // block (LOCK / ARM / PROP STATE format) gives the model explicit text instructions
   // so it knows exactly what to preserve vs. replace without needing a clean background.
   const photo_guide = hasFrame
-    ? 'Photo 1 = your avatar (person to composite). Photo 2 = Scene reference frame (background/composition to match).'
-    : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
+    ? 'Photo 1 = Scene reference frame (the base image — background and composition to preserve). Photo 2 = Avatar (the replacement person — face, body, clothing, accessories to use).'
+    : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 2'}.`;
 
   const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, disembodied arms, extra hands, ghost limbs, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
   const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
@@ -319,28 +319,30 @@ exports.handler = async (event) => {
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
 
   const parts = [];
-  parts.push({ text: 'Photo 1 (avatar — the person to composite):' });
-  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame) {
-    parts.push({ text: 'Photo 2 (scene reference frame — background and composition to match):' });
+    // Scene frame is Photo 1 — model treats the first image as the base to modify
+    parts.push({ text: 'Photo 1 (scene reference frame — base image, background and composition to preserve):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
+  // Avatar is Photo 2 — replacement person reference
+  parts.push({ text: 'Photo 2 (avatar — the replacement person):' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
 
   const systemRules = hasFrame
     ? `You are a professional photo compositor. Your task is PERSON REPLACEMENT.
 
-Photo 1 = the avatar (replacement person — face, body, clothing, accessories).
-Photo 2 = the scene reference frame (background, props, lighting, composition to preserve).
+Photo 1 = the scene reference frame. This is the BASE IMAGE. Start from Photo 1 and modify it.
+Photo 2 = the avatar (replacement person — face, body, clothing, accessories).
 
 MANDATORY RULES:
-1. BACKGROUND LOCK: Preserve ALL background elements from Photo 2 exactly — walls, shelves, furniture, objects, colors, flags, windows, lighting. The background comes ONLY from Photo 2, never from Photo 1.
-2. REPLACE PERSON: Remove the person in Photo 2 completely and paint in the Photo 1 avatar at the same position and scale. No ghosting, no blending, no transparency.
-3. FOLLOW LOCK INSTRUCTIONS: The instruction contains explicit LOCK, ARM, PROP STATE, and LIGHT directives extracted from the scene. Follow each one exactly.
-4. PROP: If the PROP or PROP STATE lines describe an object being held, the avatar MUST hold that same object in the same hand at the same position and orientation.
-5. ONE PERSON ONLY: Only the Photo 1 avatar in the output. No other people, no floating hands, no ghost limbs.
-6. LIGHTING: Match the avatar's lighting to Photo 2's scene exactly.`
-    : `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
+1. BASE IMAGE: Photo 1 is the starting point. Its background — walls, shelves, furniture, objects, colors, flags, windows, lighting — must be preserved exactly in the output. Do NOT use Photo 2's background.
+2. REPLACE PERSON: Remove the person in Photo 1 completely. Replace them with the Photo 2 avatar at the same position, scale, and pose. No ghosting, no blending, no transparency of the original person.
+3. FOLLOW LOCK INSTRUCTIONS: The instruction contains explicit LOCK, ARM, PROP STATE, and LIGHT directives. Follow each one exactly.
+4. PROP: If PROP or PROP STATE describes an object being held, the avatar MUST hold that same object in the same hand at the same position and orientation as the original person in Photo 1.
+5. ONE PERSON ONLY: Only the Photo 2 avatar in the output. No other people, no floating hands, no ghost limbs.
+6. LIGHTING: Light the avatar to match Photo 1's scene lighting exactly.`
+    : `Generate a photorealistic portrait of the person in Photo 2 as described in the instruction.`;
 
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: systemRules }] },
