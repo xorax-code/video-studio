@@ -186,7 +186,7 @@
 
   var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay completely unchanged; if multiple reference photos are mentioned, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
 
-  var _FS_VID_SYS = 'You are a Veo 3 video prompt engineer. Rewrite the user\'s casual description into a precise clip prompt. Return ONLY: {"action":"<precise physical movement and camera description, under 60 words>","speech":"<exact spoken words, or empty string if none>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, blurry"}';
+  var _FS_VID_SYS = 'You are a Veo 3 video prompt engineer. Rewrite the user\'s casual description into a precise single-scene clip prompt. STRICT RULES: (1) The clip is ONE continuous shot — no cuts, no transitions, no scene changes, no "then", no phases, no "first...then", no "as...". (2) Describe only what is physically happening in a single moment or sustained action. (3) The action field must be one unbroken sentence of movement and camera description, under 60 words. Return ONLY: {"action":"<single continuous movement and camera, under 60 words, no transitions>","speech":"<exact spoken words, or empty string if none>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, multiple scenes, blurry"}';
 
   // ── Status helper ──────────────────────────────────────────────────────────
   function _fsStatus(elId, text, color) {
@@ -217,9 +217,51 @@
           + '<button onclick="useFsImgResultAsRef(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:5px;color:#fb923c;cursor:pointer;" title="Use as new reference">→ Ref</button>'
         + '</div>';
       var imgEl = card.querySelector('img');
-      if (imgEl) imgEl.addEventListener('click', function() { useFsImgResultAsRef(idx); });
+      if (imgEl) imgEl.addEventListener('click', (function(url) { return function() { _fsOpenLightbox(url); }; })(item.dataUrl));
       strip.appendChild(card);
     });
+  }
+
+  // ── Image lightbox ─────────────────────────────────────────────────────────
+  function _fsOpenLightbox(dataUrl) {
+    var existing = document.getElementById('fsImgLightbox');
+    if (existing) existing.remove();
+
+    var modal = document.createElement('div');
+    modal.id = 'fsImgLightbox';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.92);display:flex;align-items:center;justify-content:center;padding:16px;cursor:zoom-out;';
+
+    var inner = document.createElement('div');
+    inner.style.cssText = 'position:relative;max-width:min(480px, 90vw);max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:10px;';
+
+    var img = document.createElement('img');
+    img.src = dataUrl;
+    img.style.cssText = 'max-width:100%;max-height:80vh;object-fit:contain;border-radius:12px;display:block;box-shadow:0 8px 40px rgba(0,0,0,0.6);';
+    img.onclick = function(e) { e.stopPropagation(); };
+
+    var closeBtn = document.createElement('button');
+    closeBtn.textContent = '✕';
+    closeBtn.style.cssText = 'position:absolute;top:-14px;right:-14px;width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+    closeBtn.onclick = function(e) { e.stopPropagation(); modal.remove(); };
+
+    var actions = document.createElement('div');
+    actions.style.cssText = 'display:flex;gap:8px;';
+    actions.innerHTML =
+      '<button onclick="(function(){var a=document.createElement(\'a\');a.href=\'' + dataUrl + '\';a.download=\'studio-result.png\';a.click();})()" '
+        + 'style="padding:8px 20px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.45);border-radius:8px;color:#34d399;cursor:pointer;">⬇ Download</button>';
+    actions.onclick = function(e) { e.stopPropagation(); };
+
+    inner.appendChild(closeBtn);
+    inner.appendChild(img);
+    inner.appendChild(actions);
+    modal.appendChild(inner);
+    modal.addEventListener('click', function() { modal.remove(); });
+
+    // Close on Escape
+    function onKey(e) { if (e.key === 'Escape') { modal.remove(); document.removeEventListener('keydown', onKey); } }
+    document.addEventListener('keydown', onKey);
+
+    document.body.appendChild(modal);
   }
 
   // ── Render video results strip ─────────────────────────────────────────────
@@ -367,7 +409,7 @@
 
     var btn     = document.getElementById('fsBtnGenImg');
     var spinner = document.getElementById('fsImgSpinner');
-    if (btn)    { btn.disabled = true; btn.textContent = 'Working…'; }
+    if (btn)    { btn.disabled = true; btn.textContent = 'Generating 3…'; }
     if (spinner) spinner.style.display = 'flex';
 
     try {
@@ -382,7 +424,7 @@
         instruction = JSON.parse(raw).instruction || casual;
       } catch(_) {}
 
-      _fsStatus('fsImgStatusTxt', '✦ Generating image…', 'rgba(52,211,153,0.9)');
+      _fsStatus('fsImgStatusTxt', '✦ Generating 3 variations…', 'rgba(52,211,153,0.9)');
 
       var images = [];
       for (var i = 0; i < loaded.length; i++) {
@@ -391,28 +433,43 @@
         images.push({ b64: compressed.slice(comma + 1), mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg' });
       }
 
-      var res = await fetch('/.netlify/functions/generate-nb-composite', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ instruction: instruction, images: images, creative: true }),
+      var payload = JSON.stringify({ instruction: instruction, images: images, creative: true });
+
+      function _doFetch() {
+        return fetch('/.netlify/functions/generate-nb-composite', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body: payload,
+        }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+          .catch(function(e) { return { ok: false, data: { error: e.message } }; });
+      }
+
+      var results = await Promise.all([_doFetch(), _doFetch(), _doFetch()]);
+
+      var newItems = [];
+      var errors   = [];
+      results.forEach(function(r) {
+        if (r.ok && r.data && r.data.imageB64) {
+          newItems.push({ dataUrl: 'data:' + (r.data.mime || 'image/png') + ';base64,' + r.data.imageB64, id: Date.now() + Math.random() });
+        } else {
+          errors.push(r.data && r.data.error ? r.data.error : 'No image returned');
+        }
       });
-      var data; try { data = await res.json(); } catch(_) { data = {}; }
-      if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
-      if (!data.imageB64) throw new Error('No image returned — try rephrasing your prompt.');
 
-      var dataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      if (!newItems.length) throw new Error(errors[0] || 'All 3 variations failed — try rephrasing your prompt.');
 
-      // Add to history (newest first), cap at max
-      _fsImgHistory.unshift({ dataUrl: dataUrl, id: Date.now() });
+      // Add to history newest-first, cap at max
+      newItems.reverse().forEach(function(item) { _fsImgHistory.unshift(item); });
       if (_fsImgHistory.length > _MAX_HISTORY) _fsImgHistory.length = _MAX_HISTORY;
       _renderImgStrip();
 
-      // Scroll the strip to show the newest result
+      // Scroll the strip to show the newest results
       var strip = document.getElementById('fsImgStrip');
       if (strip) strip.scrollLeft = 0;
 
       _fsStatus('fsImgStatusTxt', '', '');
-      if (typeof showToast === 'function') showToast('Image generated!', 'success', 3000);
+      var msg = newItems.length === 3 ? '3 variations generated!' : newItems.length + ' of 3 variations generated.';
+      if (typeof showToast === 'function') showToast(msg, 'success', 3000);
 
     } catch(e) {
       _fsStatus('fsImgStatusTxt', '', '');
