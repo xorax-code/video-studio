@@ -1,50 +1,42 @@
 /**
  * Netlify Function: generate-nb-composite
- * Generates a Nano Banana scene image using a two-stage hybrid pipeline.
  *
- * ── HYBRID PIPELINE (approximates Google Flow's NARWHAL model) ───────────────
+ * ── PIPELINE ─────────────────────────────────────────────────────────────────
  *
- * Stage 1 — Pose Analysis (gemini-2.0-flash-001, text only, ~1–2s)
- *   Sends the scene reference frame to a fast vision model and gets back a
- *   structured JSON description of: arm positions, hand grip, prop detail,
- *   elbow height, body placement, facing direction, and lighting.
- *   Uses a SEPARATE quota bucket from the image model — no quota competition.
- *   Fails gracefully: if analysis fails for any reason, Stage 2 runs as-is.
+ * Stage 1 — Pose Analysis  (gemini-2.0-flash-001, text-only, ~1–2s)
+ *   Analyzes the scene frame: arm positions, prop details, lighting, background.
+ *   Separate quota from the image model. Fails gracefully.
  *
- * Stage 2 — Composite Generation (gemini-2.5-flash-image, ~15–20s)
- *   The Stage 1 pose analysis is injected at the TOP of the NB Pro instruction
- *   as a [POSE GROUND TRUTH] block. The model now reads explicit text describing
- *   the exact pose BEFORE it sees the ARM section from the NB prompt — this is
- *   what NARWHAL does internally (vision pass → text map → render).
+ * Stage 2 — Imagen 3 Inpaint  (imagen-3.0-capability-001)
+ *   Uses EDIT_MODE_INPAINT_INSERTION with MASK_MODE_FOREGROUND:
+ *   - Imagen automatically detects and masks the person in the scene frame
+ *   - Replaces only the masked region with the avatar appearance + prop
+ *   - Background outside the mask is preserved pixel-perfectly
+ *   - No hand-crafted mask image required
  *
- *   Photo ordering matches Google Flow's Nano Banana 2 agent:
- *     Photo 1 (avatar)  → FIRST — the identity to composite
- *     Photo 2 (frame)   → SECOND — the background scene to preserve
+ * Why this works where gemini-2.5-flash-image didn't:
+ *   Imagen 3 is a dedicated editing model. The foreground mask constrains edits
+ *   to the person region only — background drift is structurally impossible.
+ *   The model doesn't need to "decide" what to keep vs change.
  *
  * Takes:
- *   - avatarB64      — base64 avatar photo (NanaBanana identity)
- *   - avatarMime     — MIME type of avatar (default: image/jpeg)
- *   - frameB64       — base64 source video frame (scene canvas)
- *   - frameMime      — MIME type of frame (default: image/jpeg)
+ *   - avatarB64      — base64 avatar photo (identity reference — appearance only)
+ *   - avatarMime     — MIME type of avatar
+ *   - frameB64       — base64 source video frame (scene to edit)
+ *   - frameMime      — MIME type of frame
  *   - instruction    — NB Pro generation instruction from 17-nb-api.js
- *   - avatarDesc     — text description of NanaBanana
+ *   - avatarDesc     — text description of the avatar's appearance
  *   - negativePrompt — things to avoid
  *
  * Returns: { imageB64, mime }
- *
- * Required env vars:
- *   GOOGLE_SERVICE_ACCOUNT_JSON  — full service account key JSON
- *   GOOGLE_CLOUD_PROJECT_ID      — your GCP project ID
- *   SUPABASE_URL                 — for auth
- *   SUPABASE_ANON                — for auth
  */
 
 const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION       = 'us-central1';
-const MODEL          = 'gemini-2.5-flash-image';  // Stage 2: image compositing
-const ANALYSIS_MODEL = 'gemini-2.0-flash-001';    // Stage 1: fast pose analysis (separate quota)
+const EDIT_MODEL     = 'imagen-3.0-capability-001';  // Stage 2: Imagen 3 edit
+const ANALYSIS_MODEL = 'gemini-2.0-flash-001';       // Stage 1: pose analysis
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -124,26 +116,18 @@ async function getAuthUser(jwt) {
 }
 
 // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
-// Sends the scene frame to a fast text-only vision model and returns a
-// structured pose description. This is what NARWHAL does internally before
-// rendering — we replicate it with a cheap separate API call.
-//
-// Uses gemini-2.0-flash-001 (separate DSQ quota from gemini-2.5-flash-image).
-// Returns null on any failure — caller falls back to original instruction.
 async function analyzeFramePose(frameImg, accessToken, projectId) {
   const prompt = `You are analyzing a video frame for professional photo compositing. A person is visible.
 Extract precise details in the exact format used by compositing software.
 
 Return ONLY a valid JSON object with these exact fields (no markdown, no explanation, raw JSON only):
 {
-  "person_position": "where the person stands in frame and how much they fill it — e.g. 'center, ~80% frame height' or 'center-left, waist-up'",
   "camera_angle": "shot description — e.g. 'straight-on chest height' or 'slightly below eye level, medium shot'",
   "background": "precise description of everything visible behind the person — room type, wall color/material, shelves, objects on shelves, furniture, window position, any flags, signs, or decor",
-  "arm_instruction": "single sentence describing both arms and hands for compositing — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports it from below' or 'both arms at sides, hands relaxed'",
+  "arm_instruction": "single sentence describing both arms and hands — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports it from below'",
   "prop": "if a prop/object is held: exact name, shape, size, color, which hand, how gripped, orientation toward camera. If none: 'none'",
-  "prop_state": "visible state of the prop — e.g. 'mouth model open, facing camera, showing teeth and tongue' or 'dark glass bottle with label facing camera'. If no prop: 'none'",
-  "lighting": "lighting description — e.g. 'warm ambient, soft shadows from above' or 'bright natural light from right window, cool tone'",
-  "body_in_frame": "simple tag for close-up detection only — e.g. 'torso up' or 'full body' or 'face only'"
+  "prop_state": "visible state of the prop — e.g. 'mouth model open, facing camera, showing teeth and tongue'. If no prop: 'none'",
+  "lighting": "lighting description — e.g. 'warm ambient, soft shadows from above'"
 }`;
 
   const reqBody = JSON.stringify({
@@ -156,16 +140,15 @@ Return ONLY a valid JSON object with these exact fields (no markdown, no explana
     }],
     generationConfig: {
       temperature: 0.1,
-      maxOutputTokens: 800,
-      responseMimeType: 'application/json', // forces valid JSON output, no markdown wrapping
+      maxOutputTokens: 600,
+      responseMimeType: 'application/json',
     },
   });
 
   const analysisPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${ANALYSIS_MODEL}:generateContent`;
 
-  let res;
   try {
-    res = await httpsRequest({
+    const res = await httpsRequest({
       hostname: `${LOCATION}-aiplatform.googleapis.com`,
       path:     analysisPath,
       method:   'POST',
@@ -175,48 +158,49 @@ Return ONLY a valid JSON object with these exact fields (no markdown, no explana
         'Content-Length': Buffer.byteLength(reqBody),
       },
     }, reqBody);
-  } catch (e) {
-    console.warn('analyzeFramePose: request error:', e.message);
-    return null;
-  }
 
-  if (res.status !== 200 || !res.data) {
-    console.warn('analyzeFramePose: non-200 from Vertex:', res.status,
-      res.data?.error?.message || res.raw?.slice(0, 200) || '');
-    return null;
-  }
-
-  const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  if (!raw) {
-    console.warn('analyzeFramePose: empty response text');
-    return null;
-  }
-
-  try {
-    // Strip any markdown fences in case responseMimeType hint was ignored
+    if (res.status !== 200 || !res.data) {
+      console.warn('analyzeFramePose: non-200:', res.status);
+      return null;
+    }
+    const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!raw) return null;
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const parsed = JSON.parse(cleaned);
-    console.log('analyzeFramePose: OK — prop:', parsed.prop, '| arm:', parsed.arm_instruction);
+    console.log('analyzeFramePose: OK — prop:', parsed.prop);
     return parsed;
   } catch (e) {
-    console.warn('analyzeFramePose: JSON parse failed. Raw:', raw.slice(0, 300));
+    console.warn('analyzeFramePose: error:', e.message);
     return null;
   }
 }
 
-// ── Build scene-grounded instruction prefix from analysis result ──────────────
-// Produces LOCK / ARM / PROP STATE lines in the same format the Veo agent uses.
-// Prepended to the incoming instruction so compositing keywords appear first.
-function buildPoseBlock(pa) {
-  const lines = [];
-  if (pa.person_position) lines.push(`[FULL PERSON] REPLACE: target person — ${pa.person_position}. Camera angle: ${pa.camera_angle || 'straight-on'}.`);
-  if (pa.background)      lines.push(`LOCK: background — ${pa.background}.`);
-  if (pa.arm_instruction) lines.push(`REPOSE ARMS (override Photo 1 pose): ${pa.arm_instruction}. Arms must NOT be at sides.`);
-  if (pa.prop && pa.prop !== 'none') lines.push(`PROP: ${pa.prop}.`);
-  if (pa.prop_state && pa.prop_state !== 'none') lines.push(`PROP STATE: ${pa.prop_state}.`);
-  if (pa.lighting)        lines.push(`LIGHT: ${pa.lighting}.`);
-  lines.push('');
-  return lines.join('\n');
+// ── Build the inpaint prompt from pose analysis + avatar description ──────────
+// This goes to Imagen 3 as the text prompt describing what to insert
+// into the masked (foreground/person) region.
+function buildImagenPrompt(avatarDesc, poseAnalysis) {
+  const parts = [];
+
+  // Avatar appearance — who to insert
+  if (avatarDesc) parts.push(avatarDesc);
+
+  // Arm position and prop — what they're holding and how
+  if (poseAnalysis?.arm_instruction && poseAnalysis.arm_instruction !== 'none') {
+    parts.push(poseAnalysis.arm_instruction);
+  }
+  if (poseAnalysis?.prop && poseAnalysis.prop !== 'none') {
+    parts.push(poseAnalysis.prop);
+  }
+  if (poseAnalysis?.prop_state && poseAnalysis.prop_state !== 'none') {
+    parts.push(poseAnalysis.prop_state);
+  }
+
+  // Lighting match
+  if (poseAnalysis?.lighting) {
+    parts.push(poseAnalysis.lighting);
+  }
+
+  return parts.join(', ');
 }
 
 exports.handler = async (event) => {
@@ -245,7 +229,6 @@ exports.handler = async (event) => {
   try {
     user = await getAuthUser(jwt);
   } catch(authErr) {
-    console.error('generate-nb-composite: getAuthUser threw:', authErr.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Auth check failed: ' + authErr.message }) };
   }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
@@ -255,7 +238,6 @@ exports.handler = async (event) => {
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
   const {
-    instruction,
     avatarDesc     = '',
     negativePrompt = '',
     avatarB64,
@@ -274,172 +256,74 @@ exports.handler = async (event) => {
     if (frameB64) frameImg = { b64: frameB64, mime: frameMime };
   }
 
-  if (!instruction || !avatarImg) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'instruction and avatar image are required.' }) };
+  if (!avatarImg) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 
+  const hasFrame  = !!frameImg;
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
 
   let accessToken;
   try {
     accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
   } catch(e) {
-    console.error('generate-nb-composite: getAccessToken failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
   }
 
-  const hasFrame = !!frameImg;
-
-  // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
-  // Uses gemini-2.0-flash-001 to extract a text map of the scene pose.
-  // Fails silently: if null, Stage 3 proceeds with the original instruction.
-  let enrichedInstruction = instruction;
+  // ── Stage 1: Pose analysis ────────────────────────────────────────────────
   let poseAnalysis = null;
   if (hasFrame) {
     poseAnalysis = await analyzeFramePose(frameImg, accessToken, projectId);
-    if (poseAnalysis) {
-      enrichedInstruction = buildPoseBlock(poseAnalysis) + instruction;
-      console.log('generate-nb-composite: Stage 1 pose analysis injected — instruction now', enrichedInstruction.length, 'chars');
-    } else {
-      console.log('generate-nb-composite: Stage 1 pose analysis unavailable — proceeding without it');
-    }
   }
 
-  // ── Stage 2: Inpainting pass ─────────────────────────────────────────────────
-  // Remove the person from the scene frame to get a clean background.
-  // Stage 3 then places the avatar into this clean scene — no ghosting possible.
-  let cleanBgImg = frameImg; // fallback: original frame
-  let inpaintSucceeded = false;
+  // ── Stage 2: Imagen 3 inpaint edit ───────────────────────────────────────
+  // Uses EDIT_MODE_INPAINT_INSERTION + MASK_MODE_FOREGROUND:
+  //   - Imagen auto-detects the person in the scene frame
+  //   - Replaces just that region with the avatar appearance
+  //   - Background outside mask is pixel-perfect preserved
 
-  if (hasFrame) {
-    const inpaintBody = JSON.stringify({
-      systemInstruction: { parts: [{ text: `You are a photo inpainting expert. Remove the person from this photo but KEEP any object they are holding.
+  const imagenPrompt = hasFrame
+    ? buildImagenPrompt(avatarDesc, poseAnalysis)
+    : (avatarDesc || 'portrait of a person');
 
-RULES:
-1. Remove the person's body — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing. This includes fingertips and any partial limbs at the edges.
-2. KEEP any product or object the person was holding (bottle, model, device, etc.). Let it float in mid-air at the same position — that is intentional.
-3. Fill the erased person area with a seamless continuation of the surrounding background — walls, shelves, floor, furniture.
-4. Do NOT remove, alter, or move the held prop/product. Its position, orientation, and appearance must be exactly preserved.
-5. Preserve all other background elements exactly as-is — shelves, wall colors, flags, windows, decor.
-6. Output: same room, no person, prop floating in place at the exact same position and orientation.` }] },
-      contents: [{ role: 'user', parts: [
-        { text: 'Remove the person from this photo but keep any object they were holding floating in place:' },
-        { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
-        { text: 'Output: same room, person removed and filled with background, held object preserved floating at exact same position.' },
-      ]}],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.1 },
-    });
-
-    const inpaintPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-    try {
-      const inpaintResult = await httpsRequest({
-        hostname: `${LOCATION}-aiplatform.googleapis.com`,
-        path: inpaintPath, method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(inpaintBody) },
-      }, inpaintBody);
-
-      if (inpaintResult?.status === 429) {
-        return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit (inpaint stage). Please wait and retry.' }) };
-      }
-      for (const c of (inpaintResult?.data?.candidates || [])) {
-        for (const p of (c?.content?.parts || [])) {
-          if (p.inlineData?.data) {
-            cleanBgImg = { b64: p.inlineData.data, mime: p.inlineData.mimeType || 'image/png' };
-            inpaintSucceeded = true;
-            console.log('generate-nb-composite: inpaint success — clean background ready');
-            break;
-          }
-        }
-        if (inpaintSucceeded) break;
-      }
-      if (!inpaintSucceeded) console.warn('generate-nb-composite: inpaint returned no image — using original frame');
-    } catch(e) {
-      console.warn('generate-nb-composite: inpaint error:', e.message, '— using original frame');
-    }
-  }
-
-  // ── Composite pass ────────────────────────────────────────────────────────
-  // Photo 1 = avatar (always).
-  // Photo 2 = clean background from inpaint (if succeeded) OR omitted (if failed).
-  // Photo 3 = original frame — prop/position/scale reference (always, if hasFrame).
-  //
-  // IMPORTANT: when inpaint failed, Photo 2 is omitted entirely.
-  // We never label the original frame (with person still in it) as "clean background" —
-  // that would be a lie to the model and produce bad results.
-  let photo_guide, systemRules;
-  if (!hasFrame) {
-    photo_guide  = `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
-    systemRules  = `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
-  } else if (inpaintSucceeded) {
-    // 3-photo mode: avatar | background-with-floating-prop | original frame (scale reference)
-    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = scene with person removed — the real prop/product is already floating in it at its correct position. Photo 3 = original scene — reference ONLY for subject scale and camera distance.';
-    systemRules  = `You are a professional photo compositor placing an avatar into a scene.
-
-Photo 1 = AVATAR — the person to insert (face, body, clothing, accessories).
-Photo 2 = SCENE WITH FLOATING PROP — the background with the person removed. The real product/prop is already visible floating in mid-air at exactly the right position. Use this as the background.
-Photo 3 = ORIGINAL SCENE — reference only for how large/close the subject was to the camera.
-
-MANDATORY RULES:
-1. BACKGROUND: Use Photo 2 as the entire background. Preserve every wall, shelf, flag, window, and the floating prop exactly as-is. Never use Photo 1's background.
-2. SCALE: Match the subject's scale and camera distance from Photo 3. If Photo 3 shows a medium-close shot where the person fills most of the frame height, the avatar must appear at the same scale and distance — not smaller.
-3. PLACE AVATAR: Insert the Photo 1 avatar at the same position as the person in Photo 3.
-4. REPOSE ARMS — CRITICAL: Do NOT keep the avatar's natural arm/hand position from Photo 1. Her arms must be repositioned to grip the floating prop in Photo 2. Read the ARM instruction in the user prompt — that describes exactly how her arms must be raised and positioned. This is a pose override, not optional.
-5. GRIP THE PROP: The prop/product already floating in Photo 2 is the real object — do NOT redraw or replace it. Render the avatar's hand(s) gripping it naturally where it floats. The prop stays exactly where it is; only the hands wrap around it.
-6. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands disconnected from her body.
-7. LIGHTING: Match Photo 2's scene lighting exactly.`;
-  } else {
-    // 2-photo fallback mode (inpaint failed): avatar | original frame
-    // Can't pretend Photo 2 is clean — it's not. Use it as scene reference only.
-    photo_guide  = 'Photo 1 = avatar (the replacement person — use their face, body, clothing, accessories). Photo 2 = original scene — use its background exactly but replace the person with the Photo 1 avatar at the same scale and position.';
-    systemRules  = `You are a professional photo compositor replacing a person in a scene.
-
-Photo 1 = AVATAR — the replacement person (face, body, clothing, accessories to use).
-Photo 2 = ORIGINAL SCENE — the background and composition to preserve. Replace the person in Photo 2 with the Photo 1 avatar.
-
-MANDATORY RULES:
-1. BACKGROUND: Preserve Photo 2's background exactly — walls, shelves, objects, colors, flags, windows. Never use Photo 1's background.
-2. SCALE: The avatar must appear at the same size and camera distance as the person in Photo 2. Match their scale exactly — not smaller, not farther away.
-3. REPLACE PERSON: Remove the person in Photo 2 completely. Place the Photo 1 avatar at the same position and scale.
-4. REPOSE ARMS — CRITICAL: Do NOT keep the avatar's natural arm/hand position from Photo 1. Read the REPOSE ARMS instruction in the user prompt — her arms must be repositioned exactly as described. This is mandatory.
-5. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object. Her hands must grip it naturally — connected to her body, not floating.
-6. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting, no floating limbs.
-7. LIGHTING: Match Photo 2's scene lighting.`;
-  }
-
-  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, severed hands, hands not connected to body, disembodied arms, extra hands, ghost limbs, hands copied from reference photo, arms at sides when they should be raised, arms hanging down, subject too small, subject far away, wide shot when original was medium-close, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
-  const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
-  const negLine = `\n\nAVOID IN OUTPUT: ${allNegatives}`;
-  const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
-
-  const parts = [];
-  parts.push({ text: 'Photo 1 — AVATAR (the person to place into the scene):' });
-  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
-  if (hasFrame && inpaintSucceeded) {
-    parts.push({ text: 'Photo 2 — SCENE WITH FLOATING PROP (person removed, real product/prop preserved floating at correct position — use this as the scene, grip the floating prop):' });
-    parts.push({ inlineData: { mimeType: cleanBgImg.mime, data: cleanBgImg.b64 } });
-    parts.push({ text: 'Photo 3 — ORIGINAL SCENE (reference ONLY for subject scale and camera distance — do NOT copy the person from this photo):' });
-    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
-  } else if (hasFrame) {
-    // inpaint failed — Photo 2 only (original frame), used as scene reference
-    parts.push({ text: 'Photo 2 — ORIGINAL SCENE (background and composition reference — replace the person with the Photo 1 avatar):' });
-    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
-  }
-  parts.push({ text: fullPrompt });
+  console.log(`generate-nb-composite: user=${user.id}, model=${EDIT_MODEL}, hasFrame=${hasFrame}, prompt="${imagenPrompt.slice(0, 120)}"`);
 
   const requestBody = JSON.stringify({
-    systemInstruction: { parts: [{ text: systemRules }] },
-    contents: [{ role: 'user', parts }],
-    generationConfig: {
-      responseModalities: ['IMAGE', 'TEXT'],
-      temperature: 0.1,
+    instances: [
+      {
+        prompt: imagenPrompt,
+        referenceImages: [
+          // The scene frame — base image to edit
+          {
+            referenceType: 'REFERENCE_TYPE_RAW',
+            referenceId: 1,
+            referenceImage: {
+              bytesBase64Encoded: frameImg ? frameImg.b64 : avatarImg.b64,
+            },
+          },
+          // Automatic foreground (person) mask — Imagen detects the person
+          {
+            referenceType: 'REFERENCE_TYPE_MASK',
+            referenceId: 2,
+            maskImageConfig: {
+              maskMode: 'MASK_MODE_FOREGROUND',
+              dilation: 0.02,  // small dilation to catch edge pixels
+            },
+          },
+        ],
+      },
+    ],
+    parameters: {
+      editMode: 'EDIT_MODE_INPAINT_INSERTION',
+      sampleCount: 1,
+      editConfig: {
+        baseSteps: 75,  // max quality; increase latency but better results for person replacement
+      },
     },
   });
 
-  const apiPath  = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+  const apiPath  = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${EDIT_MODEL}:predict`;
   const hostname = `${LOCATION}-aiplatform.googleapis.com`;
-  const mode = !hasFrame ? 'generate-only' : (inpaintSucceeded ? (poseAnalysis ? '3photo+analysis' : '3photo') : (poseAnalysis ? '2photo-fallback+analysis' : '2photo-fallback'));
-
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, promptLen=${fullPrompt.length}`);
 
   const vertexOptions = {
     hostname,
@@ -456,15 +340,11 @@ MANDATORY RULES:
   try {
     result = await httpsRequest(vertexOptions, requestBody);
   } catch(e) {
-    console.error('generate-nb-composite: Vertex fetch error:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
   }
 
-  console.log('generate-nb-composite: Vertex AI status:', result.status);
+  console.log('generate-nb-composite: Imagen 3 status:', result.status);
 
-  // FIX: check 429 BEFORE the !result.data guard — if Vertex returns a 429 with a
-  // non-JSON body (e.g. from an intermediate proxy), data is null and the 502 path
-  // would fire instead of the correct 429, causing the client retry logic to break.
   if (result.status === 429) {
     return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit. Please wait and retry.' }) };
   }
@@ -479,27 +359,25 @@ MANDATORY RULES:
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
 
-  const candidates = result.data.candidates || [];
-  for (const candidate of candidates) {
-    const responseParts = candidate?.content?.parts || [];
-    for (const part of responseParts) {
-      if (part.inlineData?.data) {
-        const mime = part.inlineData.mimeType || 'image/png';
-        console.log('generate-nb-composite: image generated, mime:', mime);
-        return {
-          statusCode: 200,
-          headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
-        };
-      }
+  // Imagen 3 response: predictions[].bytesBase64Encoded
+  const predictions = result.data.predictions || [];
+  for (const pred of predictions) {
+    if (pred.bytesBase64Encoded) {
+      const mime = pred.mimeType || 'image/png';
+      console.log('generate-nb-composite: image generated, mime:', mime);
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageB64: pred.bytesBase64Encoded, mime }),
+      };
     }
   }
 
-  console.error('generate-nb-composite: no image in response. Full:', JSON.stringify(result.data).slice(0, 500));
+  console.error('generate-nb-composite: no image in response:', JSON.stringify(result.data).slice(0, 500));
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
+    body: JSON.stringify({ error: 'Imagen 3 returned no image. Check Vertex AI logs.' }),
   };
 
   } catch(topErr) {
