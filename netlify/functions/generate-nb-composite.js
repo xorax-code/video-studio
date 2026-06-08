@@ -31,7 +31,7 @@ const https  = require('https');
 const crypto = require('crypto');
 
 const LOCATION       = 'us-central1';
-const MODEL          = 'gemini-2.5-flash-image';
+const MODEL          = 'gemini-3.1-flash-image-preview';
 const ANALYSIS_MODEL = 'gemini-2.0-flash-001';
 
 function httpsRequest(options, body) {
