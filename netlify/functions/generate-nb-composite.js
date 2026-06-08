@@ -111,11 +111,11 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
 // ── Build LOCK instruction block from pose analysis ───────────────────────────
 function buildLockBlock(pa) {
   const lines = [];
-  if (pa.background)                             lines.push(`LOCK BACKGROUND: ${pa.background}.`);
-  if (pa.arm_instruction)                        lines.push(`LOCK ARMS: ${pa.arm_instruction} — do not move these arms.`);
-  if (pa.prop && pa.prop !== 'none')             lines.push(`LOCK PROP: ${pa.prop} — keep exactly as held, same grip and orientation.`);
-  if (pa.prop_state && pa.prop_state !== 'none') lines.push(`PROP STATE: ${pa.prop_state}.`);
-  if (pa.lighting)                               lines.push(`LOCK LIGHT: ${pa.lighting}.`);
+  if (pa.background)                             lines.push(`lock background: ${pa.background}.`);
+  if (pa.arm_instruction)                        lines.push(`lock arms: ${pa.arm_instruction} — do not move these arms.`);
+  if (pa.prop && pa.prop !== 'none')             lines.push(`lock prop: ${pa.prop} — keep exactly as held, same grip and orientation.`);
+  if (pa.prop_state && pa.prop_state !== 'none') lines.push(`prop state: ${pa.prop_state}.`);
+  if (pa.lighting)                               lines.push(`lock light: ${pa.lighting}.`);
   lines.push('');
   return lines.join('\n');
 }

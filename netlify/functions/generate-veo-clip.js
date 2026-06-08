@@ -109,16 +109,16 @@ Examine this image carefully. Return ONLY a valid JSON object with these exact f
 // ── Build [SCENE GROUND TRUTH] block ─────────────────────────────────────────
 function buildSceneBlock(sa) {
   return [
-    '[SCENE GROUND TRUTH — EXTRACTED FROM REFERENCE FRAME — READ FIRST]',
-    `SETTING:          ${sa.setting         || 'not specified'}`,
-    `CAMERA ANGLE:     ${sa.camera_angle    || 'not specified'}`,
-    `LIGHTING:         ${sa.lighting        || 'not specified'}`,
-    `SUBJECT POSITION: ${sa.subject_position || 'not specified'}`,
-    `PROPS:            ${sa.props           || 'none'}`,
-    `COLOR PALETTE:    ${sa.color_palette   || 'not specified'}`,
-    `VISUAL STYLE:     ${sa.visual_style    || 'not specified'}`,
-    '!! MATCH THIS SCENE — preserve the setting, lighting, camera angle, and color palette exactly !!',
-    '[END SCENE GROUND TRUTH]',
+    '[scene reference — match this exactly]',
+    `setting: ${sa.setting         || 'not specified'}`,
+    `camera angle: ${sa.camera_angle    || 'not specified'}`,
+    `lighting: ${sa.lighting        || 'not specified'}`,
+    `subject position: ${sa.subject_position || 'not specified'}`,
+    `props: ${sa.props           || 'none'}`,
+    `color palette: ${sa.color_palette   || 'not specified'}`,
+    `visual style: ${sa.visual_style    || 'not specified'}`,
+    'preserve the setting, lighting, camera angle, and color palette exactly.',
+    '[end scene reference]',
     '',
   ].join('\n');
 }
