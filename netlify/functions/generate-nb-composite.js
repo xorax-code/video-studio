@@ -191,31 +191,31 @@ exports.handler = async (event) => {
 
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis) : '';
 
-  const systemInstruction = hasFrame ? `You are a photo editor performing APPEARANCE TRANSFER.
+  const systemInstruction = hasFrame ? `You are a photo compositor. Your task: REPLACE THE STANDING PERSON in Photo 1 with the person from Photo 2, while keeping everything else in Photo 1 exactly the same.
 
-Photo 1 = BASE SCENE — edit this image. The background, arm positions, prop grip, body scale and position are all locked.
-Photo 2 = APPEARANCE SOURCE — apply this person's face, hair, headwrap, clothing and jewelry to the person in Photo 1.
+THE STANDING PERSON in Photo 1 is a human figure — a man. Replace that man entirely with the elderly woman from Photo 2.
 
-WHAT TO CHANGE (take from Photo 2):
-- Face and skin tone: apply Photo 2's face (elderly woman, dark brown skin, weathered features)
-- Hair: replace with Photo 2's long grey dreadlocks
-- Head covering: apply Photo 2's colorful headwrap/turban
-- Clothing: replace with Photo 2's white dress with gold trim
-- Jewelry: add Photo 2's amber bead necklaces and cowrie shells
-- Body silhouette: reshape toward Photo 2's female figure — softer shoulders, feminine form
+REPLACE (the standing human figure only):
+- Remove the man's face, head, hair, clothing, and body
+- In his place, insert the elderly woman from Photo 2: dark brown skin, long grey dreadlocks, colorful headwrap, white dress with gold trim, amber bead necklaces, cowrie shells
+- Keep her at the same position and scale as the man was
 
-WHAT TO LOCK (keep from Photo 1 exactly):
-- Background: every wall, shelf, jar, flag, window — pixel-perfect
-- Arm positions and hand grip: exactly as they appear in Photo 1
-- Prop/product: same object, same position, same grip, same orientation
-- Subject scale and position in frame
-- Scene lighting and shadows` : `Generate a photorealistic portrait with the appearance of the person in Photo 1.`;
+LOCK (do not touch anything else):
+- The background — every wall, shelf, jar, bottle, flag, window stays exactly as in Photo 1
+- The arms and hands — same angles, same position, same grip
+- Every held object or prop — it is a physical object, not a person; do not put any face or human features inside it
+- Scene lighting and shadows
+
+STRICT RULES:
+- The only human face in the output is the elderly woman's face on her body — nowhere else
+- Held objects (dental models, bottles, products) are props — they are hollow/solid objects, never put a face inside them
+- Remove any text, captions, or subtitles visible in Photo 1 from the final output` : `Generate a photorealistic portrait with the appearance of the person in Photo 1.`;
 
   const userPrompt = hasFrame
-    ? `${lockBlock}APPEARANCE TRANSFER: Apply Photo 2's face, hair, headwrap, clothing and jewelry to the person in Photo 1. Keep all LOCK items unchanged.\n\n${instruction}`
+    ? `${lockBlock}PERSON REPLACEMENT: The man in Photo 1 must be completely replaced by the elderly woman from Photo 2. She stands in his exact position holding whatever he was holding. All held objects remain unchanged — they are props, not faces. Background is unchanged. Remove all captions and text.\n\n${instruction}`
     : `Portrait of ${avatarDesc || 'the person shown'}.`;
 
-  const negLine = `\n\nAVOID: changed background, wrong background, avatar background, moved arms, moved prop, prop replaced with different object, floating prop, ghost limbs, two people, composite seam, text overlay`;
+  const negLine = `\n\nCRITICAL — REMOVE ALL TEXT: The output image must contain zero text, zero captions, zero subtitles, zero words. If the source frame has any text, subtitles, or captions burned in, erase them completely. Clean background behind where text was.\n\nALSO AVOID: changed background, wrong background, avatar background, moved arms, moved prop, prop replaced with different object, floating prop, ghost limbs, two people visible, composite seam, face placed inside prop or object`;
   const fullPrompt = userPrompt + negLine;
 
   const parts = [];
