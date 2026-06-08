@@ -15,6 +15,12 @@
   var _fsVidHistory = []; // [{src, id}]       src is always a blob URL
   var _MAX_HISTORY  = 20;
 
+  // Prompt history — last 10 per mode, stored in localStorage (tiny text, no need for IndexedDB)
+  var _fsImgPromptHistory = [];
+  var _fsVidPromptHistory = [];
+  try { _fsImgPromptHistory = JSON.parse(localStorage.getItem('fsImgPrompts') || '[]'); } catch(_) {}
+  try { _fsVidPromptHistory = JSON.parse(localStorage.getItem('fsVidPrompts') || '[]'); } catch(_) {}
+
   // Expose state checkers for inline HTML onmouseleave handlers
   window._fsSlotFilled = function(idx) { return !!_fsImgSlots[idx]; };
   window._fsVidFilled  = function()    { return !!_fsVidFrame; };
@@ -186,7 +192,80 @@
 
   var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay completely unchanged; if multiple reference photos are mentioned, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
 
-  var _FS_VID_SYS = 'You are a Veo 3 video prompt engineer. Rewrite the user\'s casual description into a precise single-scene clip prompt. STRICT RULES: (1) The clip is ONE continuous shot — no cuts, no transitions, no scene changes, no "then", no phases, no "first...then", no "as...". (2) Describe only what is physically happening in a single moment or sustained action. (3) The action field must be one unbroken sentence of movement and camera description, under 60 words. Return ONLY: {"action":"<single continuous movement and camera, under 60 words, no transitions>","speech":"<exact spoken words, or empty string if none>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, multiple scenes, blurry"}';
+  // _FS_VID_SYS removed — video prompt enhancement handled by enhance-veo-prompt Netlify function (Gemini 2.5 Flash multimodal)
+
+  // ── Prompt history ─────────────────────────────────────────────────────────
+  function _fsSavePrompt(mode, text) {
+    if (!text || !text.trim()) return;
+    var key = mode === 'image' ? 'fsImgPrompts' : 'fsVidPrompts';
+    var arr = mode === 'image' ? _fsImgPromptHistory : _fsVidPromptHistory;
+    var ex  = arr.indexOf(text);
+    if (ex !== -1) arr.splice(ex, 1);
+    arr.unshift(text);
+    if (arr.length > 10) arr.length = 10;
+    try { localStorage.setItem(key, JSON.stringify(arr)); } catch(_) {}
+    _fsRenderPromptHistory(mode);
+  }
+
+  function _fsRenderPromptHistory(mode) {
+    var cId  = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
+    var pId  = mode === 'image' ? 'fsImgPrompt'        : 'fsVidPrompt';
+    var arr  = mode === 'image' ? _fsImgPromptHistory  : _fsVidPromptHistory;
+    var cont = document.getElementById(cId);
+    if (!cont) return;
+    cont.innerHTML = '';
+    if (!arr.length) { cont.style.display = 'none'; return; }
+    cont.style.display = 'flex';
+    arr.forEach(function(text) {
+      var chip = document.createElement('button');
+      chip.title = text;
+      chip.textContent = text.length > 42 ? text.slice(0, 39) + '…' : text;
+      chip.style.cssText = 'flex:0 0 auto;max-width:210px;padding:3px 9px;font-size:9px;font-family:inherit;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.12);border-radius:20px;color:var(--text-3);cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;transition:all 0.12s;';
+      chip.onmouseover = function() { this.style.background = 'rgba(52,211,153,0.1)'; this.style.borderColor = 'rgba(52,211,153,0.3)'; this.style.color = '#34d399'; };
+      chip.onmouseout  = function() { this.style.background = 'rgba(255,255,255,0.05)'; this.style.borderColor = 'rgba(255,255,255,0.12)'; this.style.color = 'var(--text-3)'; };
+      chip.onclick = function() { var el = document.getElementById(pId); if (el) { el.value = text; el.focus(); } };
+      cont.appendChild(chip);
+    });
+  }
+
+  function _fsInitPromptHistory() {
+    ['image', 'video'].forEach(function(mode) {
+      var pId = mode === 'image' ? 'fsImgPrompt' : 'fsVidPrompt';
+      var cId = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
+      var el  = document.getElementById(pId);
+      if (!el || document.getElementById(cId)) return;
+      var div = document.createElement('div');
+      div.id = cId;
+      div.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;margin-top:5px;';
+      el.parentNode.insertBefore(div, el.nextSibling);
+      _fsRenderPromptHistory(mode);
+    });
+  }
+
+  // ── Delete individual results ──────────────────────────────────────────────
+  window.deleteFsImgResult = function(idx) {
+    _fsImgHistory.splice(idx, 1);
+    _renderImgStrip();
+    _fsSaveImgHistory();
+  };
+
+  window.deleteFsVidResult = function(idx) {
+    _fsVidHistory.splice(idx, 1);
+    _renderVidStrip();
+    _fsSaveVidHistory();
+  };
+
+  // ── Use image result as video start frame ──────────────────────────────────
+  window.useFsImgResultAsVidStart = function(idx) {
+    var item = _fsImgHistory[idx];
+    if (!item) return;
+    var dataUrl = item.dataUrl;
+    var comma   = dataUrl.indexOf(',');
+    _fsVidFrame = { dataUrl: dataUrl, b64: dataUrl.slice(comma + 1), mime: dataUrl.slice(5, comma).split(';')[0] || 'image/jpeg' };
+    _fsRenderVidFrame();
+    switchFsMode('video');
+    if (typeof showToast === 'function') showToast('Set as video start frame — enter a prompt and generate.', 'success', 2500);
+  };
 
   // ── Status helper ──────────────────────────────────────────────────────────
   function _fsStatus(elId, text, color) {
@@ -209,21 +288,27 @@
     strip.innerHTML = '';
     _fsImgHistory.forEach(function(item, idx) {
       var card = document.createElement('div');
-      card.style.cssText = 'flex:0 0 130px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;';
+      card.style.cssText = 'flex:0 0 130px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;position:relative;';
       card.innerHTML =
-        '<img src="' + item.dataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;" title="Click to use as new reference">'
-        + '<div style="padding:5px;display:flex;gap:3px;">'
-          + '<button onclick="downloadFsImgResult(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;" title="Download">⬇</button>'
-          + '<button onclick="useFsImgResultAsRef(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:5px;color:#fb923c;cursor:pointer;" title="Use as new reference">→ Ref</button>'
+        // Delete ✕ — top-right corner
+        '<div style="position:absolute;top:4px;right:4px;z-index:2;">'
+          + '<button onclick="event.stopPropagation();deleteFsImgResult(' + idx + ')" title="Delete" '
+            + 'style="width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">✕</button>'
+        + '</div>'
+        + '<img src="' + item.dataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:zoom-in;" title="Expand">'
+        + '<div style="padding:4px;display:flex;gap:2px;flex-wrap:wrap;">'
+          + '<button onclick="downloadFsImgResult(' + idx + ')" style="flex:1;padding:3px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;" title="Download">⬇</button>'
+          + '<button onclick="useFsImgResultAsRef(' + idx + ')" style="flex:1;padding:3px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(251,146,60,0.1);border:1px solid rgba(251,146,60,0.3);border-radius:5px;color:#fb923c;cursor:pointer;" title="Use as image reference">→ Ref</button>'
+          + '<button onclick="useFsImgResultAsVidStart(' + idx + ')" style="flex:1;padding:3px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);border-radius:5px;color:#a78bfa;cursor:pointer;" title="Use as video start frame">→ Vid</button>'
         + '</div>';
       var imgEl = card.querySelector('img');
-      if (imgEl) imgEl.addEventListener('click', (function(url) { return function() { _fsOpenLightbox(url); }; })(item.dataUrl));
+      if (imgEl) imgEl.addEventListener('click', (function(url, i) { return function() { _fsOpenLightbox(url, i); }; })(item.dataUrl, idx));
       strip.appendChild(card);
     });
   }
 
   // ── Image lightbox ─────────────────────────────────────────────────────────
-  function _fsOpenLightbox(dataUrl) {
+  function _fsOpenLightbox(dataUrl, idx) {
     var existing = document.getElementById('fsImgLightbox');
     if (existing) existing.remove();
 
@@ -245,10 +330,26 @@
     closeBtn.onclick = function(e) { e.stopPropagation(); modal.remove(); };
 
     var actions = document.createElement('div');
-    actions.style.cssText = 'display:flex;gap:8px;';
-    actions.innerHTML =
-      '<button onclick="(function(){var a=document.createElement(\'a\');a.href=\'' + dataUrl + '\';a.download=\'studio-result.png\';a.click();})()" '
-        + 'style="padding:8px 20px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.45);border-radius:8px;color:#34d399;cursor:pointer;">⬇ Download</button>';
+    actions.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;justify-content:center;';
+
+    var dlBtn = document.createElement('button');
+    dlBtn.textContent = '⬇ Download';
+    dlBtn.style.cssText = 'padding:8px 16px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.45);border-radius:8px;color:#34d399;cursor:pointer;';
+    dlBtn.onclick = function(e) { e.stopPropagation(); var a = document.createElement('a'); a.href = dataUrl; a.download = 'studio-result.png'; a.click(); };
+
+    var refBtn = document.createElement('button');
+    refBtn.textContent = '→ Use as Ref';
+    refBtn.style.cssText = 'padding:8px 16px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(251,146,60,0.15);border:1px solid rgba(251,146,60,0.45);border-radius:8px;color:#fb923c;cursor:pointer;';
+    refBtn.onclick = function(e) { e.stopPropagation(); modal.remove(); if (typeof idx === 'number') useFsImgResultAsRef(idx); };
+
+    var vidBtn = document.createElement('button');
+    vidBtn.textContent = '→ Start Video';
+    vidBtn.style.cssText = 'padding:8px 16px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(139,92,246,0.15);border:1px solid rgba(139,92,246,0.45);border-radius:8px;color:#a78bfa;cursor:pointer;';
+    vidBtn.onclick = function(e) { e.stopPropagation(); modal.remove(); if (typeof idx === 'number') useFsImgResultAsVidStart(idx); };
+
+    actions.appendChild(dlBtn);
+    actions.appendChild(refBtn);
+    actions.appendChild(vidBtn);
     actions.onclick = function(e) { e.stopPropagation(); };
 
     inner.appendChild(closeBtn);
@@ -270,15 +371,32 @@
     var wrapper = document.getElementById('fsVidResults');
     var countEl = document.getElementById('fsVidResultCount');
     if (!strip) return;
-    if (countEl) countEl.textContent = _fsVidHistory.length;
+    var doneCount = _fsVidHistory.filter(function(i) { return !i.pending; }).length;
+    if (countEl) countEl.textContent = doneCount;
     if (wrapper) wrapper.style.display = _fsVidHistory.length ? '' : 'none';
 
     strip.innerHTML = '';
     _fsVidHistory.forEach(function(item, idx) {
       var card = document.createElement('div');
       card.style.cssText = 'flex:0 0 150px;border-radius:8px;overflow:hidden;background:var(--surface-2);border:1px solid var(--border-2);flex-shrink:0;position:relative;';
+
+      // Pending placeholder — show spinner while generation is in flight
+      if (item.pending) {
+        card.style.cssText += 'display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:9/16;gap:8px;';
+        card.innerHTML =
+          '<div style="width:20px;height:20px;border:2px solid rgba(52,211,153,0.2);border-top-color:#34d399;border-radius:50%;animation:spin 0.8s linear infinite;"></div>'
+          + '<span style="font-size:9px;color:var(--text-3);text-align:center;padding:0 8px;">generating…</span>';
+        strip.appendChild(card);
+        return;
+      }
+
       card.innerHTML =
-        '<video src="' + item.src + '" muted playsinline loop style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;" title="Click to preview"></video>'
+        // Delete ✕ — top-right corner
+        '<div style="position:absolute;top:4px;right:4px;z-index:2;">'
+          + '<button onclick="event.stopPropagation();deleteFsVidResult(' + idx + ')" title="Delete" '
+            + 'style="width:18px;height:18px;border-radius:50%;background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.2);color:rgba(255,255,255,0.7);font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;line-height:1;">✕</button>'
+        + '</div>'
+        + '<video src="' + item.src + '" muted playsinline loop style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:pointer;" title="Click to preview"></video>'
         + '<div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.15s;background:rgba(0,0,0,0.25);" class="fs-vid-overlay">'
           + '<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.65);border:2px solid rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;padding-left:2px;">▶</div>'
         + '</div>'
@@ -407,6 +525,8 @@
     var jwt = await _fsJwt();
     if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
 
+    _fsSavePrompt('image', casual); // persist to history
+
     var varSel  = document.getElementById('fsImgVariations');
     var varCount = varSel ? Math.max(1, Math.min(3, parseInt(varSel.value) || 1)) : 1;
     var btn     = document.getElementById('fsBtnGenImg');
@@ -486,38 +606,35 @@
   };
 
   // ── GENERATE VIDEO ─────────────────────────────────────────────────────────
-  window.generateFsVideo = async function() {
-    var promptEl = document.getElementById('fsVidPrompt');
-    var casual   = promptEl ? promptEl.value.trim() : '';
-    if (!casual) {
-      if (typeof showToast === 'function') showToast('Enter a video prompt first.', 'warning'); return;
-    }
+  // Tracks how many generations are currently in flight so the button label
+  // stays informative and the button is NEVER disabled — new generations can
+  // always be started while others are running.
+  var _fsVidActiveCount = 0;
 
-    var durEl = document.querySelector('#fsVidDuration .fs-dur-btn.active');
-    var dur   = durEl ? parseInt(durEl.dataset.dur) || 6 : 6;
+  function _fsVidUpdateBtn() {
+    var btn = document.getElementById('fsBtnGenVid');
+    if (!btn) return;
+    btn.textContent = _fsVidActiveCount > 0
+      ? '⚡ Generate Video (' + _fsVidActiveCount + ' running)'
+      : '⚡ Generate Video';
+  }
 
-    var jwt = await _fsJwt();
-    if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
-
-    var btn     = document.getElementById('fsBtnGenVid');
-    var spinner = document.getElementById('fsVidSpinner');
-    if (btn)    { btn.disabled = true; btn.textContent = 'Working…'; }
-    if (spinner) spinner.style.display = 'flex';
+  // Run a single video generation. Shows a pending placeholder card in the
+  // strip immediately so the user can see progress without blocking new runs.
+  async function _runOneVidGeneration(pendingId, casual, dur, jwt, startImg, refFrameUrl, enhFrameB64, enhFrameMime) {
+    _fsVidActiveCount++;
+    _fsVidUpdateBtn();
 
     try {
       if (typeof generateVeoClipViaAPI !== 'function') throw new Error('Veo API not loaded — refresh the page.');
 
-      _fsStatus('fsVidStatusTxt', '✦ Analyzing scene & building prompt…', 'rgba(139,92,246,0.9)');
+      // Build enhanced prompt via Gemini 2.5 Flash
       var veoFields = { action: casual, speech: '', negative_prompt: 'text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, blurry' };
       try {
-        // Build payload — include start frame if one is loaded so Gemini 2.5 Flash
-        // can see the actual scene and ground the action in what's really there.
         var enhPayload = { casual: casual, duration: dur };
-        if (_fsVidFrame && _fsVidFrame.dataUrl) {
-          var _cf = await _fsCompress(_fsVidFrame.dataUrl, 768, 0.80);
-          var _cm = _cf.indexOf(',');
-          enhPayload.frameB64  = _cf.slice(_cm + 1);
-          enhPayload.frameMime = _cf.slice(5, _cm).split(';')[0] || 'image/jpeg';
+        if (enhFrameB64) {
+          enhPayload.frameB64  = enhFrameB64;
+          enhPayload.frameMime = enhFrameMime || 'image/jpeg';
         }
         var enhRes  = await fetch('/.netlify/functions/enhance-veo-prompt', {
           method:  'POST',
@@ -525,9 +642,7 @@
           body:    JSON.stringify(enhPayload),
         });
         var enhData; try { enhData = await enhRes.json(); } catch(_) { enhData = {}; }
-        if (enhRes.ok && enhData.action) {
-          veoFields = Object.assign(veoFields, enhData);
-        }
+        if (enhRes.ok && enhData.action) veoFields = Object.assign(veoFields, enhData);
       } catch(_) {}
 
       var veoJson = JSON.stringify({
@@ -537,32 +652,25 @@
         negative_prompt: veoFields.negative_prompt || 'text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, blurry',
       });
 
-      _fsStatus('fsVidStatusTxt', '✦ Generating with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
-
       var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
       var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
       var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
 
-      // Compress start frame if provided; also pass raw frame as reference for scene analysis
-      var startImg   = null;
-      var refFrameUrl = null;
-      if (_fsVidFrame) {
-        var cf = await _fsCompress(_fsVidFrame.dataUrl, 1024, 0.85);
-        startImg    = cf;
-        refFrameUrl = _fsVidFrame.dataUrl; // uncompressed original for scene analysis
-      }
-
       var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg, refFrameUrl);
 
-      // Always resolve to a blob URL — download attribute only works same-origin
       var blobSrc = null;
       if (typeof window._fetchVideoAsBlob === 'function') {
         blobSrc = await window._fetchVideoAsBlob(result.videoUrl);
       }
       var finalSrc = blobSrc || result.videoUrl;
 
-      // Add to history (newest first)
-      _fsVidHistory.unshift({ src: finalSrc, id: Date.now(), mime: 'video/mp4' });
+      // Replace the pending placeholder with the real video
+      var idx = _fsVidHistory.findIndex(function(item) { return item.id === pendingId; });
+      if (idx !== -1) {
+        _fsVidHistory[idx] = { src: finalSrc, id: pendingId, mime: 'video/mp4' };
+      } else {
+        _fsVidHistory.unshift({ src: finalSrc, id: pendingId, mime: 'video/mp4' });
+      }
       if (_fsVidHistory.length > _MAX_HISTORY) _fsVidHistory.length = _MAX_HISTORY;
       _renderVidStrip();
       _fsSaveVidHistory();
@@ -570,17 +678,71 @@
       var strip = document.getElementById('fsVidStrip');
       if (strip) strip.scrollLeft = 0;
 
-      _fsStatus('fsVidStatusTxt', '', '');
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
-      if (typeof showToast === 'function') showToast('Video generated!', 'success', 4000);
+      if (typeof showToast === 'function') showToast('Video ready!', 'success', 4000);
 
     } catch(e) {
-      _fsStatus('fsVidStatusTxt', '', '');
+      // Remove the pending placeholder on failure
+      var idx2 = _fsVidHistory.findIndex(function(item) { return item.id === pendingId; });
+      if (idx2 !== -1) _fsVidHistory.splice(idx2, 1);
+      _renderVidStrip();
       if (typeof showToast === 'function') showToast('Video failed: ' + (e.message || e), 'error', 7000);
     } finally {
-      if (btn)    { btn.disabled = false; btn.textContent = '⚡ Generate Video'; }
-      if (spinner) spinner.style.display = 'none';
+      _fsVidActiveCount--;
+      _fsVidUpdateBtn();
     }
+  }
+
+  window.generateFsVideo = async function() {
+    var promptEl = document.getElementById('fsVidPrompt');
+    var casual   = promptEl ? promptEl.value.trim() : '';
+    if (!casual) {
+      if (typeof showToast === 'function') showToast('Enter a video prompt first.', 'warning'); return;
+    }
+
+    var durEl    = document.querySelector('#fsVidDuration .fs-dur-btn.active');
+    var dur      = durEl ? parseInt(durEl.dataset.dur) || 6 : 6;
+    var varSel   = document.getElementById('fsVidVariations');
+    var varCount = varSel ? Math.max(1, Math.min(3, parseInt(varSel.value) || 1)) : 1;
+
+    var jwt = await _fsJwt();
+    if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
+
+    _fsSavePrompt('video', casual); // persist to history
+
+    // Pre-compress frames once — shared across all parallel generations
+    var startImg    = null;
+    var refFrameUrl = null;
+    var enhFrameB64 = null;
+    var enhFrameMime = 'image/jpeg';
+    if (_fsVidFrame && _fsVidFrame.dataUrl) {
+      var cf      = await _fsCompress(_fsVidFrame.dataUrl, 1024, 0.85);
+      startImg    = cf;
+      refFrameUrl = _fsVidFrame.dataUrl;
+      // Separate 768px version for enhance-veo-prompt (multimodal, smaller = faster)
+      var ef   = await _fsCompress(_fsVidFrame.dataUrl, 768, 0.80);
+      var em   = ef.indexOf(',');
+      enhFrameB64  = ef.slice(em + 1);
+      enhFrameMime = ef.slice(5, em).split(';')[0] || 'image/jpeg';
+    }
+
+    // Add pending placeholder cards immediately so user sees activity
+    var pendingIds = [];
+    for (var i = 0; i < varCount; i++) {
+      var pid = Date.now() + i;
+      pendingIds.push(pid);
+      _fsVidHistory.unshift({ pending: true, id: pid });
+    }
+    var wrapper = document.getElementById('fsVidResults');
+    if (wrapper) wrapper.style.display = '';
+    _renderVidStrip();
+    var strip = document.getElementById('fsVidStrip');
+    if (strip) strip.scrollLeft = 0;
+
+    // Fire all generations in parallel — each manages its own placeholder
+    pendingIds.forEach(function(pid) {
+      _runOneVidGeneration(pid, casual, dur, jwt, startImg, refFrameUrl, enhFrameB64, enhFrameMime);
+    });
   };
 
   // ── Duration toggle ────────────────────────────────────────────────────────
@@ -660,6 +822,7 @@
   function _fsSaveVidHistory() {
     var toSave = _fsVidHistory.slice(0, _FS_VID_PERSIST_MAX);
     Promise.all(toSave.map(function(item) {
+      if (item.pending || !item.src) return Promise.resolve(null); // skip in-flight placeholders
       if (item.arrayBuffer) return Promise.resolve(item); // already converted
       return fetch(item.src)
         .then(function(r) { return r.arrayBuffer(); })
@@ -713,11 +876,15 @@
     if (typeof showToast === 'function') showToast('History cleared.', 'success', 2500);
   };
 
-  // Kick off restore when DOM is ready
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', _fsRestoreHistory);
-  } else {
+  // Kick off restore + UI init when DOM is ready
+  function _fsOnReady() {
     _fsRestoreHistory();
+    _fsInitPromptHistory();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _fsOnReady);
+  } else {
+    _fsOnReady();
   }
 
 })();

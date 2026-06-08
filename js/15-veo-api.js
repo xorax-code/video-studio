@@ -693,7 +693,8 @@
       if (typeof renderSegments === 'function') renderSegments();
     }, 4000);
   }
-  window.generateAllScenesViaAPI = generateAllScenesViaAPI;
+  window.generateAllScenesViaAPI  = generateAllScenesViaAPI;
+  window.generateVeoClipViaAPI    = generateVeoClipViaAPI;   // exposed for 19-producer-pipeline
 
   // ── Download a segment's video — always via blob so browser saves the file ─
   // The <a download> attribute is ignored for cross-origin URLs (googleapis.com),
