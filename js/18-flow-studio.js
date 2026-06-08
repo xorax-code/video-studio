@@ -68,6 +68,16 @@
     _fsRenderSlot(idx);
   };
 
+  window.fsSlotClearAll = function() {
+    for (var i = 0; i < 5; i++) {
+      _fsImgSlots[i] = null;
+      _fsRenderSlot(i);
+      var inp = document.getElementById('fsSlotInput-' + i);
+      if (inp) inp.value = '';
+    }
+    showToast('All reference photos cleared.', 'info', 1800);
+  };
+
   function _fsRenderSlot(idx) {
     var slot   = document.getElementById('fsSlot-' + idx);
     var clearX = document.getElementById('fsSlotClear-' + idx);

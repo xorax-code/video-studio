@@ -1139,6 +1139,12 @@
 
       renderStoryboard();
       showToast('✅ ' + window._sbBeats.length + ' beats parsed — review and tweak, then Build All Prompts', 'success', 4000);
+      // Auto-collapse script panel so beats are immediately visible
+      var _sp = document.getElementById('vsPanelScript');
+      if (_sp && _sp.dataset.collapsed !== '1') {
+        var _sh = _sp.querySelector('.vs-panel-header.collapsible');
+        if (_sh) _sh.click();
+      }
 
     } catch(e) {
       if (wrap) {

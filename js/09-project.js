@@ -701,6 +701,16 @@
     if (added > 0) saveDailyItems();
   }
 
+  function _fmtTime12(t) {
+    // Convert "HH:MM" 24h to "H:MM AM/PM"
+    if (!t) return '';
+    var parts = t.split(':');
+    var h = parseInt(parts[0], 10), m = parts[1] || '00';
+    var ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12 || 12;
+    return h + ':' + m + ' ' + ampm;
+  }
+
   function renderDailyPlan() {
     const _ddl = document.getElementById('dailyDateLabel');
     if (_ddl) _ddl.textContent = fmtDailyDate(dailyDate);
@@ -708,7 +718,14 @@
     if (picker) picker.value = dailyDate;
     autoPopulateDay(dailyDate);
 
-    const items = dailyItems.filter(i => i.date === dailyDate);
+    const items = dailyItems.filter(i => i.date === dailyDate)
+      .sort((a, b) => {
+        // Sort by postTime (HH:MM string), items without a time go last
+        if (a.postTime && b.postTime) return a.postTime.localeCompare(b.postTime);
+        if (a.postTime) return -1;
+        if (b.postTime) return 1;
+        return 0;
+      });
     const list  = document.getElementById('dailyList');
     const empty = document.getElementById('dailyEmpty');
     const banner = document.getElementById('dailyScheduledBanner');
@@ -769,7 +786,7 @@
                 <span style="font-size:12px;font-weight:600;color:var(--text-1);">${escHtml(acct?.username||'Unknown')}</span>
                 ${typeBadge}
               </div>
-              <div style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}${fromPlan?' · from schedule':''}</div>
+              <div style="font-size:10px;color:var(--text-3);">${escHtml(acct?.platform||'')}${fromPlan?' · from schedule':''}${item.postTime?` · <span style="color:var(--accent-2);font-weight:600;">${escHtml(_fmtTime12(item.postTime))}</span>`:''}</div>
             </div>
           </div>
           <div style="display:flex;gap:5px;flex-shrink:0;">
@@ -890,6 +907,8 @@
     if (sel) sel.innerHTML = accounts.map(a => `<option value="${escHtml(a.id)}" ${item?.accountId===a.id?'selected':''}>${platformEmojis[a.platform]||'🌐'} ${escHtml(a.username)} (${escHtml(a.platform)})</option>`).join('');
     const _dii = document.getElementById('dailyItemInspo');
     if (_dii) _dii.value = item?.inspoUrl || '';
+    const _dit = document.getElementById('dailyItemTime');
+    if (_dit) _dit.value = item?.postTime || '';
     const _dis = document.getElementById('dailyItemScript');
     if (_dis) _dis.value = item?.script || '';
     const _dimo = document.getElementById('dailyItemModalOverlay');
@@ -909,6 +928,7 @@
     const data = {
       accountId,
       inspoUrl: document.getElementById('dailyItemInspo')?.value?.trim() ?? '',
+      postTime: document.getElementById('dailyItemTime')?.value?.trim() ?? '',
       script:   document.getElementById('dailyItemScript')?.value?.trim() ?? '',
       date:     dailyDate,
       // NOTE: do NOT include done here — when editing we preserve the existing

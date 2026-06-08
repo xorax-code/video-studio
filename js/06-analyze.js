@@ -430,6 +430,12 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     if (shortSegs.length > 0) {
       showToast(`${shortSegs.length} segment${shortSegs.length > 1 ? 's have' : ' has'} fewer than 4 words. Use the ⊕ Merge button to combine them.`, 'warning', 5000);
     }
+    // Auto-collapse script panel in Producer mode so segment cards are immediately visible
+    const _scriptPanel = document.getElementById('vsPanelScript');
+    if (_scriptPanel && _scriptPanel.dataset.collapsed !== '1') {
+      const _hdr = _scriptPanel.querySelector('.vs-panel-header.collapsible');
+      if (_hdr) _hdr.click();
+    }
   }  // end _doSplit
 
   // NB Pro starting-frame prompt for script-only scenes (no video frame reference)
@@ -3710,10 +3716,10 @@ TECHNICAL SPECS:
       <select onchange="switchProject(this.value)" style="font-size:11px;padding:3px 8px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:4px;color:var(--text-1);font-family:inherit;outline:none;max-width:220px;flex:1;">
         ${projects.map(pr => `<option value="${escHtml(pr.id)}" ${pr.id === activeProjectId ? 'selected' : ''}>${escHtml(pr.name)}</option>`).join('')}
       </select>
-      <button class="btn" onclick="renameProject()" style="padding:2px 8px;font-size:10px;" title="Rename">✏</button>
-      <button class="btn" onclick="newProject()" style="padding:2px 10px;font-size:11px;flex-shrink:0;">+ New Project</button>
-      <button class="btn" onclick="exportProjectJSON()" style="padding:2px 8px;font-size:10px;color:var(--accent-2);border-color:rgba(124,106,247,0.4);" title="Export project as JSON file">⬇ Export</button>
-      <button class="btn" onclick="document.getElementById('projectImportInput').click()" style="padding:2px 8px;font-size:10px;color:var(--text-2);" title="Import project from JSON file">⬆ Import</button>
+      <button class="btn" onclick="renameProject()" style="padding:2px 8px;font-size:10px;" title="Rename project"><i class="ti ti-pencil" style="font-size:11px;vertical-align:-1px;"></i> Rename</button>
+      <button class="btn" onclick="newProject()" style="padding:2px 10px;font-size:11px;flex-shrink:0;">+ New</button>
+      <button class="btn" onclick="exportProjectJSON()" style="padding:2px 8px;font-size:10px;color:var(--accent-2);border-color:rgba(124,106,247,0.4);" title="Export project as JSON file"><i class="ti ti-download" style="font-size:11px;vertical-align:-1px;"></i> Export</button>
+      <button class="btn" onclick="document.getElementById('projectImportInput').click()" style="padding:2px 8px;font-size:10px;color:var(--text-2);" title="Import project from JSON file"><i class="ti ti-upload" style="font-size:11px;vertical-align:-1px;"></i> Import</button>
       <input type="file" id="projectImportInput" accept=".json" style="display:none;" onchange="importProjectJSON(this)">
       ${(projects.length > 1 && p) ? `<button class="btn" onclick="deleteProject(${escHtml(JSON.stringify(p.id))})" style="padding:2px 8px;font-size:10px;color:var(--danger);border-color:#3a2020;" title="Delete project">🗑</button>` : ''}
     `;

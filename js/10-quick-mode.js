@@ -86,8 +86,10 @@
     const isLight = theme === 'light';
     const label = document.getElementById('themeLabel');
     const thumb = document.getElementById('themeToggleThumb');
+    const icon  = document.getElementById('themeToggleIcon');
     if (label) label.textContent = isLight ? 'Light' : 'Dark';
     if (thumb) thumb.style.transform = isLight ? 'translateX(17px)' : 'translateX(0)';
+    if (icon)  icon.className = isLight ? 'ti ti-sun' : 'ti ti-moon';
   }
 
   function toggleAppTheme() {
