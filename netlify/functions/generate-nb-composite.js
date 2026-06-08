@@ -305,13 +305,101 @@ exports.handler = async (event) => {
     }
   }
 
-  // ── Stage 2: Composite generation (single-stage, original frame as reference) ─
-  // Photo 2 is always the original scene frame — never inpainted. The pose analysis
-  // block (LOCK / ARM / PROP STATE format) gives the model explicit text instructions
-  // so it knows exactly what to preserve vs. replace without needing a clean background.
-  const photo_guide = hasFrame
-    ? 'Photo 1 = Scene reference frame (the base image — background and composition to preserve). Photo 2 = Avatar (the replacement person — face, body, clothing, accessories to use).'
-    : `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 2'}.`;
+  // ── Stage 2: Inpainting pass ─────────────────────────────────────────────────
+  // Remove the person from the scene frame to get a clean background.
+  // Stage 3 then places the avatar into this clean scene — no ghosting possible.
+  let cleanBgImg = frameImg; // fallback: original frame
+  let inpaintSucceeded = false;
+
+  if (hasFrame) {
+    const inpaintBody = JSON.stringify({
+      systemInstruction: { parts: [{ text: `You are a photo inpainting expert. Remove the person AND everything they are holding from this photo completely and fill with natural background.
+
+RULES:
+1. Remove every part of the person — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing.
+2. Remove any object held by or in contact with the person (bottles, models, bags, props — anything). Do NOT leave floating objects.
+3. Fill ALL erased areas with a seamless continuation of the surrounding background — walls, shelves, floor, furniture, whatever is visible nearby.
+4. Preserve every background element that the person was NOT touching — shelves, wall colors, flags, windows, decor, products on shelves.
+5. Output must look like the same room photographed with nobody in it and nothing being held.` }] },
+      contents: [{ role: 'user', parts: [
+        { text: 'Remove the person and everything they are holding from this photo:' },
+        { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
+        { text: 'Output: same room, same shelves, same background — person and props completely removed, gaps filled seamlessly.' },
+      ]}],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.1 },
+    });
+
+    const inpaintPath = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+    try {
+      const inpaintResult = await httpsRequest({
+        hostname: `${LOCATION}-aiplatform.googleapis.com`,
+        path: inpaintPath, method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(inpaintBody) },
+      }, inpaintBody);
+
+      if (inpaintResult?.status === 429) {
+        return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit (inpaint stage). Please wait and retry.' }) };
+      }
+      for (const c of (inpaintResult?.data?.candidates || [])) {
+        for (const p of (c?.content?.parts || [])) {
+          if (p.inlineData?.data) {
+            cleanBgImg = { b64: p.inlineData.data, mime: p.inlineData.mimeType || 'image/png' };
+            inpaintSucceeded = true;
+            console.log('generate-nb-composite: inpaint success — clean background ready');
+            break;
+          }
+        }
+        if (inpaintSucceeded) break;
+      }
+      if (!inpaintSucceeded) console.warn('generate-nb-composite: inpaint returned no image — using original frame');
+    } catch(e) {
+      console.warn('generate-nb-composite: inpaint error:', e.message, '— using original frame');
+    }
+  }
+
+  // ── Composite pass ────────────────────────────────────────────────────────
+  // Photo 1 = avatar (always).
+  // Photo 2 = clean background from inpaint (if succeeded) OR omitted (if failed).
+  // Photo 3 = original frame — prop/position/scale reference (always, if hasFrame).
+  //
+  // IMPORTANT: when inpaint failed, Photo 2 is omitted entirely.
+  // We never label the original frame (with person still in it) as "clean background" —
+  // that would be a lie to the model and produce bad results.
+  let photo_guide, systemRules;
+  if (!hasFrame) {
+    photo_guide  = `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
+    systemRules  = `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
+  } else if (inpaintSucceeded) {
+    // 3-photo mode: avatar | clean background | original frame (prop reference)
+    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = clean background (person removed — use this as the scene). Photo 3 = original scene — reference ONLY for identifying the prop being held.';
+    systemRules  = `You are a professional photo compositor placing an avatar into a scene.
+
+Photo 1 = AVATAR — the person to insert (face, body, clothing, accessories).
+Photo 2 = CLEAN BACKGROUND — the scene with the person already removed. This is the ONLY background for the output.
+Photo 3 = ORIGINAL SCENE — reference only for identifying the prop the person was holding and their position/scale.
+
+MANDATORY RULES:
+1. BACKGROUND: Use Photo 2 as the entire background. Preserve it exactly — every wall, shelf, object, color, flag, window. Never use Photo 1's background.
+2. PLACE AVATAR: Insert the Photo 1 avatar at the same position and scale shown in Photo 3. Match the pose from the ARM and PROP STATE lines in the instruction.
+3. PROP: Identify the prop in Photo 3. The avatar MUST hold that same prop in the same hand at the same orientation toward camera. Render it naturally in the avatar's grip.
+4. ONE PERSON: Only the Photo 1 avatar in the output. No other people, no ghost limbs.
+5. LIGHTING: Match Photo 2's scene lighting exactly.`;
+  } else {
+    // 2-photo fallback mode (inpaint failed): avatar | original frame
+    // Can't pretend Photo 2 is clean — it's not. Use it as scene reference only.
+    photo_guide  = 'Photo 1 = avatar (the replacement person — use their face, body, clothing, accessories). Photo 2 = original scene — use its background exactly but replace the person with the Photo 1 avatar.';
+    systemRules  = `You are a professional photo compositor replacing a person in a scene.
+
+Photo 1 = AVATAR — the replacement person (face, body, clothing, accessories to use).
+Photo 2 = ORIGINAL SCENE — the background and composition to preserve. Replace the person in Photo 2 with the Photo 1 avatar.
+
+MANDATORY RULES:
+1. BACKGROUND: Preserve Photo 2's background exactly — walls, shelves, objects, colors, flags, windows. Never use Photo 1's background.
+2. REPLACE PERSON: Remove the person in Photo 2 completely. Place the Photo 1 avatar at the same position and scale.
+3. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object at the same position.
+4. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting of the original person.
+5. LIGHTING: Match Photo 2's scene lighting.`;
+  }
 
   const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, disembodied arms, extra hands, ghost limbs, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
   const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
@@ -319,30 +407,19 @@ exports.handler = async (event) => {
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
 
   const parts = [];
-  if (hasFrame) {
-    // Scene frame is Photo 1 — model treats the first image as the base to modify
-    parts.push({ text: 'Photo 1 (scene reference frame — base image, background and composition to preserve):' });
+  parts.push({ text: 'Photo 1 — AVATAR (the person to place into the scene):' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
+  if (hasFrame && inpaintSucceeded) {
+    parts.push({ text: 'Photo 2 — CLEAN BACKGROUND (person and props removed — use this as the scene background):' });
+    parts.push({ inlineData: { mimeType: cleanBgImg.mime, data: cleanBgImg.b64 } });
+    parts.push({ text: 'Photo 3 — ORIGINAL SCENE (reference ONLY — for prop identification and avatar scale/position; do NOT copy the person):' });
+    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
+  } else if (hasFrame) {
+    // inpaint failed — Photo 2 only (original frame), used as scene reference
+    parts.push({ text: 'Photo 2 — ORIGINAL SCENE (background and composition reference — replace the person with the Photo 1 avatar):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-  // Avatar is Photo 2 — replacement person reference
-  parts.push({ text: 'Photo 2 (avatar — the replacement person):' });
-  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
-
-  const systemRules = hasFrame
-    ? `You are a professional photo compositor. Your task is PERSON REPLACEMENT.
-
-Photo 1 = the scene reference frame. This is the BASE IMAGE. Start from Photo 1 and modify it.
-Photo 2 = the avatar (replacement person — face, body, clothing, accessories).
-
-MANDATORY RULES:
-1. BASE IMAGE: Photo 1 is the starting point. Its background — walls, shelves, furniture, objects, colors, flags, windows, lighting — must be preserved exactly in the output. Do NOT use Photo 2's background.
-2. REPLACE PERSON: Remove the person in Photo 1 completely. Replace them with the Photo 2 avatar at the same position, scale, and pose. No ghosting, no blending, no transparency of the original person.
-3. FOLLOW LOCK INSTRUCTIONS: The instruction contains explicit LOCK, ARM, PROP STATE, and LIGHT directives. Follow each one exactly.
-4. PROP: If PROP or PROP STATE describes an object being held, the avatar MUST hold that same object in the same hand at the same position and orientation as the original person in Photo 1.
-5. ONE PERSON ONLY: Only the Photo 2 avatar in the output. No other people, no floating hands, no ghost limbs.
-6. LIGHTING: Light the avatar to match Photo 1's scene lighting exactly.`
-    : `Generate a photorealistic portrait of the person in Photo 2 as described in the instruction.`;
 
   const requestBody = JSON.stringify({
     systemInstruction: { parts: [{ text: systemRules }] },
@@ -355,7 +432,7 @@ MANDATORY RULES:
 
   const apiPath  = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
   const hostname = `${LOCATION}-aiplatform.googleapis.com`;
-  const mode = hasFrame ? (poseAnalysis ? 'composite+analysis' : 'composite') : 'generate-only';
+  const mode = !hasFrame ? 'generate-only' : (inpaintSucceeded ? (poseAnalysis ? '3photo+analysis' : '3photo') : (poseAnalysis ? '2photo-fallback+analysis' : '2photo-fallback'));
 
   console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, promptLen=${fullPrompt.length}`);
 
@@ -399,8 +476,8 @@ MANDATORY RULES:
 
   const candidates = result.data.candidates || [];
   for (const candidate of candidates) {
-    const parts = candidate?.content?.parts || [];
-    for (const part of parts) {
+    const responseParts = candidate?.content?.parts || [];
+    for (const part of responseParts) {
       if (part.inlineData?.data) {
         const mime = part.inlineData.mimeType || 'image/png';
         console.log('generate-nb-composite: image generated, mime:', mime);
