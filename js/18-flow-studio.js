@@ -28,21 +28,48 @@
   // ── Mode toggle ────────────────────────────────────────────────────────────
   window.switchFsMode = function(mode) {
     _fsMode = mode;
-    var imgPanel = document.getElementById('fsImgPanel');
-    var vidPanel = document.getElementById('fsVidPanel');
-    var imgBtn   = document.getElementById('fsModeImgBtn');
-    var vidBtn   = document.getElementById('fsModeVidBtn');
-    if (imgPanel) imgPanel.style.display = mode === 'image' ? '' : 'none';
-    if (vidPanel) vidPanel.style.display = mode === 'video' ? '' : 'none';
-    _fsStyleModeBtn(imgBtn, mode === 'image');
-    _fsStyleModeBtn(vidBtn, mode === 'video');
+    var isImg = mode === 'image';
+
+    // Ingredient panels
+    var imgRefs = document.getElementById('fsImgRefs');
+    var vidRefs = document.getElementById('fsVidRefs');
+    if (imgRefs) imgRefs.style.display = isImg ? '' : 'none';
+    if (vidRefs) vidRefs.style.display = isImg ? 'none' : '';
+
+    // Prompts
+    var imgPrompt = document.getElementById('fsImgPrompt');
+    var vidPrompt = document.getElementById('fsVidPrompt');
+    if (imgPrompt) imgPrompt.style.display = isImg ? '' : 'none';
+    if (vidPrompt) vidPrompt.style.display = isImg ? 'none' : '';
+
+    // Settings (count vs duration+count)
+    var imgSettings = document.getElementById('fsImgSettings');
+    var vidSettings = document.getElementById('fsVidSettings');
+    if (imgSettings) imgSettings.style.display = isImg ? 'flex' : 'none';
+    if (vidSettings) vidSettings.style.display = isImg ? 'none' : 'flex';
+
+    // Generate buttons
+    var genImg = document.getElementById('fsBtnGenImg');
+    var genVid = document.getElementById('fsBtnGenVid');
+    if (genImg) genImg.style.display = isImg ? '' : 'none';
+    if (genVid) genVid.style.display = isImg ? 'none' : '';
+
+    // Spinners
+    var spnImg = document.getElementById('fsImgSpinner');
+    var spnVid = document.getElementById('fsVidSpinner');
+    if (spnImg && spnImg.style.display !== 'none') { /* keep visible if actively spinning */ }
+    if (!isImg && spnImg) spnImg.style.display = 'none';
+    if (isImg  && spnVid) spnVid.style.display = 'none';
+
+    // Mode pill active states
+    _fsStyleModeBtn(document.getElementById('fsModeImgBtn'), isImg);
+    _fsStyleModeBtn(document.getElementById('fsModeVidBtn'), !isImg);
   };
 
   function _fsStyleModeBtn(btn, active) {
     if (!btn) return;
-    btn.style.background  = active ? 'rgba(52,211,153,0.18)' : 'var(--surface-2)';
-    btn.style.borderColor = active ? 'rgba(52,211,153,0.55)' : 'var(--border-2)';
-    btn.style.color       = active ? '#34d399'               : 'var(--text-3)';
+    btn.style.background = active ? 'rgba(52,211,153,0.2)' : 'transparent';
+    btn.style.color      = active ? '#34d399'              : 'var(--text-3)';
   }
 
   // ── Image slot upload ──────────────────────────────────────────────────────
@@ -287,6 +314,14 @@
   }
 
   // ── Render image results strip ─────────────────────────────────────────────
+  function _updateEmptyState() {
+    var empty = document.getElementById('fsEmptyState');
+    if (!empty) return;
+    var hasImg = _fsImgHistory.length > 0;
+    var hasVid = _fsVidHistory.length > 0;
+    empty.style.display = (hasImg || hasVid) ? 'none' : 'flex';
+  }
+
   function _renderImgStrip() {
     var strip   = document.getElementById('fsImgStrip');
     var wrapper = document.getElementById('fsImgResults');
@@ -294,6 +329,7 @@
     if (!strip) return;
     if (countEl) countEl.textContent = _fsImgHistory.length;
     if (wrapper) wrapper.style.display = _fsImgHistory.length ? '' : 'none';
+    _updateEmptyState();
 
     strip.innerHTML = '';
     _fsImgHistory.forEach(function(item, idx) {
@@ -384,6 +420,7 @@
     var doneCount = _fsVidHistory.filter(function(i) { return !i.pending; }).length;
     if (countEl) countEl.textContent = doneCount;
     if (wrapper) wrapper.style.display = _fsVidHistory.length ? '' : 'none';
+    _updateEmptyState();
 
     strip.innerHTML = '';
     _fsVidHistory.forEach(function(item, idx) {
@@ -541,7 +578,7 @@
     var varCount = varSel ? Math.max(1, Math.min(3, parseInt(varSel.value) || 1)) : 1;
     var btn     = document.getElementById('fsBtnGenImg');
     var spinner = document.getElementById('fsImgSpinner');
-    if (btn)    { btn.disabled = true; btn.textContent = varCount === 1 ? 'Generating…' : 'Generating ' + varCount + '…'; }
+    if (btn)    { btn.disabled = true; btn.textContent = varCount === 1 ? '✨ Generating…' : '✨ Generating ' + varCount + '…'; }
     if (spinner) spinner.style.display = 'flex';
 
     try {
@@ -610,7 +647,7 @@
       _fsStatus('fsImgStatusTxt', '', '');
       if (typeof showToast === 'function') showToast('Image error: ' + (e.message || e), 'error', 6000);
     } finally {
-      if (btn)     { btn.disabled = false; btn.textContent = '✨ Generate Image'; }
+      if (btn)     { btn.disabled = false; btn.textContent = '✨ Generate'; }
       if (spinner)  spinner.style.display = 'none';
     }
   };
@@ -625,8 +662,8 @@
     var btn = document.getElementById('fsBtnGenVid');
     if (!btn) return;
     btn.textContent = _fsVidActiveCount > 0
-      ? '⚡ Generate Video (' + _fsVidActiveCount + ' running)'
-      : '⚡ Generate Video';
+      ? '⚡ Generate (' + _fsVidActiveCount + '…)'
+      : '⚡ Generate';
   }
 
   // Run a single video generation. Shows a pending placeholder card in the
