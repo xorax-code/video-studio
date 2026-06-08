@@ -3,36 +3,22 @@
  *
  * ── PIPELINE ─────────────────────────────────────────────────────────────────
  *
- * Stage 1 — Pose Analysis  (gemini-2.0-flash-001, text-only, ~1–2s)
+ * Stage 1 — Pose Analysis  (gemini-2.0-flash via Gemini Developer API, text-only)
  *   Analyzes the scene frame: arm positions, prop details, lighting, background.
- *   Separate quota from the image model. Fails gracefully.
  *
- * Stage 2 — Appearance Transfer  (gemini-2.5-flash-image, single call)
+ * Stage 2 — Appearance Transfer  (gemini-3.1-flash-image via Gemini Developer API)
+ *   Nano Banana 2 — Google's model with native character consistency.
  *   Photo 1 = scene frame  (base image — background, arms, prop all locked)
  *   Photo 2 = avatar       (face, hair, clothing to apply to the person in Photo 1)
  *
- *   Task: appearance transfer, not person replacement.
- *   The original person's pose, arm positions, and prop grip are preserved.
- *   Only their face, hair, headwrap, clothing and jewelry change.
- *
- * Takes:
- *   - avatarB64      — base64 avatar photo
- *   - avatarMime     — MIME type of avatar
- *   - frameB64       — base64 source video frame
- *   - frameMime      — MIME type of frame
- *   - instruction    — NB Pro generation instruction from 17-nb-api.js
- *   - avatarDesc     — text description of the avatar's appearance
- *   - negativePrompt — things to avoid
- *
- * Returns: { imageB64, mime }
+ * Requires env var: GEMINI_API_KEY  (from aistudio.google.com/apikey)
  */
 
 const https  = require('https');
-const crypto = require('crypto');
 
-const LOCATION       = 'us-central1';
-const MODEL          = 'gemini-3.1-flash-image-preview';
-const ANALYSIS_MODEL = 'gemini-2.0-flash-001';
+const MODEL          = 'gemini-3.1-flash-image';
+const ANALYSIS_MODEL = 'gemini-2.0-flash';
+const GEMINI_HOST    = 'generativelanguage.googleapis.com';
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -49,48 +35,6 @@ function httpsRequest(options, body) {
     });
     req.on('error', reject);
     if (body) req.write(body);
-    req.end();
-  });
-}
-
-// ── Service account → Vertex AI access token ─────────────────────────────────
-async function getAccessToken(saJson) {
-  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
-  const now = Math.floor(Date.now() / 1000);
-  const claim = {
-    iss:   sa.client_email,
-    scope: 'https://www.googleapis.com/auth/cloud-platform',
-    aud:   'https://oauth2.googleapis.com/token',
-    exp:   now + 3600,
-    iat:   now,
-  };
-  const header  = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
-  const payload = Buffer.from(JSON.stringify(claim)).toString('base64url');
-  const unsigned = header + '.' + payload;
-  const signer = crypto.createSign('RSA-SHA256');
-  signer.update(unsigned);
-  const sig = signer.sign(sa.private_key, 'base64url');
-  const jwt = unsigned + '.' + sig;
-  const body = 'grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=' + jwt;
-  return new Promise((resolve, reject) => {
-    const req = https.request({
-      hostname: 'oauth2.googleapis.com',
-      path:     '/token',
-      method:   'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
-    }, (res) => {
-      const chunks = [];
-      res.on('data', c => chunks.push(c));
-      res.on('end', () => {
-        try {
-          const data = JSON.parse(Buffer.concat(chunks).toString());
-          if (data.access_token) resolve(data.access_token);
-          else reject(new Error('Token exchange failed: ' + JSON.stringify(data)));
-        } catch(e) { reject(e); }
-      });
-    });
-    req.on('error', reject);
-    req.write(body);
     req.end();
   });
 }
@@ -112,7 +56,7 @@ async function getAuthUser(jwt) {
 }
 
 // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
-async function analyzeFramePose(frameImg, accessToken, projectId) {
+async function analyzeFramePose(frameImg, apiKey) {
   const prompt = `You are analyzing a video frame for photo compositing. A person is visible.
 
 Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON only):
@@ -140,13 +84,12 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
     },
   });
 
-  const path = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${ANALYSIS_MODEL}:generateContent`;
+  const path = `/v1beta/models/${ANALYSIS_MODEL}:generateContent?key=${apiKey}`;
   try {
     const res = await httpsRequest({
-      hostname: `${LOCATION}-aiplatform.googleapis.com`,
+      hostname: GEMINI_HOST,
       path, method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
         'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(reqBody),
       },
@@ -168,11 +111,11 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
 // ── Build LOCK instruction block from pose analysis ───────────────────────────
 function buildLockBlock(pa) {
   const lines = [];
-  if (pa.background)                          lines.push(`LOCK BACKGROUND: ${pa.background}.`);
-  if (pa.arm_instruction)                     lines.push(`LOCK ARMS: ${pa.arm_instruction} — do not move these arms.`);
-  if (pa.prop && pa.prop !== 'none')          lines.push(`LOCK PROP: ${pa.prop} — keep exactly as held, same grip and orientation.`);
+  if (pa.background)                             lines.push(`LOCK BACKGROUND: ${pa.background}.`);
+  if (pa.arm_instruction)                        lines.push(`LOCK ARMS: ${pa.arm_instruction} — do not move these arms.`);
+  if (pa.prop && pa.prop !== 'none')             lines.push(`LOCK PROP: ${pa.prop} — keep exactly as held, same grip and orientation.`);
   if (pa.prop_state && pa.prop_state !== 'none') lines.push(`PROP STATE: ${pa.prop_state}.`);
-  if (pa.lighting)                            lines.push(`LOCK LIGHT: ${pa.lighting}.`);
+  if (pa.lighting)                               lines.push(`LOCK LIGHT: ${pa.lighting}.`);
   lines.push('');
   return lines.join('\n');
 }
@@ -191,8 +134,9 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  if (!process.env.GOOGLE_SERVICE_ACCOUNT_JSON || !process.env.GOOGLE_CLOUD_PROJECT_ID) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error.' }) };
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'GEMINI_API_KEY not configured.' }) };
   }
 
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
@@ -233,28 +177,17 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 
-  const hasFrame  = !!frameImg;
-  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
-
-  let accessToken;
-  try {
-    accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  } catch(e) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with Vertex AI.' }) };
-  }
+  const hasFrame = !!frameImg;
 
   // ── Stage 1: Pose analysis ────────────────────────────────────────────────
   let poseAnalysis = null;
   if (hasFrame) {
-    poseAnalysis = await analyzeFramePose(frameImg, accessToken, projectId);
+    poseAnalysis = await analyzeFramePose(frameImg, apiKey);
   }
 
-  // ── Stage 2: Appearance transfer ─────────────────────────────────────────
-  // Photo 1 = scene frame (base image — the model edits this)
+  // ── Stage 2: Appearance transfer via Nano Banana 2 ───────────────────────
+  // Photo 1 = scene frame (base — background, arms, prop locked)
   // Photo 2 = avatar      (appearance source: face, hair, clothing)
-  //
-  // The person's pose, arms, and prop in Photo 1 are locked.
-  // Only their appearance (face, hair, headwrap, clothing, jewelry) changes.
 
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis) : '';
 
@@ -303,36 +236,35 @@ WHAT TO LOCK (keep from Photo 1 exactly):
     },
   });
 
-  const apiPath  = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${MODEL}:generateContent`;
-  const hostname = `${LOCATION}-aiplatform.googleapis.com`;
-  const mode     = hasFrame ? (poseAnalysis ? 'appearance-transfer+analysis' : 'appearance-transfer') : 'generate-only';
+  const apiPath = `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
+  const mode    = hasFrame ? (poseAnalysis ? 'appearance-transfer+analysis' : 'appearance-transfer') : 'generate-only';
 
   console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, promptLen=${fullPrompt.length}`);
 
   let result;
   try {
     result = await httpsRequest({
-      hostname, path: apiPath, method: 'POST',
+      hostname: GEMINI_HOST,
+      path: apiPath, method: 'POST',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
         'Content-Type':   'application/json',
         'Content-Length': Buffer.byteLength(requestBody),
       },
     }, requestBody);
   } catch(e) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Vertex AI: ' + e.message }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
   }
 
-  console.log('generate-nb-composite: Vertex AI status:', result.status);
+  console.log('generate-nb-composite: Gemini API status:', result.status);
 
   if (result.status === 429) {
-    return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Vertex AI rate limit. Please wait and retry.' }) };
+    return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Gemini API rate limit. Please wait and retry.' }) };
   }
   if (!result.data) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Vertex AI. Status: ' + result.status }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Gemini API. Status: ' + result.status }) };
   }
   if (result.status !== 200 || result.data.error) {
-    const errMsg = result.data?.error?.message || `Vertex AI error (HTTP ${result.status})`;
+    const errMsg = result.data?.error?.message || `Gemini API error (HTTP ${result.status})`;
     console.error('generate-nb-composite: error:', errMsg);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
@@ -357,7 +289,7 @@ WHAT TO LOCK (keep from Photo 1 exactly):
   return {
     statusCode: 502,
     headers: CORS,
-    body: JSON.stringify({ error: 'Model returned no image. Check Vertex AI logs.' }),
+    body: JSON.stringify({ error: 'Model returned no image. Check Gemini API logs.' }),
   };
 
   } catch(topErr) {
