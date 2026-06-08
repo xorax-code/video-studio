@@ -316,11 +316,12 @@ exports.handler = async (event) => {
       systemInstruction: { parts: [{ text: `You are a photo inpainting expert. Remove the person AND everything they are holding from this photo completely and fill with natural background.
 
 RULES:
-1. Remove every part of the person — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing.
-2. Remove any object held by or in contact with the person (bottles, models, bags, props — anything). Do NOT leave floating objects.
-3. Fill ALL erased areas with a seamless continuation of the surrounding background — walls, shelves, floor, furniture, whatever is visible nearby.
-4. Preserve every background element that the person was NOT touching — shelves, wall colors, flags, windows, decor, products on shelves.
-5. Output must look like the same room photographed with nobody in it and nothing being held.` }] },
+1. Remove every part of the person — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing. This includes partial limbs, fingertips, and any skin visible at the edges.
+2. Remove any object held by or in contact with the person (bottles, models, bags, props — anything). Do NOT leave floating objects or hand artifacts.
+3. Pay special attention to hands gripping objects — remove the hands AND the prop together. Do not leave knuckles, fingertips, or partial hands in the scene.
+4. Fill ALL erased areas with a seamless continuation of the surrounding background — walls, shelves, floor, furniture, whatever is visible nearby.
+5. Preserve every background element that the person was NOT touching — shelves, wall colors, flags, windows, decor, products on shelves.
+6. Output must look like the same room photographed with nobody in it, nothing being held, and zero body-part artifacts.` }] },
       contents: [{ role: 'user', parts: [
         { text: 'Remove the person and everything they are holding from this photo:' },
         { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
@@ -371,23 +372,24 @@ RULES:
     systemRules  = `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
   } else if (inpaintSucceeded) {
     // 3-photo mode: avatar | clean background | original frame (prop reference)
-    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = clean background (person removed — use this as the scene). Photo 3 = original scene — reference ONLY for identifying the prop being held.';
+    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = clean background (person removed — use this as the scene). Photo 3 = original scene — reference ONLY for prop identification and subject scale/distance from camera.';
     systemRules  = `You are a professional photo compositor placing an avatar into a scene.
 
 Photo 1 = AVATAR — the person to insert (face, body, clothing, accessories).
 Photo 2 = CLEAN BACKGROUND — the scene with the person already removed. This is the ONLY background for the output.
-Photo 3 = ORIGINAL SCENE — reference only for identifying the prop the person was holding and their position/scale.
+Photo 3 = ORIGINAL SCENE — reference only for: (a) what prop the person held, (b) how large/close the subject was to the camera.
 
 MANDATORY RULES:
-1. BACKGROUND: Use Photo 2 as the entire background. Preserve it exactly — every wall, shelf, object, color, flag, window. Never use Photo 1's background.
-2. PLACE AVATAR: Insert the Photo 1 avatar at the same position and scale shown in Photo 3. Match the pose from the ARM and PROP STATE lines in the instruction.
-3. PROP: Identify the prop in Photo 3. The avatar MUST hold that same prop in the same hand at the same orientation toward camera. Render it naturally in the avatar's grip.
-4. ONE PERSON: Only the Photo 1 avatar in the output. No other people, no ghost limbs.
-5. LIGHTING: Match Photo 2's scene lighting exactly.`;
+1. BACKGROUND: Use Photo 2 as the entire background. Preserve it exactly. Never use Photo 1's background.
+2. SCALE: Match the subject's scale and camera distance from Photo 3. If Photo 3 shows a medium-close shot where the person fills most of the frame height, the avatar must appear at that same scale and distance — not smaller or farther away.
+3. PLACE AVATAR: Insert the Photo 1 avatar centered at the same horizontal position as the person in Photo 3.
+4. PROP: Look at Photo 3 to identify what object is being held. The avatar MUST hold that same object. Her hands are physically attached to her body — the object must be gripped by her own hands, not floating. Do NOT copy the hands from Photo 3 — use the avatar's own hands from Photo 1 and have them grip the prop.
+5. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands, no artifacts.
+6. LIGHTING: Match Photo 2's scene lighting exactly.`;
   } else {
     // 2-photo fallback mode (inpaint failed): avatar | original frame
     // Can't pretend Photo 2 is clean — it's not. Use it as scene reference only.
-    photo_guide  = 'Photo 1 = avatar (the replacement person — use their face, body, clothing, accessories). Photo 2 = original scene — use its background exactly but replace the person with the Photo 1 avatar.';
+    photo_guide  = 'Photo 1 = avatar (the replacement person — use their face, body, clothing, accessories). Photo 2 = original scene — use its background exactly but replace the person with the Photo 1 avatar at the same scale and position.';
     systemRules  = `You are a professional photo compositor replacing a person in a scene.
 
 Photo 1 = AVATAR — the replacement person (face, body, clothing, accessories to use).
@@ -395,13 +397,14 @@ Photo 2 = ORIGINAL SCENE — the background and composition to preserve. Replace
 
 MANDATORY RULES:
 1. BACKGROUND: Preserve Photo 2's background exactly — walls, shelves, objects, colors, flags, windows. Never use Photo 1's background.
-2. REPLACE PERSON: Remove the person in Photo 2 completely. Place the Photo 1 avatar at the same position and scale.
-3. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object at the same position.
-4. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting of the original person.
-5. LIGHTING: Match Photo 2's scene lighting.`;
+2. SCALE: The avatar must appear at the same size and camera distance as the person in Photo 2. Match their scale exactly — not smaller, not farther away.
+3. REPLACE PERSON: Remove the person in Photo 2 completely. Place the Photo 1 avatar at the same position and scale.
+4. PROP: If PROP / PROP STATE lines describe a held object, the avatar MUST hold that same object at the same position. Her hands must be physically connected to her body gripping the prop — no floating hands.
+5. ONE PERSON: Only the Photo 1 avatar in the output. No ghosting of the original person, no floating limbs.
+6. LIGHTING: Match Photo 2's scene lighting.`;
   }
 
-  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, disembodied arms, extra hands, ghost limbs, arms at sides when they should be raised, arms hanging down, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
+  const coreNegatives = 'ghosting, double exposure, semi-transparent person, two people, floating hands, severed hands, hands not connected to body, disembodied arms, extra hands, ghost limbs, hands copied from reference photo, arms at sides when they should be raised, arms hanging down, subject too small, subject far away, wide shot when original was medium-close, text overlay, text from reference frame, labels from reference, numbers on body, captions, composite seam, edge halo, color fringing, wrong background, avatar background';
   const allNegatives = [coreNegatives, negativePrompt].filter(Boolean).join(', ');
   const negLine = `\n\nAVOID IN OUTPUT: ${allNegatives}`;
   const fullPrompt = `${photo_guide}\n\n${enrichedInstruction}${negLine}`;
