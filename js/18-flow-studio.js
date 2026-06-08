@@ -7,7 +7,7 @@
 
   // ── State ──────────────────────────────────────────────────────────────────
   var _fsMode     = 'image';
-  var _fsImgSlots = [null,null,null,null,null]; // {dataUrl,b64,mime}
+  var _fsImgSlots = [null,null,null,null,null,null]; // {dataUrl,b64,mime} — Subject/Background/Style/Ref/Product/Extra
   var _fsVidFrame = null;                       // {dataUrl,b64,mime}
 
   // History arrays — results are never replaced, only appended (newest first)
@@ -96,7 +96,7 @@
   };
 
   window.fsSlotClearAll = function() {
-    for (var i = 0; i < 5; i++) {
+    for (var i = 0; i < 6; i++) {
       _fsImgSlots[i] = null;
       _fsRenderSlot(i);
       var inp = document.getElementById('fsSlotInput-' + i);
