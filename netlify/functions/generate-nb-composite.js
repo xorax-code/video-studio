@@ -313,19 +313,19 @@ exports.handler = async (event) => {
 
   if (hasFrame) {
     const inpaintBody = JSON.stringify({
-      systemInstruction: { parts: [{ text: `You are a photo inpainting expert. Remove the person AND everything they are holding from this photo completely and fill with natural background.
+      systemInstruction: { parts: [{ text: `You are a photo inpainting expert. Remove the person from this photo but KEEP any object they are holding.
 
 RULES:
-1. Remove every part of the person — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing. This includes partial limbs, fingertips, and any skin visible at the edges.
-2. Remove any object held by or in contact with the person (bottles, models, bags, props — anything). Do NOT leave floating objects or hand artifacts.
-3. Pay special attention to hands gripping objects — remove the hands AND the prop together. Do not leave knuckles, fingertips, or partial hands in the scene.
-4. Fill ALL erased areas with a seamless continuation of the surrounding background — walls, shelves, floor, furniture, whatever is visible nearby.
-5. Preserve every background element that the person was NOT touching — shelves, wall colors, flags, windows, decor, products on shelves.
-6. Output must look like the same room photographed with nobody in it, nothing being held, and zero body-part artifacts.` }] },
+1. Remove the person's body — face, head, hair, neck, torso, arms, wrists, hands, fingers, legs, feet, clothing. This includes fingertips and any partial limbs at the edges.
+2. KEEP any product or object the person was holding (bottle, model, device, etc.). Let it float in mid-air at the same position — that is intentional.
+3. Fill the erased person area with a seamless continuation of the surrounding background — walls, shelves, floor, furniture.
+4. Do NOT remove, alter, or move the held prop/product. Its position, orientation, and appearance must be exactly preserved.
+5. Preserve all other background elements exactly as-is — shelves, wall colors, flags, windows, decor.
+6. Output: same room, no person, prop floating in place at the exact same position and orientation.` }] },
       contents: [{ role: 'user', parts: [
-        { text: 'Remove the person and everything they are holding from this photo:' },
+        { text: 'Remove the person from this photo but keep any object they were holding floating in place:' },
         { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
-        { text: 'Output: same room, same shelves, same background — person and props completely removed, gaps filled seamlessly.' },
+        { text: 'Output: same room, person removed and filled with background, held object preserved floating at exact same position.' },
       ]}],
       generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.1 },
     });
@@ -371,20 +371,20 @@ RULES:
     photo_guide  = `Generate a photorealistic portrait of ${avatarDesc || 'the person shown in Photo 1'}.`;
     systemRules  = `Generate a photorealistic portrait of the person in Photo 1 as described in the instruction.`;
   } else if (inpaintSucceeded) {
-    // 3-photo mode: avatar | clean background | original frame (prop reference)
-    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = clean background (person removed — use this as the scene). Photo 3 = original scene — reference ONLY for prop identification and subject scale/distance from camera.';
+    // 3-photo mode: avatar | background-with-floating-prop | original frame (scale reference)
+    photo_guide  = 'Photo 1 = avatar (the person to place). Photo 2 = scene with person removed — the real prop/product is already floating in it at its correct position. Photo 3 = original scene — reference ONLY for subject scale and camera distance.';
     systemRules  = `You are a professional photo compositor placing an avatar into a scene.
 
 Photo 1 = AVATAR — the person to insert (face, body, clothing, accessories).
-Photo 2 = CLEAN BACKGROUND — the scene with the person already removed. This is the ONLY background for the output.
-Photo 3 = ORIGINAL SCENE — reference only for: (a) what prop the person held, (b) how large/close the subject was to the camera.
+Photo 2 = SCENE WITH FLOATING PROP — the background with the person removed. The real product/prop is already visible floating in mid-air at exactly the right position. Use this as the background.
+Photo 3 = ORIGINAL SCENE — reference only for how large/close the subject was to the camera.
 
 MANDATORY RULES:
-1. BACKGROUND: Use Photo 2 as the entire background. Preserve it exactly. Never use Photo 1's background.
-2. SCALE: Match the subject's scale and camera distance from Photo 3. If Photo 3 shows a medium-close shot where the person fills most of the frame height, the avatar must appear at that same scale and distance — not smaller or farther away.
-3. PLACE AVATAR: Insert the Photo 1 avatar centered at the same horizontal position as the person in Photo 3.
-4. PROP: Look at Photo 3 to identify what object is being held. The avatar MUST hold that same object. Her hands are physically attached to her body — the object must be gripped by her own hands, not floating. Do NOT copy the hands from Photo 3 — use the avatar's own hands from Photo 1 and have them grip the prop.
-5. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands, no artifacts.
+1. BACKGROUND: Use Photo 2 as the entire background. Preserve every wall, shelf, flag, window, and the floating prop exactly as-is. Never use Photo 1's background.
+2. SCALE: Match the subject's scale and camera distance from Photo 3. If Photo 3 shows a medium-close shot where the person fills most of the frame height, the avatar must appear at the same scale and distance — not smaller.
+3. PLACE AVATAR: Insert the Photo 1 avatar at the same position as the person in Photo 3, so that her hand(s) naturally reach the floating prop in Photo 2.
+4. GRIP THE PROP: The prop/product already floating in Photo 2 is the real object — do NOT redraw or replace it. Render the avatar's hand(s) gripping it naturally. The prop stays exactly where it is; only the hand wraps around it.
+5. ONE PERSON: Only the Photo 1 avatar in the output. No ghost limbs, no floating hands disconnected from her body.
 6. LIGHTING: Match Photo 2's scene lighting exactly.`;
   } else {
     // 2-photo fallback mode (inpaint failed): avatar | original frame
@@ -413,9 +413,9 @@ MANDATORY RULES:
   parts.push({ text: 'Photo 1 — AVATAR (the person to place into the scene):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasFrame && inpaintSucceeded) {
-    parts.push({ text: 'Photo 2 — CLEAN BACKGROUND (person and props removed — use this as the scene background):' });
+    parts.push({ text: 'Photo 2 — SCENE WITH FLOATING PROP (person removed, real product/prop preserved floating at correct position — use this as the scene, grip the floating prop):' });
     parts.push({ inlineData: { mimeType: cleanBgImg.mime, data: cleanBgImg.b64 } });
-    parts.push({ text: 'Photo 3 — ORIGINAL SCENE (reference ONLY — for prop identification and avatar scale/position; do NOT copy the person):' });
+    parts.push({ text: 'Photo 3 — ORIGINAL SCENE (reference ONLY for subject scale and camera distance — do NOT copy the person from this photo):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   } else if (hasFrame) {
     // inpaint failed — Photo 2 only (original frame), used as scene reference
