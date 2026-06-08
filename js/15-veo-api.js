@@ -291,7 +291,7 @@
     if (obj.foreground_props) parts.push('Foreground and props: ' + obj.foreground_props);
     // Anchor left/right in action before adding to prompt
     if (obj.action) parts.push(_anchorLeftRight(obj.action));
-    if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech + '"');
+    if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech.toLowerCase() + '"');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');

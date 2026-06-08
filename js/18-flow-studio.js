@@ -531,9 +531,9 @@
 
       var veoJson = JSON.stringify({
         action:          veoFields.action,
-        speech:          veoFields.speech || '',
+        speech:          (veoFields.speech || '').toLowerCase(),
         duration:        dur,
-        negative_prompt: veoFields.negative_prompt || 'text, captions, watermarks, subtitles, blurry',
+        negative_prompt: veoFields.negative_prompt || 'text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, blurry',
       });
 
       _fsStatus('fsVidStatusTxt', '✦ Generating with Veo 3… (~1 min)', 'rgba(52,211,153,0.9)');
