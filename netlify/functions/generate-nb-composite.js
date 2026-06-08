@@ -232,30 +232,36 @@ exports.handler = async (event) => {
 
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis) : '';
 
+  // Always-on face replacement directive — must fire even when poseAnalysis fails
+  const faceReplaceDirective = hasFrame
+    ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1.\n\n`
+    : '';
+
   const systemInstruction = hasFrame
-    ? `You are a professional photo editor. You have been given two photos:
+    ? `You are a professional photo editor performing a FULL PERSON REPLACEMENT.
 
-Photo 1 — the base scene (background, setting, props, lighting).
-Photo 2 — the appearance reference (person whose look, face, clothing, or style may be applied).
+Photo 1 — the base scene: background, setting, props, lighting, arm positions, and held objects are preserved from this photo.
+Photo 2 — the replacement person: this person's face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.
 
-Follow the user's instruction exactly. The instruction tells you what to do — whether that is replacing the person, changing appearance, adding someone, adjusting a pose, or something else entirely. Do not assume any action that is not stated in the instruction.
+CRITICAL: The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person. Preserve only the background, prop, arms position, and lighting from Photo 1.
 
 Always remove any burned-in text, captions, or subtitles from the output image.`
     : `You are a professional photo editor. Follow the user's instruction exactly using the provided reference photo(s).`;
 
   const userPrompt = hasFrame
-    ? `${lockBlock}${instruction}`
+    ? `${faceReplaceDirective}${lockBlock}${instruction}`
     : `${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
-  const negLine = `\n\nAVOID: composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.`;
+  // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
+  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.`;
   const fullPrompt = userPrompt + negLine;
 
   const parts = [];
   if (hasFrame) {
-    parts.push({ text: 'Photo 1 — BASE SCENE (edit this — background, arms, and prop are all locked):' });
+    parts.push({ text: 'Photo 1 — BASE SCENE (keep only: background, arms, prop, lighting — the PERSON in this photo is being fully replaced):' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-  parts.push({ text: 'Photo 2 — APPEARANCE SOURCE (face, hair, headwrap, clothing, jewelry to apply):' });
+  parts.push({ text: 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   parts.push({ text: fullPrompt });
 
