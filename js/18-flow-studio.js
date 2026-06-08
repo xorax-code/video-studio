@@ -407,9 +407,11 @@
     var jwt = await _fsJwt();
     if (!jwt) { if (typeof showToast === 'function') showToast('Please log in.', 'warning'); return; }
 
+    var varSel  = document.getElementById('fsImgVariations');
+    var varCount = varSel ? Math.max(1, Math.min(3, parseInt(varSel.value) || 1)) : 1;
     var btn     = document.getElementById('fsBtnGenImg');
     var spinner = document.getElementById('fsImgSpinner');
-    if (btn)    { btn.disabled = true; btn.textContent = 'Generating 3…'; }
+    if (btn)    { btn.disabled = true; btn.textContent = varCount === 1 ? 'Generating…' : 'Generating ' + varCount + '…'; }
     if (spinner) spinner.style.display = 'flex';
 
     try {
@@ -424,7 +426,7 @@
         instruction = JSON.parse(raw).instruction || casual;
       } catch(_) {}
 
-      _fsStatus('fsImgStatusTxt', '✦ Generating 3 variations…', 'rgba(52,211,153,0.9)');
+      _fsStatus('fsImgStatusTxt', varCount === 1 ? '✦ Generating image…' : '✦ Generating ' + varCount + ' variations…', 'rgba(52,211,153,0.9)');
 
       var images = [];
       for (var i = 0; i < loaded.length; i++) {
@@ -444,7 +446,7 @@
           .catch(function(e) { return { ok: false, data: { error: e.message } }; });
       }
 
-      var results = await Promise.all([_doFetch(), _doFetch(), _doFetch()]);
+      var results = await Promise.all(Array.from({ length: varCount }, _doFetch));
 
       var newItems = [];
       var errors   = [];
@@ -468,7 +470,9 @@
       if (strip) strip.scrollLeft = 0;
 
       _fsStatus('fsImgStatusTxt', '', '');
-      var msg = newItems.length === 3 ? '3 variations generated!' : newItems.length + ' of 3 variations generated.';
+      var msg = newItems.length === varCount
+        ? (varCount === 1 ? 'Image generated!' : varCount + ' variations generated!')
+        : newItems.length + ' of ' + varCount + ' variations generated.';
       if (typeof showToast === 'function') showToast(msg, 'success', 3000);
 
     } catch(e) {
@@ -502,12 +506,27 @@
     try {
       if (typeof generateVeoClipViaAPI !== 'function') throw new Error('Veo API not loaded — refresh the page.');
 
-      _fsStatus('fsVidStatusTxt', '✦ Building prompt with GPT…', 'rgba(139,92,246,0.9)');
-      var veoFields = { action: casual, speech: '', negative_prompt: 'text, captions, watermarks, subtitles, blurry' };
+      _fsStatus('fsVidStatusTxt', '✦ Analyzing scene & building prompt…', 'rgba(139,92,246,0.9)');
+      var veoFields = { action: casual, speech: '', negative_prompt: 'text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, blurry' };
       try {
-        var raw = await _fsGpt(_FS_VID_SYS, casual, jwt, 400);
-        raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
-        veoFields = Object.assign(veoFields, JSON.parse(raw));
+        // Build payload — include start frame if one is loaded so Gemini 2.5 Flash
+        // can see the actual scene and ground the action in what's really there.
+        var enhPayload = { casual: casual, duration: dur };
+        if (_fsVidFrame && _fsVidFrame.dataUrl) {
+          var _cf = await _fsCompress(_fsVidFrame.dataUrl, 768, 0.80);
+          var _cm = _cf.indexOf(',');
+          enhPayload.frameB64  = _cf.slice(_cm + 1);
+          enhPayload.frameMime = _cf.slice(5, _cm).split(';')[0] || 'image/jpeg';
+        }
+        var enhRes  = await fetch('/.netlify/functions/enhance-veo-prompt', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body:    JSON.stringify(enhPayload),
+        });
+        var enhData; try { enhData = await enhRes.json(); } catch(_) { enhData = {}; }
+        if (enhRes.ok && enhData.action) {
+          veoFields = Object.assign(veoFields, enhData);
+        }
       } catch(_) {}
 
       var veoJson = JSON.stringify({
