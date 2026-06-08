@@ -464,6 +464,7 @@
       newItems.reverse().forEach(function(item) { _fsImgHistory.unshift(item); });
       if (_fsImgHistory.length > _MAX_HISTORY) _fsImgHistory.length = _MAX_HISTORY;
       _renderImgStrip();
+      _fsSaveImgHistory();
 
       // Scroll the strip to show the newest results
       var strip = document.getElementById('fsImgStrip');
@@ -561,9 +562,10 @@
       var finalSrc = blobSrc || result.videoUrl;
 
       // Add to history (newest first)
-      _fsVidHistory.unshift({ src: finalSrc, id: Date.now() });
+      _fsVidHistory.unshift({ src: finalSrc, id: Date.now(), mime: 'video/mp4' });
       if (_fsVidHistory.length > _MAX_HISTORY) _fsVidHistory.length = _MAX_HISTORY;
       _renderVidStrip();
+      _fsSaveVidHistory();
 
       var strip = document.getElementById('fsVidStrip');
       if (strip) strip.scrollLeft = 0;
@@ -599,5 +601,123 @@
     el.style.height = 'auto';
     el.style.height = Math.min(el.scrollHeight, 200) + 'px';
   };
+
+  // ── IndexedDB persistence ──────────────────────────────────────────────────
+  // Images:  store full dataUrl strings (already in memory, JSON-serializable).
+  // Videos:  blob URLs die on refresh — convert to ArrayBuffer before saving,
+  //          recreate blob URLs on load. Cap video persistence at 5 items.
+  var _FS_DB_NAME    = 'fsStudio';
+  var _FS_DB_VERSION = 1;
+  var _FS_VID_PERSIST_MAX = 5;
+  var _fsDb = null;
+
+  function _fsOpenDb() {
+    if (_fsDb) return Promise.resolve(_fsDb);
+    return new Promise(function(resolve, reject) {
+      var req = indexedDB.open(_FS_DB_NAME, _FS_DB_VERSION);
+      req.onupgradeneeded = function(e) {
+        var db = e.target.result;
+        if (!db.objectStoreNames.contains('imgHistory')) db.createObjectStore('imgHistory', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('vidHistory')) db.createObjectStore('vidHistory', { keyPath: 'id' });
+      };
+      req.onsuccess = function(e) { _fsDb = e.target.result; resolve(_fsDb); };
+      req.onerror   = function(e) { reject(e.target.error); };
+    });
+  }
+
+  function _fsPutAll(storeName, items) {
+    return _fsOpenDb().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx    = db.transaction(storeName, 'readwrite');
+        var store = tx.objectStore(storeName);
+        store.clear();
+        items.forEach(function(item) { store.put(item); });
+        tx.oncomplete = resolve;
+        tx.onerror    = function(e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  function _fsGetAll(storeName) {
+    return _fsOpenDb().then(function(db) {
+      return new Promise(function(resolve, reject) {
+        var tx    = db.transaction(storeName, 'readonly');
+        var req   = tx.objectStore(storeName).getAll();
+        req.onsuccess = function(e) { resolve(e.target.result || []); };
+        req.onerror   = function(e) { reject(e.target.error); };
+      });
+    });
+  }
+
+  // Save image history — called after every image generation
+  function _fsSaveImgHistory() {
+    _fsPutAll('imgHistory', _fsImgHistory).catch(function(e) {
+      console.warn('fsStudio: could not save image history:', e);
+    });
+  }
+
+  // Save video history — convert blob URLs to ArrayBuffers first
+  function _fsSaveVidHistory() {
+    var toSave = _fsVidHistory.slice(0, _FS_VID_PERSIST_MAX);
+    Promise.all(toSave.map(function(item) {
+      if (item.arrayBuffer) return Promise.resolve(item); // already converted
+      return fetch(item.src)
+        .then(function(r) { return r.arrayBuffer(); })
+        .then(function(ab) { return { id: item.id, arrayBuffer: ab, mime: item.mime || 'video/mp4' }; })
+        .catch(function() { return null; }); // skip if fetch fails
+    })).then(function(items) {
+      var valid = items.filter(Boolean);
+      _fsPutAll('vidHistory', valid).catch(function(e) {
+        console.warn('fsStudio: could not save video history:', e);
+      });
+    });
+  }
+
+  // Load both histories on page load
+  function _fsRestoreHistory() {
+    // Restore images
+    _fsGetAll('imgHistory').then(function(items) {
+      if (!items.length) return;
+      // Sort by id descending (newest first) then restore
+      items.sort(function(a, b) { return b.id - a.id; });
+      _fsImgHistory = items.slice(0, _MAX_HISTORY);
+      _renderImgStrip();
+    }).catch(function(e) { console.warn('fsStudio: could not restore image history:', e); });
+
+    // Restore videos — recreate blob URLs from stored ArrayBuffers
+    _fsGetAll('vidHistory').then(function(items) {
+      if (!items.length) return;
+      items.sort(function(a, b) { return b.id - a.id; });
+      var restored = items.map(function(item) {
+        var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
+        var blobUrl = URL.createObjectURL(blob);
+        return { src: blobUrl, id: item.id, mime: item.mime, arrayBuffer: item.arrayBuffer };
+      });
+      _fsVidHistory = restored;
+      _renderVidStrip();
+    }).catch(function(e) { console.warn('fsStudio: could not restore video history:', e); });
+  }
+
+  // Expose a clear function for the UI
+  window.fsClearHistory = function(which) {
+    if (!which || which === 'img') {
+      _fsImgHistory = [];
+      _fsPutAll('imgHistory', []).catch(function(){});
+      _renderImgStrip();
+    }
+    if (!which || which === 'vid') {
+      _fsVidHistory = [];
+      _fsPutAll('vidHistory', []).catch(function(){});
+      _renderVidStrip();
+    }
+    if (typeof showToast === 'function') showToast('History cleared.', 'success', 2500);
+  };
+
+  // Kick off restore when DOM is ready
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _fsRestoreHistory);
+  } else {
+    _fsRestoreHistory();
+  }
 
 })();

@@ -266,12 +266,11 @@
         var m   = match.toLowerCase();
         var isL = /left/.test(m);
         var dir = isL ? 'left' : 'right';
-        var DIR = isL ? 'LEFT' : 'RIGHT';
         var tag = '(screen-' + dir + ', viewer\'s ' + dir + ')';
-        if (/of\s+frame/.test(m))   return 'on the ' + DIR + ' of frame ' + tag;
-        if (/\bside\b/.test(m))     return DIR + ' side of screen (viewer\'s ' + dir + ')';
-        if (/^on\s+the/.test(m))    return 'on the ' + DIR + ' of screen ' + tag;
-        if (/^to\s+the/.test(m))    return 'to the ' + DIR + ' ' + tag;
+        if (/of\s+frame/.test(m))   return 'on the ' + dir + ' of frame ' + tag;
+        if (/\bside\b/.test(m))     return dir + ' side of screen (viewer\'s ' + dir + ')';
+        if (/^on\s+the/.test(m))    return 'on the ' + dir + ' of screen ' + tag;
+        if (/^to\s+the/.test(m))    return 'to the ' + dir + ' ' + tag;
         return match;
       }
     );
