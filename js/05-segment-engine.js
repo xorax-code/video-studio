@@ -2196,14 +2196,19 @@
         <!-- Thumbnail (replicator) or visual desc (producer) -->
         ${seg._scriptOnly ? `
         <div style="display:flex;flex-direction:column;gap:5px;">
-          <!-- Visual Description -->
+          <!-- Visual Description — collapsed by default, open if has content -->
           <div class="seg-field-visual">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);margin-bottom:3px;">🎨 Visual Description</div>
-            <textarea id="framedesc-seg-${i}"
-              oninput="segments[${i}].frameDesc=this.value;autoGrow(this);debounceSave()"
-              class="seg-ta-base seg-ta-visual"
-              placeholder="Describe the frame — location, lighting, background, mood, clothing, camera angle…"
-            >${escHtml(seg.frameDesc || '')}</textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="(function(el){var w=document.getElementById('framedesc-wrap-${i}');var open=w.style.display!=='none';w.style.display=open?'none':'flex';el.querySelector('.vd-tog').textContent=open?'▸ Frame':'▾ Frame';})(this)">
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:var(--warning);">🎨 Frame${seg.frameDesc ? ' <span style=\\"color:#4ade80;font-size:10px;\\">✓</span>' : ''}</span>
+              <span class="vd-tog" style="font-size:9px;color:var(--text-3);padding:1px 6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">${seg.frameDesc ? '▾ Frame' : '▸ Frame'}</span>
+            </div>
+            <div id="framedesc-wrap-${i}" style="display:${seg.frameDesc ? 'flex' : 'none'};flex-direction:column;">
+              <textarea id="framedesc-seg-${i}"
+                oninput="segments[${i}].frameDesc=this.value;autoGrow(this);debounceSave()"
+                class="seg-ta-base seg-ta-visual"
+                placeholder="Describe the frame — location, lighting, background, mood, clothing, camera angle…"
+              >${escHtml(seg.frameDesc || '')}</textarea>
+            </div>
           </div>
         </div>
         ` : `
@@ -2265,15 +2270,20 @@
           </div>
         </div>
 
-        <!-- Scene Notes — manual hints for NB Pro prompt builder -->
+        <!-- Scene Notes — collapsed by default, open if has content -->
         <div class="seg-field-notes">
-          <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(167,139,250,0.6);margin-bottom:3px;">📝 Scene Notes <span style="font-weight:400;opacity:0.55;text-transform:none;letter-spacing:0;">(face mask, props, action)</span></div>
-          <textarea id="notes-seg-${i}"
-            oninput="segments[${i}].sceneNotes=this.value;autoGrow(this);debounceSave()"
-            class="seg-ta-base"
-            style="font-size:10px;min-height:26px;color:rgba(167,139,250,0.85);border-color:rgba(167,139,250,0.2);"
-            placeholder="e.g. wearing black face mask pulling it off · holding red product label · two people, target the woman on left"
-          >${escHtml(seg.sceneNotes || '')}</textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="(function(el){var w=document.getElementById('notes-wrap-${i}');var open=w.style.display!=='none';w.style.display=open?'none':'flex';el.querySelector('.sn-tog').textContent=open?'▸ Notes':'▾ Notes';})(this)">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(167,139,250,0.6);">📝 Notes${seg.sceneNotes ? ' <span style=\\"color:#4ade80;font-size:10px;\\">✓</span>' : ''}</span>
+            <span class="sn-tog" style="font-size:9px;color:var(--text-3);padding:1px 6px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">${seg.sceneNotes ? '▾ Notes' : '▸ Notes'}</span>
+          </div>
+          <div id="notes-wrap-${i}" style="display:${seg.sceneNotes ? 'flex' : 'none'};flex-direction:column;">
+            <textarea id="notes-seg-${i}"
+              oninput="segments[${i}].sceneNotes=this.value;autoGrow(this);debounceSave()"
+              class="seg-ta-base"
+              style="font-size:10px;min-height:26px;color:rgba(167,139,250,0.85);border-color:rgba(167,139,250,0.2);"
+              placeholder="e.g. wearing black face mask pulling it off · holding red product label · two people, target the woman on left"
+            >${escHtml(seg.sceneNotes || '')}</textarea>
+          </div>
         </div>
 
         <!-- Product toggle moved to segment header — icon next to Split button -->

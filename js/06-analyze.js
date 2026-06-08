@@ -1404,6 +1404,9 @@ Production rules:
     const collapsed = layout.classList.toggle('left-collapsed');
     localStorage.setItem('vs_leftcol_collapsed', collapsed ? '1' : '');
     if (btn) { btn.textContent = collapsed ? '›' : '‹'; btn.title = collapsed ? 'Show left panel' : 'Hide left panel'; }
+    // Show/hide the producer-mode Settings button row
+    const settingsRow = document.getElementById('vsSettingsToggleRow');
+    if (settingsRow) settingsRow.style.display = collapsed ? 'flex' : 'none';
   }
 
   // ── Video player mini / expand / collapse toggle ─────────────────────────
