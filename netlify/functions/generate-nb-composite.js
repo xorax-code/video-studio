@@ -161,6 +161,7 @@ exports.handler = async (event) => {
     avatarMime     = 'image/jpeg',
     frameB64       = null,
     frameMime      = 'image/jpeg',
+    creative       = false,
   } = body;
 
   let avatarImg = null, frameImg = null;
@@ -179,6 +180,46 @@ exports.handler = async (event) => {
 
   const hasFrame = !!frameImg;
 
+  // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
+  if (creative) {
+    const creativeParts = [];
+    for (const img of [avatarImg, frameImg].filter(Boolean)) {
+      creativeParts.push({ inlineData: { mimeType: img.mime, data: img.b64 } });
+    }
+    creativeParts.push({ text: instruction || 'Generate a high-quality image based on the reference photos.' });
+
+    const creativeBody = JSON.stringify({
+      systemInstruction: { parts: [{ text: 'You are a professional photo editor and image generator. Follow the user\'s instruction exactly and creatively. Use any provided reference photos as visual guides.' }] },
+      contents: [{ role: 'user', parts: creativeParts }],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.7 },
+    });
+
+    let creativeResult;
+    try {
+      creativeResult = await httpsRequest({
+        hostname: GEMINI_HOST,
+        path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(creativeBody) },
+      }, creativeBody);
+    } catch(e) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
+    }
+
+    if (creativeResult.status === 429) return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit — please wait and retry.' }) };
+    if (!creativeResult.data || creativeResult.status !== 200 || creativeResult.data.error) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: creativeResult.data?.error?.message || 'Gemini error ' + creativeResult.status }) };
+    }
+    for (const candidate of creativeResult.data.candidates || []) {
+      for (const part of candidate?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png' }) };
+        }
+      }
+    }
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no image.' }) };
+  }
+
   // ── Stage 1: Pose analysis ────────────────────────────────────────────────
   let poseAnalysis = null;
   if (hasFrame) {
@@ -191,31 +232,22 @@ exports.handler = async (event) => {
 
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis) : '';
 
-  const systemInstruction = hasFrame ? `You are a photo compositor. Your task: REPLACE THE STANDING PERSON in Photo 1 with the person from Photo 2, while keeping everything else in Photo 1 exactly the same.
+  const systemInstruction = hasFrame
+    ? `You are a professional photo editor. You have been given two photos:
 
-THE STANDING PERSON in Photo 1 is a human figure — a man. Replace that man entirely with the elderly woman from Photo 2.
+Photo 1 — the base scene (background, setting, props, lighting).
+Photo 2 — the appearance reference (person whose look, face, clothing, or style may be applied).
 
-REPLACE (the standing human figure only):
-- Remove the man's face, head, hair, clothing, and body
-- In his place, insert the elderly woman from Photo 2: dark brown skin, long grey dreadlocks, colorful headwrap, white dress with gold trim, amber bead necklaces, cowrie shells
-- Keep her at the same position and scale as the man was
+Follow the user's instruction exactly. The instruction tells you what to do — whether that is replacing the person, changing appearance, adding someone, adjusting a pose, or something else entirely. Do not assume any action that is not stated in the instruction.
 
-LOCK (do not touch anything else):
-- The background — every wall, shelf, jar, bottle, flag, window stays exactly as in Photo 1
-- The arms and hands — same angles, same position, same grip
-- Every held object or prop — it is a physical object, not a person; do not put any face or human features inside it
-- Scene lighting and shadows
-
-STRICT RULES:
-- The only human face in the output is the elderly woman's face on her body — nowhere else
-- Held objects (dental models, bottles, products) are props — they are hollow/solid objects, never put a face inside them
-- Remove any text, captions, or subtitles visible in Photo 1 from the final output` : `Generate a photorealistic portrait with the appearance of the person in Photo 1.`;
+Always remove any burned-in text, captions, or subtitles from the output image.`
+    : `You are a professional photo editor. Follow the user's instruction exactly using the provided reference photo(s).`;
 
   const userPrompt = hasFrame
-    ? `${lockBlock}PERSON REPLACEMENT: The man in Photo 1 must be completely replaced by the elderly woman from Photo 2. She stands in his exact position holding whatever he was holding. All held objects remain unchanged — they are props, not faces. Background is unchanged. Remove all captions and text.\n\n${instruction}`
-    : `Portrait of ${avatarDesc || 'the person shown'}.`;
+    ? `${lockBlock}${instruction}`
+    : `${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
-  const negLine = `\n\nCRITICAL — REMOVE ALL TEXT: The output image must contain zero text, zero captions, zero subtitles, zero words. If the source frame has any text, subtitles, or captions burned in, erase them completely. Clean background behind where text was.\n\nALSO AVOID: changed background, wrong background, avatar background, moved arms, moved prop, prop replaced with different object, floating prop, ghost limbs, two people visible, composite seam, face placed inside prop or object`;
+  const negLine = `\n\nAVOID: composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.`;
   const fullPrompt = userPrompt + negLine;
 
   const parts = [];

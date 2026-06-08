@@ -394,7 +394,7 @@
       var res = await fetch('/.netlify/functions/generate-nb-composite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ instruction: instruction, images: images }),
+        body: JSON.stringify({ instruction: instruction, images: images, creative: true }),
       });
       var data; try { data = await res.json(); } catch(_) { data = {}; }
       if (!res.ok || data.error) throw new Error(data.error || 'HTTP ' + res.status);
