@@ -1151,21 +1151,30 @@
           h += '</div>';
           h += '<textarea id="' + promptId + '" oninput="if(segments[' + i + '].veoExtras[' + j + '])segments[' + i + '].veoExtras[' + j + '].veoPrompt=this.value;debounceSave()" class="seg-ta-base seg-ta-prompt" style="display:none;font-size:9px;">' + escHtml(extra.veoPrompt || '') + '</textarea>';
         }
+        if (extra.veoPrompt && !extra.apiVideoUrl) {
+          h += '<button id="regenExtraBtn-' + i + '-' + j + '" onclick="if(typeof getGenerateMode===\'function\'&&getGenerateMode()===\'api\'){regenExtraClip(' + i + ',' + j + ');}else{showToast(\'Switch to Auto mode to generate via API.\',\'info\',4000);}" title="Generate continuation clip via API" style="width:100%;padding:5px 0;font-size:9px;font-weight:700;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">&#x26A1; Generate Clip ' + (j + 2) + '</button>';
+        }
         if (extra.apiVideoUrl) {
           h += '<div style="border-top:1px solid rgba(99,102,241,0.2);padding-top:6px;margin-top:2px;">';
           h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
           h += '<span style="font-size:9px;font-weight:700;color:#818cf8;">&#x26A1; Clip ' + (j + 2) + ' Video</span>';
+          h += '<div style="display:flex;gap:4px;align-items:center;">';
+          h += '<button id="regenExtraBtn-' + i + '-' + j + '" onclick="if(typeof getGenerateMode===\'function\'&&getGenerateMode()===\'api\'){regenExtraClip(' + i + ',' + j + ');}else{showToast(\'Switch to Auto mode to regenerate via API.\',\'info\',4000);}" title="Regenerate continuation clip" style="padding:2px 7px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">&#x21BA; Regen</button>';
           h += '<button onclick="(function(){var e=segments[' + i + ']&&segments[' + i + '].veoExtras&&segments[' + i + '].veoExtras[' + j + '];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">&#x2715;</button>';
-          h += '</div>';
+          h += '</div></div>';
           h += '<video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="' + (extra.apiVideoRaw || extra.apiVideoUrl) + '"></video>';
-          h += '<button onclick="(function(){var e=segments[' + i + ']&&segments[' + i + '].veoExtras&&segments[' + i + '].veoExtras[' + j + '];if(!e||!e.apiVideoUrl)return;var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (i+1) + '-clip-' + (j+2) + '.mp4\';a.click();})()" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;padding:5px 0;width:100%;font-size:10px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">&#x2B07; Download Clip ' + (j+2) + '</button>';
+          h += '<select id="dl-sel-extra-' + i + '-' + j + '" onchange="handleExtraDlSel(this,' + i + ',' + j + ')" style="width:100%;margin-top:5px;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">';
+          h += '<option value="">&#x2B07; Download</option>';
+          h += '<option value="720p">720p (original)</option>';
+          h += '<option value="1080p">1080p (upscaled)</option>';
+          h += '</select>';
           h += '</div>';
         }
         h += '</div>';
       });
       h += '</div>';
     }
-    h += '<button onclick="addVeoExtra(' + i + ')" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:' + (hasExtras ? '0' : '4px') + ';">&#xFF0B; Add Continuation Clip</button>';
+    h += '<button onclick="addVeoExtra(' + i + ')" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:' + (hasExtras ? '6px' : '4px') + ';">&#xFF0B; Add Continuation Clip</button>';
     return h;
   }
 
@@ -2366,10 +2375,40 @@
           </div>
         </div>
 
-        <!-- Continuation Clips (same start frame, new speech) -->
+        <!-- Inline generation status — driven by _setCardStatus() in 15-veo-api.js -->
+        <div id="seg-gen-status-${i}" style="display:none;margin-top:6px;padding:5px 9px;border-radius:6px;border:1px solid transparent;align-items:center;gap:7px;font-size:10px;font-weight:700;">
+          <div id="seg-gen-spinner-${i}" style="flex-shrink:0;"></div>
+          <span id="seg-gen-msg-${i}"></span>
+        </div>
+
+        <!-- Generate button (has prompt, no video yet) -->
+        ${seg.veoPrompt && !seg.apiVideoUrl ? `<button id="regenSceneBtn-${i}" onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to generate via API.','info',4000);}" title="Generate this clip via API" style="width:100%;padding:6px 0;font-size:10px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:6px;color:#38bdf8;cursor:pointer;font-family:inherit;margin-top:5px;margin-bottom:3px;transition:all 0.15s;">⚡ Generate This Clip</button>` : ''}
+
+        <!-- Generated video (API) -->
+        ${seg.apiVideoUrl ? `
+        <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#34d399;">⚡ Generated Video</span>
+            <div style="display:flex;gap:5px;align-items:center;">
+              <button id="regenSceneBtn-${i}" onclick="if(getGenerateMode&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate this clip via API" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">↺ Regen</button>
+              <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+            </div>
+          </div>
+          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+          <div style="display:flex;gap:5px;margin-top:6px;">
+            <select id="dl-sel-seg-${i}" onchange="handleDlSel(this,${i})" style="flex:1;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">
+              <option value="">⬇ Download</option>
+              <option value="720p">720p (original)</option>
+              <option value="1080p">1080p (upscaled)</option>
+            </select>
+            <button onclick="window.openSegModal(${i})" style="flex:2;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 0;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⤢ View Full + Assemble</button>
+          </div>
+        </div>` : ''}
+
+        <!-- Continuation Clips — always ordered AFTER the main clip video -->
         <div class="seg-field-extras">
           ${(seg.veoExtras && seg.veoExtras.length > 0) ? `
-          <div style="border-top:1px solid var(--border);padding-top:6px;margin-top:2px;">
+          <div style="border-top:1px solid var(--border);padding-top:6px;margin-top:6px;">
             <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:rgba(99,102,241,0.8);margin-bottom:5px;">🔁 Continuation Clips <span style="font-weight:400;opacity:0.55;text-transform:none;letter-spacing:0;">(same frame · new speech)</span></div>
             ${seg.veoExtras.map((extra, j) => `
             <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.22);border-radius:6px;padding:7px 8px;margin-bottom:5px;display:flex;flex-direction:column;gap:5px;">
@@ -2393,44 +2432,29 @@
                 class="seg-ta-base seg-ta-prompt"
                 style="display:none;font-size:9px;"
               >${escHtml(extra.veoPrompt || '')}</textarea>` : ''}
+              ${extra.veoPrompt && !extra.apiVideoUrl ? `
+              <button id="regenExtraBtn-${i}-${j}" onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenExtraClip(${i},${j});}else{showToast('Switch to Auto mode to generate via API.','info',4000);}" title="Generate continuation clip via API" style="width:100%;padding:5px 0;font-size:9px;font-weight:700;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">⚡ Generate Clip ${j+2}</button>` : ''}
               ${extra.apiVideoUrl ? `
               <div style="border-top:1px solid rgba(99,102,241,0.2);padding-top:6px;margin-top:2px;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                   <span style="font-size:9px;font-weight:700;color:#818cf8;">⚡ Clip ${j+2} Video</span>
-                  <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+                  <div style="display:flex;gap:4px;align-items:center;">
+                    <button id="regenExtraBtn-${i}-${j}" onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenExtraClip(${i},${j});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate continuation clip" style="padding:2px 7px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺ Regen</button>
+                    <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+                  </div>
                 </div>
                 <video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="${extra.apiVideoRaw || extra.apiVideoUrl}"></video>
-                <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e||!e.apiVideoUrl)return;var a=document.createElement('a');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download='scene-${i+1}-clip-${j+2}.mp4';a.click();})()" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;padding:5px 0;width:100%;font-size:10px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">⬇ Download Clip ${j+2}</button>
+                <select id="dl-sel-extra-${i}-${j}" onchange="handleExtraDlSel(this,${i},${j})" style="width:100%;margin-top:5px;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">
+                  <option value="">⬇ Download</option>
+                  <option value="720p">720p (original)</option>
+                  <option value="1080p">1080p (upscaled)</option>
+                </select>
               </div>` : ''}
             </div>
             `).join('')}
           </div>` : ''}
-          ${seg.veoPrompt && !seg.apiVideoUrl ? `<button id="regenSceneBtn-${i}" onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to generate via API.','info',4000);}" title="Generate this clip via API" style="width:100%;padding:6px 0;font-size:10px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:6px;color:#38bdf8;cursor:pointer;font-family:inherit;margin-top:5px;margin-bottom:3px;transition:all 0.15s;">⚡ Generate This Clip</button>` : ''}
-          <button onclick="addVeoExtra(${i})" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:${(seg.veoExtras && seg.veoExtras.length > 0) ? '0' : '4px'};">＋ Add Continuation Clip</button>
+          <button onclick="addVeoExtra(${i})" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:${(seg.veoExtras && seg.veoExtras.length > 0) ? '6px' : '4px'};">＋ Add Continuation Clip</button>
         </div>
-
-        <!-- Inline generation status — driven by _setCardStatus() in 15-veo-api.js -->
-        <div id="seg-gen-status-${i}" style="display:none;margin-top:6px;padding:5px 9px;border-radius:6px;border:1px solid transparent;align-items:center;gap:7px;font-size:10px;font-weight:700;">
-          <div id="seg-gen-spinner-${i}" style="flex-shrink:0;"></div>
-          <span id="seg-gen-msg-${i}"></span>
-        </div>
-
-        <!-- Generated video (Gemini API) -->
-        ${seg.apiVideoUrl ? `
-        <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-            <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#34d399;">⚡ Generated Video</span>
-            <div style="display:flex;gap:5px;align-items:center;">
-              <button id="regenSceneBtn-${i}" onclick="if(getGenerateMode&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate this clip via API" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">↺ Regen</button>
-              <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
-            </div>
-          </div>
-          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
-          <div style="display:flex;gap:5px;margin-top:6px;">
-            <button onclick="downloadSegmentVideo(${i})" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 0;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ DL</button>
-            <button onclick="window.openSegModal(${i})" style="flex:2;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 0;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⤢ View Full + Assemble</button>
-          </div>
-        </div>` : ''}
 
         <!-- Card footer: Merge + Continue buttons -->
         ${i < segments.length - 1 ? `

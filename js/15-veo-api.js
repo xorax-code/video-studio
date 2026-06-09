@@ -801,4 +801,45 @@
   }
   window.regenSingleScene = regenSingleScene;
 
+  // ── Regenerate a single continuation (extra) clip ──────────────────────────
+  async function regenExtraClip(segIdx, extraIdx) {
+    var seg   = (window.segments || [])[segIdx];
+    var extra = seg && seg.veoExtras && seg.veoExtras[extraIdx];
+    if (!extra) { showToast('Extra clip not found.', 'error'); return; }
+    if (!extra.veoPrompt || !extra.veoPrompt.trim()) {
+      showToast('Generate the Veo 3 prompt for this clip first.', 'warning'); return;
+    }
+
+    var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
+    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
+    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+
+    var durSecs = 6;
+    try { var _po = JSON.parse(extra.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+
+    var btnId = 'regenExtraBtn-' + segIdx + '-' + extraIdx;
+    var btn = document.getElementById(btnId);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+
+    try {
+      // Continuation clips share the parent segment's start frame
+      var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
+      var result   = await generateVeoClipViaAPI(extra.veoPrompt, durSecs, modelKey, startImg, seg.frameDataUrl || null);
+
+      extra.apiVideoUrl  = result.videoUrl;
+      extra.apiVideoMime = result.mimeType || 'video/mp4';
+      var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
+      if (blobUrl) extra.apiVideoRaw = blobUrl;
+
+      if (typeof saveSegments   === 'function') saveSegments();
+      if (typeof renderSegments === 'function') renderSegments();
+      if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      showToast('Clip ' + (extraIdx + 2) + ' generated!', 'success', 4000);
+    } catch(e) {
+      showToast('Regen failed (Clip ' + (extraIdx + 2) + '): ' + e.message, 'error', 8000);
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Regen'; }
+    }
+  }
+  window.regenExtraClip = regenExtraClip;
+
   // ── Apply mode UI on page load (restores pi

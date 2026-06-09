@@ -144,93 +144,86 @@
     }
   };
 
-  // ── 1080p upscale + download ───────────────────────────────────────────────
-  window.galleryUpscale = async function(segIdx) {
-    var segs = window.segments || [];
-    var seg  = segs[segIdx];
-    if (!seg) return;
-    var videoUrl = seg.apiVideoUrl || seg.apiVideoRaw;
+  // ── Shared 1080p upscale helper — works with both <button> and <select> ──
+  async function _doUpscale(videoUrl, filename, elId) {
     if (!videoUrl) {
-      if (typeof showToast === 'function') showToast('No video found for this clip.', 'error');
+      if (typeof showToast === 'function') showToast('No video URL for this clip.', 'error');
       return;
     }
-
-    // Require auth token
     var jwt = typeof window.getAuthToken === 'function' ? window.getAuthToken() : null;
     if (!jwt) jwt = localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
     if (!jwt) {
       if (typeof showToast === 'function') showToast('Please log in to use 1080p download.', 'warning');
       return;
     }
-
-    var btn = document.getElementById('gal-hd-btn-' + segIdx);
-    var originalLabel = 'HD';
-
-    function setBtnState(label, disabled) {
-      if (btn) { btn.textContent = label; btn.disabled = !!disabled; }
+    var el = document.getElementById(elId);
+    var isSelect = el && el.tagName === 'SELECT';
+    var originalLabel = isSelect ? (el.options[0] && el.options[0].text) : (el && el.textContent);
+    function setElState(label, disabled) {
+      if (!el) return;
+      el.disabled = !!disabled;
+      if (isSelect) { if (el.options[0]) el.options[0].text = label; el.selectedIndex = 0; }
+      else el.textContent = label;
     }
-
     try {
-      setBtnState('…', true);
+      setElState('⏳ …', true);
       if (typeof showToast === 'function') showToast('Starting 1080p upscale…', 'info', 4000);
-
-      // Step 1: Create Transcoder job
-      var createRes = await fetch('/.netlify/functions/upscale-video', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body:    JSON.stringify({ videoUrl: videoUrl }),
+      var createRes  = await fetch('/.netlify/functions/upscale-video', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({ videoUrl: videoUrl }),
       });
       var createData = await createRes.json();
-      if (!createRes.ok || !createData.jobName) {
-        throw new Error(createData.error || 'Failed to start upscale job.');
-      }
-
-      var jobName      = createData.jobName;
-      var outputGcsUri = createData.outputGcsUri;
-
-      // Step 2: Poll until done
-      var maxAttempts = 60; // 5 minutes at 5s intervals
-      var attempt     = 0;
-      setBtnState('0%', true);
-
+      if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start upscale job.');
+      var jobName = createData.jobName, outputGcsUri = createData.outputGcsUri;
+      var maxAttempts = 60, attempt = 0;
       while (attempt < maxAttempts) {
         await new Promise(function(r) { setTimeout(r, 5000); });
         attempt++;
-
-        var pollRes = await fetch('/.netlify/functions/poll-upscale', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body:    JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
+        var pollRes  = await fetch('/.netlify/functions/poll-upscale', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
         });
         var pollData = await pollRes.json();
-
-        if (pollData.state === 'FAILED') {
-          throw new Error(pollData.error || 'Upscale job failed.');
-        }
-
+        if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Upscale job failed.');
         if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
-          // Step 3: Download via signed URL
-          setBtnState('↓', true);
-          var a = document.createElement('a');
-          a.href = pollData.downloadUrl;
-          a.download = 'scene-' + (segIdx + 1) + '-1080p.mp4';
-          a.click();
+          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = filename; a.click();
           if (typeof showToast === 'function') showToast('1080p download started!', 'success', 4000);
-          setBtnState(originalLabel, false);
+          setElState(originalLabel, false);
           return;
         }
-
-        // Still PROCESSING
-        var pct = Math.min(95, Math.round((attempt / maxAttempts) * 100));
-        setBtnState(pct + '%', true);
+        setElState('⏳ ' + Math.min(95, Math.round((attempt / maxAttempts) * 100)) + '%', true);
       }
-
       throw new Error('Upscale timed out after 5 minutes.');
-
     } catch(e) {
-      console.error('[galleryUpscale]', e);
+      console.error('[upscale]', e);
       if (typeof showToast === 'function') showToast('1080p failed: ' + (e.message || e), 'error', 6000);
-      setBtnState(originalLabel, false);
+      setElState(originalLabel, false);
+    }
+  }
+
+  // ── 1080p for gallery clips (button, by segIdx) ───────────────────────────
+  window.galleryUpscale = async function(segIdx) {
+    var seg = (window.segments || [])[segIdx];
+    if (!seg) return;
+    return _doUpscale(seg.apiVideoUrl || seg.apiVideoRaw, 'scene-' + (segIdx + 1) + '-1080p.mp4', 'gal-hd-btn-' + segIdx);
+  };
+
+  // ── Download-resolution select handlers (segment cards) ──────────────────
+  window.handleDlSel = function(sel, segIdx) {
+    var v = sel.value; sel.selectedIndex = 0;
+    if (v === '720p') { if (typeof downloadSegmentVideo === 'function') downloadSegmentVideo(segIdx); }
+    else if (v === '1080p') { _doUpscale((window.segments[segIdx]||{}).apiVideoUrl || (window.segments[segIdx]||{}).apiVideoRaw, 'scene-' + (segIdx + 1) + '-1080p.mp4', sel.id); }
+  };
+  window.handleExtraDlSel = function(sel, segIdx, extraIdx) {
+    var v = sel.value; sel.selectedIndex = 0;
+    var seg = (window.segments || [])[segIdx];
+    var extra = seg && seg.veoExtras && seg.veoExtras[extraIdx];
+    if (!extra) return;
+    if (v === '720p') {
+      var a = document.createElement('a'); a.href = extra.apiVideoRaw || extra.apiVideoUrl;
+      a.download = 'scene-' + (segIdx + 1) + '-clip-' + (extraIdx + 2) + '.mp4'; a.click();
+    } else if (v === '1080p') {
+      _doUpscale(extra.apiVideoUrl || extra.apiVideoRaw, 'scene-' + (segIdx + 1) + '-clip-' + (extraIdx + 2) + '-1080p.mp4', sel.id);
     }
   };
 
