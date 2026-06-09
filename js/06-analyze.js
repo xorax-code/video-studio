@@ -1291,21 +1291,8 @@ Production rules:
   }
 
   function _syncVeoModelToggle(model) {
-    const fastBtn = document.getElementById('veoModelFastBtn');
-    const liteBtn = document.getElementById('veoModelLiteBtn');
-    const qualBtn = document.getElementById('veoModelQualBtn');
-    if (!fastBtn || !qualBtn) return;
-    const isFast  = model === 'Veo 3.1 Fast';
-    const isLite  = model === 'Veo 3.1 Lite';
-    const isQual  = model === 'Veo 3.1 Standard';
-    fastBtn.style.background = isFast ? 'rgba(34,197,94,0.18)'  : 'var(--surface)';
-    fastBtn.style.color      = isFast ? '#4ade80'               : 'var(--text-3)';
-    if (liteBtn) {
-      liteBtn.style.background = isLite ? 'rgba(96,165,250,0.18)' : 'var(--surface)';
-      liteBtn.style.color      = isLite ? '#60a5fa'               : 'var(--text-3)';
-    }
-    qualBtn.style.background = isQual ? 'rgba(251,191,36,0.15)' : 'var(--surface)';
-    qualBtn.style.color      = isQual ? '#fbbf24'               : 'var(--text-3)';
+    const sel = document.getElementById('veoModelSelect');
+    if (sel) sel.value = model;
   }
 
   function toggleAllPrompts() {

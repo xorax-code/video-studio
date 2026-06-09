@@ -1151,6 +1151,16 @@
           h += '</div>';
           h += '<textarea id="' + promptId + '" oninput="if(segments[' + i + '].veoExtras[' + j + '])segments[' + i + '].veoExtras[' + j + '].veoPrompt=this.value;debounceSave()" class="seg-ta-base seg-ta-prompt" style="display:none;font-size:9px;">' + escHtml(extra.veoPrompt || '') + '</textarea>';
         }
+        if (extra.apiVideoUrl) {
+          h += '<div style="border-top:1px solid rgba(99,102,241,0.2);padding-top:6px;margin-top:2px;">';
+          h += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">';
+          h += '<span style="font-size:9px;font-weight:700;color:#818cf8;">&#x26A1; Clip ' + (j + 2) + ' Video</span>';
+          h += '<button onclick="(function(){var e=segments[' + i + ']&&segments[' + i + '].veoExtras&&segments[' + i + '].veoExtras[' + j + '];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">&#x2715;</button>';
+          h += '</div>';
+          h += '<video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="' + (extra.apiVideoRaw || extra.apiVideoUrl) + '"></video>';
+          h += '<button onclick="(function(){var e=segments[' + i + ']&&segments[' + i + '].veoExtras&&segments[' + i + '].veoExtras[' + j + '];if(!e||!e.apiVideoUrl)return;var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (i+1) + '-clip-' + (j+2) + '.mp4\';a.click();})()" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;padding:5px 0;width:100%;font-size:10px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">&#x2B07; Download Clip ' + (j+2) + '</button>';
+          h += '</div>';
+        }
         h += '</div>';
       });
       h += '</div>';
@@ -2212,12 +2222,13 @@
           </div>
         </div>
         ` : `
-        <div>
+        <div style="display:flex;gap:7px;align-items:flex-start;">
+          <!-- Frame column (left) -->
+          <div style="flex:1;min-width:0;">
           ${seg.frameDataUrl ? `
-          <!-- Click-to-target thumbnail: click directly on the person to pin them -->
           <div style="position:relative;display:block;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
-              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};"
+              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};width:100%;height:178px;object-fit:cover;border-radius:6px;display:block;"
               ${seg.isCTA ? '' : `onclick="setTargetPin(${i}, event)"`}
               title="${seg.isCTA ? 'Product photo' : 'Click on a person to mark them as the NB swap target'}">
             ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
@@ -2234,7 +2245,24 @@
             <span style="font-size:8px;color:var(--text-3);opacity:0.6;flex-shrink:0;">Gender:</span>
             <button onclick="setTargetGender(${i},'woman')" title="Target is a woman" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='woman'?'rgba(244,114,182,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='woman'?'rgba(244,114,182,0.12)':'transparent'};color:${seg.targetGender==='woman'?'#f472b6':'var(--text-3)'};">👩 Woman</button>
             <button onclick="setTargetGender(${i},'man')" title="Target is a man" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='man'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='man'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetGender==='man'?'#60a5fa':'var(--text-3)'};">👨 Man</button>
-          </div>` : ''}`}` : ('<div class="seg-empty-frame" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px;min-height:60px;">' + (seg._shotlessData ? '<span style="font-size:9px;font-weight:700;color:rgba(139,92,246,0.8);letter-spacing:0.5px;text-transform:uppercase;">✨ Shotless</span><span style="font-size:9px;color:var(--text-3);text-align:center;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">' + escHtml(seg._shotlessData.scene_description || seg.action || '') + '</span>' : '<span style="font-size:28px;opacity:0.22;">🎞</span>') + '</div>')}
+          </div>` : ''}`}` : ('<div style="width:100%;height:178px;border-radius:6px;border:1px dashed var(--border);background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">' + (seg._shotlessData ? '<span style="font-size:9px;font-weight:700;color:rgba(139,92,246,0.8);letter-spacing:0.5px;text-transform:uppercase;">✨ Shotless</span><span style="font-size:9px;color:var(--text-3);text-align:center;line-height:1.4;padding:0 4px;">' + escHtml(seg._shotlessData.scene_description || seg.action || '') + '</span>' : '<span style="font-size:28px;opacity:0.22;">🎞</span>') + '</div>')}
+          </div>
+          <!-- Generated video column (portrait, right) -->
+          <div style="width:100px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;">
+            ${seg.apiVideoUrl ? `
+            <video controls playsinline style="width:100px;height:178px;border-radius:7px;background:#000;object-fit:contain;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+            <div style="display:flex;gap:2px;">
+              <button onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode.','info',3000);}" title="Regenerate clip" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:4px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺</button>
+              <button onclick="downloadSegmentVideo(${i})" title="Download clip" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:4px;color:#34d399;cursor:pointer;font-family:inherit;">⬇</button>
+              <button onclick="clearSegmentApiVideo(${i})" title="Remove" style="padding:3px 6px;font-size:11px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+            </div>
+            ` : `
+            <div style="width:100px;height:178px;border:1px dashed rgba(255,255,255,0.06);border-radius:7px;background:rgba(255,255,255,0.02);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
+              <span style="font-size:22px;opacity:0.12;">🎬</span>
+              <span style="font-size:8px;color:var(--text-4);opacity:0.4;text-align:center;line-height:1.3;">No clip<br>yet</span>
+            </div>
+            `}
+          </div>
         </div>
         `}
 
@@ -2247,6 +2275,7 @@
           <textarea id="script-seg-${i}"
             oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
             class="seg-ta-base seg-ta-script"
+            style="max-height:44px;overflow-y:auto;"
             placeholder="Script for this scene…"
           >${escHtml(seg.script || '')}</textarea>
         </div>
@@ -2375,6 +2404,15 @@
                 class="seg-ta-base seg-ta-prompt"
                 style="display:none;font-size:9px;"
               >${escHtml(extra.veoPrompt || '')}</textarea>` : ''}
+              ${extra.apiVideoUrl ? `
+              <div style="border-top:1px solid rgba(99,102,241,0.2);padding-top:6px;margin-top:2px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
+                  <span style="font-size:9px;font-weight:700;color:#818cf8;">⚡ Clip ${j+2} Video</span>
+                  <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+                </div>
+                <video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="${extra.apiVideoRaw || extra.apiVideoUrl}"></video>
+                <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e||!e.apiVideoUrl)return;var a=document.createElement('a');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download='scene-${i+1}-clip-${j+2}.mp4';a.click();})()" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:5px;padding:5px 0;width:100%;font-size:10px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">⬇ Download Clip ${j+2}</button>
+              </div>` : ''}
             </div>
             `).join('')}
           </div>` : ''}
@@ -2388,18 +2426,18 @@
           <span id="seg-gen-msg-${i}"></span>
         </div>
 
-        <!-- Generated video (Gemini API) -->
-        ${seg.apiVideoUrl ? `
+        <!-- Generated video — producer mode only (replicator shows it inline with the frame above) -->
+        ${seg.apiVideoUrl && seg._scriptOnly ? `
         <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
             <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#34d399;">⚡ Generated Video</span>
-            <div style="display:flex;gap:5px;align-items:center;">
-              <button id="regenSceneBtn-${i}" onclick="if(getGenerateMode&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate this clip via API" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">↺ Regen</button>
-              <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+            <div style="display:flex;gap:3px;align-items:center;">
+              <button onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode.','info',4000);}" title="Regenerate" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺</button>
+              <button onclick="downloadSegmentVideo(${i})" title="Download" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇</button>
+              <button onclick="clearSegmentApiVideo(${i})" title="Remove" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
             </div>
           </div>
-          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
-          <button onclick="downloadSegmentVideo(${i})" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;width:100%;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ Download Scene ${i+1}</button>
+          <video controls playsinline style="width:100%;max-height:280px;border-radius:7px;background:#000;object-fit:contain;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
         </div>` : ''}
 
       </div>

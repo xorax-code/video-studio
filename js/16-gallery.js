@@ -25,7 +25,28 @@
     if (!grid) return;
 
     var segs = window.segments || [];
-    var clips = segs.filter(function(s) { return s.apiVideoUrl || s.apiVideoRaw; });
+
+    // Build flat clip list: primary clips + continuation extras
+    var clips = [];
+    segs.forEach(function(seg, idx) {
+      if (seg.apiVideoUrl || seg.apiVideoRaw) {
+        var dur = 6;
+        try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = po.duration || 6; } catch(e) {}
+        clips.push({ seg: seg, segIdx: idx, extraIdx: -1, dur: dur,
+          url: seg.apiVideoRaw || seg.apiVideoUrl || '',
+          mime: seg.apiVideoMime || 'video/mp4',
+          label: 'Scene ' + (idx + 1) });
+      }
+      (seg.veoExtras || []).forEach(function(extra, j) {
+        if (!(extra.apiVideoUrl || extra.apiVideoRaw)) return;
+        var eDur = 8;
+        try { eDur = JSON.parse(extra.veoPrompt || '{}').duration || 8; } catch(e) {}
+        clips.push({ seg: seg, segIdx: idx, extraIdx: j, dur: eDur,
+          url: extra.apiVideoRaw || extra.apiVideoUrl || '',
+          mime: extra.apiVideoMime || 'video/mp4',
+          label: 'Scene ' + (idx + 1) + ' · Clip ' + (j + 2) });
+      });
+    });
 
     if (countEl) countEl.textContent = clips.length ? clips.length + ' clip' + (clips.length !== 1 ? 's' : '') : '';
 
@@ -37,35 +58,34 @@
     }
 
     grid.innerHTML = '';
-    clips.forEach(function(seg) {
-      var idx = segs.indexOf(seg);
-      var dur = 6;
-      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = po.duration || 6; } catch(e) {}
-      var url = seg.apiVideoUrl || seg.apiVideoRaw || '';
-      var label = 'Scene ' + (idx + 1);
-      var inAssembler = window._assemblerClips.some(function(c) { return c.segIdx === idx; });
+    clips.forEach(function(clip) {
+      var inAssembler = window._assemblerClips.some(function(c) {
+        return c.segIdx === clip.segIdx && (c.extraIdx === undefined ? -1 : c.extraIdx) === clip.extraIdx;
+      });
 
       var card = document.createElement('div');
       card.className = 'gal-card';
-      card.dataset.segIdx = idx;
+      card.dataset.segIdx = clip.segIdx;
       card.innerHTML =
         '<div class="gal-thumb">'
-          + '<video src="' + url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
-          + '<div class="gal-dur">' + dur + 's</div>'
+          + '<video src="' + clip.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+          + '<div class="gal-dur">' + clip.dur + 's</div>'
           + (inAssembler ? '<div class="gal-badge-added">✓ Added</div>' : '')
         + '</div>'
         + '<div class="gal-meta">'
-          + '<span class="gal-label">' + label + '</span>'
+          + '<span class="gal-label">' + clip.label + '</span>'
           + '<div class="gal-btns">'
-            + '<button class="gal-btn gal-btn-add" onclick="galleryAddToAssembler(' + idx + ')" title="Add to assembler">'
+            + '<button class="gal-btn gal-btn-add" onclick="galleryAddToAssembler(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Add to assembler">'
               + (inAssembler ? '✓ Added' : '+ Assemble')
             + '</button>'
-            + '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + idx + ')" title="Download clip (original)">⬇</button>'
-            + '<button class="gal-btn gal-btn-hd" id="gal-hd-btn-' + idx + '" onclick="galleryUpscale(' + idx + ')" title="Download 1080p upscaled">HD</button>'
+            + (clip.extraIdx === -1
+              ? '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + clip.segIdx + ')" title="Download clip">⬇</button>'
+                + '<button class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
+              : '<button class="gal-btn gal-btn-dl" onclick="(function(){var e=segments[' + clip.segIdx + '].veoExtras[' + clip.extraIdx + '];var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (clip.segIdx+1) + '-clip-' + (clip.extraIdx+2) + '.mp4\';a.click();})()" title="Download clip">⬇</button>'
+            )
           + '</div>'
         + '</div>';
 
-      // Hover-to-play
       var vid = card.querySelector('.gal-video');
       card.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
       card.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = 0; } });
@@ -76,29 +96,41 @@
   window.renderGallery = renderGallery;
 
   // ── Gallery actions ────────────────────────────────────────────────────────
-  window.galleryAddToAssembler = function(segIdx) {
+  window.galleryAddToAssembler = function(segIdx, extraIdx) {
+    if (extraIdx === undefined) extraIdx = -1;
     var segs = window.segments || [];
     var seg = segs[segIdx];
     if (!seg) return;
-    var already = window._assemblerClips.some(function(c) { return c.segIdx === segIdx; });
+    var already = window._assemblerClips.some(function(c) {
+      return c.segIdx === segIdx && (c.extraIdx === undefined ? -1 : c.extraIdx) === extraIdx;
+    });
     if (already) {
-      window._assemblerClips = window._assemblerClips.filter(function(c) { return c.segIdx !== segIdx; });
+      window._assemblerClips = window._assemblerClips.filter(function(c) {
+        return !(c.segIdx === segIdx && (c.extraIdx === undefined ? -1 : c.extraIdx) === extraIdx);
+      });
     } else {
-      var dur = 6;
-      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
+      var blobUrl, mime, dur, label;
+      if (extraIdx >= 0) {
+        var extra = seg.veoExtras && seg.veoExtras[extraIdx];
+        if (!extra) return;
+        dur = 8; try { dur = parseInt(JSON.parse(extra.veoPrompt || '{}').duration, 10) || 8; } catch(e) {}
+        blobUrl = extra.apiVideoRaw || extra.apiVideoUrl || '';
+        mime    = extra.apiVideoMime || 'video/mp4';
+        label   = 'Scene ' + (segIdx + 1) + ' · Clip ' + (extraIdx + 2);
+      } else {
+        dur = 6; try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
+        blobUrl = seg.apiVideoRaw || seg.apiVideoUrl || '';
+        mime    = seg.apiVideoMime || 'video/mp4';
+        label   = 'Scene ' + (segIdx + 1);
+      }
       window._assemblerClips.push({
-        segIdx: segIdx,
-        start:  0,
-        end:    dur,
-        dur:    dur,
-        blobUrl: seg.apiVideoRaw || seg.apiVideoUrl || '',  // prefer local blob over expiring Google URL
-        mime:   seg.apiVideoMime || 'video/mp4',
-        label:  'Scene ' + (segIdx + 1)
+        segIdx: segIdx, extraIdx: extraIdx,
+        start: 0, end: dur, dur: dur,
+        blobUrl: blobUrl, mime: mime, label: label
       });
     }
     renderGallery();
     renderAssembler();
-    // Scroll assembler into view if adding
     if (!already) {
       var ap = document.getElementById('assemblerPanel');
       if (ap) ap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -206,14 +238,28 @@
     var segs = window.segments || [];
     window._assemblerClips = [];
     segs.forEach(function(seg, idx) {
-      if (!seg.apiVideoUrl && !seg.apiVideoRaw) return;
-      var dur = 6;
-      try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
-      window._assemblerClips.push({
-        segIdx: idx, start: 0, end: dur, dur: dur,
-        blobUrl: seg.apiVideoRaw || seg.apiVideoUrl || '',  // prefer local blob over expiring Google URL
-        mime: seg.apiVideoMime || 'video/mp4',
-        label: 'Scene ' + (idx + 1)
+      // Primary clip
+      if (seg.apiVideoUrl || seg.apiVideoRaw) {
+        var dur = 6;
+        try { var po = JSON.parse(seg.veoPrompt || '{}'); dur = parseInt(po.duration, 10) || 6; } catch(e) {}
+        window._assemblerClips.push({
+          segIdx: idx, extraIdx: -1, start: 0, end: dur, dur: dur,
+          blobUrl: seg.apiVideoRaw || seg.apiVideoUrl || '',
+          mime: seg.apiVideoMime || 'video/mp4',
+          label: 'Scene ' + (idx + 1)
+        });
+      }
+      // Continuation extras
+      (seg.veoExtras || []).forEach(function(extra, j) {
+        if (!extra.apiVideoUrl && !extra.apiVideoRaw) return;
+        var eDur = 8;
+        try { eDur = parseInt(JSON.parse(extra.veoPrompt || '{}').duration, 10) || 8; } catch(e) {}
+        window._assemblerClips.push({
+          segIdx: idx, extraIdx: j, start: 0, end: eDur, dur: eDur,
+          blobUrl: extra.apiVideoRaw || extra.apiVideoUrl || '',
+          mime: extra.apiVideoMime || 'video/mp4',
+          label: 'Scene ' + (idx + 1) + ' · Clip ' + (j + 2)
+        });
       });
     });
     renderGallery();
