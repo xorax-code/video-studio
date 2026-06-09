@@ -465,6 +465,19 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       _instrParts.push(`STAGING — show this exact moment: ${_staging}. The avatar is ACTIVELY performing this action (holding the product label-forward, mixing in a bowl, squeezing/stirring, scooping, applying, or examining) — NOT just standing and talking. Place a counter or table in front of the avatar for the demo.`);
     }
 
+    // ── POSE & CAMERA vary per scene; SETTING stays identical ──
+    _instrParts.push('POSE & CAMERA (this scene only): set the avatar\'s body position, blocking and camera framing to match the staged action above — she may be standing at the counter, seated at the desk leaning over a demo, or tending to a person on a table. The ROOM and SETTING stay IDENTICAL to every other scene; only her pose, what she holds, and the camera distance change between scenes.');
+
+    // Per-scene shot/framing — derived from the scene's shot hint (falls back to a sensible default)
+    var _shotHint = (_stgSeg && _stgSeg._shot) ? String(_stgSeg._shot).toLowerCase() : '';
+    var _shotDesc = /wide|full/.test(_shotHint)              ? 'wide shot, full body and the surrounding room visible'
+                  : /medium close/.test(_shotHint)           ? 'medium close-up, chest-up, hands and prop visible'
+                  : /close[- ]?up|ecu|macro|detail/.test(_shotHint) ? 'close-up, the product or treated area prominent'
+                  : /medium/.test(_shotHint)                 ? 'medium shot, waist-up with the table and props visible'
+                  : isFirst                                  ? 'medium shot, waist-up, establishing the scene and the table'
+                  :                                            'medium close-up, chest-up, hands and any prop visible';
+    var _framing = 'vertical 9:16, ' + _shotDesc + ', 85mm equivalent, f/1.8 shallow depth of field';
+
     // Background / setting lock
     if (frameDesc) {
       _instrParts.push(`LOCK: background — ${frameDesc}. Do not alter, move, or add any background elements.`);
@@ -523,7 +536,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       photo_guide: _soPhotoGuide,
       seed:        Math.floor(Math.random() * 99999),
       instruction: _instrParts.join(' '),
-      framing:     'vertical 9:16, medium close-up, person centered, 85mm equivalent, f/1.8 shallow depth of field',
+      framing:     _framing,
       expression:  isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
       style:       'photorealistic lifestyle editorial — real room, real light, real decor. NOT AI art, NOT studio backdrop, NOT blurred gradient',
       remove_captions: true,

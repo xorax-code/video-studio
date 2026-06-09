@@ -2278,21 +2278,21 @@
           >${escHtml(seg.script || '')}</textarea>
         </div>
 
-        <!-- Scene Action (collapsed by default) -->
+        <!-- Scene direction — OPEN by default: this is where the creator says what she does/holds/shows -->
         <div class="seg-field-action">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px;cursor:pointer;" onclick="(function(){var ta=document.getElementById('action-wrap-${i}');var open=ta.style.display!=='none';ta.style.display=open?'none':'';this.querySelector('.action-toggle').textContent=open?'▸ Show':'▾ Hide';}).call(this)">
-            <span class="seg-action-label" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">🎬 Action</span>
+            <span class="seg-action-label" style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;">🎬 What she's doing — prop / demo</span>
             <div style="display:flex;gap:4px;align-items:center;">
-              <button id="regen-action-btn-${i}" onclick="event.stopPropagation();refreshSegmentAction(${i})" title="Re-analyze frames with GPT-4o to rewrite the scene action" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.35);border-radius:2px;color:#6ee7b7;font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Action</button>
+              <button id="regen-action-btn-${i}" onclick="event.stopPropagation();refreshSegmentAction(${i})" title="Let AI suggest the visual action/demo for this line" style="background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.35);border-radius:2px;color:#6ee7b7;font-size:9px;padding:1px 6px;cursor:pointer;">↻ Suggest</button>
               <button onclick="event.stopPropagation();refreshSegmentVeo3(${i})" title="Regenerate Veo 3" style="background:var(--accent-glow-sm);border:1px solid var(--accent);border-radius:2px;color:var(--accent-2);font-size:9px;padding:1px 6px;cursor:pointer;">↻ Regen Veo 3</button>
-              <span class="action-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">▸ Show</span>
+              <span class="action-toggle" style="font-size:9px;color:var(--text-3);padding:1px 5px;background:var(--bg);border:1px solid var(--border);border-radius:3px;">▾ Hide</span>
             </div>
           </div>
-          <div id="action-wrap-${i}" style="display:none;">
+          <div id="action-wrap-${i}" style="display:block;">
             <textarea id="action-seg-${i}"
               oninput="segments[${i}].action=this.value;autoGrow(this);debounceSave()"
               class="seg-ta-base seg-ta-action"
-              placeholder="Describe what the person is doing — posture, gestures, expression, energy…"
+              placeholder="What is she physically DOING in this scene? Give her a prop or demo — not just talking. e.g. 'holds the product label-forward toward camera' · 'drops a spoon of baking soda into a glass of water, then squeezes a lemon over it' · 'points at the problem area on a jaw model'. This is what the frame will show."
             >${escHtml(seg.action || '')}</textarea>
           </div>
         </div>
