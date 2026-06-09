@@ -68,7 +68,7 @@
         if (numEl2) { numEl2.style.background = 'rgba(251,146,60,0.15)'; numEl2.style.borderColor = 'rgba(251,146,60,0.4)'; numEl2.style.color = '#fb923c'; }
       }
     }
-    if (step3Label) step3Label.textContent = m === 'api' ? '⚡ Auto' : '⚡ Auto';
+    if (step3Label) step3Label.textContent = m === 'api' ? '⚡ Make Clips' : '⚡ Make Clips';
 
     // Show/hide NB Review button based on mode (only relevant in API mode)
     var reviewBtn = document.getElementById('reviewNbBtn');

@@ -3654,7 +3654,7 @@ TECHNICAL SPECS:
       ctaProductName: s.ctaProductName || '',
       showProduct: s.showProduct || false,
       _shotlessData: s._shotlessData || null,
-      veoExtras: s.veoExtras && s.veoExtras.length ? s.veoExtras.map(function(e){ return { speech: e.speech || '', action: e.action || '', veoPrompt: e.veoPrompt || '' }; }) : [],
+      veoExtras: s.veoExtras && s.veoExtras.length ? s.veoExtras.map(function(e){ return { speech: e.speech || '', action: e.action || '', veoPrompt: e.veoPrompt || '', apiVideoUrl: e.apiVideoUrl || null, apiVideoMime: e.apiVideoMime || null }; }) : [],
       apiVideoUrl:  s.apiVideoUrl  || null,
       apiVideoMime: s.apiVideoMime || null,
     }));
@@ -3688,11 +3688,13 @@ TECHNICAL SPECS:
     // URI and rebuild the local blob URL after load. Runs async after a short
     // delay so 15-veo-api.js (which exposes window._fetchVideoAsBlob) has loaded.
     var _segsWithVideo = segments.filter(function(s) { return s.apiVideoUrl; });
-    if (_segsWithVideo.length) {
+    var _segsWithExtras = segments.filter(function(s) { return s.veoExtras && s.veoExtras.some(function(e){ return e.apiVideoUrl; }); });
+    if (_segsWithVideo.length || _segsWithExtras.length) {
       setTimeout(async function() {
         var _fetchBlob = window._fetchVideoAsBlob;
         if (typeof _fetchBlob !== 'function') return;
         var changed = false;
+        // Re-blob main segment videos
         for (var _vi = 0; _vi < _segsWithVideo.length; _vi++) {
           var _vs = _segsWithVideo[_vi];
           if (!_vs.apiVideoUrl) continue;
@@ -3700,6 +3702,18 @@ TECHNICAL SPECS:
             var _blob = await _fetchBlob(_vs.apiVideoUrl);
             if (_blob) { _vs.apiVideoRaw = _blob; changed = true; }
           } catch(_) {}
+        }
+        // Re-blob continuation clip videos (veoExtras)
+        for (var _ei = 0; _ei < _segsWithExtras.length; _ei++) {
+          var _es = _segsWithExtras[_ei];
+          for (var _ej = 0; _ej < (_es.veoExtras || []).length; _ej++) {
+            var _ex = _es.veoExtras[_ej];
+            if (!_ex.apiVideoUrl) continue;
+            try {
+              var _exBlob = await _fetchBlob(_ex.apiVideoUrl);
+              if (_exBlob) { _ex.apiVideoRaw = _exBlob; changed = true; }
+            } catch(_) {}
+          }
         }
         if (changed) {
           if (typeof renderSegments  === 'function') renderSegments();
