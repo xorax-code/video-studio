@@ -458,13 +458,25 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     // Camera angle
     _instrParts.push(`Camera angle: straight-on, ${isFirst ? 'chest height' : 'medium close-up'}.`);
 
-    // Background lock — from frameDesc if available, otherwise generic
+    // ── STAGING — the specific action for THIS scene (this is what makes frames non-flat) ──
+    var _stgSeg  = (window.segments || [])[sceneIndex];
+    var _staging = (_stgSeg && _stgSeg.action) ? _stgSeg.action : (scriptSlice || '');
+    if (_staging) {
+      _instrParts.push(`STAGING — show this exact moment: ${_staging}. The avatar is ACTIVELY performing this action (holding the product label-forward, mixing in a bowl, squeezing/stirring, scooping, applying, or examining) — NOT just standing and talking. Place a counter or table in front of the avatar for the demo.`);
+    }
+
+    // Background / setting lock
     if (frameDesc) {
       _instrParts.push(`LOCK: background — ${frameDesc}. Do not alter, move, or add any background elements.`);
     } else if (setting) {
-      _instrParts.push(`LOCK: background — ${setting}. Do not alter, move, or add any background elements.`);
+      _instrParts.push(`SETTING (locked for the ENTIRE video — identical in every scene): ${setting}. Same room, decor, props, lighting direction and camera position across all scenes; ONLY the avatar's action changes between scenes. Do not reimagine or vary the environment.`);
     } else {
       _instrParts.push('LOCK: background — use the reference frame environment exactly as shown. Do not alter, move, or add any background elements.');
+    }
+
+    // Product reveal on the final scene
+    if (sceneNum === total && total > 1) {
+      _instrParts.push('PRODUCT REVEAL: the avatar holds the product up toward camera, label facing forward and well-lit, as the clear focal point of this final frame.');
     }
 
     // Products/props (from Appearance Inventory product instructions)
@@ -4110,7 +4122,9 @@ TECHNICAL SPECS:
     var _fmtVal    = (_fmtPill && _fmtPill.dataset && _fmtPill.dataset.val) || 'talking-head';
     var videoType  = { 'talking-head': 'standard', 'demo': 'product', 'reveal': 'reveal' }[_fmtVal] || 'standard';
     var ctaKeyword = (_kit0.cta || '').trim();
-    var pov        = 'first';
+    var _povPill   = document.querySelector('.sb-pov-pill.active');
+    var scriptPov  = (_povPill && _povPill.dataset && _povPill.dataset.val) || 'first';
+    var pov        = scriptPov === 'client' ? 'third' : 'first';
     var avatarDesc = ((document.getElementById('avatarDesc') && document.getElementById('avatarDesc').value) || '').trim();
 
     if (!niche) {
@@ -4172,6 +4186,29 @@ TECHNICAL SPECS:
       productContext += 'KEY SELLING POINTS — weave these naturally into the speech, do not list them verbatim:\n' + bkLines + '\n';
     }
     if (bkCta && videoType !== 'standard') productContext += 'CTA TEXT: ' + bkCta + '\n';
+
+    // ── Universal staging playbook (reverse-engineered from winning UGC) ──────────
+    var _setEl2 = document.getElementById('studioSetting');
+    var _sceneSetting = _setEl2 ? _setEl2.value.trim() : '';
+    systemPrompt += '\n\nSTAGING PLAYBOOK — apply to EVERY scene\'s "visual" field:\n'
+      + '- The whole video is shot in ONE locked setting' + (_sceneSetting ? (': ' + _sceneSetting) : ' (a single themed room/space — pick one fitting the niche and keep it IDENTICAL every scene)') + '. Never change location between scenes; only the action changes.\n'
+      + '- There is a counter/table in front of the speaker where the demo happens and the product is revealed.\n'
+      + '- Scene 1 opens on a SHOCK VISUAL or bold result on the table (a curiosity prop, the problem area up close, or a before/after) — not a talking head.\n'
+      + '- Middle scenes are a HANDS-ON DEMO/ritual: mixing ingredients in a glass bowl, squeezing/stirring, scooping, or applying — something physically happens, narrated as it happens.\n'
+      + '- The FINAL scene reveals the product held label-forward to camera, then the CTA.\n'
+      + '- Keep ONE person on camera. If a client is referenced, show them as a treated body part or a split-frame inset — NEVER a second talking head.';
+    if (_sceneSetting) productContext += 'SETTING (all scenes happen here, locked): ' + _sceneSetting + '\n';
+
+    // ── Client-narration perspective override (single avatar tells a client's story) ──
+    if (scriptPov === 'client') {
+      systemPrompt = 'PERSPECTIVE — CRITICAL, THIS OVERRIDES ALL OTHER POV / "I tried" RULES BELOW:\n'
+        + 'The single person speaking is NOT the customer and did NOT use the product themselves. They are a trusted expert/insider narrating a CLIENT\'S experience in the third person.\n'
+        + '- Speak ABOUT the client: "I had a client who…", "she came to me with…", "her skin…", "so I had her try…", "a week later she sent me this…".\n'
+        + '- The speaker is the authority/helper who recommended it — NEVER the one with the problem. NEVER use "I tried it", "my skin", "I was struggling" — the problem and the results belong to the CLIENT.\n'
+        + '- Arc: Hook = the client\'s problem ("a client came to me with…"). Middle = what the speaker had the client do / the product they recommended. Result = the client\'s transformation. CTA = the speaker offering to send what they gave the client.\n'
+        + '- VISUALS: keep ONE person (the speaker) on camera the whole time — talking to camera, gesturing, holding the product, or holding up a phone showing the client\'s before/after. Do NOT put the client on screen and do NOT write two-person scenes.\n\n'
+        + '----------\n\n' + systemPrompt;
+    }
 
     var userPrompt = 'Write a ' + (sceneCount || 5) + '-scene video script.\n\n' + (productContext ? productContext + '\n' : '') + typeInstructions + formatContext + (avatarDesc ? '\n\nAvatar delivering the video: ' + avatarDesc : '') + '\n\nOutput this exact JSON structure:\n{\n  "scenes": [\n    {\n      "speech": "The exact words spoken in this scene (' + sceneLen + ')",\n      "visual": "Specific physical action — what the person is doing, how they hold/use the product, camera framing, expressions"\n    }\n  ]\n}';
 
@@ -4486,6 +4523,17 @@ TECHNICAL SPECS:
     }
   }
   window.reviseProducerScript = reviseProducerScript;
+
+  // Script voice toggle — "My experience" (first person) vs "Client's story" (third person)
+  function setSbPerspective(btn) {
+    document.querySelectorAll('.sb-pov-pill').forEach(function (b) {
+      b.classList.remove('active');
+      b.style.background = 'var(--glass-2)'; b.style.color = 'var(--text-2)'; b.style.borderColor = 'var(--border-2)';
+    });
+    btn.classList.add('active');
+    btn.style.background = 'rgba(16,185,129,0.12)'; btn.style.color = '#34d399'; btn.style.borderColor = 'rgba(16,185,129,0.4)';
+  }
+  window.setSbPerspective = setSbPerspective;
 
   async function produceAllScenes() {
     var btn = document.getElementById('produceAllScenesBtn');
