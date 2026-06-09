@@ -4377,6 +4377,116 @@ TECHNICAL SPECS:
   }
 
   // ── produceAllScenes: split → pre-fill visuals → NB prompts → Veo 3 prompts ──
+  // ── Smart scene segmentation via Vertex Gemini 2.5 Pro (producer-ai) ──────────
+  // Returns [{spoken,seconds,action,shot,emphasis}] or null on any failure
+  // (caller falls back to the legacy sentence splitter).
+  async function aiSegmentScript(script) {
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      var jwt = null;
+      if (_sbRef) {
+        var sr = await _sbRef.auth.getSession();
+        jwt = (sr && sr.data && sr.data.session && sr.data.session.access_token) || null;
+      }
+      if (!jwt) return null;
+      var prod = (document.getElementById('sbProduct') && document.getElementById('sbProduct').value || '').trim();
+      var durEl = document.querySelector('.sb-dur-pill.active');
+      var tSecs = durEl ? (parseInt(durEl.dataset.val, 10) || 45) : 45;
+      var charDesc = (typeof avatarInventory === 'string' && avatarInventory) ? avatarInventory.slice(0, 600) : '';
+      var res = await fetch('/.netlify/functions/producer-ai', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify({ task: 'segment', script: script, product: prod, targetSeconds: tSecs, character: charDesc }),
+      });
+      if (!res.ok) { console.warn('aiSegmentScript: HTTP ' + res.status); return null; }
+      var data = await res.json();
+      return (data && Array.isArray(data.scenes) && data.scenes.length) ? data.scenes : null;
+    } catch (e) {
+      console.warn('aiSegmentScript failed, will fall back to sentence split:', e && e.message);
+      return null;
+    }
+  }
+
+  // Build segments[] from AI scene objects — mirrors _doSplit's segment shape.
+  function _buildSegmentsFromAIScenes(scenes) {
+    var elapsed = 0;
+    segments = scenes.map(function (sc) {
+      var dur   = (Number(sc.seconds) >= 7) ? 8 : 6;
+      var start = Math.round(elapsed * 10) / 10;
+      elapsed  += dur;
+      var end   = Math.round(elapsed * 10) / 10;
+      var action = String(sc.action || '').trim();
+      if (sc.shot) action += (action ? '  ' : '') + 'Shot: ' + String(sc.shot).trim() + '.';
+      return {
+        startTime:    start,
+        endTime:      end,
+        script:       String(sc.spoken || '').trim(),
+        action:       action || deriveSceneAction(String(sc.spoken || ''), 0, scenes.length),
+        frameDataUrl: null,
+        nbPrompt:     '',
+        veoPrompt:    '',
+        frameDesc:    '',
+        _scriptOnly:  true,
+        _shot:        String(sc.shot || '').trim(),
+        _emphasis:    String(sc.emphasis || '').trim(),
+      };
+    }).filter(function (s) { return s.script; });
+    saveSegments();
+    renderSegments();
+    var total = segments.length;
+    var countEl = document.getElementById('segmentCount');
+    if (countEl) countEl.textContent = total + ' scene' + (total !== 1 ? 's' : '');
+    // Mirror _doSplit: auto-collapse the script panel so segment cards are visible
+    var _sp = document.getElementById('vsPanelScript');
+    if (_sp && _sp.dataset.collapsed !== '1') {
+      var _hdr = _sp.querySelector('.vs-panel-header.collapsible');
+      if (_hdr) _hdr.click();
+    }
+  }
+
+  // ── Script revise loop — rewrite the producer script from the user's notes ────
+  // Uses Vertex Gemini 2.5 Pro (producer-ai, task 'revise').
+  async function reviseProducerScript() {
+    var ta      = document.getElementById('originalScript');
+    var notesEl = document.getElementById('sbReviseNotes');
+    var script  = ta ? (ta.value || '').trim() : '';
+    var notes   = notesEl ? (notesEl.value || '').trim() : '';
+    if (!script) { showToast('Write or paste a script first, then tell the AI how to improve it.', 'warning'); return; }
+    var btn = document.getElementById('sbReviseBtn');
+    var orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '⟳ Revising…'; }
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      var jwt = null;
+      if (_sbRef) { var sr = await _sbRef.auth.getSession(); jwt = (sr && sr.data && sr.data.session && sr.data.session.access_token) || null; }
+      if (!jwt) { showToast('Please log in to use AI revise.', 'warning'); return; }
+      var prod = (document.getElementById('sbProduct') && document.getElementById('sbProduct').value || '').trim();
+      var res = await fetch('/.netlify/functions/producer-ai', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify({ task: 'revise', script: script, notes: notes, product: prod }),
+      });
+      var data = null;
+      try { data = await res.json(); } catch (_) {}
+      if (!res.ok || !data || !data.script) {
+        showToast((data && data.error) || 'Revise failed — please try again.', 'error');
+        return;
+      }
+      if (ta) {
+        ta.value = data.script;
+        try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+        if (typeof saveSegments === 'function') saveSegments();
+      }
+      if (notesEl) notesEl.value = '';
+      showToast('Script revised. Review it, then Produce All Scenes.', 'success');
+    } catch (e) {
+      showToast('Revise failed: ' + (e && e.message), 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = orig; }
+    }
+  }
+  window.reviseProducerScript = reviseProducerScript;
+
   async function produceAllScenes() {
     var btn = document.getElementById('produceAllScenesBtn');
     if (btn) { btn.textContent = '⏳ Producing…'; btn.disabled = true; }
@@ -4396,9 +4506,17 @@ TECHNICAL SPECS:
         if (btn) { btn.textContent = '\uD83D\uDE80 Produce All Scenes'; btn.disabled = false; }
         return;
       }
-      var _psSentences = _psScript.replace(/\r\n|\r/g,'\n').replace(/\n+/g,' ')
-        .split(/(?<=[.!?\u2026])\s+/).map(function(s){return s.trim();}).filter(Boolean);
-      if (_psSentences.length) _doSplit(_psSentences);
+      // Step 1/4 \u2014 smart segmentation via Gemini 2.5 Pro (Vertex); fall back to sentence split.
+      showToast('Step 1/4 \u2014 Breaking the script into scenes\u2026', 'info');
+      var _aiScenes = null;
+      try { _aiScenes = await aiSegmentScript(_psScript); } catch(_) { _aiScenes = null; }
+      if (_aiScenes && _aiScenes.length) {
+        _buildSegmentsFromAIScenes(_aiScenes);
+      } else {
+        var _psSentences = _psScript.replace(/\r\n|\r/g,'\n').replace(/\n+/g,' ')
+          .split(/(?<=[.!?\u2026])\s+/).map(function(s){return s.trim();}).filter(Boolean);
+        if (_psSentences.length) _doSplit(_psSentences);
+      }
 
       var _producerSteps = [
         ['Step 2/4 — Building visual NB prompts…',  buildProducerFrameNBPrompts],

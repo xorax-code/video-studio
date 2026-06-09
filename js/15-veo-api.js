@@ -701,8 +701,14 @@
     }
 
     if (succeeded > 0) {
-      if (typeof renderGallery   === 'function') renderGallery();
-      if (typeof renderAssembler === 'function') renderAssembler();
+      // Auto-assemble: line up every generated clip on the timeline in order so the
+      // finished sequence is ready to preview/export in one step (no manual adding).
+      if (typeof galleryAddAllToAssembler === 'function') {
+        galleryAddAllToAssembler();
+      } else {
+        if (typeof renderGallery   === 'function') renderGallery();
+        if (typeof renderAssembler === 'function') renderAssembler();
+      }
       var nudge = document.getElementById('openEditorNudge');
       if (nudge) nudge.style.display = 'flex';
     }
