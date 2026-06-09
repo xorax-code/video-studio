@@ -2099,7 +2099,7 @@
     if (h.wc === 0) return '';
     const warn = (h.level === 'short' || h.level === 'over') ? ' ⚠'
                : (h.level === 'long' ? ' ⚠' : '');
-    return `<span style="font-weight:400;color:${h.color};" title="${h.title}"> ${h.wc}w · ~${h.estSec.toFixed(1)}s${warn}</span>`;
+    return `<span style="font-weight:600;color:${h.color};font-size:9px;background:rgba(0,0,0,0.25);border:1px solid ${h.color}33;border-radius:3px;padding:0 5px;margin-left:4px;" title="${h.title}">${h.wc} words · ~${Math.round(h.estSec)}s${warn}</span>`;
   }
 
   // --- Veo 3 prompt JSON safety lint ---
@@ -2207,7 +2207,7 @@
           <span style="margin-left:auto;"></span>
           ${(typeof productImageDataUrl !== 'undefined' && productImageDataUrl && !seg.isCTA) ? `<button onclick="toggleSegmentProduct(${i})" title="${seg.showProduct ? 'Product ON — click to remove' : 'Product OFF — click to include'}" style="width:22px;height:22px;padding:0;border-radius:4px;border:1px solid ${seg.showProduct ? 'rgba(251,146,60,0.75)' : 'rgba(255,255,255,0.12)'};background:transparent;cursor:pointer;overflow:hidden;opacity:${seg.showProduct ? '1' : '0.28'};flex-shrink:0;box-shadow:${seg.showProduct ? '0 0 6px rgba(251,146,60,0.4)' : 'none'};transition:opacity 0.15s,border-color 0.15s;"><img src="${productImageDataUrl}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:3px;"></button>` : ''}
           <button class="dup-btn" onclick="duplicateSegment(${i})" title="Duplicate this segment — copies frame, action, prompts" style="background:rgba(124,106,247,0.07);border:1px solid rgba(124,106,247,0.2);border-radius:4px;color:var(--accent-2);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">⧉ Split</button>
-          <button class="seg-pin-btn" onclick="(function(b){var c=b.closest('[id^=seg-card-]');if(!c)return;var open=c.getAttribute('data-open')==='1';c.setAttribute('data-open',open?'0':'1');b.textContent=open?'···':'pin';b.title=open?'Expand to edit':'Collapse card';}).call(this,this)" title="Expand to edit">···</button>
+          <button class="seg-pin-btn" onclick="(function(b){var c=b.closest('[id^=seg-card-]');if(!c)return;var open=c.getAttribute('data-open')==='1';c.setAttribute('data-open',open?'0':'1');b.textContent=open?'▾':'▴';b.title=open?'Expand card':'Collapse card';}).call(this,this)" title="Collapse card" style="font-size:12px;line-height:1;padding:2px 7px;">▾</button>
           <button onclick="removeSegment(${i})" style="background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);font-size:10px;padding:2px 8px;cursor:pointer;flex-shrink:0;">✕</button>
         </div>
 
@@ -2426,7 +2426,10 @@
             </div>
           </div>
           <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
-          <button onclick="downloadSegmentVideo(${i})" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;width:100%;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ Download Scene ${i+1}</button>
+          <div style="display:flex;gap:5px;margin-top:6px;">
+            <button onclick="downloadSegmentVideo(${i})" style="flex:1;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 0;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ DL</button>
+            <button onclick="window.openSegModal(${i})" style="flex:2;display:flex;align-items:center;justify-content:center;gap:4px;padding:5px 0;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⤢ View Full + Assemble</button>
+          </div>
         </div>` : ''}
 
         <!-- Card footer: Merge + Continue buttons -->
