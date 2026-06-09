@@ -2186,14 +2186,22 @@
       setVideoMini(true);
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
-    container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:10px;display:flex;flex-direction:row;align-items:flex-start;gap:12px;';
+    container.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;align-content:start;';
+    // Inject floating card hover CSS once
+    if (!document.getElementById('seg-card-floating-css')) {
+      const _fcss = document.createElement('style');
+      _fcss.id = 'seg-card-floating-css';
+      _fcss.textContent = '.seg-card-floating:hover{transform:translateY(-4px)!important;box-shadow:0 6px 16px rgba(0,0,0,.4),0 22px 55px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)!important;border-color:rgba(99,102,241,0.38)!important;}';
+      document.head.appendChild(_fcss);
+    }
     container.innerHTML = segments.map((seg, i) => `
-      <div id="seg-card-${i}"
-        style="display:flex;flex-direction:column;gap:7px;width:330px;flex-shrink:0;border:1px solid ${seg.done ? 'rgba(34,197,94,0.45)' : 'var(--glass-border)'};border-radius:10px;padding:10px;background:${seg.done ? 'rgba(34,197,94,0.06)' : 'var(--glass-2)'};backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);position:relative;box-shadow:var(--shadow-card);transition:border-color 0.16s,box-shadow 0.16s;">
+      <div id="seg-card-${i}" class="seg-card-floating"
+        style="display:flex;flex-direction:column;gap:7px;width:100%;border:1px solid ${seg.done ? 'rgba(34,197,94,0.55)' : 'rgba(255,255,255,0.07)'};border-radius:14px;padding:12px;background:${seg.done ? 'rgba(34,197,94,0.07)' : 'linear-gradient(145deg,rgba(24,24,40,0.94) 0%,rgba(14,14,26,0.97) 100%)'};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:relative;box-shadow:0 2px 4px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.04);transition:transform 0.22s cubic-bezier(.22,.68,0,1.2),box-shadow 0.22s,border-color 0.2s;">
 
         <!-- Card header: seg# + time badge + done badge + remove -->
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <span style="font-size:12px;font-weight:800;color:${seg.done ? '#4ade80' : 'var(--accent-2)'};letter-spacing:-0.3px;">Seg ${i+1}</span>
+          <span style="font-size:12px;font-weight:800;color:${seg.done ? '#4ade80' : 'var(--accent-2)'};letter-spacing:-0.3px;cursor:pointer;" onclick="window.openSegModal(${i});event.stopPropagation();" title="Expand scene viewer">Seg ${i+1}</span>
+          <button onclick="window.openSegModal(${i});event.stopPropagation();" title="Open full scene viewer" style="background:rgba(99,102,241,0.09);border:1px solid rgba(99,102,241,0.28);border-radius:4px;color:var(--accent-2);font-size:9px;padding:1px 7px;cursor:pointer;flex-shrink:0;line-height:1.3;font-family:inherit;font-weight:700;">⤢ View</button>
           ${seg.isCTA ? `<span style="font-size:9px;font-weight:700;padding:1px 7px;border-radius:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;letter-spacing:0.04em;">🛍 CTA</span>` : `<span style="font-size:10px;color:var(--text-3);font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:4px;padding:2px 7px;letter-spacing:0.3px;">${fmt(seg.startTime)} – ${fmt(seg.endTime)}</span>`}
           ${seg.done ? `<span class="scene-done-badge" style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>` : `<span class="scene-done-badge" style="display:none;font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.15);border:1px solid rgba(34,197,94,0.4);border-radius:4px;padding:1px 7px;">✅ DONE</span>`}
           <span style="margin-left:auto;"></span>
@@ -2222,13 +2230,12 @@
           </div>
         </div>
         ` : `
-        <div style="display:flex;gap:7px;align-items:flex-start;">
-          <!-- Frame column (left) -->
-          <div style="flex:1;min-width:0;">
+        <div>
           ${seg.frameDataUrl ? `
+          <!-- Click-to-target thumbnail: click directly on the person to pin them -->
           <div style="position:relative;display:block;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
-              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};width:100%;height:178px;object-fit:cover;border-radius:6px;display:block;"
+              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};"
               ${seg.isCTA ? '' : `onclick="setTargetPin(${i}, event)"`}
               title="${seg.isCTA ? 'Product photo' : 'Click on a person to mark them as the NB swap target'}">
             ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
@@ -2245,24 +2252,7 @@
             <span style="font-size:8px;color:var(--text-3);opacity:0.6;flex-shrink:0;">Gender:</span>
             <button onclick="setTargetGender(${i},'woman')" title="Target is a woman" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='woman'?'rgba(244,114,182,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='woman'?'rgba(244,114,182,0.12)':'transparent'};color:${seg.targetGender==='woman'?'#f472b6':'var(--text-3)'};">👩 Woman</button>
             <button onclick="setTargetGender(${i},'man')" title="Target is a man" style="font-size:9px;padding:2px 7px;border-radius:3px;cursor:pointer;border:1px solid ${seg.targetGender==='man'?'rgba(96,165,250,0.6)':'rgba(255,255,255,0.1)'};background:${seg.targetGender==='man'?'rgba(96,165,250,0.12)':'transparent'};color:${seg.targetGender==='man'?'#60a5fa':'var(--text-3)'};">👨 Man</button>
-          </div>` : ''}`}` : ('<div style="width:100%;height:178px;border-radius:6px;border:1px dashed var(--border);background:var(--surface-2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;">' + (seg._shotlessData ? '<span style="font-size:9px;font-weight:700;color:rgba(139,92,246,0.8);letter-spacing:0.5px;text-transform:uppercase;">✨ Shotless</span><span style="font-size:9px;color:var(--text-3);text-align:center;line-height:1.4;padding:0 4px;">' + escHtml(seg._shotlessData.scene_description || seg.action || '') + '</span>' : '<span style="font-size:28px;opacity:0.22;">🎞</span>') + '</div>')}
-          </div>
-          <!-- Generated video column (portrait, right) -->
-          <div style="width:100px;flex-shrink:0;display:flex;flex-direction:column;gap:3px;">
-            ${seg.apiVideoUrl ? `
-            <video controls playsinline style="width:100px;height:178px;border-radius:7px;background:#000;object-fit:contain;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
-            <div style="display:flex;gap:2px;">
-              <button onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode.','info',3000);}" title="Regenerate clip" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:4px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺</button>
-              <button onclick="downloadSegmentVideo(${i})" title="Download clip" style="flex:1;padding:3px 0;font-size:11px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:4px;color:#34d399;cursor:pointer;font-family:inherit;">⬇</button>
-              <button onclick="clearSegmentApiVideo(${i})" title="Remove" style="padding:3px 6px;font-size:11px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:4px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
-            </div>
-            ` : `
-            <div style="width:100px;height:178px;border:1px dashed rgba(255,255,255,0.06);border-radius:7px;background:rgba(255,255,255,0.02);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;">
-              <span style="font-size:22px;opacity:0.12;">🎬</span>
-              <span style="font-size:8px;color:var(--text-4);opacity:0.4;text-align:center;line-height:1.3;">No clip<br>yet</span>
-            </div>
-            `}
-          </div>
+          </div>` : ''}`}` : ('<div class="seg-empty-frame" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;padding:8px;min-height:60px;">' + (seg._shotlessData ? '<span style="font-size:9px;font-weight:700;color:rgba(139,92,246,0.8);letter-spacing:0.5px;text-transform:uppercase;">✨ Shotless</span><span style="font-size:9px;color:var(--text-3);text-align:center;line-height:1.4;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;">' + escHtml(seg._shotlessData.scene_description || seg.action || '') + '</span>' : '<span style="font-size:28px;opacity:0.22;">🎞</span>') + '</div>')}
         </div>
         `}
 
@@ -2275,7 +2265,6 @@
           <textarea id="script-seg-${i}"
             oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
             class="seg-ta-base seg-ta-script"
-            style="max-height:44px;overflow-y:auto;"
             placeholder="Script for this scene…"
           >${escHtml(seg.script || '')}</textarea>
         </div>
@@ -2426,27 +2415,32 @@
           <span id="seg-gen-msg-${i}"></span>
         </div>
 
-        <!-- Generated video — producer mode only (replicator shows it inline with the frame above) -->
-        ${seg.apiVideoUrl && seg._scriptOnly ? `
+        <!-- Generated video (Gemini API) -->
+        ${seg.apiVideoUrl ? `
         <div style="border-top:1px solid rgba(16,185,129,0.22);padding-top:8px;margin-top:4px;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:5px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
             <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#34d399;">⚡ Generated Video</span>
-            <div style="display:flex;gap:3px;align-items:center;">
-              <button onclick="if(typeof getGenerateMode==='function'&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode.','info',4000);}" title="Regenerate" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺</button>
-              <button onclick="downloadSegmentVideo(${i})" title="Download" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇</button>
-              <button onclick="clearSegmentApiVideo(${i})" title="Remove" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+            <div style="display:flex;gap:5px;align-items:center;">
+              <button id="regenSceneBtn-${i}" onclick="if(getGenerateMode&&getGenerateMode()==='api'){regenSingleScene(${i});}else{showToast('Switch to Auto mode to regenerate via API.','info',4000);}" title="Regenerate this clip via API" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;transition:all 0.15s;">↺ Regen</button>
+              <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
             </div>
           </div>
-          <video controls playsinline style="width:100%;max-height:280px;border-radius:7px;background:#000;object-fit:contain;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+          <button onclick="downloadSegmentVideo(${i})" style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:6px;padding:6px 0;width:100%;font-size:10px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ Download Scene ${i+1}</button>
+        </div>` : ''}
+
+        <!-- Card footer: Merge + Continue buttons -->
+        ${i < segments.length - 1 ? `
+        <div style="display:flex;gap:5px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;margin-top:2px;">
+          <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="flex:1;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);border-radius:5px;color:#93c5fd;font-size:9px;font-weight:600;padding:4px 0;cursor:pointer;font-family:inherit;">⊕ Merge ↓</button>
+          <button onclick="addVeoExtraFromNextSeg(${i})" title="Add next seg as continuation clip" style="flex:1;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.32);border-radius:5px;color:#c4b5fd;font-size:9px;font-weight:600;padding:4px 0;cursor:pointer;font-family:inherit;">＋ Cont. ↓</button>
         </div>` : ''}
 
       </div>
       ${i < segments.length - 1 ? `
-      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;flex-shrink:0;align-self:flex-start;margin-top:72px;gap:3px;">
-        <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
-        <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="background:rgba(96,165,250,0.14);border:1px solid rgba(96,165,250,0.45);border-radius:6px;color:#93c5fd;font-size:10px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">⊕ Merge</button>
-        <button onclick="addVeoExtraFromNextSeg(${i})" title="Add as continuation clip" style="background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.42);border-radius:6px;color:#c4b5fd;font-size:9.5px;font-weight:600;padding:5px 10px;cursor:pointer;white-space:nowrap;font-family:inherit;transition:all 0.15s;">＋ Cont.</button>
-        <div style="width:1px;height:16px;background:rgba(255,255,255,0.07);"></div>
+      <div style="display:none;">
+        <button onclick="mergeSegments(${i},${i+1})">⊕ Merge</button>
+        <button onclick="addVeoExtraFromNextSeg(${i})">＋ Cont.</button>
       </div>` : ''}
 `).join('');
 
@@ -2457,6 +2451,165 @@
     // Update step progress strip whenever segments change
     setTimeout(() => updateStepProgress?.(), 80);
   }
+
+  // ─── Floating card zoom modal ────────────────────────────────────────────────
+  window.closeSegModal = function() {
+    const m = document.getElementById('segFloatModal');
+    if (!m) return;
+    if (m._onKey) document.removeEventListener('keydown', m._onKey);
+    m.remove();
+  };
+
+  window.openSegModal = function(idx) {
+    const _segs = typeof segments !== 'undefined' ? segments : window.segments;
+    const seg = _segs?.[idx];
+    if (!seg) return;
+    const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
+    const total = _segs.length;
+    const prev = idx > 0 ? idx - 1 : total - 1;
+    const next = idx < total - 1 ? idx + 1 : 0;
+
+    // Inject animation CSS once
+    if (!document.getElementById('sfm-css')) {
+      const sc = document.createElement('style'); sc.id = 'sfm-css';
+      sc.textContent = '@keyframes sfmFade{from{opacity:0}to{opacity:1}}@keyframes sfmUp{from{opacity:0;transform:scale(.94) translateY(12px)}to{opacity:1;transform:scale(1) translateY(0)}}';
+      document.head.appendChild(sc);
+    }
+
+    const existing = document.getElementById('segFloatModal');
+    if (existing) { if (existing._onKey) document.removeEventListener('keydown', existing._onKey); existing.remove(); }
+
+    const overlay = document.createElement('div');
+    overlay.id = 'segFloatModal';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:9990;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);animation:sfmFade .18s ease;';
+    overlay.addEventListener('click', e => { if (e.target === overlay) window.closeSegModal(); });
+
+    const hasVideo = !!seg.apiVideoUrl;
+    const hasExtras = seg.veoExtras && seg.veoExtras.length > 0;
+    const hasFrame  = !!seg.frameDataUrl;
+    const hasNB     = !!seg.nbPreviewDataUrl;
+
+    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+    overlay.innerHTML = `
+    <div style="background:linear-gradient(160deg,rgba(20,20,38,0.98),rgba(10,10,22,0.99));border:1px solid rgba(255,255,255,0.09);border-radius:18px;box-shadow:0 40px 100px rgba(0,0,0,.75),0 10px 30px rgba(0,0,0,.5);width:100%;max-width:920px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;animation:sfmUp .22s cubic-bezier(.22,.68,0,1.2);">
+
+      <!-- Header -->
+      <div style="display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,0.07);flex-shrink:0;">
+        <span style="font-size:13px;font-weight:800;color:${seg.done?'#4ade80':'#818cf8'};">Scene ${idx+1}</span>
+        ${!seg.isCTA?`<span style="font-size:10px;color:var(--text-3);font-family:monospace;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.08);border-radius:4px;padding:2px 7px;">${fmt(seg.startTime||0)} – ${fmt(seg.endTime||0)}</span>`:`<span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;background:rgba(251,191,36,0.15);border:1px solid rgba(251,191,36,0.3);color:#fbbf24;">🛍 CTA</span>`}
+        ${seg.done?'<span style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:2px 7px;">✅ Done</span>':''}
+        ${hasVideo?'<span style="font-size:9px;font-weight:700;color:#34d399;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:2px 7px;">⚡ Clip Ready</span>':''}
+        <span style="flex:1;"></span>
+        <button onclick="window.openSegModal(${prev})" title="Previous (←)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">◀</button>
+        <span style="font-size:10px;color:var(--text-3);min-width:40px;text-align:center;">${idx+1} / ${total}</span>
+        <button onclick="window.openSegModal(${next})" title="Next (→)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">▶</button>
+        <button onclick="window.closeSegModal()" style="padding:3px 11px;font-size:12px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.25);border-radius:6px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
+      </div>
+
+      <!-- Body -->
+      <div style="display:flex;flex:1;min-height:0;overflow:hidden;">
+
+        <!-- Left: Frame + NB preview -->
+        <div style="width:200px;flex-shrink:0;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:9px;border-right:1px solid rgba(255,255,255,0.06);">
+          ${hasFrame?`
+          <div>
+            <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:4px;">Reference Frame</div>
+            <img src="${seg.frameDataUrl}" style="width:100%;border-radius:8px;display:block;cursor:zoom-in;" onclick="typeof openLightbox==='function'&&openLightbox(this.src)" title="Click to enlarge">
+          </div>`:seg._scriptOnly?`
+          <div style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.2);border-radius:8px;padding:10px;text-align:center;">
+            <div style="font-size:9px;font-weight:700;color:#a78bfa;margin-bottom:3px;">✨ Producer Mode</div>
+            <div style="font-size:8px;color:var(--text-3);line-height:1.5;">No reference frame</div>
+          </div>`:`
+          <div style="height:90px;background:rgba(255,255,255,0.03);border:1px dashed rgba(255,255,255,0.1);border-radius:8px;display:flex;align-items:center;justify-content:center;">
+            <span style="font-size:24px;opacity:.18;">🎞</span>
+          </div>`}
+          ${hasNB?`
+          <div>
+            <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:4px;">NB Composite</div>
+            <img src="${seg.nbPreviewDataUrl}" style="width:100%;border-radius:8px;display:block;cursor:zoom-in;" onclick="typeof openLightbox==='function'&&openLightbox(this.src)" title="Click to enlarge">
+          </div>`:''}
+        </div>
+
+        <!-- Right: Script + clips -->
+        <div style="flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+
+          <!-- Script -->
+          <div>
+            <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--text-3);margin-bottom:5px;">📝 Script</div>
+            <div style="font-size:11px;color:var(--text-1);line-height:1.75;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:8px;padding:10px 12px;">${esc(seg.script||'No script')}</div>
+          </div>
+
+          ${seg._scriptOnly&&seg.frameDesc?`
+          <div>
+            <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(251,191,36,.7);margin-bottom:5px;">🎨 Frame Description</div>
+            <div style="font-size:10px;color:var(--text-2);line-height:1.6;background:rgba(251,191,36,0.04);border:1px solid rgba(251,191,36,0.12);border-radius:8px;padding:8px 10px;">${esc(seg.frameDesc)}</div>
+          </div>`:''}
+
+          <!-- Primary generated clip -->
+          ${hasVideo?`
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
+              <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#34d399;">⚡ Clip 1 · Primary</div>
+              <div style="display:flex;gap:5px;">
+                <button onclick="typeof regenSingleScene==='function'&&regenSingleScene(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺ Regen</button>
+                <button onclick="typeof downloadSegmentVideo==='function'&&downloadSegmentVideo(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ DL</button>
+                <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},-1)" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕ Assemble</button>
+              </div>
+            </div>
+            <video controls playsinline style="width:100%;border-radius:10px;background:#000;display:block;max-height:300px;object-fit:contain;" src="${seg.apiVideoRaw||seg.apiVideoUrl}"></video>
+          </div>`:`
+          <div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;padding:18px;text-align:center;">
+            <div style="font-size:9px;color:var(--text-3);margin-bottom:10px;">No clip generated yet</div>
+            <button onclick="window.closeSegModal();setTimeout(()=>{document.getElementById('seg-card-${idx}')?.scrollIntoView({behavior:'smooth',block:'center'})},80)" style="padding:5px 16px;font-size:10px;font-weight:700;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.4);border-radius:7px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⤡ Go to Card</button>
+          </div>`}
+
+          <!-- Continuation clips -->
+          ${hasExtras?`
+          <div>
+            <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#a78bfa;margin-bottom:9px;">🔁 Continuation Clips · ${seg.veoExtras.length} extra${seg.veoExtras.length>1?'s':''}</div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              ${seg.veoExtras.map((ex,j)=>`
+              <div style="background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.18);border-radius:10px;padding:10px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                  <span style="font-size:9px;font-weight:700;color:#c4b5fd;">Clip ${j+2}</span>
+                  ${ex.apiVideoUrl?`<div style="display:flex;gap:4px;">
+                    <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},${j})" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕</button>
+                  </div>`:''}
+                </div>
+                ${ex.speech?`<div style="font-size:10px;color:var(--text-2);line-height:1.55;margin-bottom:7px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${esc(ex.speech)}</div>`:''}
+                ${ex.apiVideoUrl?`<video controls playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
+              </div>`).join('')}
+            </div>
+          </div>`:''}
+
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="display:flex;align-items:center;gap:7px;padding:11px 16px;border-top:1px solid rgba(255,255,255,0.07);flex-shrink:0;background:rgba(0,0,0,0.18);">
+        <button onclick="window.closeSegModal();setTimeout(()=>{document.getElementById('seg-card-${idx}')?.scrollIntoView({behavior:'smooth',block:'center'})},80);" style="padding:5px 13px;font-size:10px;font-weight:700;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.12);border-radius:7px;color:var(--text-2);cursor:pointer;font-family:inherit;">✏ Edit Card</button>
+        ${hasVideo?`
+        <button onclick="typeof regenSingleScene==='function'&&regenSingleScene(${idx})" style="padding:5px 13px;font-size:10px;font-weight:700;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.35);border-radius:7px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺ Regen</button>
+        <button onclick="typeof downloadSegmentVideo==='function'&&downloadSegmentVideo(${idx})" style="padding:5px 13px;font-size:10px;font-weight:700;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:7px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ Download</button>`:`
+        <button onclick="window.closeSegModal();setTimeout(()=>{document.getElementById('seg-card-${idx}')?.scrollIntoView({behavior:'smooth',block:'center'})},80);" style="padding:5px 13px;font-size:10px;font-weight:700;background:rgba(99,102,241,0.14);border:1px solid rgba(99,102,241,0.4);border-radius:7px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⚡ Generate</button>`}
+        <span style="flex:1;"></span>
+        <span style="font-size:9px;color:rgba(255,255,255,0.2);">Esc · ← →</span>
+      </div>
+    </div>`;
+
+    document.body.appendChild(overlay);
+
+    // Keyboard nav
+    const onKey = e => {
+      if (e.key === 'Escape') { window.closeSegModal(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { window.openSegModal(next); }
+      else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { window.openSegModal(prev); }
+    };
+    overlay._onKey = onKey;
+    document.addEventListener('keydown', onKey);
+  };
+  // ─── End floating card modal ───────────────────────────────────────────────
 
   // Background source is always Photo 2 (uploaded background) unless bgFromAvatar is set.
   // The per-segment dropdown was removed — background panel drives Photo 2 for all scenes.
