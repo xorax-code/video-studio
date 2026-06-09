@@ -581,8 +581,19 @@
   // Any clips beyond that limit sit in "queued" state and auto-start as
   // slots free up — no manual batching needed regardless of segment count.
   async function generateAllScenesViaAPI() {
-    var toGenerate = segments.filter(function(s) { return s.veoPrompt && s.veoPrompt.trim() && s.nbApproved !== false; });
-    if (!toGenerate.length) {
+    // Build flat work list — primary clips first, then continuation extras (veoExtras)
+    var workList = [];
+    segments.forEach(function(seg) {
+      if (!seg.veoPrompt || !seg.veoPrompt.trim() || seg.nbApproved === false) return;
+      var segIdx = segments.indexOf(seg);
+      workList.push({ seg: seg, segIdx: segIdx, veoPrompt: seg.veoPrompt, isExtra: false, extraIdx: -1, extra: null });
+      (seg.veoExtras || []).forEach(function(extra, j) {
+        if (!(extra.veoPrompt || '').trim()) return;
+        workList.push({ seg: seg, segIdx: segIdx, veoPrompt: extra.veoPrompt, isExtra: true, extraIdx: j, extra: extra });
+      });
+    });
+
+    if (!workList.length) {
       showToast('Generate prompts first before running via API.', 'warning');
       return;
     }
@@ -590,7 +601,7 @@
     var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
     var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
     var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
-    var total    = toGenerate.length;
+    var total    = workList.length;
 
     // Concurrency limit — Vertex AI allows 10 concurrent video gen operations
     var MAX_CONCURRENT = 10;
@@ -600,12 +611,12 @@
 
     // Mark ALL clips as queued upfront so users see the full picture immediately
     _veoGenStatuses = {};
-    toGenerate.forEach(function(seg) {
-      _setCardStatus(segments.indexOf(seg), 'queued', 'In queue…');
+    workList.forEach(function(item) {
+      _setCardStatus(item.segIdx, 'queued', 'In queue…');
     });
 
     // Shared state — safe in JS (single-threaded event loop)
-    var nextIdx  = 0;
+    var nextIdx   = 0;
     var succeeded = 0;
     var failed    = 0;
     var aborted   = false;
@@ -614,28 +625,36 @@
     async function worker() {
       while (!aborted) {
         var i = nextIdx;
-        if (i >= toGenerate.length) break;
+        if (i >= workList.length) break;
         nextIdx++;  // claim this task before any await
 
-        var seg      = toGenerate[i];
-        var segIdx   = segments.indexOf(seg);
+        var item     = workList[i];
+        var seg      = item.seg;
+        var segIdx   = item.segIdx;
         var sceneNum = i + 1;
+        var clipLabel = item.isExtra ? 'Clip ' + (item.extraIdx + 2) + ' (cont.)' : 'Clip 1';
 
         _updateVeoAPIScene(sceneNum, total, 'generating');
-        _setCardStatus(segIdx, 'generating', 'Generating… (~1 min)');
+        _setCardStatus(segIdx, 'generating', 'Generating ' + clipLabel + '… (~1 min)');
 
         var durSecs = 6;
-        try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+        try { var _po = JSON.parse(item.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
 
         try {
+          // All clips (primary + continuations) use the same NB composite start frame
           var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-          // Pass seg.frameDataUrl as the reference frame for scene analysis (separate from start image)
-          var result    = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, _startImg, seg.frameDataUrl || null);
+          var result    = await generateVeoClipViaAPI(item.veoPrompt, durSecs, modelKey, _startImg, seg.frameDataUrl || null);
 
-          seg.apiVideoUrl  = result.videoUrl;
-          seg.apiVideoMime = result.mimeType || 'video/mp4';
-          var blobUrl = await _fetchVideoAsBlob(result.videoUrl);
-          if (blobUrl) seg.apiVideoRaw = blobUrl;
+          var videoBlob = await _fetchVideoAsBlob(result.videoUrl);
+          if (item.isExtra) {
+            item.extra.apiVideoUrl  = result.videoUrl;
+            item.extra.apiVideoMime = result.mimeType || 'video/mp4';
+            if (videoBlob) item.extra.apiVideoRaw = videoBlob;
+          } else {
+            seg.apiVideoUrl  = result.videoUrl;
+            seg.apiVideoMime = result.mimeType || 'video/mp4';
+            if (videoBlob) seg.apiVideoRaw = videoBlob;
+          }
 
           _updateVeoAPIScene(sceneNum, total, 'done');
           _setCardStatus(segIdx, 'done', 'Done!');
@@ -647,10 +666,10 @@
           if (typeof renderGallery  === 'function') renderGallery();
 
         } catch(e) {
-          console.error('[VeoAPI] Scene ' + sceneNum + ' failed:', e.message);
+          console.error('[VeoAPI] Clip ' + sceneNum + ' failed:', e.message);
           _updateVeoAPIScene(sceneNum, total, 'error');
           _setCardStatus(segIdx, 'error', 'Failed: ' + (e.message || 'Unknown').slice(0, 45));
-          showToast('Scene ' + sceneNum + ' failed: ' + (e.message || 'Unknown'), 'error', 7000);
+          showToast('Clip ' + sceneNum + ' failed: ' + (e.message || 'Unknown'), 'error', 7000);
           failed++;
 
           if (typeof renderSegments === 'function') renderSegments();

@@ -120,9 +120,9 @@
     }
 
     // ── Progress bar ──────────────────────────────────────────────────────────
-    function _ppUpdateProgress(nbDone, veoDone, total) {
-      // Each scene has two phases; progress = fraction of total phase-steps done.
-      var steps    = total * 2;
+    function _ppUpdateProgress(nbDone, veoDone, nbTotal, veoTotal) {
+      // Progress = fraction of all phase steps done (NB + Veo, Veo may include extras)
+      var steps     = (nbTotal || 0) + (veoTotal || 0);
       var stepsDone = nbDone + veoDone;
       var pct = steps > 0 ? Math.round((stepsDone / steps) * 100) : 0;
 
@@ -132,7 +132,7 @@
 
       if (bar)   bar.style.width   = pct + '%';
       if (pctEl) pctEl.textContent = pct + '%';
-      if (label) label.textContent = 'NB: ' + nbDone + '/' + total + '  ·  Veo: ' + veoDone + '/' + total;
+      if (label) label.textContent = 'NB: ' + nbDone + '/' + (nbTotal||0) + '  ·  Veo: ' + veoDone + '/' + (veoTotal||0);
     }
 
     // ── Run Pipeline button state ─────────────────────────────────────────────
@@ -181,7 +181,11 @@
 
       try {  // try/finally ensures _ppRunning + button reset even on unexpected throw
 
-      var total    = toRun.length;
+      var total       = toRun.length;
+      // Total Veo jobs = 1 primary per segment + continuation extras
+      var totalVeoJobs = toRun.reduce(function(acc, s) {
+        return acc + 1 + ((s.veoExtras || []).filter(function(e){ return (e.veoPrompt||'').trim(); }).length);
+      }, 0);
       var nbDone   = 0;
       var veoDone  = 0;
       var veoFail  = 0;
@@ -228,14 +232,14 @@
         if (!nbOk) {
           _ppSetPhase(segIdx, 'nb',  'error',   'Failed — check credits/quota');
           _ppSetPhase(segIdx, 'veo', 'skipped', 'Skipped (no frame)');
-          _ppUpdateProgress(nbDone, veoDone + veoFail, total);
+          _ppUpdateProgress(nbDone, veoDone + veoFail, total, totalVeoJobs);
           // Still wait before next NB request
           if (i < toRun.length - 1) await new Promise(function (r) { setTimeout(r, 15000); });
           continue;
         }
 
         _ppSetPhase(segIdx, 'nb', 'done', 'Frame ready');
-        _ppUpdateProgress(nbDone, veoDone + veoFail, total);
+        _ppUpdateProgress(nbDone, veoDone + veoFail, total, totalVeoJobs);
 
         // ── Phase 2: Veo clip (non-blocking) ──────────────────────────────
         _ppSetPhase(segIdx, 'veo', 'generating', 'Generating clip…');
@@ -281,10 +285,47 @@
                   showToast('Not enough credits — pipeline stopped. Top up to continue.', 'error', 9000);
               }
             }
-            _ppUpdateProgress(nbDone, veoDone + veoFail, total);
+            _ppUpdateProgress(nbDone, veoDone + veoFail, total, totalVeoJobs);
           })();
           veoPromises.push(p);
         })(seg, segIdx, durSecs);
+
+        // ── Fire continuation clip extras (same NB start frame, different speech) ──
+        (seg.veoExtras || []).forEach(function(extra, extraJ) {
+          if (!(extra.veoPrompt || '').trim()) return;
+          var extraDur = 6;
+          try { extraDur = (JSON.parse(extra.veoPrompt || '{}').duration) || 6; } catch (_) {}
+          (function(theSeg, theSegIdx, theExtra, theDur, clipNum) {
+            var p = (async function() {
+              try {
+                var startImg = theSeg.nbPreviewDataUrl || theSeg.frameDataUrl || null;
+                var result   = await window.generateVeoClipViaAPI(
+                  theExtra.veoPrompt, theDur, modelKey, startImg, theSeg.frameDataUrl || null
+                );
+                theExtra.apiVideoUrl  = result.videoUrl;
+                theExtra.apiVideoMime = result.mimeType || 'video/mp4';
+                var blobUrl = typeof window._fetchVideoAsBlob === 'function'
+                  ? await window._fetchVideoAsBlob(result.videoUrl) : null;
+                if (blobUrl) theExtra.apiVideoRaw = blobUrl;
+                veoDone++;
+                if (typeof saveSegments         === 'function') saveSegments();
+                if (typeof renderSegments       === 'function') renderSegments();
+                if (typeof renderGallery        === 'function') renderGallery();
+                if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+              } catch(veoErr) {
+                console.error('[Pipeline] Veo extra clip ' + clipNum + ' scene ' + (theSegIdx+1) + ' failed:', veoErr.message);
+                veoFail++;
+                if (veoErr.message && veoErr.message.toLowerCase().includes('credit')) {
+                  aborted = true;
+                  if (typeof showToast === 'function')
+                    showToast('Not enough credits — pipeline stopped. Top up to continue.', 'error', 9000);
+                }
+              }
+              _ppUpdateProgress(nbDone, veoDone + veoFail, total, totalVeoJobs);
+            })();
+            veoPromises.push(p);
+          })(seg, segIdx, extra, extraDur, extraJ + 2);
+        });
 
         // 15 s gap between NB requests (skip after last segment)
         if (i < toRun.length - 1) {
