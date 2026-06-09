@@ -759,32 +759,42 @@
     const manageBtnHtml = `<button onclick="openBillingPortal()" style="padding:8px 18px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;">Billing & Cancellation</button>`;
 
     const plansHtml = PLAN_ORDER.map((planKey, idx) => {
-      const info       = PLAN_INFO[planKey];
-      const isCurrent  = planKey === tier;
-      const isUpgrade  = idx > tierIdx;
-      const isAgency   = planKey === 'agency';
-      const border     = isCurrent ? '1px solid var(--accent)' : '1px solid var(--border)';
-      const bg         = isCurrent ? 'rgba(124,106,247,0.07)' : 'var(--surface-2)';
+      const info      = PLAN_INFO[planKey];
+      const isCurrent = planKey === tier;
+      const isUpgrade = idx > tierIdx;
+      const isRec     = planKey === 'pro';   // Pro = "Most Popular"
 
-      let actionHtml = '';
+      // Feature checklist from the desc string
+      const feats = info.desc.split(' · ').map(f =>
+        `<div style="display:flex;gap:7px;align-items:flex-start;font-size:11px;color:var(--text-2);line-height:1.45;">
+           <span style="color:#34d399;flex-shrink:0;font-weight:800;">✓</span><span>${f}</span>
+         </div>`).join('');
+
+      // Price: split main amount from the /period suffix
+      const _pParts   = info.price.split('/');
+      const priceMain = _pParts[0];
+      const period    = _pParts.length > 1 ? '/' + _pParts.slice(1).join('/') : '';
+
+      // Per-card CTA
+      let cta;
       if (isCurrent) {
-        actionHtml = `<span style="font-size:10px;font-weight:700;padding:3px 9px;border-radius:5px;background:rgba(16,185,129,0.15);color:#4ade80;">CURRENT</span>`;
+        cta = `<div style="margin-top:auto;padding:9px 0;text-align:center;border-radius:8px;background:rgba(16,185,129,0.12);color:#4ade80;font-size:11.5px;font-weight:700;">✓ Current plan</div>`;
       } else if (isUpgrade) {
-        actionHtml = `<button onclick="openUpgradeModal('${planKey}')" style="padding:7px 16px;border-radius:7px;background:var(--grad-accent);border:none;color:#fff;font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Upgrade</button>`;
+        cta = `<button onclick="openUpgradeModal('${planKey}')" style="margin-top:auto;width:100%;padding:10px 0;border-radius:8px;background:${isRec ? 'var(--grad-accent)' : 'var(--surface-3)'};border:${isRec ? 'none' : '1px solid var(--border-2)'};color:${isRec ? '#fff' : 'var(--text-1)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:filter 0.15s,border-color 0.15s;" onmouseover="this.style.filter='brightness(1.08)';this.style.borderColor='var(--accent)'" onmouseout="this.style.filter='';this.style.borderColor='${isRec ? 'transparent' : 'var(--border-2)'}'">Choose ${info.label} →</button>`;
+      } else {
+        cta = `<div style="margin-top:auto;padding:9px 0;text-align:center;font-size:10.5px;color:var(--text-4);">Included in your plan</div>`;
       }
 
-      const rec = planKey === 'pro' && tier === 'free'
-        ? `<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;background:var(--grad-accent);color:#fff;margin-left:6px;">RECOMMENDED</span>`
-        : '';
+      const cardBorder = isCurrent ? '1.5px solid var(--accent)' : isRec ? '1.5px solid rgba(16,185,129,0.45)' : '1px solid var(--border)';
+      const cardBg     = isRec ? 'linear-gradient(180deg, rgba(16,185,129,0.07), var(--surface-2))' : 'var(--surface-2)';
+      const glow       = isRec ? 'box-shadow:0 0 26px rgba(16,185,129,0.14);' : '';
 
-      return `<div style="background:${bg};border:${border};border-radius:10px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
-        <div>
-          <div style="font-size:13px;font-weight:700;color:var(--text-1);margin-bottom:3px;">
-            ${info.label} <span style="font-size:11px;font-weight:500;color:var(--text-3);">— ${info.price}</span>${rec}
-          </div>
-          <div style="font-size:11px;color:var(--text-3);">${info.desc}</div>
-        </div>
-        ${actionHtml}
+      return `<div style="position:relative;display:flex;flex-direction:column;gap:8px;background:${cardBg};border:${cardBorder};${glow}border-radius:13px;padding:18px 16px 16px;">
+        ${isRec ? `<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--grad-accent);color:#fff;font-size:9px;font-weight:800;letter-spacing:0.06em;padding:3px 11px;border-radius:99px;white-space:nowrap;">★ MOST POPULAR</div>` : ''}
+        <div style="font-size:11.5px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:${isRec ? '#34d399' : 'var(--text-2)'};">${info.label}</div>
+        <div style="display:flex;align-items:baseline;gap:3px;"><span style="font-size:26px;font-weight:900;letter-spacing:-1px;color:var(--text-1);">${priceMain}</span><span style="font-size:12px;color:var(--text-3);">${period}</span></div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;">${feats}</div>
+        ${cta}
       </div>`;
     }).join('');
 
@@ -836,7 +846,7 @@
       </div>
 
       <div class="uset-section-title">Subscription Plans</div>
-      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:stretch;margin-bottom:20px;padding-top:12px;">
         ${plansHtml}
       </div>
 
