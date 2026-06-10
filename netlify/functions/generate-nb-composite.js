@@ -84,6 +84,21 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
       temperature: 0.1,
       maxOutputTokens: 600,
       responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          camera_angle:       { type: 'string' },
+          visible_person:     { type: 'string' },
+          face_in_frame:      { type: 'boolean' },
+          full_body_in_frame: { type: 'boolean' },
+          background:         { type: 'string' },
+          arm_instruction:    { type: 'string' },
+          prop:               { type: 'string' },
+          prop_state:         { type: 'string' },
+          lighting:           { type: 'string' },
+        },
+        required: ['visible_person', 'face_in_frame', 'full_body_in_frame', 'background', 'arm_instruction', 'prop', 'lighting'],
+      },
     },
   });
 
@@ -260,12 +275,20 @@ exports.handler = async (event) => {
   const faceOutOfFrame = hasFrame && (_faceBoolIsFalse || faceOutOfFrameRegex);
   const faceVisible = hasFrame && !faceOutOfFrame;
 
-  // Person replacement directive — adapts to the source frame's crop.
-  const faceReplaceDirective = !hasFrame
-    ? ''
-    : faceVisible
-      ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1. Photo 2 is ONLY an appearance reference for the single person already in Photo 1 — do NOT add a second person and do NOT place anyone standing in the background.\n\n`
-      : `HAND/ARM ONLY (critical): Photo 1 shows ONLY a ${_vp || 'hand/arm'} (a hand holding the product) — there is NO person, face, head, or body in the frame. KEEP THE EXACT SAME CROP. Recolor ONLY the visible hand/arm skin and sleeve to match the Photo 2 avatar's skin tone and clothing. Photo 2 is JUST a skin/appearance reference — it is NOT a person to insert. Do NOT add, draw, or place a face, head, hair, or a standing/seated person anywhere in the image, including the background. The output must contain ONLY the same hand/arm holding the product, with the same framing as Photo 1 — no human figure in the background.\n\n`;
+  // Person handling — the MAIN image model decides from Photo 1's actual content, so this
+  // works even if the secondary analysis fails. Analysis (when available) is appended as a hint.
+  const _analysisHint = !hasFrame ? ''
+    : faceOutOfFrame ? ' [Analysis of Photo 1: HAND/ARM-ONLY, no person — apply Case B.]'
+    : (faceVisible && poseAnalysis) ? ' [Analysis of Photo 1: a person is visible — apply Case A.]'
+    : '';
+  const faceReplaceDirective = !hasFrame ? '' :
+`PERSON HANDLING (critical — first LOOK at Photo 1, then apply the ONE matching case):
+
+CASE A — Photo 1 shows a person's FACE or BODY: Completely replace that person's identity with the Photo 2 avatar — exact face, skin tone, hair, and hands. The output person must look like Photo 2, not the original. Integrate them so they look genuinely PHOTOGRAPHED in this scene, not pasted: match Photo 1's lighting direction and color temperature, shadow softness, grain/noise, perspective, and depth of field; add natural contact shadows and blended edges; no cut-out halo or sticker look.
+
+CASE B — Photo 1 shows ONLY a hand or arm holding the product (NO face, NO body, no person): Keep it as ONLY that hand/arm. Recolor just the visible hand/arm skin and sleeve to match the Photo 2 avatar's skin tone and clothing color. Photo 2 is ONLY a skin/appearance reference here — it is NOT a person to insert. Do NOT add, draw, or place a face, head, hair, or any standing/seated person ANYWHERE in the image, including the background. Keep the EXACT same crop and framing as Photo 1 — output only the same hand/arm holding the product.
+
+In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1.${_analysisHint}\n\n`;
 
   // Product replacement directive — only when a product reference (Photo 3) is provided
   const productReplaceDirective = hasProduct
@@ -278,18 +301,13 @@ exports.handler = async (event) => {
     : '';
 
   const systemInstruction = hasFrame
-    ? `You are a professional photo editor performing a ${faceVisible ? 'FULL PERSON REPLACEMENT' : 'PARTIAL (BODY-PART) REPLACEMENT'}${hasProduct ? ' and a PRODUCT REPLACEMENT' : ''}.
+    ? `You are a professional photo compositor. You receive Photo 1 (a base scene/frame) and Photo 2 (an appearance reference for ONE person)${hasProduct ? ' and Photo 3 (a product reference)' : ''}.
 
-Photo 1 — the base scene: background, setting, lighting, arm positions${faceVisible ? '' : ', and the exact crop/framing'} are preserved from this photo.${hasProduct ? ' The held object is NOT preserved — it will be replaced.' : ' Props and held objects are also preserved from this photo.'}
-Photo 2 — the appearance source: ${faceVisible
-      ? 'this person\'s face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.'
-      : 'use this person\'s skin tone, hands, arms, and clothing. IMPORTANT: the person\'s face and head are OUT OF FRAME in Photo 1 — do NOT add, reveal, or invent a face, head, or hair. Only the body parts already visible in Photo 1 are replaced.'}${hasProduct ? '\nPhoto 3 — the replacement product: the object held in the hand must be replaced with this exact product (match its shape, color, packaging, label, and text). Keep the same hand and grip from Photo 1.' : ''}
+Your task depends on what Photo 1 actually contains:
+- If Photo 1 contains a visible person (face and/or body): replace ONLY that person's identity with Photo 2's appearance, and integrate them so they look genuinely photographed in the scene — match the lighting, color, grain, shadows, perspective and depth of field; do not let them look pasted or cut-out.
+- If Photo 1 shows only a hand/arm holding a product (no face or body): keep it as just that hand/arm, matching only the skin tone and clothing to Photo 2. Do NOT add a face, head, hair, or any person — including in the background.
 
-CRITICAL: ${faceVisible
-      ? 'The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person.'
-      : 'Keep the EXACT same crop as Photo 1 — show only the same body parts (no face/head if none is shown). Replace only the visible skin, hands, arms, and clothing to match Photo 2.'} Preserve the background, arm positions, and lighting from Photo 1${hasProduct ? ', but replace the held product with the Photo 3 product.' : ', and keep the held prop as in Photo 1.'}
-
-Always remove any burned-in text, captions, or subtitles from the output image.`
+Hard rules for BOTH cases: never add a second person or any human figure that was not already in Photo 1; preserve Photo 1's background, framing, and lighting.${hasProduct ? ' Replace the product held in the hand with the exact product from Photo 3 (same hand, grip, and scale).' : ''} Always remove any burned-in text, captions, or subtitles.`
     : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
 
   const userPrompt = hasFrame
@@ -302,14 +320,10 @@ Always remove any burned-in text, captions, or subtitles from the output image.`
 
   const parts = [];
   if (hasFrame) {
-    parts.push({ text: faceVisible
-      ? 'Photo 1 — BASE SCENE (keep only: background, arms, prop, lighting — the PERSON in this photo is being fully replaced):'
-      : 'Photo 1 — BASE SCENE: this is a HAND/ARM shot with NO person, face, or body. Keep the exact crop, background, arm, hand, prop, and lighting. There is no person to add:' });
+    parts.push({ text: 'Photo 1 — BASE SCENE / FRAME (match its background, framing, lighting, and any hand/arm/prop shown). Look at this photo to decide: does it contain a person, or only a hand/arm?:' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-  parts.push({ text: faceVisible
-    ? 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):'
-    : 'Photo 2 — SKIN & APPEARANCE REFERENCE ONLY (use ONLY for the hand/arm skin tone and sleeve/clothing color — do NOT insert this person, their face, head, hair, or body anywhere in the image, including the background):' });
+  parts.push({ text: 'Photo 2 — APPEARANCE REFERENCE for the person (use it to set the identity/face/skin/hair IF a person is visible in Photo 1, or ONLY the skin/hand tone if Photo 1 shows only a hand/arm). Do NOT add this person as an extra or background figure:' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasProductSwap) {
     parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
