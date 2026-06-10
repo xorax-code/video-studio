@@ -76,14 +76,16 @@
       frameMime = frameParts.mime;
     }
 
-    // ── Product reference (optional) — Photo 3: swap the held product ──────────
-    // Only applies in compositing mode (a real frame with a held product). When a
-    // product photo is uploaded, the backend replaces the original held object.
+    // ── Product reference (optional) — make the avatar's product the real one ──
+    // Gated ENTIRELY on the per-segment product toggle (seg.showProduct — the product
+    // icon next to Split). Only segments the user explicitly marks get the product:
+    //   Replicator (real frame)  → REPLACE the held product with the uploaded one.
+    //   Producer (no frame)       → the generated avatar HOLDS the exact product.
     var productB64 = null, productMime = 'image/jpeg', hasProduct = false;
     try {
       var _prodUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl)
         || window._producerProductImageUrl || null;
-      if (_prodUrl && hasFrame) {
+      if (_prodUrl && seg.showProduct) {
         var prodCompressed = await _nbCompressImage(_prodUrl, 768, 0.80);
         var prodParts = _nbSplitDataUrl(prodCompressed);
         productB64 = prodParts.b64;
@@ -197,8 +199,9 @@
       instruction = _gParts.join(' ');
     }
 
-    // When a product reference is provided, tell the model to swap the held product.
-    if (hasProduct) {
+    // Compositing mode (Replicator): reinforce the held-product swap in the instruction.
+    // Generate mode (Producer): the backend adds its own "EXACT PRODUCT" directive.
+    if (hasProduct && hasFrame) {
       instruction += ' PRODUCT REPLACE (critical): The object held in the hand must be REPLACED with the product shown in Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose, but the held product\'s shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep or blend the original product from the scene frame.';
     }
 

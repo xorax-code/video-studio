@@ -62,6 +62,7 @@ async function analyzeFramePose(frameImg, apiKey) {
 Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON only):
 {
   "camera_angle": "shot description — e.g. 'straight-on chest height, medium shot'",
+  "visible_person": "which parts of the person are actually in frame — choose the closest single phrase: 'hands only', 'arms only', 'arms and torso, no face', 'face and upper body', or 'full body'",
   "background": "precise description of everything visible behind the person — room type, wall color, shelves, objects, window, flags, decor",
   "arm_instruction": "single sentence describing both arms and hands — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports from below'",
   "prop": "if a prop/object is held: exact name, shape, size, color, which hand, orientation. If none: 'none'",
@@ -188,8 +189,12 @@ exports.handler = async (event) => {
   }
 
   const hasFrame   = !!frameImg;
-  // Product swap only applies in compositing mode (a held product in a real frame).
-  const hasProduct = !!(frameImg && productImg);
+  // Two product modes:
+  //   swap — compositing on a real frame: REPLACE the held product (Replicator).
+  //   gen  — no frame: the generated avatar HOLDS this exact product (Producer).
+  const hasProductSwap = !!(frameImg && productImg);
+  const hasProductGen  = !!(!frameImg && productImg);
+  const hasProduct     = hasProductSwap; // back-compat alias for the swap path below
 
   // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
   if (creative) {
@@ -243,33 +248,50 @@ exports.handler = async (event) => {
 
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct) : '';
 
-  // Always-on face replacement directive — must fire even when poseAnalysis fails
-  const faceReplaceDirective = hasFrame
-    ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1.\n\n`
-    : '';
+  // What's actually visible in the source frame — drives how much of the person to replace.
+  // Default to face-visible (full replace) when analysis is missing, to preserve old behavior.
+  const _vp = ((poseAnalysis && poseAnalysis.visible_person) || '').toLowerCase();
+  const faceOutOfFrame = hasFrame && /hands?\s*only|arms?\s*only|no\s*face|without.*face|faceless|below\s*(the\s*)?(neck|chin|shoulders)|hands?\s*(and|&)\s*arms?\s*only/.test(_vp);
+  const faceVisible = hasFrame && !faceOutOfFrame;
+
+  // Person replacement directive — adapts to the source frame's crop.
+  const faceReplaceDirective = !hasFrame
+    ? ''
+    : faceVisible
+      ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1.\n\n`
+      : `BODY-PART MATCH (critical): In Photo 1 the person's face and head are OUT OF FRAME — only their ${_vp || 'hands/arms'} are visible. KEEP THE EXACT SAME CROP AND FRAMING. Do NOT add, reveal, zoom out to, or invent a face, head, or hair. Replace ONLY the visible skin, hands, arms, and clothing so they match the Photo 2 avatar's skin tone, hands, and outfit. The output must show the SAME body parts as Photo 1 and nothing more — no face appears anywhere in the image.\n\n`;
 
   // Product replacement directive — only when a product reference (Photo 3) is provided
   const productReplaceDirective = hasProduct
     ? `PRODUCT REPLACE (critical): Photo 3 is the PRODUCT reference. The object held in the hand in Photo 1 must be COMPLETELY replaced with the product from Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose from Photo 1 — but the held product's shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep, blend, or retain the original product that was in Photo 1.\n\n`
     : '';
 
+  // Generate-mode product directive — the generated avatar holds this exact product
+  const productGenDirective = hasProductGen
+    ? `EXACT PRODUCT (critical): The final reference image labeled "PRODUCT" shows the exact product for this scene. Whenever the avatar holds, shows, or displays a product in this image, it MUST be that exact product — match its shape, color, packaging, label, and text precisely. Do NOT invent, substitute, or restyle a different product. If the scene's action does not involve holding a product, do not add one.\n\n`
+    : '';
+
   const systemInstruction = hasFrame
-    ? `You are a professional photo editor performing a FULL PERSON REPLACEMENT${hasProduct ? ' and a PRODUCT REPLACEMENT' : ''}.
+    ? `You are a professional photo editor performing a ${faceVisible ? 'FULL PERSON REPLACEMENT' : 'PARTIAL (BODY-PART) REPLACEMENT'}${hasProduct ? ' and a PRODUCT REPLACEMENT' : ''}.
 
-Photo 1 — the base scene: background, setting, lighting, and arm positions are preserved from this photo.${hasProduct ? ' The held object is NOT preserved — it will be replaced.' : ' Props and held objects are also preserved from this photo.'}
-Photo 2 — the replacement person: this person's face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.${hasProduct ? '\nPhoto 3 — the replacement product: the object held in the hand must be replaced with this exact product (match its shape, color, packaging, label, and text). Keep the same hand and grip from Photo 1.' : ''}
+Photo 1 — the base scene: background, setting, lighting, arm positions${faceVisible ? '' : ', and the exact crop/framing'} are preserved from this photo.${hasProduct ? ' The held object is NOT preserved — it will be replaced.' : ' Props and held objects are also preserved from this photo.'}
+Photo 2 — the appearance source: ${faceVisible
+      ? 'this person\'s face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.'
+      : 'use this person\'s skin tone, hands, arms, and clothing. IMPORTANT: the person\'s face and head are OUT OF FRAME in Photo 1 — do NOT add, reveal, or invent a face, head, or hair. Only the body parts already visible in Photo 1 are replaced.'}${hasProduct ? '\nPhoto 3 — the replacement product: the object held in the hand must be replaced with this exact product (match its shape, color, packaging, label, and text). Keep the same hand and grip from Photo 1.' : ''}
 
-CRITICAL: The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person. Preserve the background, arm positions, and lighting from Photo 1${hasProduct ? ', but replace the held product with the Photo 3 product.' : ', and keep the held prop as in Photo 1.'}
+CRITICAL: ${faceVisible
+      ? 'The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person.'
+      : 'Keep the EXACT same crop as Photo 1 — show only the same body parts (no face/head if none is shown). Replace only the visible skin, hands, arms, and clothing to match Photo 2.'} Preserve the background, arm positions, and lighting from Photo 1${hasProduct ? ', but replace the held product with the Photo 3 product.' : ', and keep the held prop as in Photo 1.'}
 
 Always remove any burned-in text, captions, or subtitles from the output image.`
-    : `You are a professional photo editor. Follow the user's instruction exactly using the provided reference photo(s).`;
+    : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
 
   const userPrompt = hasFrame
     ? `${faceReplaceDirective}${productReplaceDirective}${lockBlock}${instruction}`
-    : `${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
+    : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
-  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.`;
+  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.${faceOutOfFrame ? ' Avoid adding any face, head, hair, or body parts that are not already visible in Photo 1; avoid zooming out, re-framing, or changing the crop.' : ''}`;
   const fullPrompt = userPrompt + negLine;
 
   const parts = [];
@@ -279,8 +301,11 @@ Always remove any burned-in text, captions, or subtitles from the output image.`
   }
   parts.push({ text: 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
-  if (hasProduct) {
+  if (hasProductSwap) {
     parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
+    parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
+  } else if (hasProductGen) {
+    parts.push({ text: 'PRODUCT — the exact product for this scene (if the avatar holds or displays a product, it must be this one — match its shape, color, packaging, label, and text):' });
     parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
   }
   parts.push({ text: fullPrompt });
