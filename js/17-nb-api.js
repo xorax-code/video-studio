@@ -261,6 +261,45 @@
   window.generateNbComposite = generateNbComposite;
 
   // ── Generate NB composites for ALL segments ───────────────────────────────
+  // ── Frame-generation progress panel ──────────────────────────────────────
+  function _nbOpenProgress(total) {
+    var ex = document.getElementById('nbFrameProgress'); if (ex) ex.remove();
+    var rows = '';
+    for (var k = 0; k < total; k++) {
+      rows += '<div id="nbfp-row-' + k + '" style="display:flex;align-items:center;gap:8px;padding:6px 9px;border-radius:7px;background:var(--surface-2);border:1px solid var(--border);font-size:11px;">'
+        + '<span id="nbfp-ic-' + k + '">⏳</span>'
+        + '<span style="flex:1;color:var(--text-2);">Scene ' + (k + 1) + ' frame</span>'
+        + '<span id="nbfp-st-' + k + '" style="font-weight:700;color:var(--text-3);">queued</span>'
+        + '</div>';
+    }
+    var m = document.createElement('div');
+    m.id = 'nbFrameProgress';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,0.80);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:16px;';
+    m.innerHTML = '<div style="background:var(--surface);border:1px solid rgba(56,189,248,0.35);border-radius:14px;padding:20px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;font-family:inherit;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 80px rgba(0,0,0,0.65);">'
+      + '<div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:9px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);display:flex;align-items:center;justify-content:center;font-size:17px;">🖼️</div>'
+      + '<div><div style="font-size:14px;font-weight:800;color:var(--text-1);">Making your start frames</div><div style="font-size:11px;color:var(--text-3);">' + total + ' scene' + (total !== 1 ? 's' : '') + ' · ~15s each · then you review them</div></div></div>'
+      + '<div style="display:flex;flex-direction:column;gap:4px;">' + rows + '</div>'
+      + '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-bottom:5px;"><span id="nbfp-label">Starting…</span><span id="nbfp-pct">0%</span></div>'
+      + '<div style="height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;"><div id="nbfp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#34d399);border-radius:3px;transition:width 0.4s;"></div></div></div>'
+      + '</div>';
+    document.body.appendChild(m);
+  }
+  function _nbSetFrameStatus(k, status, doneCount, total) {
+    var ic = document.getElementById('nbfp-ic-' + k), st = document.getElementById('nbfp-st-' + k), row = document.getElementById('nbfp-row-' + k);
+    var cfg = { generating: ['⟳', '#38bdf8', 'generating…', 'rgba(56,189,248,0.08)'],
+                done:       ['✅', '#34d399', 'done',          'rgba(52,211,153,0.07)'],
+                error:      ['❌', '#f87171', 'failed',        'rgba(239,68,68,0.07)'] }[status];
+    if (cfg) { if (ic) ic.textContent = cfg[0]; if (st) { st.textContent = cfg[2]; st.style.color = cfg[1]; } if (row) row.style.background = cfg[3]; }
+    if (typeof doneCount === 'number' && total) {
+      var pct = Math.round((doneCount / total) * 100);
+      var bar = document.getElementById('nbfp-bar'), pe = document.getElementById('nbfp-pct'), lb = document.getElementById('nbfp-label');
+      if (bar) bar.style.width = pct + '%';
+      if (pe) pe.textContent = pct + '%';
+      if (lb) lb.textContent = doneCount + '/' + total + ' frames';
+    }
+  }
+  function _nbCloseProgress() { var m = document.getElementById('nbFrameProgress'); if (m) m.remove(); }
+
   async function generateAllNbComposites() {
     // Include segments that either have an NB prompt OR have a frameDataUrl (person-swap path)
     var toGen = segments.filter(function(s) { return (s.nbPrompt || '').trim() || s.frameDataUrl; });
@@ -279,22 +318,26 @@
 
     var succeeded = 0, failed = 0;
     var n = toGen.length;
+    _nbOpenProgress(n);
 
     for (var i = 0; i < n; i++) {
       var seg = toGen[i];
       var segIdx = segments.indexOf(seg);
 
-      // Update button label with progress
+      // Update button label + progress panel
       if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> ' + (i + 1) + '/' + n + '…';
+      _nbSetFrameStatus(i, 'generating');
 
       var ok = await generateNbComposite(segIdx);
       if (ok) succeeded++; else failed++;
+      _nbSetFrameStatus(i, ok ? 'done' : 'error', succeeded + failed, n);
 
       // Delay between requests — Vertex AI image generation quota is ~5 QPM.
       // 15s spacing keeps us well under the limit regardless of generation time.
       if (i < n - 1) await new Promise(function(r) { setTimeout(r, 15000); });
     }
 
+    _nbCloseProgress();
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }
 
     if (succeeded > 0) {
