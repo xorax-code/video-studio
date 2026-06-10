@@ -302,10 +302,14 @@ Always remove any burned-in text, captions, or subtitles from the output image.`
 
   const parts = [];
   if (hasFrame) {
-    parts.push({ text: 'Photo 1 — BASE SCENE (keep only: background, arms, prop, lighting — the PERSON in this photo is being fully replaced):' });
+    parts.push({ text: faceVisible
+      ? 'Photo 1 — BASE SCENE (keep only: background, arms, prop, lighting — the PERSON in this photo is being fully replaced):'
+      : 'Photo 1 — BASE SCENE: this is a HAND/ARM shot with NO person, face, or body. Keep the exact crop, background, arm, hand, prop, and lighting. There is no person to add:' });
     parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
   }
-  parts.push({ text: 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):' });
+  parts.push({ text: faceVisible
+    ? 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):'
+    : 'Photo 2 — SKIN & APPEARANCE REFERENCE ONLY (use ONLY for the hand/arm skin tone and sleeve/clothing color — do NOT insert this person, their face, head, hair, or body anywhere in the image, including the background):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
   if (hasProductSwap) {
     parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
