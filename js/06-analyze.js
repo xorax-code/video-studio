@@ -4548,6 +4548,23 @@ TECHNICAL SPECS:
   }
   window.setSbPerspective = setSbPerspective;
 
+  // ── One-tap style presets (from the UGC style profile) — fill Setting + Voice ──
+  function applyProducerPreset(btn) {
+    var setting = btn.getAttribute('data-setting') || '';
+    var voice   = btn.getAttribute('data-voice')   || 'first';
+    var name    = btn.getAttribute('data-name')    || 'preset';
+    var setEl = document.getElementById('studioSetting');
+    if (setEl) { setEl.value = setting; try { setEl.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {} }
+    var pill = document.querySelector('.sb-pov-pill[data-val="' + voice + '"]');
+    if (pill && typeof setSbPerspective === 'function') setSbPerspective(pill);
+    document.querySelectorAll('.sb-preset-card').forEach(function (c) {
+      c.classList.remove('on'); c.style.borderColor = 'var(--border-2)'; c.style.background = 'var(--surface-2)';
+    });
+    btn.classList.add('on'); btn.style.borderColor = 'rgba(16,185,129,0.55)'; btn.style.background = 'rgba(16,185,129,0.10)';
+    if (typeof showToast === 'function') showToast('Style set — ' + name + '. Now write or paste your script.', 'success', 3500);
+  }
+  window.applyProducerPreset = applyProducerPreset;
+
   async function produceAllScenes() {
     var btn = document.getElementById('produceAllScenesBtn');
     if (btn) { btn.textContent = '⏳ Producing…'; btn.disabled = true; }
