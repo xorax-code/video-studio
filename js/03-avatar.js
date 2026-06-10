@@ -413,6 +413,7 @@
     reader.readAsDataURL(file);
     event.target.value = '';
   }
+  window.onProducerProductPhotoSelect = onProducerProductPhotoSelect;
 
   // Extract a structured appearance inventory from the avatar photo via GPT-4o
   // Vision. Runs automatically whenever a new avatar is set.
