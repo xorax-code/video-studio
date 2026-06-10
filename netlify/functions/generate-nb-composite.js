@@ -186,10 +186,12 @@ exports.handler = async (event) => {
     frameMime      = 'image/jpeg',
     productB64     = null,
     productMime    = 'image/jpeg',
+    handRefB64     = null,
+    handRefMime    = 'image/jpeg',
     creative       = false,
   } = body;
 
-  let avatarImg = null, frameImg = null, productImg = null;
+  let avatarImg = null, frameImg = null, productImg = null, handRefImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
     if (imgs[0]) avatarImg  = imgs[0];
@@ -199,7 +201,10 @@ exports.handler = async (event) => {
     avatarImg = { b64: avatarB64, mime: avatarMime };
     if (frameB64)   frameImg   = { b64: frameB64, mime: frameMime };
     if (productB64) productImg = { b64: productB64, mime: productMime };
+    if (handRefB64) handRefImg = { b64: handRefB64, mime: handRefMime };
   }
+  // The locked hand reference applies only when compositing onto a real frame.
+  const hasHandRef = !!(frameImg && handRefImg);
 
   if (!avatarImg) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
@@ -290,6 +295,13 @@ CASE B — Photo 1 shows ONLY a hand or arm holding the product (NO face, NO bod
 
 In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1.${_analysisHint}\n\n`;
 
+  // Hand-lock directive — when a locked hand reference is provided, the hand/wrist
+  // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
+  // consistency, while the hand POSE/grip still comes from Photo 1.
+  const handRefDirective = hasHandRef
+    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand and wrist. The hand/forearm in the output MUST match that HAND REFERENCE — same skin tone, same bracelet(s), same sleeve cuff and clothing at the wrist — on this and every frame. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand's appearance, jewelry, and sleeve come from the HAND REFERENCE. Never output a bare/different hand or the original person's hand.\n\n`
+    : '';
+
   // Product replacement directive — only when a product reference (Photo 3) is provided
   const productReplaceDirective = hasProduct
     ? `PRODUCT REPLACE (critical): Photo 3 is the PRODUCT reference. The object held in the hand in Photo 1 must be COMPLETELY replaced with the product from Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose from Photo 1 — but the held product's shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep, blend, or retain the original product that was in Photo 1.\n\n`
@@ -311,7 +323,7 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
     : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
 
   const userPrompt = hasFrame
-    ? `${faceReplaceDirective}${productReplaceDirective}${lockBlock}${instruction}`
+    ? `${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${lockBlock}${instruction}`
     : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
@@ -331,6 +343,10 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
   } else if (hasProductGen) {
     parts.push({ text: 'PRODUCT — the exact product for this scene (if the avatar holds or displays a product, it must be this one — match its shape, color, packaging, label, and text):' });
     parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
+  }
+  if (hasHandRef) {
+    parts.push({ text: 'HAND REFERENCE — the correct hand and wrist for this person (match the output hand to this: skin tone, bracelet(s), sleeve cuff and clothing at the wrist). Keep the hand POSE/grip from Photo 1, but the hand appearance comes from here:' });
+    parts.push({ inlineData: { mimeType: handRefImg.mime, data: handRefImg.b64 } });
   }
   parts.push({ text: fullPrompt });
 

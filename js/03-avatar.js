@@ -381,6 +381,22 @@
         renderSegments();
       }
     }).catch(e => console.warn('loadProductRefImg error:', e));
+
+    // Also restore the locked hand reference, if any
+    DB.get('sm_hand_ref_img').then(hand => {
+      if (!hand) return;
+      window._handRefDataUrl = hand;
+      const hThumb = document.getElementById('handRefThumb');
+      const hIcon  = document.getElementById('handRefIcon');
+      const hHint  = document.getElementById('handRefHint');
+      const hClr   = document.getElementById('clearHandRefBtn');
+      const hBtn   = document.getElementById('genHandRefBtn');
+      if (hThumb) { hThumb.src = hand; hThumb.style.display = 'block'; }
+      if (hIcon)  hIcon.style.display = 'none';
+      if (hHint)  hHint.style.display = '';
+      if (hClr)   hClr.style.display = '';
+      if (hBtn)   hBtn.textContent = '↻ Redo hand';
+    }).catch(e => console.warn('loadHandRefImg error:', e));
   }
 
   // ── Producer-mode product photo upload (mirrors replicator's onProductRefImageChange) ──

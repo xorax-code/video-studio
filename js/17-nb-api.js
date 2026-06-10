@@ -94,6 +94,23 @@
       }
     } catch(_) {}
 
+    // ── Locked hand reference (optional) — keeps the hand identical across frames ──
+    // When the user has locked a hand, send it on every frame that composites onto a
+    // real reference frame, so the hand's skin/bracelet/sleeve stay consistent.
+    var handRefB64 = null, handRefMime = 'image/jpeg';
+    try {
+      var _handUrl = window._handRefDataUrl || null;
+      if (!_handUrl && typeof DB !== 'undefined' && DB && DB.get) {
+        try { _handUrl = await DB.get('sm_hand_ref_img'); if (_handUrl) window._handRefDataUrl = _handUrl; } catch(_) {}
+      }
+      if (_handUrl && hasFrame) {
+        var handCompressed = await _nbCompressImage(_handUrl, 768, 0.80);
+        var handParts = _nbSplitDataUrl(handCompressed);
+        handRefB64 = handParts.b64;
+        handRefMime = handParts.mime;
+      }
+    } catch(_) {}
+
     // ── Build instruction for Imagen 3 based on what photos are available ──────
     // When a video frame exists: avatar (SUBJECT ref) + frame (STYLE ref for background).
     // When avatar only: generate a fresh lifestyle frame from the NB prompt context.
@@ -226,6 +243,8 @@
             frameMime,
             productB64,
             productMime,
+            handRefB64,
+            handRefMime,
           }),
         });
 
@@ -285,6 +304,95 @@
     return false;
   }
   window.generateNbComposite = generateNbComposite;
+
+  // ── Lock Her Hand: generate ONE canonical hand reference, reused on every frame ──
+  async function generateHandReference() {
+    if (!avatarImageDataUrl) { showToast('Upload your avatar photo first — the hand is generated from it.', 'warning'); return; }
+    var btn = document.getElementById('genHandRefBtn');
+    var _origLabel = btn ? btn.textContent : '';
+    function setBtn(t, dis) { if (btn) { btn.textContent = t; btn.disabled = !!dis; } }
+
+    // Auth
+    var jwt = null;
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
+    } catch(_) {}
+    if (!jwt) { showToast('Please log in to lock the hand.', 'warning'); return; }
+
+    // Appearance details (skin tone, bracelet, sleeve/clothing) from the inventory
+    var accessory = '';
+    try { if (typeof getAvatarAccessoryNote === 'function') accessory = (getAvatarAccessoryNote() || '').trim(); } catch(_) {}
+    var avDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
+
+    var handInstruction =
+      'Generate a photorealistic vertical 9:16 CLOSE-UP of THIS exact person\'s right hand and forearm — use the skin tone, age, and ethnicity from the appearance reference photo. '
+      + 'The hand is raised toward the camera, fingers gently curled as if about to hold a small product. '
+      + (avDesc ? 'Person: ' + avDesc + '. ' : '')
+      + (accessory ? 'The wrist and sleeve MUST show: ' + accessory + '. ' : 'Show her bracelet(s) on the wrist and her sleeve cuff clearly. ')
+      + 'Plain soft neutral studio background, soft even lighting, realistic skin texture and wrinkles appropriate to her age. '
+      + 'ONLY the hand and forearm — NO face, NO head, NO full body, NO product. One hand only.';
+
+    try {
+      setBtn('⏳ Generating…', true);
+      showToast('Generating her hand…', 'info', 4000);
+      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 768, 0.80);
+      var aParts = _nbSplitDataUrl(avatarCompressed);
+      var res = await fetch('/.netlify/functions/generate-nb-composite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({
+          instruction: handInstruction,
+          avatarDesc: avDesc,
+          avatarB64: aParts.b64,
+          avatarMime: aParts.mime,
+          // no frame → generate mode produces the hand from the avatar's appearance
+        }),
+      });
+      var data = {};
+      try { data = await res.json(); } catch(_) {}
+      if (!res.ok || !data.imageB64) {
+        showToast('Hand generation failed: ' + (data.error || ('HTTP ' + res.status)), 'error', 8000);
+        setBtn(_origLabel || '🤚 Lock her hand', false);
+        return;
+      }
+      var dataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      window._handRefDataUrl = dataUrl;
+      try { if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', dataUrl); } catch(_) {}
+
+      var thumb = document.getElementById('handRefThumb');
+      var icon  = document.getElementById('handRefIcon');
+      var hint  = document.getElementById('handRefHint');
+      var clr   = document.getElementById('clearHandRefBtn');
+      if (thumb) { thumb.src = dataUrl; thumb.style.display = 'block'; }
+      if (icon)  icon.style.display = 'none';
+      if (hint)  hint.style.display = '';
+      if (clr)   clr.style.display = '';
+      setBtn('↻ Redo hand', false);
+      showToast('Hand locked — it will be reused on every product frame.', 'success', 4500);
+    } catch(e) {
+      showToast('Hand generation error: ' + (e.message || e), 'error', 8000);
+      setBtn(_origLabel || '🤚 Lock her hand', false);
+    }
+  }
+  window.generateHandReference = generateHandReference;
+
+  function clearHandReference() {
+    window._handRefDataUrl = null;
+    try { if (typeof DB !== 'undefined' && DB && DB.del) DB.del('sm_hand_ref_img'); else if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', null); } catch(_) {}
+    var thumb = document.getElementById('handRefThumb');
+    var icon  = document.getElementById('handRefIcon');
+    var hint  = document.getElementById('handRefHint');
+    var clr   = document.getElementById('clearHandRefBtn');
+    var btn   = document.getElementById('genHandRefBtn');
+    if (thumb) { thumb.src = ''; thumb.style.display = 'none'; }
+    if (icon)  icon.style.display = '';
+    if (hint)  hint.style.display = 'none';
+    if (clr)   clr.style.display = 'none';
+    if (btn)   { btn.textContent = '🤚 Lock her hand'; btn.disabled = false; }
+    if (typeof showToast === 'function') showToast('Hand reference cleared.', 'info', 2500);
+  }
+  window.clearHandReference = clearHandReference;
 
   // ── Generate NB composites for ALL segments ───────────────────────────────
   // ── Frame-generation progress panel ──────────────────────────────────────
