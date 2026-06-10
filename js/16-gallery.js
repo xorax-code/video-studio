@@ -278,100 +278,132 @@
     return m + ':' + (s < 10 ? '0' : '') + s + '.' + ms;
   }
 
-  function _updateTimelineUI(asmIdx) {
-    var clip = window._assemblerClips[asmIdx];
-    if (!clip) return;
-    var leftPct  = (clip.start / clip.dur) * 100;
-    var rightPct = ((clip.dur - clip.end) / clip.dur) * 100;
-    var usedSec  = clip.end - clip.start;
+  // ── Horizontal (CapCut-style) timeline state + preview controller ──────────
+  if (typeof window._asmSel !== 'number') window._asmSel = -1; // selected clip index
+  var _asmPlaying = false;
+  var _asmCurIdx  = 0;     // clip currently loaded in the preview
+  var _asmRAF     = null;
 
-    var fill = document.getElementById('asm-tl-fill-' + asmIdx);
-    var dl   = document.getElementById('asm-tl-dl-'   + asmIdx);
-    var dr   = document.getElementById('asm-tl-dr-'   + asmIdx);
-    var hl   = document.getElementById('asm-tl-hl-'   + asmIdx);
-    var hr   = document.getElementById('asm-tl-hr-'   + asmIdx);
-    var ts   = document.getElementById('asm-tl-ts-'   + asmIdx);
-    var td   = document.getElementById('asm-tl-td-'   + asmIdx);
-    var te   = document.getElementById('asm-tl-te-'   + asmIdx);
+  function _asmUsed(c)       { return Math.max(0, (c.end - c.start)); }
+  function _asmTotalUsed()   { return window._assemblerClips.reduce(function(s, c) { return s + _asmUsed(c); }, 0); }
+  function _asmSeqStart(i)   { var t = 0; for (var k = 0; k < i; k++) t += _asmUsed(window._assemblerClips[k]); return t; }
+  function _asmPreviewEl()   { return document.getElementById('asmPreviewVid'); }
 
-    if (fill) { fill.style.left = leftPct + '%';  fill.style.right = rightPct + '%'; }
-    if (dl)   dl.style.width    = leftPct + '%';
-    if (dr)   dr.style.width    = rightPct + '%';
-    if (hl)   hl.style.left     = leftPct + '%';
-    if (hr)   hr.style.right    = rightPct + '%';
-    if (ts)   ts.textContent    = _fmtTime(clip.start);
-    if (te)   te.textContent    = _fmtTime(clip.end);
-    if (td)   td.textContent    = usedSec.toFixed(1) + 's';
-  }
-
-  // Global drag state — one handle active at a time
-  var _tlDrag = null; // { asmIdx, side, trackEl, vidEl }
-
-  function _initTimelineDrag(asmIdx, trackEl, vidEl) {
-    var hl = document.getElementById('asm-tl-hl-' + asmIdx);
-    var hr = document.getElementById('asm-tl-hr-' + asmIdx);
-
-    function onHandleDown(side) {
-      return function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        _tlDrag = { asmIdx: asmIdx, side: side, trackEl: trackEl, vidEl: vidEl };
-        document.body.style.cursor = 'ew-resize';
-      };
+  // Sequence time → { idx, local } (local = time inside the clip's source video)
+  function _asmSeqToClip(t) {
+    var clips = window._assemblerClips, acc = 0;
+    for (var i = 0; i < clips.length; i++) {
+      var u = _asmUsed(clips[i]);
+      if (t < acc + u || i === clips.length - 1) {
+        return { idx: i, local: clips[i].start + Math.max(0, Math.min(u, t - acc)) };
+      }
+      acc += u;
     }
-
-    if (hl) hl.addEventListener('mousedown', onHandleDown('start'));
-    if (hr) hr.addEventListener('mousedown', onHandleDown('end'));
-
-    // Click on track (not on handle) → seek preview
-    trackEl.addEventListener('mousedown', function(e) {
-      if (e.target === hl || e.target === hr ||
-          e.target.classList.contains('asm-tl-hl') ||
-          e.target.classList.contains('asm-tl-hr') ||
-          e.target.classList.contains('asm-tl-grip')) return;
-      var rect = trackEl.getBoundingClientRect();
-      var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      var clip = window._assemblerClips[asmIdx];
-      var t    = pct * clip.dur;
-      if (vidEl) { vidEl.currentTime = t; vidEl.play().catch(function(){}); }
-      // Show playhead momentarily
-      var ph = document.getElementById('asm-tl-ph-' + asmIdx);
-      if (ph) { ph.style.display = 'block'; ph.style.left = (pct * 100) + '%'; }
-      setTimeout(function() { if (ph) ph.style.display = 'none'; }, 1200);
-    });
+    return { idx: 0, local: (clips[0] ? clips[0].start : 0) };
   }
 
-  // Attach global move/up handlers once
+  function _asmSetPlayhead(t) {
+    var wrap = document.getElementById('asmTlWrap');
+    var ph   = document.getElementById('asmPlayhead');
+    var total = _asmTotalUsed();
+    if (ph && wrap) {
+      var pct = total > 0 ? (t / total) : 0;
+      ph.style.left = (pct * wrap.offsetWidth) + 'px';
+    }
+    var lbl = document.getElementById('asmTimeLabel');
+    if (lbl) lbl.textContent = _fmtTime(t) + ' / ' + _fmtTime(total);
+  }
+
+  function _asmLoadClip(idx, local, play) {
+    var clip = window._assemblerClips[idx]; if (!clip) return;
+    var v = _asmPreviewEl(); if (!v) return;
+    _asmCurIdx = idx;
+    if (v.getAttribute('data-src') !== clip.blobUrl) {
+      v.src = clip.blobUrl; v.setAttribute('data-src', clip.blobUrl); v.load();
+    }
+    var seek = function() {
+      try { v.currentTime = (typeof local === 'number') ? local : clip.start; } catch(_) {}
+      if (play) v.play().catch(function(){});
+    };
+    if (v.readyState >= 1) seek(); else v.addEventListener('loadedmetadata', seek, { once: true });
+  }
+
+  function _asmSeekSeq(t) {
+    var m = _asmSeqToClip(t);
+    _asmLoadClip(m.idx, m.local, _asmPlaying);
+    _asmSetPlayhead(t);
+  }
+  window._asmSeekSeq = _asmSeekSeq;
+
+  function _asmTick() {
+    if (!_asmPlaying) return;
+    var v = _asmPreviewEl(), clips = window._assemblerClips, clip = clips[_asmCurIdx];
+    if (v && clip) {
+      if (v.currentTime >= clip.end - 0.02) {
+        if (_asmCurIdx < clips.length - 1) {
+          _asmLoadClip(_asmCurIdx + 1, clips[_asmCurIdx + 1].start, true);
+        } else { _asmPause(); _asmSeekSeq(0); return; }
+      }
+      var seqT = _asmSeqStart(_asmCurIdx) + Math.max(0, (v.currentTime - clip.start));
+      _asmSetPlayhead(seqT);
+    }
+    _asmRAF = requestAnimationFrame(_asmTick);
+  }
+
+  window.asmTogglePlay = function() {
+    var clips = window._assemblerClips; if (!clips.length) return;
+    if (_asmPlaying) { _asmPause(); return; }
+    _asmPlaying = true;
+    var btn = document.getElementById('asmPlayBtn'); if (btn) btn.textContent = '⏸';
+    var v = _asmPreviewEl();
+    if (!v.getAttribute('data-src')) _asmLoadClip(_asmCurIdx, clips[_asmCurIdx].start, true);
+    else v.play().catch(function(){});
+    if (_asmRAF) cancelAnimationFrame(_asmRAF);
+    _asmRAF = requestAnimationFrame(_asmTick);
+  };
+
+  function _asmPause() {
+    _asmPlaying = false;
+    var v = _asmPreviewEl(); if (v) v.pause();
+    var btn = document.getElementById('asmPlayBtn'); if (btn) btn.textContent = '▶';
+    if (_asmRAF) { cancelAnimationFrame(_asmRAF); _asmRAF = null; }
+  }
+  window.asmPause = _asmPause;
+
+  // ── Trim-handle drag (on the selected clip's green ends) ───────────────────
+  var _tlDrag = null; // { idx, side, leftX, pxPerSec, startBase, block }
+
+  function _asmHandleDown(idx, side, block) {
+    return function(e) {
+      e.preventDefault(); e.stopPropagation();
+      var clip = window._assemblerClips[idx]; if (!clip) return;
+      var rect = block.getBoundingClientRect();
+      _tlDrag = { idx: idx, side: side, block: block, leftX: rect.left,
+                  pxPerSec: rect.width / Math.max(0.1, _asmUsed(clip)), startBase: clip.start };
+      document.body.style.cursor = 'ew-resize';
+    };
+  }
+
   document.addEventListener('mousemove', function(e) {
     if (!_tlDrag) return;
-    var d    = _tlDrag;
-    var clip = window._assemblerClips[d.asmIdx];
-    if (!clip) return;
-    var rect = d.trackEl.getBoundingClientRect();
-    var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-    var t    = pct * clip.dur;
-
-    if (d.side === 'start') {
-      clip.start = Math.max(0, Math.min(clip.end - 0.1, t));
-    } else {
-      clip.end = Math.min(clip.dur, Math.max(clip.start + 0.1, t));
+    var d = _tlDrag, clip = window._assemblerClips[d.idx]; if (!clip) return;
+    var local = d.startBase + (e.clientX - d.leftX) / d.pxPerSec;
+    if (d.side === 'start') clip.start = Math.max(0, Math.min(clip.end - 0.2, local));
+    else                    clip.end   = Math.min(clip.dur, Math.max(clip.start + 0.2, local));
+    var used = _asmUsed(clip);
+    if (d.block) {
+      d.block.style.flexGrow = Math.max(0.2, used);
+      var dl = d.block.querySelector('.asm-cliph-dur'); if (dl) dl.textContent = used.toFixed(1) + 's';
     }
-
-    _updateTimelineUI(d.asmIdx);
-
-    // Seek the thumbnail video to the dragged point for live preview
-    if (d.vidEl) { try { d.vidEl.currentTime = d.side === 'start' ? clip.start : clip.end; } catch(_) {} }
-
-    // Update total duration label
     var totalEl = document.getElementById('assemblerTotal');
     if (totalEl) {
-      var total = window._assemblerClips.reduce(function(s, c) { return s + (c.end - c.start); }, 0);
-      totalEl.textContent = window._assemblerClips.length + ' clip' + (window._assemblerClips.length !== 1 ? 's' : '') + ' · ' + total.toFixed(1) + 's total';
+      var n = window._assemblerClips.length;
+      totalEl.textContent = n + ' clip' + (n !== 1 ? 's' : '') + ' · ' + _asmTotalUsed().toFixed(1) + 's total';
     }
   });
 
   document.addEventListener('mouseup', function() {
-    if (_tlDrag) { document.body.style.cursor = ''; _tlDrag = null; }
+    if (_tlDrag) { document.body.style.cursor = ''; var i = _tlDrag.idx; _tlDrag = null; _asmSeekSeq(_asmSeqStart(i)); }
   });
 
   // ── Render Assembler ───────────────────────────────────────────────────────
@@ -389,134 +421,146 @@
 
     if (emptyEl) emptyEl.style.display = clips.length ? 'none' : 'flex';
 
-    var rows = document.getElementById('assemblerRows');
-    if (!rows) return;
-    rows.innerHTML = '';
+    var editor = document.getElementById('assemblerEditor');
+    if (editor) editor.style.display = clips.length ? 'block' : 'none';
+
+    var track = document.getElementById('asmTrack');
+    if (!track) return;
+    if (window._asmSel >= clips.length) window._asmSel = clips.length - 1;
+    if (window._asmSel < 0 && clips.length) window._asmSel = 0;
+    track.innerHTML = '';
 
     clips.forEach(function(clip, i) {
-      var leftPct  = (clip.start / clip.dur) * 100;
-      var rightPct = ((clip.dur - clip.end) / clip.dur) * 100;
+      var used  = _asmUsed(clip);
+      var block = document.createElement('div');
+      block.className = 'asm-cliph' + (i === window._asmSel ? ' on' : '');
+      block.style.flexGrow = Math.max(0.2, used);
+      block.dataset.idx = i;
+      block.draggable = true;
 
-      var row = document.createElement('div');
-      row.className = 'asm-clip';
-      row.draggable = true;
-      row.dataset.asmIdx = i;
+      block.innerHTML =
+        '<video class="asm-cliph-thumb" src="' + clip.blobUrl + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
+        + '<div class="asm-cliph-grad"></div>'
+        + '<div class="asm-cliph-label">' + clip.label + '</div>'
+        + '<div class="asm-cliph-dur">' + used.toFixed(1) + 's</div>'
+        + (i === window._asmSel
+            ? '<div class="asm-cliph-hl" title="Trim start"></div><div class="asm-cliph-hr" title="Trim end"></div>'
+            : '');
 
-      row.innerHTML =
-        '<div class="asm-drag-handle" title="Drag to reorder">⠿</div>'
-        + '<div class="asm-thumb-wrap">'
-          + '<video src="' + clip.blobUrl + '" muted playsinline preload="metadata" class="asm-thumb-vid"></video>'
-        + '</div>'
-        + '<div class="asm-info">'
-          + '<div class="asm-clip-label">' + clip.label + '</div>'
-          + '<div class="asm-clip-sub">' + clip.dur + 's original</div>'
-        + '</div>'
+      track.appendChild(block);
 
-        // ── Visual timeline trimmer ───────────────────────────────────────
-        + '<div class="asm-timeline" id="asm-tl-' + i + '">'
-          + '<div class="asm-tl-track" id="asm-tl-track-' + i + '">'
-            + '<div class="asm-tl-dim" id="asm-tl-dl-' + i + '" style="left:0;width:' + leftPct  + '%;"></div>'
-            + '<div class="asm-tl-fill" id="asm-tl-fill-' + i + '" style="left:' + leftPct + '%;right:' + rightPct + '%;"></div>'
-            + '<div class="asm-tl-dim" id="asm-tl-dr-' + i + '" style="right:0;width:' + rightPct + '%;"></div>'
-            + '<div class="asm-tl-hl" id="asm-tl-hl-' + i + '" style="left:' + leftPct  + '%;"><span class="asm-tl-grip">⋮⋮</span></div>'
-            + '<div class="asm-tl-hr" id="asm-tl-hr-' + i + '" style="right:' + rightPct + '%;"><span class="asm-tl-grip">⋮⋮</span></div>'
-            + '<div class="asm-tl-playhead" id="asm-tl-ph-' + i + '"></div>'
-          + '</div>'
-          + '<div class="asm-tl-times">'
-            + '<span id="asm-tl-ts-' + i + '">' + _fmtTime(clip.start) + '</span>'
-            + '<span id="asm-tl-td-' + i + '" class="asm-tl-dur">' + (clip.end - clip.start).toFixed(1) + 's</span>'
-            + '<span id="asm-tl-te-' + i + '">' + _fmtTime(clip.end) + '</span>'
-          + '</div>'
-        + '</div>'
+      var tv = block.querySelector('.asm-cliph-thumb');
 
-        + '<div class="asm-clip-actions">'
-          + '<button class="asm-btn asm-btn-prev" onclick="assemblerPreviewClip(' + i + ')" title="Preview clip">▶</button>'
-          + '<button class="asm-btn asm-btn-rm"   onclick="assemblerRemove('      + i + ')" title="Remove">✕</button>'
-        + '</div>';
-
-      var vid   = row.querySelector('.asm-thumb-vid');
-      var track = row.querySelector('.asm-tl-track');
-
-      // Hover-to-play thumb
-      row.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
-      row.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = clip.start; } });
-
-      rows.appendChild(row);
-
-      // Init drag handles after DOM insertion
-      _initTimelineDrag(i, track, vid);
-
-      // Drag-to-reorder events
-      row.addEventListener('dragstart', function(e) {
-        if (_tlDrag) { e.preventDefault(); return; } // don't reorder while trimming
-        _dragSrcIdx = i;
-        e.dataTransfer.effectAllowed = 'move';
-        row.classList.add('asm-dragging');
+      // Click to select (ignore clicks on the trim handles)
+      block.addEventListener('click', function(e) {
+        if (e.target.classList.contains('asm-cliph-hl') || e.target.classList.contains('asm-cliph-hr')) return;
+        if (_tlDrag) return;
+        window.asmSelect(i);
       });
-      row.addEventListener('dragend', function() {
-        row.classList.remove('asm-dragging');
-        document.querySelectorAll('.asm-clip').forEach(function(r) { r.classList.remove('asm-drag-over'); });
+
+      // Hover-scrub the thumbnail
+      block.addEventListener('mouseenter', function() { if (tv && i !== window._asmSel) { try { tv.currentTime = clip.start; tv.play().catch(function(){}); } catch(_) {} } });
+      block.addEventListener('mouseleave', function() { if (tv) tv.pause(); });
+
+      // Trim handles (only on selected clip)
+      var hl = block.querySelector('.asm-cliph-hl'), hr = block.querySelector('.asm-cliph-hr');
+      if (hl) hl.addEventListener('mousedown', _asmHandleDown(i, 'start', block));
+      if (hr) hr.addEventListener('mousedown', _asmHandleDown(i, 'end', block));
+
+      // Drag to reorder
+      block.addEventListener('dragstart', function(e) {
+        if (_tlDrag) { e.preventDefault(); return; }
+        _dragSrcIdx = i; e.dataTransfer.effectAllowed = 'move'; block.classList.add('asm-dragging');
       });
-      row.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; row.classList.add('asm-drag-over'); });
-      row.addEventListener('dragleave', function() { row.classList.remove('asm-drag-over'); });
-      row.addEventListener('drop', function(e) {
-        e.preventDefault();
-        row.classList.remove('asm-drag-over');
+      block.addEventListener('dragend', function() {
+        block.classList.remove('asm-dragging');
+        document.querySelectorAll('.asm-cliph').forEach(function(b) { b.classList.remove('asm-drag-over'); });
+      });
+      block.addEventListener('dragover', function(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; block.classList.add('asm-drag-over'); });
+      block.addEventListener('dragleave', function() { block.classList.remove('asm-drag-over'); });
+      block.addEventListener('drop', function(e) {
+        e.preventDefault(); block.classList.remove('asm-drag-over');
         if (_dragSrcIdx === null || _dragSrcIdx === i) return;
-        var moved = window._assemblerClips.splice(_dragSrcIdx, 1)[0];
-        var targetIdx = parseInt(row.dataset.asmIdx);
-        if (_dragSrcIdx < targetIdx) targetIdx--;
-        window._assemblerClips.splice(targetIdx, 0, moved);
-        _dragSrcIdx = null;
-        renderAssembler();
-        renderGallery();
+        var moved = clips.splice(_dragSrcIdx, 1)[0];
+        var targetIdx = i; if (_dragSrcIdx < targetIdx) targetIdx--;
+        clips.splice(targetIdx, 0, moved);
+        _dragSrcIdx = null; window._asmSel = targetIdx;
+        renderAssembler(); renderGallery();
       });
     });
+
+    // Click the ruler to scrub the whole sequence
+    var ruler = document.getElementById('asmRuler');
+    if (ruler) ruler.onclick = function(e) {
+      var rect = this.getBoundingClientRect();
+      var pct  = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      _asmSeekSeq(pct * _asmTotalUsed());
+    };
+
+    // Make sure the preview shows something and the playhead reflects selection
+    var v = _asmPreviewEl();
+    if (v && clips.length && !v.getAttribute('data-src')) _asmLoadClip(0, clips[0].start, false);
+    if (!_asmPlaying) _asmSetPlayhead(window._asmSel >= 0 ? _asmSeqStart(window._asmSel) : 0);
   }
   window.renderAssembler = renderAssembler;
 
   // ── Assembler actions ──────────────────────────────────────────────────────
-  window.assemblerSetTrim = function(idx, field, val) {
-    var clip = window._assemblerClips[idx];
-    if (!clip) return;
-    val = Math.max(0, Math.min(clip.dur, isNaN(val) ? 0 : val));
-    if (field === 'start') { clip.start = Math.min(val, clip.end - 0.1); }
-    else                   { clip.end   = Math.max(val, clip.start + 0.1); }
-    _updateTimelineUI(idx);
+  // Select a clip (highlights it, shows trim handles, loads it into the preview)
+  window.asmSelect = function(i) {
+    if (i < 0 || i >= window._assemblerClips.length) return;
+    window._asmSel = i;
+    _asmPause();
+    renderAssembler();
+    var c = window._assemblerClips[i];
+    if (c) { _asmLoadClip(i, c.start, false); _asmSetPlayhead(_asmSeqStart(i)); }
   };
 
+  // Delete the selected clip
+  window.asmDeleteSelected = function() {
+    var i = window._asmSel;
+    if (i < 0 || i >= window._assemblerClips.length) { if (typeof showToast === 'function') showToast('Click a clip to select it first.', 'warning'); return; }
+    window._assemblerClips.splice(i, 1);
+    window._asmSel = Math.min(i, window._assemblerClips.length - 1);
+    _asmPause();
+    renderGallery(); renderAssembler();
+    _asmSeekSeq(0);
+  };
+
+  // Back-compat: remove a clip by index
   window.assemblerRemove = function(idx) {
+    if (idx < 0 || idx >= window._assemblerClips.length) return;
     window._assemblerClips.splice(idx, 1);
-    renderGallery();
-    renderAssembler();
+    if (window._asmSel >= window._assemblerClips.length) window._asmSel = window._assemblerClips.length - 1;
+    renderGallery(); renderAssembler();
+  };
+
+  // Split the SELECTED clip at the playhead (or its midpoint) into two clips
+  window.asmSplitAtPlayhead = function() {
+    var i = window._asmSel, clips = window._assemblerClips;
+    if (i < 0 || i >= clips.length) { if (typeof showToast === 'function') showToast('Click a clip to select it, then Split.', 'warning'); return; }
+    var clip = clips[i], used = _asmUsed(clip), local;
+    var v = _asmPreviewEl();
+    if (_asmCurIdx === i && v && v.getAttribute('data-src') === clip.blobUrl) local = v.currentTime;
+    else local = clip.start + used / 2;
+    local = Math.max(clip.start + 0.2, Math.min(clip.end - 0.2, local));
+    if (clip.end - clip.start < 0.5) { if (typeof showToast === 'function') showToast('Clip is too short to split.', 'warning'); return; }
+    var second = Object.assign({}, clip, { start: local, end: clip.end });
+    clip.end = local;
+    clips.splice(i + 1, 0, second);
+    window._asmSel = i;
+    renderGallery(); renderAssembler();
+    if (typeof showToast === 'function') showToast('Clip split — select either half and Delete to cut it out.', 'success', 3000);
   };
 
   window.assemblerClearAll = function() {
     if (!window._assemblerClips.length) return;
-    if (!confirm('Clear all clips from the assembler?')) return;
+    if (!confirm('Clear all clips from the timeline?')) return;
     window._assemblerClips = [];
+    window._asmSel = -1;
+    _asmPause();
+    var v = _asmPreviewEl(); if (v) { v.removeAttribute('src'); v.removeAttribute('data-src'); }
     renderGallery();
     renderAssembler();
-  };
-
-  window.assemblerPreviewClip = function(idx) {
-    var clip = window._assemblerClips[idx];
-    if (!clip || !clip.blobUrl) return;
-    // Open in a simple modal
-    var existing = document.getElementById('asmPreviewModal');
-    if (existing) existing.remove();
-    var modal = document.createElement('div');
-    modal.id = 'asmPreviewModal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.88);display:flex;align-items:center;justify-content:center;';
-    modal.innerHTML =
-      '<div style="position:relative;max-width:360px;width:90%;border-radius:14px;overflow:hidden;background:#000;">'
-        + '<video src="' + clip.blobUrl + '#t=' + clip.start + ',' + clip.end + '" controls autoplay loop muted style="width:100%;display:block;max-height:70vh;"></video>'
-        + '<button onclick="document.getElementById(\'asmPreviewModal\').remove()" '
-          + 'style="position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.6);border:none;color:#fff;font-size:18px;cursor:pointer;border-radius:50%;width:30px;height:30px;line-height:30px;text-align:center;">✕</button>'
-        + '<div style="padding:8px 12px;font-size:11px;color:rgba(255,255,255,0.5);">' + clip.label + ' · ' + clip.start.toFixed(1) + 's – ' + clip.end.toFixed(1) + 's</div>'
-      + '</div>';
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
   };
 
   window.toggleAssembler = function() {
