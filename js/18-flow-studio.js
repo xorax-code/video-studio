@@ -411,6 +411,19 @@
     document.body.appendChild(modal);
   }
 
+  // ── Studio 1080p upscale (reuses the gallery upscaler) ──
+  function fsUpscale1080(idx) {
+    var item = _fsVidHistory[idx];
+    if (!item) return;
+    var url = item.gcsUrl || item.src;
+    if (typeof window._doUpscale === 'function') {
+      window._doUpscale(url, 'studio-video-' + (idx + 1) + '-1080p.mp4', 'fs-hd-' + idx);
+    } else if (typeof showToast === 'function') {
+      showToast('1080p upscale is not available right now.', 'warning');
+    }
+  }
+  window.fsUpscale1080 = fsUpscale1080;
+
   // ── Render video results strip ─────────────────────────────────────────────
   function _renderVidStrip() {
     var strip   = document.getElementById('fsVidStrip');
@@ -448,8 +461,9 @@
           + '<div style="width:36px;height:36px;border-radius:50%;background:rgba(0,0,0,0.65);border:2px solid rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;font-size:14px;color:#fff;padding-left:2px;">▶</div>'
         + '</div>'
         + '<div style="padding:5px;display:flex;gap:3px;">'
-          + '<button onclick="previewFsVid(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;cursor:pointer;">▶ Watch</button>'
-          + '<button onclick="downloadFsVidResult(' + idx + ')" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;">⬇</button>'
+          + '<button onclick="previewFsVid(' + idx + ')" title="Preview" style="flex:0 0 26px;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.3);border-radius:5px;color:#38bdf8;cursor:pointer;">▶</button>'
+          + '<button onclick="downloadFsVidResult(' + idx + ')" title="Download 720p" style="flex:1;padding:4px 2px;font-size:9px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.1);border:1px solid rgba(52,211,153,0.3);border-radius:5px;color:#34d399;cursor:pointer;">720p</button>'
+          + '<button id="fs-hd-' + idx + '" onclick="fsUpscale1080(' + idx + ')" title="Upscale &amp; download in 1080p HD" style="flex:1;padding:4px 2px;font-size:9px;font-weight:800;font-family:inherit;background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.45);border-radius:5px;color:#34d399;cursor:pointer;">1080p</button>'
         + '</div>';
 
       var vid     = card.querySelector('video');
@@ -714,9 +728,9 @@
       // Replace the pending placeholder with the real video
       var idx = _fsVidHistory.findIndex(function(item) { return item.id === pendingId; });
       if (idx !== -1) {
-        _fsVidHistory[idx] = { src: finalSrc, id: pendingId, mime: 'video/mp4' };
+        _fsVidHistory[idx] = { src: finalSrc, id: pendingId, mime: 'video/mp4', gcsUrl: result.videoUrl };
       } else {
-        _fsVidHistory.unshift({ src: finalSrc, id: pendingId, mime: 'video/mp4' });
+        _fsVidHistory.unshift({ src: finalSrc, id: pendingId, mime: 'video/mp4', gcsUrl: result.videoUrl });
       }
       if (_fsVidHistory.length > _MAX_HISTORY) _fsVidHistory.length = _MAX_HISTORY;
       _renderVidStrip();

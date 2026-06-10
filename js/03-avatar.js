@@ -260,6 +260,7 @@
     const reader = new FileReader();
     reader.onload = () => {
       productImageDataUrl = reader.result;
+      window._producerProductImageUrl = productImageDataUrl; // expose globally for the composite (Photo 3)
       const thumb  = document.getElementById('productRefThumb');
       const icon   = document.getElementById('productRefIcon');
       const clear  = document.getElementById('clearProductRefBtn');

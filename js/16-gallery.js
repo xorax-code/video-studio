@@ -201,6 +201,9 @@
     }
   }
 
+  // Expose the upscaler so other modules (Studio, etc.) can offer 1080p too.
+  window._doUpscale = _doUpscale;
+
   // ── 1080p for gallery clips (button, by segIdx) ───────────────────────────
   window.galleryUpscale = async function(segIdx) {
     var seg = (window.segments || [])[segIdx];

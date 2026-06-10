@@ -109,12 +109,17 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
 }
 
 // ── Build LOCK instruction block from pose analysis ───────────────────────────
-function buildLockBlock(pa) {
+function buildLockBlock(pa, skipProp) {
   const lines = [];
   if (pa.background)                             lines.push(`lock background: ${pa.background}.`);
   if (pa.arm_instruction)                        lines.push(`lock arms: ${pa.arm_instruction} — do not move these arms.`);
-  if (pa.prop && pa.prop !== 'none')             lines.push(`lock prop: ${pa.prop} — keep exactly as held, same grip and orientation.`);
-  if (pa.prop_state && pa.prop_state !== 'none') lines.push(`prop state: ${pa.prop_state}.`);
+  if (skipProp) {
+    // Product is being replaced — keep the hand/grip but NOT the original object.
+    lines.push(`hand & grip: keep the exact hand position, grip, finger placement, and arm pose — but the held object itself will be swapped (see PRODUCT REPLACE).`);
+  } else {
+    if (pa.prop && pa.prop !== 'none')             lines.push(`lock prop: ${pa.prop} — keep exactly as held, same grip and orientation.`);
+    if (pa.prop_state && pa.prop_state !== 'none') lines.push(`prop state: ${pa.prop_state}.`);
+  }
   if (pa.lighting)                               lines.push(`lock light: ${pa.lighting}.`);
   lines.push('');
   return lines.join('\n');
@@ -161,24 +166,30 @@ exports.handler = async (event) => {
     avatarMime     = 'image/jpeg',
     frameB64       = null,
     frameMime      = 'image/jpeg',
+    productB64     = null,
+    productMime    = 'image/jpeg',
     creative       = false,
   } = body;
 
-  let avatarImg = null, frameImg = null;
+  let avatarImg = null, frameImg = null, productImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
-    if (imgs[0]) avatarImg = imgs[0];
-    if (imgs[1]) frameImg  = imgs[1];
+    if (imgs[0]) avatarImg  = imgs[0];
+    if (imgs[1]) frameImg   = imgs[1];
+    if (imgs[2]) productImg = imgs[2];
   } else if (avatarB64) {
     avatarImg = { b64: avatarB64, mime: avatarMime };
-    if (frameB64) frameImg = { b64: frameB64, mime: frameMime };
+    if (frameB64)   frameImg   = { b64: frameB64, mime: frameMime };
+    if (productB64) productImg = { b64: productB64, mime: productMime };
   }
 
   if (!avatarImg) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 
-  const hasFrame = !!frameImg;
+  const hasFrame   = !!frameImg;
+  // Product swap only applies in compositing mode (a held product in a real frame).
+  const hasProduct = !!(frameImg && productImg);
 
   // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
   if (creative) {
@@ -230,26 +241,31 @@ exports.handler = async (event) => {
   // Photo 1 = scene frame (base — background, arms, prop locked)
   // Photo 2 = avatar      (appearance source: face, hair, clothing)
 
-  const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis) : '';
+  const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct) : '';
 
   // Always-on face replacement directive — must fire even when poseAnalysis fails
   const faceReplaceDirective = hasFrame
     ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1.\n\n`
     : '';
 
+  // Product replacement directive — only when a product reference (Photo 3) is provided
+  const productReplaceDirective = hasProduct
+    ? `PRODUCT REPLACE (critical): Photo 3 is the PRODUCT reference. The object held in the hand in Photo 1 must be COMPLETELY replaced with the product from Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose from Photo 1 — but the held product's shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep, blend, or retain the original product that was in Photo 1.\n\n`
+    : '';
+
   const systemInstruction = hasFrame
-    ? `You are a professional photo editor performing a FULL PERSON REPLACEMENT.
+    ? `You are a professional photo editor performing a FULL PERSON REPLACEMENT${hasProduct ? ' and a PRODUCT REPLACEMENT' : ''}.
 
-Photo 1 — the base scene: background, setting, props, lighting, arm positions, and held objects are preserved from this photo.
-Photo 2 — the replacement person: this person's face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.
+Photo 1 — the base scene: background, setting, lighting, and arm positions are preserved from this photo.${hasProduct ? ' The held object is NOT preserved — it will be replaced.' : ' Props and held objects are also preserved from this photo.'}
+Photo 2 — the replacement person: this person's face, skin tone, hair, head, hands, clothing, and accessories must appear in the final image. The person in the output MUST look like the person in Photo 2 — not the person in Photo 1.${hasProduct ? '\nPhoto 3 — the replacement product: the object held in the hand must be replaced with this exact product (match its shape, color, packaging, label, and text). Keep the same hand and grip from Photo 1.' : ''}
 
-CRITICAL: The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person. Preserve only the background, prop, arms position, and lighting from Photo 1.
+CRITICAL: The person in Photo 1 is being REPLACED. Their face, skin tone, hair, and hands must NOT appear in the output. Replace them completely with the face, skin tone, hair, and hands of the Photo 2 person. Preserve the background, arm positions, and lighting from Photo 1${hasProduct ? ', but replace the held product with the Photo 3 product.' : ', and keep the held prop as in Photo 1.'}
 
 Always remove any burned-in text, captions, or subtitles from the output image.`
     : `You are a professional photo editor. Follow the user's instruction exactly using the provided reference photo(s).`;
 
   const userPrompt = hasFrame
-    ? `${faceReplaceDirective}${lockBlock}${instruction}`
+    ? `${faceReplaceDirective}${productReplaceDirective}${lockBlock}${instruction}`
     : `${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
@@ -263,6 +279,10 @@ Always remove any burned-in text, captions, or subtitles from the output image.`
   }
   parts.push({ text: 'Photo 2 — REPLACEMENT PERSON (use this person\'s face, skin tone, hair, hands, clothing, and accessories in the output — this is who must appear in the final image):' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
+  if (hasProduct) {
+    parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
+    parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
+  }
   parts.push({ text: fullPrompt });
 
   const requestBody = JSON.stringify({

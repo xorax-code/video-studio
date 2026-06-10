@@ -76,6 +76,22 @@
       frameMime = frameParts.mime;
     }
 
+    // ── Product reference (optional) — Photo 3: swap the held product ──────────
+    // Only applies in compositing mode (a real frame with a held product). When a
+    // product photo is uploaded, the backend replaces the original held object.
+    var productB64 = null, productMime = 'image/jpeg', hasProduct = false;
+    try {
+      var _prodUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl)
+        || window._producerProductImageUrl || null;
+      if (_prodUrl && hasFrame) {
+        var prodCompressed = await _nbCompressImage(_prodUrl, 768, 0.80);
+        var prodParts = _nbSplitDataUrl(prodCompressed);
+        productB64 = prodParts.b64;
+        productMime = prodParts.mime;
+        hasProduct = true;
+      }
+    } catch(_) {}
+
     // ── Build instruction for Imagen 3 based on what photos are available ──────
     // When a video frame exists: avatar (SUBJECT ref) + frame (STYLE ref for background).
     // When avatar only: generate a fresh lifestyle frame from the NB prompt context.
@@ -181,6 +197,11 @@
       instruction = _gParts.join(' ');
     }
 
+    // When a product reference is provided, tell the model to swap the held product.
+    if (hasProduct) {
+      instruction += ' PRODUCT REPLACE (critical): The object held in the hand must be REPLACED with the product shown in Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose, but the held product\'s shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep or blend the original product from the scene frame.';
+    }
+
     // ── Request with 429 retry-backoff ───────────────────────────────────────
     // Vertex AI image generation has a tight QPM quota (~5/min).
     // On 429 "Resource exhausted" we wait and retry up to 3 times.
@@ -200,6 +221,8 @@
             avatarMime:     avatarParts.mime,
             frameB64,
             frameMime,
+            productB64,
+            productMime,
           }),
         });
 
