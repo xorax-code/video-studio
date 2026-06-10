@@ -63,6 +63,8 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
 {
   "camera_angle": "shot description — e.g. 'straight-on chest height, medium shot'",
   "visible_person": "which parts of the person are actually in frame — choose the closest single phrase: 'hands only', 'arms only', 'arms and torso, no face', 'face and upper body', or 'full body'",
+  "face_in_frame": "boolean true or false — is a human FACE or HEAD actually visible in this frame? Answer false when only a hand, arm, forearm, or torso is shown (a hand holding a product with no face = false).",
+  "full_body_in_frame": "boolean true or false — is a full standing/seated body visible (not just hands/arms)?",
   "background": "precise description of everything visible behind the person — room type, wall color, shelves, objects, window, flags, decor",
   "arm_instruction": "single sentence describing both arms and hands — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports from below'",
   "prop": "if a prop/object is held: exact name, shape, size, color, which hand, orientation. If none: 'none'",
@@ -249,17 +251,21 @@ exports.handler = async (event) => {
   const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct) : '';
 
   // What's actually visible in the source frame — drives how much of the person to replace.
-  // Default to face-visible (full replace) when analysis is missing, to preserve old behavior.
+  // Prefer the explicit boolean from analysis; fall back to a phrase regex; default to
+  // face-visible (full replace) when analysis is entirely missing, to preserve old behavior.
   const _vp = ((poseAnalysis && poseAnalysis.visible_person) || '').toLowerCase();
-  const faceOutOfFrame = hasFrame && /hands?\s*only|arms?\s*only|no\s*face|without.*face|faceless|below\s*(the\s*)?(neck|chin|shoulders)|hands?\s*(and|&)\s*arms?\s*only/.test(_vp);
+  const _faceBool = poseAnalysis ? poseAnalysis.face_in_frame : undefined;
+  const _faceBoolIsFalse = (_faceBool === false || _faceBool === 'false' || _faceBool === 'no');
+  const faceOutOfFrameRegex = /hands?\s*only|arms?\s*only|no\s*face|without.*face|faceless|below\s*(the\s*)?(neck|chin|shoulders)|forearm|wrist|hands?\s*(and|&)\s*arms?\s*only/.test(_vp);
+  const faceOutOfFrame = hasFrame && (_faceBoolIsFalse || faceOutOfFrameRegex);
   const faceVisible = hasFrame && !faceOutOfFrame;
 
   // Person replacement directive — adapts to the source frame's crop.
   const faceReplaceDirective = !hasFrame
     ? ''
     : faceVisible
-      ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1.\n\n`
-      : `BODY-PART MATCH (critical): In Photo 1 the person's face and head are OUT OF FRAME — only their ${_vp || 'hands/arms'} are visible. KEEP THE EXACT SAME CROP AND FRAMING. Do NOT add, reveal, zoom out to, or invent a face, head, or hair. Replace ONLY the visible skin, hands, arms, and clothing so they match the Photo 2 avatar's skin tone, hands, and outfit. The output must show the SAME body parts as Photo 1 and nothing more — no face appears anywhere in the image.\n\n`;
+      ? `FACE REPLACE (critical): Completely remove the Photo 1 person's face, skin tone, hair, and hands. Replace them entirely with the Photo 2 avatar's exact face, skin tone, hair, and hands. The person in the final image must look like Photo 2, not Photo 1. Do NOT blend, partially preserve, or retain any facial features, skin color, or hand appearance from Photo 1. Photo 2 is ONLY an appearance reference for the single person already in Photo 1 — do NOT add a second person and do NOT place anyone standing in the background.\n\n`
+      : `HAND/ARM ONLY (critical): Photo 1 shows ONLY a ${_vp || 'hand/arm'} (a hand holding the product) — there is NO person, face, head, or body in the frame. KEEP THE EXACT SAME CROP. Recolor ONLY the visible hand/arm skin and sleeve to match the Photo 2 avatar's skin tone and clothing. Photo 2 is JUST a skin/appearance reference — it is NOT a person to insert. Do NOT add, draw, or place a face, head, hair, or a standing/seated person anywhere in the image, including the background. The output must contain ONLY the same hand/arm holding the product, with the same framing as Photo 1 — no human figure in the background.\n\n`;
 
   // Product replacement directive — only when a product reference (Photo 3) is provided
   const productReplaceDirective = hasProduct
@@ -291,7 +297,7 @@ Always remove any burned-in text, captions, or subtitles from the output image.`
     : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
-  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Remove any burned-in text, captions, or subtitles from the output.${faceOutOfFrame ? ' Avoid adding any face, head, hair, or body parts that are not already visible in Photo 1; avoid zooming out, re-framing, or changing the crop.' : ''}`;
+  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Avoid adding a second person, a duplicate of the subject, or any extra human figure standing or seated in the background that was not already in Photo 1. Remove any burned-in text, captions, or subtitles from the output.${faceOutOfFrame ? ' This frame is a hand/arm shot with NO person — avoid adding any face, head, hair, full body, or background person; avoid zooming out, re-framing, or changing the crop. Show only the same hand/arm holding the product.' : ''}`;
   const fullPrompt = userPrompt + negLine;
 
   const parts = [];
