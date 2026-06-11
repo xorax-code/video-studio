@@ -11,15 +11,77 @@
   var _dragSrcIdx = null;  // assembler drag source index
   var _ffmpegLoaded = false;
 
+  // ── Timeline persistence (survives refresh / next session) ────────────────
+  // We persist ONLY a lightweight record per clip — which scene/extra it is and
+  // its in/out trim points — never the blob. On load we rebuild the full clips
+  // from the user's saved segments, so the timeline (and your trims/splits/order)
+  // comes back. Saved only on real user mutations, never on a render, so an empty
+  // initial render can't wipe the saved timeline.
+  var _asmRestoreAttempted = false;
+  function _asmSave() {
+    try {
+      var recs = (window._assemblerClips || []).map(function (c) {
+        return { segIdx: c.segIdx, extraIdx: (c.extraIdx == null ? -1 : c.extraIdx), start: c.start, end: c.end };
+      });
+      if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_assembler_timeline', recs);
+    } catch (_) {}
+  }
+  function _asmBuildClip(rec) {
+    var segs = window.segments || [];
+    var seg = segs[rec.segIdx];
+    if (!seg) return null;
+    var blobUrl, mime, dur, label;
+    if (rec.extraIdx != null && rec.extraIdx >= 0) {
+      var ex = seg.veoExtras && seg.veoExtras[rec.extraIdx];
+      if (!ex || (!ex.apiVideoRaw && !ex.apiVideoUrl)) return null;
+      blobUrl = ex.apiVideoRaw || ex.apiVideoUrl; mime = ex.apiVideoMime || 'video/mp4';
+      dur = 8; try { dur = parseInt(JSON.parse(ex.veoPrompt || '{}').duration, 10) || 8; } catch (e) {}
+      label = 'Scene ' + (rec.segIdx + 1) + ' · Clip ' + (rec.extraIdx + 2);
+    } else {
+      if (!seg.apiVideoRaw && !seg.apiVideoUrl) return null;
+      blobUrl = seg.apiVideoRaw || seg.apiVideoUrl; mime = seg.apiVideoMime || 'video/mp4';
+      dur = 6; try { dur = parseInt(JSON.parse(seg.veoPrompt || '{}').duration, 10) || 6; } catch (e) {}
+      label = 'Scene ' + (rec.segIdx + 1);
+    }
+    var start = (typeof rec.start === 'number') ? rec.start : 0;
+    var end   = (typeof rec.end   === 'number') ? rec.end   : dur;
+    start = Math.max(0, Math.min(start, dur));
+    end   = Math.max(start + 0.1, Math.min(end, dur));
+    return { segIdx: rec.segIdx, extraIdx: (rec.extraIdx == null ? -1 : rec.extraIdx), start: start, end: end, dur: dur, blobUrl: blobUrl, mime: mime, label: label };
+  }
+  async function _asmRestoreOnce() {
+    if (_asmRestoreAttempted) return;
+    if (!(window.segments && window.segments.length)) return; // wait until clips are loaded
+    if (window._assemblerClips && window._assemblerClips.length) { _asmRestoreAttempted = true; return; }
+    _asmRestoreAttempted = true;
+    try {
+      var recs = (typeof DB !== 'undefined' && DB && DB.get) ? await DB.get('sm_assembler_timeline') : null;
+      if (!recs || !recs.length) return;
+      var rebuilt = [];
+      recs.forEach(function (rec) { var c = _asmBuildClip(rec); if (c) rebuilt.push(c); });
+      if (rebuilt.length) {
+        window._assemblerClips = rebuilt;
+        if (typeof window._asmSel !== 'number' || window._asmSel < 0) window._asmSel = 0;
+        renderAssembler();
+        if (typeof renderGallery === 'function') renderGallery();
+      }
+    } catch (_) {}
+  }
+  window._asmRestoreOnce = _asmRestoreOnce;
+
   // ── Init ───────────────────────────────────────────────────────────────────
   function initGallery() {
     renderGallery();
     renderAssembler();
+    _asmRestoreOnce();
+    // Safety net: segments may finish loading shortly after init
+    setTimeout(function () { _asmRestoreOnce(); }, 1500);
   }
   window.initGallery = initGallery;
 
   // ── Render Gallery ─────────────────────────────────────────────────────────
   function renderGallery() {
+    _asmRestoreOnce(); // restore a saved timeline once segments are available
     var grid = document.getElementById('galleryGrid');
     var countEl = document.getElementById('galleryCount');
     if (!grid) return;
@@ -131,6 +193,7 @@
     }
     renderGallery();
     renderAssembler();
+    _asmSave();
     if (!already) {
       var ap = document.getElementById('assemblerPanel');
       if (ap) ap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
@@ -150,8 +213,12 @@
       if (typeof showToast === 'function') showToast('No video URL for this clip.', 'error');
       return;
     }
-    var jwt = typeof window.getAuthToken === 'function' ? window.getAuthToken() : null;
-    if (!jwt) jwt = localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
+    var jwt = null;
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) { var _sr = await _sbRef.auth.getSession(); jwt = (_sr && _sr.data && _sr.data.session && _sr.data.session.access_token) || null; }
+    } catch(_) {}
+    if (!jwt) jwt = (typeof window.getAuthToken === 'function' ? window.getAuthToken() : null) || localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
     if (!jwt) {
       if (typeof showToast === 'function') showToast('Please log in to use 1080p download.', 'warning');
       return;
@@ -260,6 +327,7 @@
     });
     renderGallery();
     renderAssembler();
+    _asmSave();
   };
 
   window.toggleGallery = function() {
@@ -403,7 +471,7 @@
   });
 
   document.addEventListener('mouseup', function() {
-    if (_tlDrag) { document.body.style.cursor = ''; var i = _tlDrag.idx; _tlDrag = null; _asmSeekSeq(_asmSeqStart(i)); }
+    if (_tlDrag) { document.body.style.cursor = ''; var i = _tlDrag.idx; _tlDrag = null; _asmSeekSeq(_asmSeqStart(i)); _asmSave(); }
   });
 
   // ── Render Assembler ───────────────────────────────────────────────────────
@@ -485,7 +553,7 @@
         var targetIdx = i; if (_dragSrcIdx < targetIdx) targetIdx--;
         clips.splice(targetIdx, 0, moved);
         _dragSrcIdx = null; window._asmSel = targetIdx;
-        renderAssembler(); renderGallery();
+        renderAssembler(); renderGallery(); _asmSave();
       });
     });
 
@@ -522,7 +590,7 @@
     window._assemblerClips.splice(i, 1);
     window._asmSel = Math.min(i, window._assemblerClips.length - 1);
     _asmPause();
-    renderGallery(); renderAssembler();
+    renderGallery(); renderAssembler(); _asmSave();
     _asmSeekSeq(0);
   };
 
@@ -531,7 +599,7 @@
     if (idx < 0 || idx >= window._assemblerClips.length) return;
     window._assemblerClips.splice(idx, 1);
     if (window._asmSel >= window._assemblerClips.length) window._asmSel = window._assemblerClips.length - 1;
-    renderGallery(); renderAssembler();
+    renderGallery(); renderAssembler(); _asmSave();
   };
 
   // Split the SELECTED clip at the playhead (or its midpoint) into two clips
@@ -548,7 +616,7 @@
     clip.end = local;
     clips.splice(i + 1, 0, second);
     window._asmSel = i;
-    renderGallery(); renderAssembler();
+    renderGallery(); renderAssembler(); _asmSave();
     if (typeof showToast === 'function') showToast('Clip split — select either half and Delete to cut it out.', 'success', 3000);
   };
 
@@ -561,6 +629,7 @@
     var v = _asmPreviewEl(); if (v) { v.removeAttribute('src'); v.removeAttribute('data-src'); }
     renderGallery();
     renderAssembler();
+    _asmSave();
   };
 
   window.toggleAssembler = function() {
@@ -607,8 +676,12 @@
     var clips = window._assemblerClips;
     if (!clips.length) { if (typeof showToast === 'function') showToast('Add clips to the timeline first.', 'warning'); return; }
 
-    var jwt = typeof window.getAuthToken === 'function' ? window.getAuthToken() : null;
-    if (!jwt) jwt = localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
+    var jwt = null;
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) { var _sr = await _sbRef.auth.getSession(); jwt = (_sr && _sr.data && _sr.data.session && _sr.data.session.access_token) || null; }
+    } catch(_) {}
+    if (!jwt) jwt = (typeof window.getAuthToken === 'function' ? window.getAuthToken() : null) || localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
     if (!jwt) { if (typeof showToast === 'function') showToast('Please log in to export 1080p.', 'warning'); return; }
 
     // Resolve each clip's cloud (GCS) source URL + trim offsets, in timeline order

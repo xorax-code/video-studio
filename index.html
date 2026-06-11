@@ -20,6 +20,54 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=DM+Serif+Display:ital@0;1&display=swap" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+<!-- ════ Analytics & ad pixels ════════════════════════════════════════════════
+     Paste your IDs below to activate. Everything is OFF (no requests) until an ID
+     is set, so this is safe to ship empty. After launch:
+       • Plausible  → set plausibleDomain to 'aiscaling.netlify.app'
+       • GA4        → set ga4Id to your 'G-XXXX' measurement ID
+       • Meta Pixel → set metaPixelId to your numeric pixel ID
+       • TikTok     → set tiktokPixelId to your pixel ID
+     Then call window.trackEvent('signup') / ('purchase') etc. on key actions. -->
+<script>
+(function () {
+  var CFG = {
+    plausibleDomain: '',   // e.g. 'aiscaling.netlify.app'
+    ga4Id:           '',   // e.g. 'G-XXXXXXXXXX'
+    metaPixelId:     '',   // e.g. '1234567890123456'
+    tiktokPixelId:   ''    // e.g. 'CXXXXXXXXXXXXXXXXXXX'
+  };
+  function inject(src, attrs) {
+    var s = document.createElement('script'); s.async = true; s.src = src;
+    if (attrs) Object.keys(attrs).forEach(function (k) { s.setAttribute(k, attrs[k]); });
+    document.head.appendChild(s); return s;
+  }
+  try {
+    if (CFG.plausibleDomain) inject('https://plausible.io/js/script.js', { 'data-domain': CFG.plausibleDomain, defer: '' });
+    if (CFG.ga4Id) {
+      inject('https://www.googletagmanager.com/gtag/js?id=' + CFG.ga4Id);
+      window.dataLayer = window.dataLayer || [];
+      window.gtag = function () { window.dataLayer.push(arguments); };
+      window.gtag('js', new Date()); window.gtag('config', CFG.ga4Id);
+    }
+    if (CFG.metaPixelId) {
+      !function (f, b, e, v, n, t, s) { if (f.fbq) return; n = f.fbq = function () { n.callMethod ? n.callMethod.apply(n, arguments) : n.queue.push(arguments) }; if (!f._fbq) f._fbq = n; n.push = n; n.loaded = !0; n.version = '2.0'; n.queue = []; t = b.createElement(e); t.async = !0; t.src = v; s = b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t, s) }(window, document, 'script', 'https://connect.facebook.net/en_US/fbevents.js');
+      window.fbq('init', CFG.metaPixelId); window.fbq('track', 'PageView');
+    }
+    if (CFG.tiktokPixelId) {
+      !function (w, d, t) { w.TiktokAnalyticsObject = t; var ttq = w[t] = w[t] || []; ttq.methods = ['page','track','identify','instances','debug','on','off','once','ready','alias','group','enableCookie','disableCookie']; ttq.setAndDefer = function (o, m) { o[m] = function () { o.push([m].concat(Array.prototype.slice.call(arguments, 0))) } }; for (var i = 0; i < ttq.methods.length; i++) ttq.setAndDefer(ttq, ttq.methods[i]); ttq.load = function (e) { var n = 'https://analytics.tiktok.com/i18n/pixel/events.js'; ttq._i = ttq._i || {}; ttq._i[e] = []; ttq._i[e]._u = n; ttq._t = ttq._t || {}; ttq._t[e] = +new Date; var o = d.createElement('script'); o.type = 'text/javascript'; o.async = !0; o.src = n + '?sdkid=' + e + '&lib=' + t; var a = d.getElementsByTagName('script')[0]; a.parentNode.insertBefore(o, a) }; ttq.load(CFG.tiktokPixelId); ttq.page(); }(window, document, 'ttq');
+    }
+  } catch (e) { /* never let analytics break the page */ }
+
+  // Fire a custom event across whichever providers are active. Safe no-op if none.
+  window.trackEvent = function (name, params) {
+    try { if (window.gtag) window.gtag('event', name, params || {}); } catch (_) {}
+    try { if (window.fbq)  window.fbq('trackCustom', name, params || {}); } catch (_) {}
+    try { if (window.ttq)  window.ttq.track(name, params || {}); } catch (_) {}
+    try { if (window.plausible) window.plausible(name, params ? { props: params } : undefined); } catch (_) {}
+  };
+})();
+</script>
 <script src="/supabase-config.js"></script>
 <style>
   :root {
@@ -1770,14 +1818,29 @@
 
       <div class="faq-item">
         <button class="faq-trigger" onclick="toggleFaq(this)">
+          Is my face / likeness in the videos, and is that okay?
+          <span class="faq-icon">+</span>
+        </button>
+        <div class="faq-body">
+          <p>Yes — you upload one face photo and the AI places that likeness into your scenes. You must confirm you have the right and consent to use any likeness you upload, and you'll do that when you upload. Don't upload photos of anyone without their permission, and remember to add required disclosures (like #ad) when you post.</p>
+        </div>
+      </div>
+
+      <div class="faq-item">
+        <button class="faq-trigger" onclick="toggleFaq(this)">
           Is my data safe?
           <span class="faq-icon">+</span>
         </button>
         <div class="faq-body">
-          <p>Yes. Affiliate OS uses Supabase for authentication and data storage — the same infrastructure trusted by thousands of production apps. Your scripts and account data are stored securely and never shared or sold. Video generation happens through Google Flow using your own prompts; we don't store your generated videos.</p>
+          <p>Your account data is stored securely in Supabase with row-level security, and is never sold. To generate your content, your uploads and prompts are processed by trusted AI providers — Google (Vertex AI / Gemini) and OpenAI — and your generated videos are stored in Google Cloud so you can download them. You can delete your uploads and account at any time. See our <a href="/privacy.html" style="color:var(--aos-accent,#10b981);text-decoration:none;">Privacy Policy</a> for the full details.</p>
         </div>
       </div>
 
+    </div>
+
+    <div style="text-align:center;margin-top:34px;padding:22px;background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.22);border-radius:14px;max-width:560px;margin-left:auto;margin-right:auto;">
+      <div style="font-size:1.02rem;font-weight:700;margin-bottom:6px;">Still have questions?</div>
+      <div style="opacity:0.75;font-size:0.92rem;">Email <a href="mailto:xorax360@gmail.com" style="color:var(--aos-accent,#10b981);text-decoration:none;font-weight:600;">xorax360@gmail.com</a> — we usually reply within a day.</div>
     </div>
   </div>
 </section>
