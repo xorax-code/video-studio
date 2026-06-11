@@ -16,6 +16,10 @@
   .updated { font-size:0.85rem; color:var(--text-muted); margin-bottom:40px; }
   h2 { font-size:1.05rem; font-weight:700; margin:32px 0 10px; color:var(--accent2); }
   p { font-size:0.9rem; color:var(--text-muted); margin-bottom:12px; }
+  ul { margin:0 0 12px 20px; }
+  li { font-size:0.9rem; color:var(--text-muted); margin-bottom:6px; }
+  a.inline { color:var(--accent2); text-decoration:none; }
+  a.inline:hover { text-decoration:underline; }
   footer { margin-top:60px; padding-top:24px; border-top:1px solid var(--border); font-size:0.8rem; color:var(--text-muted); display:flex; gap:24px; flex-wrap:wrap; }
   footer a { color:var(--text-muted); text-decoration:none; } footer a:hover { color:var(--text); }
 </style>
@@ -24,28 +28,48 @@
 <div class="wrap">
   <a href="/" class="back">← Back to Affiliate OS</a>
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: May 2026</p>
+  <p class="updated">Last updated: June 2026</p>
+
+  <p>This policy explains what Affiliate OS collects, how we use it, and the third-party AI services that process your content when you generate videos. By using the service you agree to this policy.</p>
 
   <h2>1. What we collect</h2>
-  <p>We collect your email address and display name when you create an account. We store your app data (accounts, scripts, projects) in Supabase, a secure cloud database. We do not sell your personal data to third parties.</p>
+  <p>We collect the information you provide and the content you create with the service:</p>
+  <ul>
+    <li><strong>Account details</strong> — your email address and display name when you sign up.</li>
+    <li><strong>Project data</strong> — your scripts, accounts, settings, and projects.</li>
+    <li><strong>Uploaded media</strong> — the photos and reference videos you upload, including <strong>face/avatar photos</strong> and product photos.</li>
+    <li><strong>Generated media</strong> — the images and videos the service produces for you.</li>
+  </ul>
+  <p>Account and project data are stored in <strong>Supabase</strong> (our cloud database). Generated videos are stored in <strong>Google Cloud Storage</strong> and served to you via temporary signed links. We do not sell your personal data.</p>
 
-  <h2>2. How we use your data</h2>
-  <p>Your data is used solely to provide the Affiliate OS service — syncing your settings, storing your projects, and keeping you signed in. We may use your email to send product updates or important account notices. You can opt out at any time.</p>
+  <h2>2. AI processing &amp; third-party providers</h2>
+  <p>To generate your content, your uploads and prompts are sent to third-party AI providers for processing. Specifically:</p>
+  <ul>
+    <li><strong>Google (Vertex AI &amp; Gemini)</strong> — your face/avatar photos, product photos, reference frames, scripts, and prompts are sent to Google's Vertex AI (Veo video generation) and Gemini models (image compositing/"face &amp; product swap," scene analysis, and scriptwriting). This is subject to <a class="inline" href="https://policies.google.com/privacy" target="_blank" rel="noopener">Google's Privacy Policy</a> and the Vertex AI / Gemini terms.</li>
+    <li><strong>OpenAI</strong> — audio you submit for transcription and certain text requests are sent to OpenAI (Whisper / chat models), subject to <a class="inline" href="https://openai.com/policies/privacy-policy" target="_blank" rel="noopener">OpenAI's Privacy Policy</a>.</li>
+  </ul>
+  <p>We send providers only what is needed to fulfill your request. We do not control these providers' own data practices; please review their policies. We do not use your content to train our own models.</p>
 
-  <h2>3. AI processing</h2>
-  <p>When you use AI features (script rewriting, scene analysis, video prompts), your content is sent to OpenAI's API for processing. This is subject to OpenAI's privacy policy. We do not store the content of AI requests beyond what is saved in your project data.</p>
+  <h2>3. Face &amp; likeness data</h2>
+  <p>When you upload a face/avatar photo, that image is processed by Google's AI models to place that likeness into the videos you generate. You are responsible for ensuring you have the legal right and consent to use any person's likeness you upload, and you confirm this at the time of upload. Do not upload images of anyone without their permission. We store uploaded photos as part of your account/project data so the feature works across sessions; you can remove them at any time (see Section 6).</p>
 
-  <h2>4. Cookies & local storage</h2>
-  <p>We use browser local storage to cache your settings and preferences locally on your device. We do not use third-party tracking cookies or advertising pixels.</p>
+  <h2>4. Cookies &amp; local storage</h2>
+  <p>We use your browser's local storage and IndexedDB to cache your settings, avatar, and project data on your device for performance. If we add product analytics in the future, we will update this policy and, where required, ask for your consent.</p>
 
   <h2>5. Data security</h2>
-  <p>Your data is stored securely via Supabase with row-level security. Passwords are never stored in plain text. Your OpenAI API key is stored in your browser's local storage and in your Supabase account — it is used only to make requests on your behalf and is never shared with or sold to any third party.</p>
+  <p>Account and project data are stored via Supabase with row-level security; passwords are never stored in plain text. API keys and credentials used to call AI providers are held server-side as protected environment variables and are never exposed to your browser.</p>
 
-  <h2>6. Data deletion</h2>
-  <p>You may request deletion of your account and all associated data at any time by emailing us. We will process deletion requests within 30 days.</p>
+  <h2>6. Your choices &amp; data deletion</h2>
+  <p>You can delete uploaded photos and projects from within the app. You may also request deletion of your account and all associated data — including uploaded media and generated videos — by emailing us, and we will process the request within 30 days. Note that content already processed by a third-party provider is subject to that provider's own retention and deletion practices.</p>
 
-  <h2>7. Contact</h2>
-  <p>Questions? Email us at <a href="mailto:xorax360@gmail.com" style="color:var(--accent2);">xorax360@gmail.com</a></p>
+  <h2>7. Children</h2>
+  <p>Affiliate OS is not directed to anyone under 18, and we do not knowingly collect data from minors. Do not upload photos of minors.</p>
+
+  <h2>8. Changes</h2>
+  <p>We may update this policy as the service evolves. Material changes will be reflected by the "Last updated" date above.</p>
+
+  <h2>9. Contact</h2>
+  <p>Questions or deletion requests? Email <a class="inline" href="mailto:xorax360@gmail.com">xorax360@gmail.com</a>.</p>
 
   <footer>
     <a href="/">Home</a>

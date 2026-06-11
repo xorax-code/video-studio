@@ -21,6 +21,27 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const CREDIT_COST = 2; // credits per transcription (tune as needed)
+
+// Read/deduct credits via Supabase admin API (fail-open if unavailable → never blocks legit use)
+async function _readBalance(userId) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || !process.env.SUPABASE_URL) return null;
+  try {
+    const r = await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.app_metadata?.credits_balance ?? 0;
+  } catch(_) { return null; }
+}
+async function _deduct(userId, balance, cost) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || balance == null) return;
+  try {
+    await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: balance - cost } }) });
+  } catch(_) {}
+}
+
 // FIX: Added JWT auth -- previously this was an open proxy; any caller could
 // make unlimited Whisper transcription calls billed to the account.
 function getAuthUser(jwt) {
@@ -95,6 +116,12 @@ exports.handler = async (event) => {
       headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Invalid or expired session.' } }),
     };
+  }
+
+  // Credit gate — block users with no credits (fail-open if balance can't be read)
+  const _bal = await _readBalance(authUser.id);
+  if (_bal != null && _bal < CREDIT_COST) {
+    return { statusCode: 402, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: { message: 'Out of credits.' }, balance: _bal, cost: CREDIT_COST }) };
   }
 
   let parsed;
@@ -233,6 +260,8 @@ exports.handler = async (event) => {
         body: JSON.stringify({ error: { message: 'Unexpected response from OpenAI: ' + result.body.slice(0, 200) } }),
       };
     }
+
+    if (result.status >= 200 && result.status < 300) await _deduct(authUser.id, _bal, CREDIT_COST);
 
     return {
       statusCode: result.status,

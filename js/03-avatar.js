@@ -164,6 +164,13 @@
   function onAvatarImageChange(e) {
     const file = e.target.files[0];
     if (!file) return;
+    // Likeness consent gate — must confirm rights before a face photo is accepted
+    const _consent = document.getElementById('avatarConsentChk');
+    if (_consent && !_consent.checked) {
+      if (typeof showToast === 'function') showToast("Please confirm you have the right to use this person's likeness first — check the box under the photo.", 'warning', 6000);
+      e.target.value = '';
+      return;
+    }
     const reader = new FileReader();
     reader.onload = function(ev) {
       try {
@@ -219,7 +226,19 @@
         if (clearBtn) clearBtn.style.display = 'block';
       }
     }).catch(e => console.warn('loadAvatarImage error:', e));
+    // Restore the likeness-consent checkbox (once given, it stays remembered)
+    DB.get('sm_likeness_consent').then(ok => {
+      const c = document.getElementById('avatarConsentChk');
+      if (c && ok) c.checked = true;
+    }).catch(function(){});
   }
+
+  // Persist the likeness-consent choice
+  function onAvatarConsentChange() {
+    const c = document.getElementById('avatarConsentChk');
+    try { DB.set('sm_likeness_consent', !!(c && c.checked)); } catch(_) {}
+  }
+  window.onAvatarConsentChange = onAvatarConsentChange;
 
   // --- Appearance Inventory ---
   // An auto-extracted catalogue of the avatar's face, hair, clothing, and

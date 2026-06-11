@@ -19,6 +19,7 @@ const https  = require('https');
 const MODEL          = 'gemini-3.1-flash-image';
 const ANALYSIS_MODEL = 'gemini-2.0-flash';
 const GEMINI_HOST    = 'generativelanguage.googleapis.com';
+const CREDIT_COST    = 2; // credits per composite frame (tune as needed)
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -53,6 +54,23 @@ async function getAuthUser(jwt) {
   });
   if (result.status !== 200 || !result.data?.id) return null;
   return result.data;
+}
+
+// ── Supabase admin (credits) ──────────────────────────────────────────────────
+async function getAdminUser(userId) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'GET',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k } });
+  return r.status === 200 ? r.data : null;
+}
+async function updateUserMeta(userId, meta) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b   = JSON.stringify({ app_metadata: meta });
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'PUT',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  return r.status === 200;
 }
 
 // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
@@ -172,6 +190,21 @@ exports.handler = async (event) => {
   }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
+  // ── Credit gate (check upfront; deduct after a frame is produced) ──────────
+  let _composeBalance = 0;
+  {
+    const adminUser = await getAdminUser(user.id);
+    if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
+    _composeBalance = adminUser.app_metadata?.credits_balance ?? 0;
+    if (_composeBalance < CREDIT_COST) {
+      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `You're out of credits for image generation (${CREDIT_COST} per frame). Balance: ${_composeBalance}.`, balance: _composeBalance, cost: CREDIT_COST }) };
+    }
+  }
+  async function _chargeCompose() {
+    const ok = await updateUserMeta(user.id, { credits_balance: _composeBalance - CREDIT_COST });
+    if (!ok) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
+  }
+
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
@@ -251,7 +284,8 @@ exports.handler = async (event) => {
     for (const candidate of creativeResult.data.candidates || []) {
       for (const part of candidate?.content?.parts || []) {
         if (part.inlineData?.data) {
-          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png' }) };
+          await _chargeCompose();
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: CREDIT_COST }) };
         }
       }
     }
@@ -399,10 +433,11 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
       if (part.inlineData?.data) {
         const mime = part.inlineData.mimeType || 'image/png';
         console.log('generate-nb-composite: image generated, mime:', mime);
+        await _chargeCompose();
         return {
           statusCode: 200,
           headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageB64: part.inlineData.data, mime }),
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime, creditsDeducted: CREDIT_COST }),
         };
       }
     }

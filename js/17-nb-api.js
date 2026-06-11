@@ -379,7 +379,7 @@
 
   function clearHandReference() {
     window._handRefDataUrl = null;
-    try { if (typeof DB !== 'undefined' && DB && DB.del) DB.del('sm_hand_ref_img'); else if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', null); } catch(_) {}
+    try { if (typeof DB !== 'undefined' && DB && DB.remove) DB.remove('sm_hand_ref_img'); else if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', null); } catch(_) {}
     var thumb = document.getElementById('handRefThumb');
     var icon  = document.getElementById('handRefIcon');
     var hint  = document.getElementById('handRefHint');

@@ -31,6 +31,7 @@ const crypto = require('crypto');
 const LOCATION    = 'us-central1';
 const MODEL_PRO   = 'gemini-2.5-pro';
 const MODEL_FLASH = 'gemini-2.5-flash';
+const CREDIT_COST = 1; // credits per script/segment AI call (tune as needed)
 
 const CORS = {
   'Access-Control-Allow-Origin':  '*',
@@ -69,6 +70,23 @@ async function getAuthUser(jwt) {
   });
   if (result.status !== 200 || !result.data?.id) return null;
   return result.data;
+}
+
+// ── Supabase admin (credits) ──────────────────────────────────────────────────
+async function getAdminUser(userId) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'GET',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k } });
+  return r.status === 200 ? r.data : null;
+}
+async function updateUserMeta(userId, meta) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b   = JSON.stringify({ app_metadata: meta });
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'PUT',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  return r.status === 200;
 }
 
 // ── OAuth2: service account → access token (same as generate-veo-clip.js) ─────
@@ -217,6 +235,21 @@ exports.handler = async (event) => {
     catch (e) { return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Auth check failed: ' + e.message }) }; }
     if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
+    // ── Credit gate (check upfront; deduct after a successful generation) ──────
+    let _paBalance = 0;
+    {
+      const adminUser = await getAdminUser(user.id);
+      if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
+      _paBalance = adminUser.app_metadata?.credits_balance ?? 0;
+      if (_paBalance < CREDIT_COST) {
+        return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `You're out of credits (${CREDIT_COST} per AI script action). Balance: ${_paBalance}.`, balance: _paBalance, cost: CREDIT_COST }) };
+      }
+    }
+    async function _chargePa() {
+      const ok = await updateUserMeta(user.id, { credits_balance: _paBalance - CREDIT_COST });
+      if (!ok) console.error(`producer-ai: credit deduction failed for user ${user.id}`);
+    }
+
     let body;
     try { body = JSON.parse(event.body || '{}'); }
     catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
@@ -268,8 +301,9 @@ exports.handler = async (event) => {
       })).filter(s => s.spoken);
       if (!clean.length) return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no scenes.' }) };
       console.log(`producer-ai segment: user=${user.id}, scenes=${clean.length}`);
+      await _chargePa();
       return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenes: clean, model: MODEL_PRO }) };
+        body: JSON.stringify({ scenes: clean, model: MODEL_PRO, creditsDeducted: CREDIT_COST }) };
     }
 
     if (task === 'write' || task === 'revise') {
@@ -292,8 +326,9 @@ exports.handler = async (event) => {
       const out = String(text || '').trim();
       if (!out) return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no script.' }) };
       console.log(`producer-ai ${task}: user=${user.id}, chars=${out.length}`);
+      await _chargePa();
       return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ script: out, model: MODEL_PRO }) };
+        body: JSON.stringify({ script: out, model: MODEL_PRO, creditsDeducted: CREDIT_COST }) };
     }
 
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Unknown task: ' + task }) };

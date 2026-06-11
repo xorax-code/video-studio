@@ -278,8 +278,17 @@
       return;
     }
     // ── Dev domain bypass: full access for testing on dev--aiscaling.netlify.app ──
+    // Gated behind a PIN so the public dev URL doesn't hand strangers free agency access.
+    // Unlock once by visiting dev--aiscaling.netlify.app/?dev=5852 (remembered in localStorage).
     // Still restores a real Supabase session so server-side functions receive a valid JWT.
-    if (window.location.hostname === 'dev--aiscaling.netlify.app') {
+    var _devUnlock = false;
+    try {
+      var _DEV_PIN  = '5852';
+      var _devParam = new URLSearchParams(window.location.search).get('dev');
+      if (_devParam === _DEV_PIN) { try { localStorage.setItem('aff_dev_unlock', _DEV_PIN); } catch(_) {} }
+      _devUnlock = (localStorage.getItem('aff_dev_unlock') === _DEV_PIN);
+    } catch(_) {}
+    if (window.location.hostname === 'dev--aiscaling.netlify.app' && _devUnlock) {
       window._stripeTier    = 'agency';
       window._stripeBaseTier = 'agency';
       window.userCredits    = 9999; // unlimited credits for dev testing

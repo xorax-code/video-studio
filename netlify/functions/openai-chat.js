@@ -18,6 +18,27 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+const CREDIT_COST = 1; // credits per chat call (tune as needed)
+
+// Read credit balance via the Supabase admin API (returns null if unavailable → fail-open)
+async function _readBalance(userId) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || !process.env.SUPABASE_URL) return null;
+  try {
+    const r = await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.app_metadata?.credits_balance ?? 0;
+  } catch(_) { return null; }
+}
+async function _deduct(userId, balance, cost) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || balance == null) return;
+  try {
+    await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: balance - cost } }) });
+  } catch(_) {}
+}
+
 // FIX: Added JWT auth -- previously this was an open proxy; any caller could
 // make unlimited OpenAI API calls billed to the account with no authentication.
 function getAuthUser(jwt) {
@@ -74,6 +95,12 @@ exports.handler = async (event) => {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: { message: 'Invalid or expired session.' } }) };
   }
 
+  // Credit gate — block users with no credits (fail-open if balance can't be read)
+  const _bal = await _readBalance(authUser.id);
+  if (_bal != null && _bal < CREDIT_COST) {
+    return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: { message: 'Out of credits.' }, balance: _bal, cost: CREDIT_COST }) };
+  }
+
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -92,6 +119,8 @@ exports.handler = async (event) => {
     });
 
     const data = await response.json();
+
+    if (response.status >= 200 && response.status < 300) await _deduct(authUser.id, _bal, CREDIT_COST);
 
     return {
       statusCode: response.status,

@@ -602,6 +602,86 @@
     _exportWithFFmpeg(clips);
   };
 
+  // ── 1080p stitched export — server-side Cloud Transcoder concat + upscale ──
+  window.assemblerExport1080 = async function() {
+    var clips = window._assemblerClips;
+    if (!clips.length) { if (typeof showToast === 'function') showToast('Add clips to the timeline first.', 'warning'); return; }
+
+    var jwt = typeof window.getAuthToken === 'function' ? window.getAuthToken() : null;
+    if (!jwt) jwt = localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
+    if (!jwt) { if (typeof showToast === 'function') showToast('Please log in to export 1080p.', 'warning'); return; }
+
+    // Resolve each clip's cloud (GCS) source URL + trim offsets, in timeline order
+    var segs = window.segments || [];
+    var payload = [];
+    for (var i = 0; i < clips.length; i++) {
+      var c = clips[i], seg = segs[c.segIdx], src = '';
+      if (seg) {
+        if (c.extraIdx != null && c.extraIdx >= 0) {
+          var ex = seg.veoExtras && seg.veoExtras[c.extraIdx];
+          src = (ex && ex.apiVideoUrl) || '';
+        } else {
+          src = seg.apiVideoUrl || '';
+        }
+      }
+      if (!src || src.indexOf('storage.googleapis.com') === -1) {
+        if (typeof showToast === 'function') showToast('Clip ' + (i + 1) + ' (' + (c.label || '') + ') has no cloud source — regenerate that clip, then re-add it.', 'error', 9000);
+        return;
+      }
+      payload.push({
+        videoUrl: src,
+        start: (c.start > 0.05) ? c.start : null,
+        end:   (c.end < c.dur - 0.05) ? c.end : null,
+      });
+    }
+
+    var btn   = document.getElementById('assemblerExport1080Btn');
+    var btn720 = document.getElementById('assemblerExportBtn');
+    var prog  = document.getElementById('assemblerExportProgress');
+    var pBar  = document.getElementById('assemblerExportBar');
+    var pLbl  = document.getElementById('assemblerExportLabel');
+    function setProg(pct, label) { if (prog) prog.style.display = 'flex'; if (pBar) pBar.style.width = pct + '%'; if (pLbl) pLbl.textContent = label; }
+    function done(label) { if (btn) { btn.disabled = false; btn.innerHTML = label || '<i class="ti ti-sparkles" style="font-size:13px;margin-right:5px;vertical-align:-1px;"></i>1080p MP4'; } if (btn720) btn720.disabled = false; if (prog) prog.style.display = 'none'; }
+
+    if (btn)   { btn.disabled = true; btn.textContent = 'Stitching…'; }
+    if (btn720) btn720.disabled = true;
+    setProg(4, 'Starting 1080p stitch (this can take a few minutes)…');
+
+    try {
+      var createRes = await fetch('/.netlify/functions/assemble-1080p', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({ clips: payload }),
+      });
+      var createData = await createRes.json();
+      if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start the stitch job.');
+
+      var jobName = createData.jobName, outputGcsUri = createData.outputGcsUri;
+      var maxAttempts = 150, attempt = 0; // ~12.5 min ceiling
+      while (attempt < maxAttempts) {
+        await new Promise(function(r) { setTimeout(r, 5000); });
+        attempt++;
+        var pollRes = await fetch('/.netlify/functions/poll-upscale', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
+        });
+        var pollData = await pollRes.json();
+        if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Stitch job failed.');
+        if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
+          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = 'assembled-1080p.mp4'; a.click();
+          if (typeof showToast === 'function') showToast('1080p video ready — download started!', 'success', 5000);
+          done();
+          return;
+        }
+        setProg(Math.min(95, 8 + Math.round((attempt / maxAttempts) * 90)), 'Rendering 1080p video… (' + (attempt * 5) + 's)');
+      }
+      throw new Error('Stitch timed out. Try fewer clips or retry.');
+    } catch(e) {
+      console.error('[assemble-1080p]', e);
+      if (typeof showToast === 'function') showToast('1080p stitch failed: ' + (e.message || e), 'error', 9000);
+      done();
+    }
+  };
+
   // ── ZIP export — JSZip, no FFmpeg, works without COEP headers ──────────────
   async function _exportAsZip(clips) {
     var btn      = document.getElementById('assemblerExportBtn');
