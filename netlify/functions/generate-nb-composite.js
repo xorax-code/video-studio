@@ -392,7 +392,7 @@ In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure
   // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
   // consistency, while the hand POSE/grip still comes from Photo 1.
   const handRefDirective = hasHandRef
-    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand and wrist. The hand/forearm in the output MUST match that HAND REFERENCE — same skin tone, same bracelet(s), same sleeve cuff and clothing at the wrist — on this and every frame. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand's appearance, jewelry, and sleeve come from the HAND REFERENCE. Never output a bare/different hand or the original person's hand.\n\n`
+    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand, wrist, and arm. The hand/forearm in the output MUST match that HAND REFERENCE EXACTLY — same skin tone, same bracelet(s)/jewelry, and the SAME arm covering as the reference: if the reference arm is BARE (tank top / sleeveless), keep it bare and do NOT add any sleeve or cuff; only show a sleeve if the reference actually has one. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand and arm appearance come from the HAND REFERENCE. Never output a bare/different hand, the original person's hand, or an invented sleeve.\n\n`
     : '';
 
   // Product replacement directive — only when a product reference (Photo 3) is provided
@@ -440,7 +440,7 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
     parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
   }
   if (hasHandRef) {
-    parts.push({ text: 'HAND REFERENCE — the correct hand and wrist for this person (match the output hand to this: skin tone, bracelet(s), sleeve cuff and clothing at the wrist). Keep the hand POSE/grip from Photo 1, but the hand appearance comes from here:' });
+    parts.push({ text: 'HAND REFERENCE — the correct hand, wrist, and arm for this person (match the output to this exactly: skin tone, bracelet(s), and the SAME arm covering — bare arm if this reference is bare/sleeveless, sleeve only if it has one). Keep the hand POSE/grip from Photo 1, but the hand and arm appearance come from here:' });
     parts.push({ inlineData: { mimeType: handRefImg.mime, data: handRefImg.b64 } });
   }
   parts.push({ text: fullPrompt });

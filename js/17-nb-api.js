@@ -330,8 +330,9 @@
       'Generate a photorealistic vertical 9:16 CLOSE-UP of THIS exact person\'s right hand and forearm — use the skin tone, age, and ethnicity from the appearance reference photo. '
       + 'The hand is raised toward the camera, fingers gently curled as if about to hold a small product. '
       + (avDesc ? 'Person: ' + avDesc + '. ' : '')
-      + (accessory ? 'The wrist and sleeve MUST show: ' + accessory + '. ' : 'Show her bracelet(s) on the wrist and her sleeve cuff clearly. ')
-      + 'Plain soft neutral studio background, soft even lighting, realistic skin texture and wrinkles appropriate to her age. '
+      + 'CLOTHING: match her ACTUAL outfit from the reference photo. If she is wearing a tank top or sleeveless top, show a BARE arm with NO sleeve and NO cuff — do not invent or add sleeves. Only show a sleeve if her top genuinely has one. Show only the bracelet(s)/jewelry she actually wears (none if she wears none). '
+      + (accessory ? 'Appearance details for reference: ' + accessory + '. ' : '')
+      + 'Plain soft neutral studio background, soft even lighting, realistic skin texture appropriate to her age. '
       + 'ONLY the hand and forearm — NO face, NO head, NO full body, NO product. One hand only.';
 
     try {
