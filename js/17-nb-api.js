@@ -327,7 +327,8 @@
     var avDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
 
     var handInstruction =
-      'Generate a photorealistic vertical 9:16 CLOSE-UP of THIS exact person\'s right hand and forearm — use the skin tone, age, and ethnicity from the appearance reference photo. '
+      'Generate a photorealistic vertical 9:16 CLOSE-UP of THIS exact person\'s right hand and forearm — use the skin tone, age, gender, and ethnicity from the appearance reference photo. '
+      + 'Match her gender exactly: if she is a woman, it MUST be a smooth, hairless, feminine hand and forearm — NO arm hair, NO coarse/knuckle hair, no masculine features. '
       + 'The hand is raised toward the camera, fingers gently curled as if about to hold a small product. '
       + (avDesc ? 'Person: ' + avDesc + '. ' : '')
       + 'CLOTHING: match her ACTUAL outfit from the reference photo. If she is wearing a tank top or sleeveless top, show a BARE arm with NO sleeve and NO cuff — do not invent or add sleeves. Only show a sleeve if her top genuinely has one. Show only the bracelet(s)/jewelry she actually wears (none if she wears none). '
