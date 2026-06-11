@@ -259,10 +259,11 @@ async function startVertexGeneration(prompt, durationSecs, modelId, startImageB6
   const body = JSON.stringify({
     instances:  [instance],
     parameters: {
-      aspectRatio:     '9:16',
-      durationSeconds: durationSecs,
-      storageUri:      gcsBucket,   // GCS bucket for output videos
-      generateAudio:   true,        // include synchronized audio in output
+      aspectRatio:      '9:16',
+      durationSeconds:  durationSecs,
+      storageUri:       gcsBucket,   // GCS bucket for output videos
+      generateAudio:    true,        // include synchronized audio in output
+      personGeneration: 'allow_adult', // permit generating adult people (documented Vertex param)
     },
   });
 
