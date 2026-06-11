@@ -231,6 +231,12 @@
       const c = document.getElementById('avatarConsentChk');
       if (c && ok) c.checked = true;
     }).catch(function(){});
+    // Restore the Max Quality (Nano Banana Pro) preference
+    DB.get('sm_nb_max_quality').then(on => {
+      window._nbMaxQuality = !!on;
+      const q = document.getElementById('nbMaxQualityChk');
+      if (q && on) q.checked = true;
+    }).catch(function(){});
   }
 
   // Persist the likeness-consent choice
@@ -239,6 +245,15 @@
     try { DB.set('sm_likeness_consent', !!(c && c.checked)); } catch(_) {}
   }
   window.onAvatarConsentChange = onAvatarConsentChange;
+
+  // Persist the Max Quality (Nano Banana Pro) preference — read by 17-nb-api.js
+  function onNbMaxQualityChange() {
+    const q = document.getElementById('nbMaxQualityChk');
+    window._nbMaxQuality = !!(q && q.checked);
+    try { DB.set('sm_nb_max_quality', window._nbMaxQuality); } catch(_) {}
+    if (typeof showToast === 'function') showToast(window._nbMaxQuality ? 'Max Quality frames ON — 5 credits/frame (Nano Banana Pro).' : 'Max Quality off — standard frames (2 credits).', 'info', 3500);
+  }
+  window.onNbMaxQualityChange = onNbMaxQualityChange;
 
   // --- Appearance Inventory ---
   // An auto-extracted catalogue of the avatar's face, hair, clothing, and

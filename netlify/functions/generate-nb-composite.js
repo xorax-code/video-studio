@@ -15,11 +15,15 @@
  */
 
 const https  = require('https');
+const crypto = require('crypto');
 
-const MODEL          = 'gemini-3.1-flash-image';
-const ANALYSIS_MODEL = 'gemini-2.0-flash';
-const GEMINI_HOST    = 'generativelanguage.googleapis.com';
-const CREDIT_COST    = 2; // credits per composite frame (tune as needed)
+const MODEL           = 'gemini-3.1-flash-image';       // default (Flash) — Gemini Developer API
+const PRO_MODEL       = 'gemini-3-pro-image-preview';   // "Max Quality" (Nano Banana Pro) — Vertex AI
+const ANALYSIS_MODEL  = 'gemini-2.0-flash';
+const GEMINI_HOST     = 'generativelanguage.googleapis.com';
+const VERTEX_LOCATION = 'us-central1';
+const CREDIT_COST     = 2; // credits per composite frame, default Flash quality
+const CREDIT_COST_PRO = 5; // credits per composite frame, Max Quality (Pro) — ~2x the real cost
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -38,6 +42,56 @@ function httpsRequest(options, body) {
     if (body) req.write(body);
     req.end();
   });
+}
+
+// ── OAuth2: service account → access token (for Vertex AI / Pro image) ────────
+async function getAccessToken(saJson) {
+  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  const now = Math.floor(Date.now() / 1000);
+  const claim = { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now };
+  const header   = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload  = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  const unsigned = `${header}.${payload}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, 'base64url');
+  const body = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${unsigned}.${sig}`;
+  const res = await httpsRequest({
+    hostname: 'oauth2.googleapis.com', path: '/token', method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+  }, body);
+  if (res.data && res.data.access_token) return res.data.access_token;
+  throw new Error('Token exchange failed');
+}
+
+function _hasImage(data) {
+  return ((data && data.candidates) || []).some(c => ((c && c.content && c.content.parts) || []).some(p => p && p.inlineData && p.inlineData.data));
+}
+
+// Send the image request to the chosen model. When `wantPro`, try Nano Banana Pro
+// on Vertex first; on any failure (model not enabled, error, no image) fall back to
+// the Flash model on the Gemini Developer API. Returns { status, data, usedPro }.
+async function callImageModel(requestObj, apiKey, wantPro) {
+  const reqJson = JSON.stringify(requestObj);
+  if (wantPro && process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const token = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const path = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/${PRO_MODEL}:generateContent`;
+      const r = await httpsRequest({
+        hostname: `${VERTEX_LOCATION}-aiplatform.googleapis.com`, path, method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+      }, reqJson);
+      if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: true };
+      console.warn('generate-nb-composite: Pro image unavailable, falling back to Flash —', r.status, (r.data && r.data.error && r.data.error.message) || '');
+    } catch (e) {
+      console.warn('generate-nb-composite: Pro image error, falling back to Flash —', e.message);
+    }
+  }
+  const r2 = await httpsRequest({
+    hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+  }, reqJson);
+  return { status: r2.status, data: r2.data, usedPro: false };
 }
 
 // ── Supabase auth check ───────────────────────────────────────────────────────
@@ -190,24 +244,29 @@ exports.handler = async (event) => {
   }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
-  // ── Credit gate (check upfront; deduct after a frame is produced) ──────────
+  let body;
+  try { body = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
+
+  // Max Quality (Nano Banana Pro on Vertex) — costs more credits than the default Flash frame
+  const wantPro     = (body.quality === 'pro' || body.maxQuality === true);
+  const composeCost = wantPro ? CREDIT_COST_PRO : CREDIT_COST;
+
+  // ── Credit gate (check upfront; deduct the ACTUAL cost after a frame is produced) ──
   let _composeBalance = 0;
   {
     const adminUser = await getAdminUser(user.id);
     if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
     _composeBalance = adminUser.app_metadata?.credits_balance ?? 0;
-    if (_composeBalance < CREDIT_COST) {
-      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `You're out of credits for image generation (${CREDIT_COST} per frame). Balance: ${_composeBalance}.`, balance: _composeBalance, cost: CREDIT_COST }) };
+    if (_composeBalance < composeCost) {
+      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `You're out of credits for image generation (${composeCost} per ${wantPro ? 'max-quality ' : ''}frame). Balance: ${_composeBalance}.`, balance: _composeBalance, cost: composeCost }) };
     }
   }
-  async function _chargeCompose() {
-    const ok = await updateUserMeta(user.id, { credits_balance: _composeBalance - CREDIT_COST });
+  async function _chargeCompose(cost) {
+    const c = (typeof cost === 'number') ? cost : composeCost;
+    const ok = await updateUserMeta(user.id, { credits_balance: _composeBalance - c });
     if (!ok) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
   }
-
-  let body;
-  try { body = JSON.parse(event.body || '{}'); }
-  catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
   const {
     instruction    = '',
@@ -362,7 +421,9 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
   const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Avoid adding a second person, a duplicate of the subject, or any extra human figure standing or seated in the background that was not already in Photo 1. Remove any burned-in text, captions, or subtitles from the output.${faceOutOfFrame ? ' This frame is a hand/arm shot with NO person — avoid adding any face, head, hair, full body, or background person; avoid zooming out, re-framing, or changing the crop. Show only the same hand/arm holding the product.' : ''}`;
-  const fullPrompt = userPrompt + negLine;
+  // Push for a crisp, photorealistic result (Veo's start frame quality flows into the video)
+  const qualityLine = '\n\nQUALITY: ultra-sharp focus and fine natural detail; realistic skin with visible pores, texture, and subtle imperfections (never plastic, waxy, airbrushed, or over-smoothed); crisp, legible product label text; true-to-life color and lighting; shot on a professional camera, high resolution. Avoid blur, softness, low detail, banding, or an obviously AI-generated look.';
+  const fullPrompt = userPrompt + negLine + qualityLine;
 
   const parts = [];
   if (hasFrame) {
@@ -384,35 +445,26 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
   }
   parts.push({ text: fullPrompt });
 
-  const requestBody = JSON.stringify({
+  const requestObj = {
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents: [{ role: 'user', parts }],
     generationConfig: {
       responseModalities: ['IMAGE', 'TEXT'],
       temperature: 0.1,
     },
-  });
+  };
 
-  const apiPath = `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`;
-  const mode    = hasFrame ? (poseAnalysis ? 'appearance-transfer+analysis' : 'appearance-transfer') : 'generate-only';
-
-  console.log(`generate-nb-composite: user=${user.id}, model=${MODEL}, mode=${mode}, promptLen=${fullPrompt.length}`);
+  const mode = hasFrame ? (poseAnalysis ? 'appearance-transfer+analysis' : 'appearance-transfer') : 'generate-only';
+  console.log(`generate-nb-composite: user=${user.id}, mode=${mode}, wantPro=${wantPro}, promptLen=${fullPrompt.length}`);
 
   let result;
   try {
-    result = await httpsRequest({
-      hostname: GEMINI_HOST,
-      path: apiPath, method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(requestBody),
-      },
-    }, requestBody);
+    result = await callImageModel(requestObj, apiKey, wantPro);
   } catch(e) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) };
   }
 
-  console.log('generate-nb-composite: Gemini API status:', result.status);
+  console.log('generate-nb-composite: image model status:', result.status, '| usedPro:', result.usedPro);
 
   if (result.status === 429) {
     return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Gemini API rate limit. Please wait and retry.' }) };
@@ -432,12 +484,13 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
     for (const part of responseParts) {
       if (part.inlineData?.data) {
         const mime = part.inlineData.mimeType || 'image/png';
-        console.log('generate-nb-composite: image generated, mime:', mime);
-        await _chargeCompose();
+        const _cost = result.usedPro ? CREDIT_COST_PRO : CREDIT_COST;
+        console.log('generate-nb-composite: image generated, mime:', mime, '| usedPro:', result.usedPro, '| cost:', _cost);
+        await _chargeCompose(_cost);
         return {
           statusCode: 200,
           headers: { ...CORS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageB64: part.inlineData.data, mime, creditsDeducted: CREDIT_COST }),
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime, creditsDeducted: _cost, quality: result.usedPro ? 'pro' : 'flash' }),
         };
       }
     }

@@ -5,8 +5,8 @@
 
   // ── Compress image to max pixels before sending ───────────────────────────
   function _nbCompressImage(dataUrl, maxPx, quality) {
-    maxPx = maxPx || 768;
-    quality = quality || 0.78;
+    maxPx = maxPx || 1280;
+    quality = quality || 0.9;
     return new Promise(function(resolve) {
       var img = new Image();
       img.onload = function() {
@@ -64,13 +64,13 @@
     if (!jwt) { showToast('Please log in to generate NB composites.', 'warning'); return false; }
 
     // Compress images before sending
-    var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 768, 0.80);
+    var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 1280, 0.9);
     var avatarParts = _nbSplitDataUrl(avatarCompressed);
 
     var frameB64 = null, frameMime = 'image/jpeg';
     var hasFrame = !!seg.frameDataUrl;
     if (hasFrame) {
-      var frameCompressed = await _nbCompressImage(seg.frameDataUrl, 768, 0.80);
+      var frameCompressed = await _nbCompressImage(seg.frameDataUrl, 1280, 0.9);
       var frameParts = _nbSplitDataUrl(frameCompressed);
       frameB64 = frameParts.b64;
       frameMime = frameParts.mime;
@@ -86,7 +86,7 @@
       var _prodUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl)
         || window._producerProductImageUrl || null;
       if (_prodUrl && seg.showProduct) {
-        var prodCompressed = await _nbCompressImage(_prodUrl, 768, 0.80);
+        var prodCompressed = await _nbCompressImage(_prodUrl, 1280, 0.9);
         var prodParts = _nbSplitDataUrl(prodCompressed);
         productB64 = prodParts.b64;
         productMime = prodParts.mime;
@@ -104,7 +104,7 @@
         try { _handUrl = await DB.get('sm_hand_ref_img'); if (_handUrl) window._handRefDataUrl = _handUrl; } catch(_) {}
       }
       if (_handUrl && hasFrame) {
-        var handCompressed = await _nbCompressImage(_handUrl, 768, 0.80);
+        var handCompressed = await _nbCompressImage(_handUrl, 1280, 0.9);
         var handParts = _nbSplitDataUrl(handCompressed);
         handRefB64 = handParts.b64;
         handRefMime = handParts.mime;
@@ -245,6 +245,7 @@
             productMime,
             handRefB64,
             handRefMime,
+            quality: (window._nbMaxQuality ? 'pro' : 'flash'),
           }),
         });
 
@@ -336,7 +337,7 @@
     try {
       setBtn('⏳ Generating…', true);
       showToast('Generating her hand…', 'info', 4000);
-      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 768, 0.80);
+      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 1280, 0.9);
       var aParts = _nbSplitDataUrl(avatarCompressed);
       var res = await fetch('/.netlify/functions/generate-nb-composite', {
         method: 'POST',
@@ -756,7 +757,7 @@
       + 'This is the MASTER REFERENCE — all other scenes will use this exact background and lighting.';
 
     try {
-      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 768, 0.80);
+      var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 1280, 0.9);
       var avatarParts      = _nbSplitDataUrl(avatarCompressed);
 
       var res = await fetch('/.netlify/functions/generate-nb-composite', {

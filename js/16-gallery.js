@@ -248,7 +248,7 @@
         attempt++;
         var pollRes  = await fetch('/.netlify/functions/poll-upscale', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
+          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri, filename: filename }),
         });
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Upscale job failed.');
@@ -735,7 +735,7 @@
         attempt++;
         var pollRes = await fetch('/.netlify/functions/poll-upscale', {
           method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri }),
+          body: JSON.stringify({ jobName: jobName, outputGcsUri: outputGcsUri, filename: 'assembled-1080p.mp4' }),
         });
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Stitch job failed.');

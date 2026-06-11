@@ -103,7 +103,9 @@ async function getAuthUser(jwt) {
 }
 
 // ── V4 signed URL for a GCS object (1-hour expiry) ───────────────────────────
-function createSignedUrl(gcsUri, sa, expiresInSeconds) {
+// `filename`, when provided, adds a forced-download Content-Disposition so the
+// browser saves the file directly instead of navigating to it (no extra tab).
+function createSignedUrl(gcsUri, sa, expiresInSeconds, filename) {
   const exp   = expiresInSeconds || 3600;
   const match = gcsUri.match(/^gs:\/\/([^/]+)\/(.+)$/);
   if (!match) throw new Error('Invalid GCS URI: ' + gcsUri);
@@ -115,13 +117,20 @@ function createSignedUrl(gcsUri, sa, expiresInSeconds) {
   const credentialScope = dateStr + '/auto/storage/goog4_request';
   const credential      = sa.client_email + '/' + credentialScope;
   const encodedObject   = object.split('/').map(encodeURIComponent).join('/');
-  const queryParams = [
+  // Sanitize the filename and build a forced-download disposition.
+  const safeName = String(filename || 'video-1080p.mp4').replace(/[^\w.\- ]+/g, '_');
+  // NOTE: GOOG4 requires the canonical query string be sorted by name. The X-Goog-*
+  // params (uppercase 'X') sort BEFORE 'response-content-disposition' (lowercase 'r'),
+  // so the disposition param goes last.
+  const params = [
     'X-Goog-Algorithm=GOOG4-RSA-SHA256',
     'X-Goog-Credential=' + encodeURIComponent(credential),
     'X-Goog-Date=' + timeStr,
     'X-Goog-Expires=' + exp,
     'X-Goog-SignedHeaders=host',
-  ].join('&');
+    'response-content-disposition=' + encodeURIComponent('attachment; filename="' + safeName + '"'),
+  ];
+  const queryParams = params.join('&');
   const canonicalRequest = [
     'GET',
     '/' + bucket + '/' + encodedObject,
@@ -169,7 +178,7 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  const { jobName, outputGcsUri } = body;
+  const { jobName, outputGcsUri, filename } = body;
   if (!jobName) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'jobName is required.' }) };
   if (!outputGcsUri) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'outputGcsUri is required.' }) };
 
@@ -232,7 +241,7 @@ exports.handler = async (event) => {
   let downloadUrl;
   try {
     const sa = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-    downloadUrl = createSignedUrl(outputFileUri, sa, 3600); // 1-hour expiry
+    downloadUrl = createSignedUrl(outputFileUri, sa, 3600, filename); // 1-hour expiry, forced download
     console.log('poll-upscale: signed URL generated for', outputFileUri);
   } catch(e) {
     console.error('poll-upscale: signed URL error:', e.message);

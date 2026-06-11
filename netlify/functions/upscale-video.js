@@ -273,8 +273,11 @@ exports.handler = async (event) => {
 
   if (result.status !== 200 || !result.data?.name) {
     const errMsg = result.data?.error?.message || `Transcoder error (HTTP ${result.status})`;
+    if (/permission denied|cloud storage|storage|forbidden/i.test(errMsg)) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'The cloud video renderer doesn’t have access to your storage yet (one-time setup). Grant the Transcoder service agent "Storage Object Admin" on your bucket, then try again.' }) };
+    }
     if (result.status === 401 || result.status === 403) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Service account not authorized for Transcoder API. Check IAM permissions (roles/transcoder.admin).' }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'The cloud renderer isn’t authorized yet. Check the service account has the Transcoder Admin role, then try again.' }) };
     }
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
   }
