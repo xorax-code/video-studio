@@ -2257,7 +2257,8 @@
       const _fcss = document.createElement('style');
       _fcss.id = 'seg-card-floating-css';
       _fcss.textContent =
-        '.seg-card-floating:hover{transform:translateY(-4px)!important;box-shadow:0 6px 16px rgba(0,0,0,.4),0 22px 55px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)!important;border-color:rgba(99,102,241,0.38)!important;}'
+        '.seg-card-floating{transform-origin:center top;}'
+        + '.seg-card-floating:hover{transform:scale(1.14)!important;z-index:60;box-shadow:0 12px 30px rgba(0,0,0,.5),0 30px 75px rgba(0,0,0,.62),inset 0 1px 0 rgba(255,255,255,.07)!important;border-color:rgba(99,102,241,0.5)!important;}'
         + '.seg-connector{flex:0 0 26px;align-self:stretch;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;}'
         + '.seg-connector .scl{width:2px;height:38%;background:rgba(255,255,255,0.08);border-radius:2px;transition:background .15s;}'
         + '.seg-connector:hover .scl{background:rgba(99,102,241,0.65);}'
@@ -2266,7 +2267,7 @@
         + '.seg-connector .sca button{white-space:nowrap;font-size:10px;font-weight:700;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:inherit;}'
         + '.seg-connector .sca .scm{background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.42);color:#93c5fd;}'
         + '.seg-connector .sca .scc{background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.42);color:#c4b5fd;}'
-        + '#segZoomBar{position:absolute;top:8px;right:14px;z-index:40;display:flex;align-items:center;gap:4px;background:rgba(18,18,32,0.92);border:1px solid var(--border-2);border-radius:8px;padding:3px 5px;}'
+        + '#segZoomBar{position:absolute;bottom:16px;right:18px;z-index:40;display:flex;align-items:center;gap:4px;background:rgba(18,18,32,0.92);border:1px solid var(--border-2);border-radius:8px;padding:3px 5px;box-shadow:0 4px 14px rgba(0,0,0,.4);}'
         + '#segZoomBar button{width:22px;height:22px;border-radius:5px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);font-size:13px;cursor:pointer;font-family:inherit;line-height:1;}'
         + '#segZoomBar span{font-size:10px;color:var(--text-3);min-width:34px;text-align:center;font-family:monospace;}';
       document.head.appendChild(_fcss);
