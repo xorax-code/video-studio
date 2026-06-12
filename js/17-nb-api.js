@@ -325,9 +325,19 @@
     } catch(_) {}
     if (!jwt) { showToast('Please log in to lock the hand.', 'warning'); return; }
 
-    // Appearance details (skin tone, bracelet, sleeve/clothing) from the inventory
-    var accessory = '';
-    try { if (typeof getAvatarAccessoryNote === 'function') accessory = (getAvatarAccessoryNote() || '').trim(); } catch(_) {}
+    // Wrist jewelry ONLY — pull just bracelet/watch/ring-type items from the
+    // inventory's JEWELRY line. We deliberately do NOT use the full accessory
+    // note here: it lists earrings/necklaces with "keep visible", and since a
+    // hand-only shot has no ears or neck, the model satisfies that by inventing
+    // a bracelet on the wrist — which is why every hand was getting one.
+    var wristJewelry = '';
+    try {
+      var _invEl = document.getElementById('avatarInventory');
+      var _inv = ((_invEl && _invEl.value) || (typeof avatarInventory !== 'undefined' ? avatarInventory : '') || '').trim();
+      var _jline = (_inv.match(/^\s*JEWELRY\s*:\s*(.+)$/im) || [])[1] || '';
+      var _wrist = (_jline.match(/[^,;]*\b(bracelet|bangle|cuff|wristband|watch|ring)s?\b[^,;]*/ig) || []).join(', ').replace(/\s+/g, ' ').trim();
+      if (_wrist && !/^none/i.test(_wrist)) wristJewelry = _wrist;
+    } catch(_) {}
     var avDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
 
     var handInstruction =
@@ -335,8 +345,10 @@
       + 'Match her gender exactly: if she is a woman, it MUST be a smooth, hairless, feminine hand and forearm — NO arm hair, NO coarse/knuckle hair, no masculine features. '
       + 'The hand is raised toward the camera, fingers gently curled as if about to hold a small product. '
       + (avDesc ? 'Person: ' + avDesc + '. ' : '')
-      + 'CLOTHING: match her ACTUAL outfit from the reference photo. If she is wearing a tank top or sleeveless top, show a BARE arm with NO sleeve and NO cuff — do not invent or add sleeves. Only show a sleeve if her top genuinely has one. Show only the bracelet(s)/jewelry she actually wears (none if she wears none). '
-      + (accessory ? 'Appearance details for reference: ' + accessory + '. ' : '')
+      + 'CLOTHING: match her ACTUAL outfit from the reference photo. If she is wearing a tank top or sleeveless top, show a BARE arm with NO sleeve and NO cuff — do not invent or add sleeves. Only show a sleeve if her top genuinely has one. '
+      + (wristJewelry
+          ? ('Wrist/hand jewelry: show exactly ' + wristJewelry + ' — and nothing else on the wrist, hand, or fingers. ')
+          : ('Bare wrist and bare hand — NO bracelet, NO bangle, NO cuff, NO wristband, NO watch, NO rings, NO jewelry of any kind on the hand, wrist, or arm. Do NOT invent or add any wrist jewelry. '))
       + 'Plain soft neutral studio background, soft even lighting, realistic skin texture appropriate to her age. '
       + 'ONLY the hand and forearm — NO face, NO head, NO full body, NO product. One hand only.';
 
@@ -409,15 +421,28 @@
   // avatar base for every face-frame composite. Fails safe — on any error the
   // user's original photo is kept and uploads are never blocked.
   async function prepareAvatarReference(originalDataUrl) {
-    if (!originalDataUrl) return;
+    console.log('[AvatarPrep] triggered');
+    if (!originalDataUrl) { console.warn('[AvatarPrep] no image — abort'); return; }
 
-    // Auth — silently keep original if not logged in
+    // Show the status immediately so it's never a silent no-op
+    if (typeof showToast === 'function') showToast('Optimizing your avatar for video (one-time, ~2 credits)…', 'info', 6000);
+
+    // Auth — try a couple of times in case the session is mid-refresh
     var jwt = null;
     try {
       var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
-      if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
-    } catch(_) {}
-    if (!jwt) return;
+      if (_sbRef) {
+        var s = await _sbRef.auth.getSession();
+        jwt = (s && s.data && s.data.session && s.data.session.access_token) || null;
+        if (!jwt) { try { var s2 = await _sbRef.auth.refreshSession(); jwt = (s2 && s2.data && s2.data.session && s2.data.session.access_token) || null; } catch(_) {} }
+      }
+    } catch(e) { console.warn('[AvatarPrep] auth error', e); }
+    if (!jwt) {
+      console.warn('[AvatarPrep] no JWT — skipped, original photo kept');
+      if (typeof showToast === 'function') showToast('Could not optimize avatar (not signed in). Refresh, sign in, then re-upload.', 'warning', 6000);
+      return;
+    }
+    console.log('[AvatarPrep] JWT ok — calling image model…');
 
     var avDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
 
@@ -432,7 +457,6 @@
       + 'Vertical 9:16, head and shoulders, facing camera, plain soft neutral background.';
 
     try {
-      if (typeof showToast === 'function') showToast('Preparing your avatar (one-time, ~2 credits)…', 'info', 4500);
       var compressed = await _nbCompressImage(originalDataUrl, 1024, 0.9);
       var aParts = _nbSplitDataUrl(compressed);
       var res = await fetch('/.netlify/functions/generate-nb-composite', {
@@ -449,16 +473,19 @@
       });
       var data = {};
       try { data = await res.json(); } catch(_) {}
+      console.log('[AvatarPrep] composite HTTP ' + res.status + ', image=' + (!!data.imageB64) + (data.error ? ', error=' + data.error : ''));
       if (!res.ok || !data.imageB64) {
-        if (typeof showToast === 'function') showToast('Kept your original photo (avatar prep unavailable). You can still generate, but very photoreal faces may get blocked.', 'info', 6000);
+        if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + (data.error || ('HTTP ' + res.status)) + '). Very photoreal faces may get blocked by Veo.', 'warning', 8000);
         return; // graceful — original avatar stays in place
       }
       var styledUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      console.log('[AvatarPrep] success — swapping in stylized avatar');
       if (typeof window.applyPreparedAvatar === 'function') {
         window.applyPreparedAvatar(styledUrl, originalDataUrl);
       }
     } catch(e) {
-      if (typeof showToast === 'function') showToast('Kept your original photo (avatar prep error).', 'info', 5000);
+      console.warn('[AvatarPrep] exception', e);
+      if (typeof showToast === 'function') showToast('Kept your original photo (avatar prep error: ' + (e && e.message || e) + ').', 'warning', 7000);
     }
   }
   window.prepareAvatarReference = prepareAvatarReference;

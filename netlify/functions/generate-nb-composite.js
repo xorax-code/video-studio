@@ -392,7 +392,7 @@ In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure
   // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
   // consistency, while the hand POSE/grip still comes from Photo 1.
   const handRefDirective = hasHandRef
-    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand, wrist, and arm. The hand/forearm in the output MUST match that HAND REFERENCE EXACTLY — same skin tone, same smoothness, same bracelet(s)/jewelry, and the SAME arm covering as the reference: if the reference arm is BARE (tank top / sleeveless), keep it bare and do NOT add any sleeve or cuff; only show a sleeve if the reference actually has one. The arm must look like the reference's gender — if it is a woman's smooth, hairless arm, then REMOVE all arm hair, coarse hair, knuckle hair, stubble, and masculine features from the original Photo 1 arm. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand and arm appearance come ENTIRELY from the HAND REFERENCE. Never output a bare/different hand, the original person's hairy or male-looking arm, or an invented sleeve.\n\n`
+    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand, wrist, and arm. The hand/forearm in the output MUST match that HAND REFERENCE EXACTLY — same skin tone, same smoothness, the SAME wrist jewelry as the reference (if the reference wrist is BARE, keep it bare — do NOT invent or add any bracelet, bangle, cuff, watch, or ring), and the SAME arm covering as the reference: if the reference arm is BARE (tank top / sleeveless), keep it bare and do NOT add any sleeve or cuff; only show a sleeve if the reference actually has one. The arm must look like the reference's gender — if it is a woman's smooth, hairless arm, then REMOVE all arm hair, coarse hair, knuckle hair, stubble, and masculine features from the original Photo 1 arm. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand and arm appearance come ENTIRELY from the HAND REFERENCE. Never output a bare/different hand, the original person's hairy or male-looking arm, or an invented sleeve.\n\n`
     : '';
 
   // Product replacement directive — only when a product reference (Photo 3) is provided
@@ -445,7 +445,7 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
     parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
   }
   if (hasHandRef) {
-    parts.push({ text: 'HAND REFERENCE — the correct hand, wrist, and arm for this person (match the output to this exactly: skin tone, bracelet(s), and the SAME arm covering — bare arm if this reference is bare/sleeveless, sleeve only if it has one). Keep the hand POSE/grip from Photo 1, but the hand and arm appearance come from here:' });
+    parts.push({ text: 'HAND REFERENCE — the correct hand, wrist, and arm for this person (match the output to this exactly: skin tone, the SAME wrist jewelry shown here — and a BARE wrist with no bracelet/watch/ring if this reference shows none, never invent one — and the SAME arm covering — bare arm if this reference is bare/sleeveless, sleeve only if it has one). Keep the hand POSE/grip from Photo 1, but the hand and arm appearance come from here:' });
     parts.push({ inlineData: { mimeType: handRefImg.mime, data: handRefImg.b64 } });
   }
   parts.push({ text: fullPrompt });
