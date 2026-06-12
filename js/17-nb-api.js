@@ -36,30 +36,64 @@
     return { b64, mime };
   }
 
-  // ── Shared composite POST with auto-retry on rate limit ───────────────────
-  // On Vertex's Dynamic Shared Quota a 429 just means the shared pool was busy
-  // for a moment, so we back off briefly and retry, showing a cue each time.
-  // Returns { res, data }. `label` (e.g. "Hand", "Scene 3") prefixes the cue.
-  var _NB_RETRY_WAITS = [4000, 8000, 16000]; // ~4s, 8s, 16s
-  async function _nbPostComposite(bodyObj, jwt, label) {
-    var res = null, data = {};
-    for (var i = 0; i <= _NB_RETRY_WAITS.length; i++) {
-      res = await fetch('/.netlify/functions/generate-nb-composite', {
+  // ── Async composite: start a background job, then poll for the result ─────
+  // Vertex's global image endpoint runs 20-30s, past Netlify's 26s synchronous
+  // limit. So we POST to the BACKGROUND worker (returns instantly, may run 15
+  // min) and poll poll-nb-composite until the image is ready — the timeout stops
+  // mattering. Returns { res, data } in the SAME shape the old sync fetch used,
+  // so every caller works unchanged. `label` prefixes the optional "rendering…" cue.
+  async function _nbGenerateAsync(bodyObj, jwt, label) {
+    var jobId = (window.crypto && window.crypto.randomUUID)
+      ? window.crypto.randomUUID()
+      : ('job-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+
+    // 1) Kick off the background worker — returns 202 immediately.
+    try {
+      await fetch('/.netlify/functions/generate-nb-composite-background', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body:    JSON.stringify(bodyObj),
+        body:    JSON.stringify(Object.assign({ jobId: jobId }, bodyObj)),
       });
-      data = {};
-      try { data = await res.json(); } catch(_) {}
-      if (res.status !== 429) break;            // only a rate limit is worth retrying
-      if (i < _NB_RETRY_WAITS.length) {
-        var sec = Math.round(_NB_RETRY_WAITS[i] / 1000);
-        if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limit — retrying in ' + sec + 's…', 'warning', _NB_RETRY_WAITS[i]);
-        await new Promise(function (r) { setTimeout(r, _NB_RETRY_WAITS[i]); });
+    } catch (e) {
+      return { res: { ok: false, status: 0 }, data: { error: 'Could not start generation: ' + (e && e.message || e) } };
+    }
+
+    // 2) Poll for the result.
+    var POLL_MS = 3000, MAX_MS = 180000, waited = 0, toldWaiting = false;
+    while (waited < MAX_MS) {
+      await new Promise(function (r) { setTimeout(r, POLL_MS); });
+      waited += POLL_MS;
+      var pr = null, pd = {};
+      try {
+        pr = await fetch('/.netlify/functions/poll-nb-composite', {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body:    JSON.stringify({ jobId: jobId }),
+        });
+        try { pd = await pr.json(); } catch(_) { pd = {}; }
+      } catch(_) { continue; } // transient network blip → keep polling
+      if (pd.status === 'done') {
+        return { res: { ok: true, status: 200 }, data: { imageB64: pd.imageB64, mime: pd.mime, quality: pd.quality, creditsDeducted: pd.credits } };
+      }
+      if (pd.status === 'error') {
+        return { res: { ok: false, status: pd.code || 502 }, data: { error: pd.error || 'Generation failed' } };
+      }
+      // still pending — one gentle cue for long renders
+      if (!toldWaiting && waited >= 12000 && typeof showToast === 'function') {
+        toldWaiting = true;
+        showToast((label ? label + ': ' : '') + 'still rendering…', 'info', 4000);
       }
     }
-    return { res: res, data: data };
+    return { res: { ok: false, status: 504 }, data: { error: 'Generation timed out (no result after polling).' } };
   }
+  window._nbGenerateAsync = _nbGenerateAsync;
+
+  // Back-compat wrapper — existing callers (hand ref, Producer, Flow Studio) keep
+  // calling _nbPostComposite and transparently get the async start+poll flow.
+  function _nbPostComposite(bodyObj, jwt, label) {
+    return _nbGenerateAsync(bodyObj, jwt, label);
+  }
+  window._nbPostComposite = _nbPostComposite;
   window._nbPostComposite = _nbPostComposite;
 
   // ── Generate NB composite for a single segment ────────────────────────────
@@ -252,87 +286,44 @@
       instruction += ' PRODUCT REPLACE (critical): The object held in the hand must be REPLACED with the product shown in Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose, but the held product\'s shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep or blend the original product from the scene frame.';
     }
 
-    // ── Request with 429 retry-backoff ───────────────────────────────────────
-    // On Vertex Dynamic Shared Quota a 429 just means the shared pool was busy
-    // for a moment and clears in seconds — so we back off briefly, not for minutes.
-    var _NB_MAX_RETRIES = 3;
-    var _NB_RETRY_BASE  = 4000; // 4s initial wait; doubles each retry (4s, 8s, 16s)
+    // ── Generate via the async background worker (no 26s timeout) ────────────
+    // Starts the background job and polls for the image; slow Vertex global gens
+    // (20-30s) no longer trip Netlify's function limit.
+    var _ar = await _nbGenerateAsync({
+      instruction,
+      avatarDesc:     _avatarDesc,
+      negativePrompt: _nbNegativePrompt,
+      avatarB64:      avatarParts.b64,
+      avatarMime:     avatarParts.mime,
+      frameB64,
+      frameMime,
+      productB64,
+      productMime,
+      handRefB64,
+      handRefMime,
+      quality: (window._nbMaxQuality ? 'pro' : 'flash'),
+    }, jwt, 'Scene ' + (segIdx + 1));
+    var res = _ar.res, data = _ar.data;
 
-    for (var _attempt = 0; _attempt <= _NB_MAX_RETRIES; _attempt++) {
-      try {
-        var res = await fetch('/.netlify/functions/generate-nb-composite', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body: JSON.stringify({
-            instruction,
-            avatarDesc:     _avatarDesc,
-            negativePrompt: _nbNegativePrompt,
-            avatarB64:      avatarParts.b64,
-            avatarMime:     avatarParts.mime,
-            frameB64,
-            frameMime,
-            productB64,
-            productMime,
-            handRefB64,
-            handRefMime,
-            quality: (window._nbMaxQuality ? 'pro' : 'flash'),
-          }),
-        });
-
-        var data;
-        try { data = await res.json(); } catch(_) { data = {}; }
-
-        // 429 = Vertex AI rate limit — wait and retry
-        if (res.status === 429) {
-          if (_attempt < _NB_MAX_RETRIES) {
-            var _waitMs = _NB_RETRY_BASE * Math.pow(2, _attempt);
-            var _waitSec = Math.round(_waitMs / 1000);
-            console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' — 429 rate limit, waiting ' + _waitSec + 's before retry ' + (_attempt + 1) + '/' + _NB_MAX_RETRIES);
-            showToast('Scene ' + (segIdx + 1) + ': Vertex AI rate limit — retrying in ' + _waitSec + 's…', 'warning', _waitMs);
-            await new Promise(function(r) { setTimeout(r, _waitMs); });
-            continue; // retry
-          }
-          // Exhausted retries
-          var _rateMsg = (data && data.error) || 'Vertex AI rate limit exceeded. Try again in a minute.';
-          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — 429 after ' + _NB_MAX_RETRIES + ' retries:', _rateMsg);
-          showToast('NB gen failed (Scene ' + (segIdx + 1) + '): rate limit — try again in ~1 min.', 'error', 12000);
-          return false;
-        }
-
-        if (!res.ok || data.error) {
-          var msg = data.error || ('HTTP ' + res.status);
-          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed — HTTP ' + res.status + ' | Error:', msg, '| Full response:', JSON.stringify(data));
-          showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
-          return false;
-        }
-
-        if (!data.imageB64) {
-          var noImgMsg = data.error || data.message || 'No image returned (safety filter or bad response)';
-          console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image in response. Full response:', JSON.stringify(data));
-          showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
-          return false;
-        }
-
-        // Store composite in segment
-        segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
-        segments[segIdx].nbApproved = null; // reset approval — needs re-review
-
-        saveSegments();
-        if (typeof renderSegments === 'function') renderSegments();
-
-        return true;
-
-      } catch(e) {
-        if (_attempt < _NB_MAX_RETRIES) {
-          console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' fetch error, retrying:', e.message);
-          await new Promise(function(r) { setTimeout(r, 5000); });
-          continue;
-        }
-        showToast('NB gen error (Scene ' + (segIdx + 1) + '): ' + (e.message || e), 'error', 6000);
-        return false;
-      }
+    if (!res.ok || data.error) {
+      var msg = data.error || ('HTTP ' + res.status);
+      console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed:', msg);
+      showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
+      return false;
     }
-    return false;
+    if (!data.imageB64) {
+      var noImgMsg = data.error || 'No image returned (safety filter or bad response)';
+      console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image:', noImgMsg);
+      showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
+      return false;
+    }
+
+    // Store composite in segment
+    segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+    segments[segIdx].nbApproved = null; // reset approval — needs re-review
+    saveSegments();
+    if (typeof renderSegments === 'function') renderSegments();
+    return true;
   }
   window.generateNbComposite = generateNbComposite;
 
@@ -480,40 +471,20 @@
     try {
       var compressed = await _nbCompressImage(originalDataUrl, 1024, 0.9);
       var aParts = _nbSplitDataUrl(compressed);
-      var reqBody = JSON.stringify({
+      // Async start+poll (same as the frame generation) — no 26s timeout.
+      var _ar = await _nbGenerateAsync({
         instruction: instruction,
         avatarDesc:  avDesc,
         avatarB64:   aParts.b64,
         avatarMime:  aParts.mime,
         // no quality:'pro' → Flash model (less photoreal = more likely to pass)
         // no frame → generate mode produces the stylized portrait from the avatar
-      });
-
-      // The default Flash composite runs on the Gemini Developer API, which has
-      // tight per-minute/per-day image caps. Per-minute limits reset quickly, so
-      // on a 429 we wait and retry instead of dropping back to the photoreal photo.
-      var waits = [0, 12000, 22000];
-      var res = null, data = {};
-      for (var attempt = 0; attempt < waits.length; attempt++) {
-        if (waits[attempt]) {
-          if (typeof showToast === 'function') showToast('Image model is rate-limited — retrying in ' + (waits[attempt] / 1000) + 's…', 'info', waits[attempt]);
-          await new Promise(function (r) { setTimeout(r, waits[attempt]); });
-        }
-        res = await fetch('/.netlify/functions/generate-nb-composite', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body: reqBody,
-        });
-        data = {};
-        try { data = await res.json(); } catch(_) {}
-        console.log('[AvatarPrep] attempt ' + (attempt + 1) + ' → HTTP ' + res.status + ', image=' + (!!data.imageB64) + (data.error ? ', error=' + data.error : ''));
-        if (res.status !== 429) break; // only a rate limit is worth retrying
-      }
+      }, jwt, 'Avatar');
+      var res = _ar.res, data = _ar.data;
+      console.log('[AvatarPrep] result → ok=' + (res && res.ok) + ', image=' + (!!(data && data.imageB64)) + (data && data.error ? ', error=' + data.error : ''));
 
       if (!res || !res.ok || !data.imageB64) {
-        var why = (res && res.status === 429)
-          ? 'Gemini image quota is maxed right now'
-          : (data.error || ('HTTP ' + (res ? res.status : '?')));
+        var why = (data && data.error) || ('HTTP ' + (res ? res.status : '?'));
         if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + why + '). Wait a minute and re-upload. Very photoreal faces may get blocked by Veo until it succeeds.', 'warning', 9000);
         return; // graceful — original avatar stays in place
       }
@@ -589,22 +560,27 @@
     var n = toGen.length;
     _nbOpenProgress(n);
 
-    for (var i = 0; i < n; i++) {
-      var seg = toGen[i];
-      var segIdx = segments.indexOf(seg);
-
-      // Update button label + progress panel
-      if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> ' + (i + 1) + '/' + n + '…';
-      _nbSetFrameStatus(i, 'generating');
-
-      var ok = await generateNbComposite(segIdx);
-      if (ok) succeeded++; else failed++;
-      _nbSetFrameStatus(i, ok ? 'done' : 'error', succeeded + failed, n);
-
-      // Delay between requests — Vertex AI image generation quota is ~5 QPM.
-      // 15s spacing keeps us well under the limit regardless of generation time.
-      if (i < n - 1) await new Promise(function(r) { setTimeout(r, 15000); });
+    // Generate several frames concurrently. Vertex Dynamic Shared Quota handles
+    // parallel requests, and each frame already retries on a brief 429 — so the
+    // old one-at-a-time + 15s spacing (left over from the legacy ~5/min fixed
+    // quota) is gone. A small worker pool keeps it fast without bursting too hard.
+    var _CONCURRENCY = 2; // 2-wide: parallel speed without DSQ throughput contention pushing gens past the 26s cap
+    var _next = 0;
+    async function _nbWorker() {
+      while (true) {
+        var i = _next++;
+        if (i >= n) break;
+        var segIdx = segments.indexOf(toGen[i]);
+        _nbSetFrameStatus(i, 'generating');
+        var ok = await generateNbComposite(segIdx);
+        if (ok) succeeded++; else failed++;
+        _nbSetFrameStatus(i, ok ? 'done' : 'error', succeeded + failed, n);
+        if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> ' + (succeeded + failed) + '/' + n + '…';
+      }
     }
+    var _workers = [];
+    for (var _w = 0; _w < Math.min(_CONCURRENCY, n); _w++) _workers.push(_nbWorker());
+    await Promise.all(_workers);
 
     _nbCloseProgress();
     if (btn) { btn.disabled = false; btn.innerHTML = origLabel; }

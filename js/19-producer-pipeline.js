@@ -233,8 +233,8 @@
           _ppSetPhase(segIdx, 'nb',  'error',   'Failed — check credits/quota');
           _ppSetPhase(segIdx, 'veo', 'skipped', 'Skipped (no frame)');
           _ppUpdateProgress(nbDone, veoDone + veoFail, total, totalVeoJobs);
-          // Still wait before next NB request
-          if (i < toRun.length - 1) await new Promise(function (r) { setTimeout(r, 15000); });
+          // Brief spacing before next NB request (DSQ handles concurrency)
+          if (i < toRun.length - 1) await new Promise(function (r) { setTimeout(r, 1500); });
           continue;
         }
 
@@ -327,9 +327,9 @@
           })(seg, segIdx, extra, extraDur, extraJ + 2);
         });
 
-        // 15 s gap between NB requests (skip after last segment)
+        // Brief gap between NB requests — DSQ handles concurrency (was 15s for the legacy fixed quota)
         if (i < toRun.length - 1) {
-          await new Promise(function (r) { setTimeout(r, 15000); });
+          await new Promise(function (r) { setTimeout(r, 1500); });
         }
       }
 

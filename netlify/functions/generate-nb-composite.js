@@ -269,7 +269,7 @@ function buildLockBlock(pa, skipProp) {
   return lines.join('\n');
 }
 
-exports.handler = async (event) => {
+const runComposite = async (event) => {
   const CORS = {
     'Access-Control-Allow-Origin':  '*',
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
@@ -578,3 +578,10 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
     };
   }
 };
+
+// Sync handler (kept for the Studio/creative path) + exports reused by the
+// background worker. runComposite(event) returns the same { statusCode, headers,
+// body } shape; the background function reads body for the image and stores it.
+exports.handler     = runComposite;
+exports.runComposite = runComposite;
+exports.getAuthUser  = getAuthUser;
