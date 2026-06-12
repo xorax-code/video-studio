@@ -47,6 +47,13 @@ exports.handler = async (event) => {
   const jobId = body.jobId;
   if (!jobId) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'jobId required.' }) };
 
+  // Opportunistic cleanup of stale rows (fire-and-forget) so the table can't grow
+  // unbounded from jobs that timed out or whose client navigated away before reading.
+  try {
+    const cutoff = new Date(Date.now() - 3600000).toISOString();
+    sb('nb_jobs?created_at=lt.' + encodeURIComponent(cutoff), { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } }).catch(function(){});
+  } catch(_) {}
+
   let rows = [];
   try {
     const r = await sb(`nb_jobs?id=eq.${encodeURIComponent(jobId)}&select=*`, { method: 'GET' });
@@ -57,8 +64,9 @@ exports.handler = async (event) => {
   }
 
   if (!Array.isArray(rows) || !rows.length) {
-    // No row yet — the background worker hasn't written one. Keep polling.
-    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'pending' }) };
+    // No row yet — the background worker hasn't written one. exists:false lets the
+    // client tell "worker never started" from "still rendering".
+    return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'pending', exists: false }) };
   }
 
   const job = rows[0];
@@ -83,5 +91,5 @@ exports.handler = async (event) => {
     };
   }
 
-  return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'pending' }) };
+  return { statusCode: 200, headers: CORS, body: JSON.stringify({ status: 'pending', exists: true }) };
 };

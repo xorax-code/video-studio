@@ -42,14 +42,17 @@
   // min) and poll poll-nb-composite until the image is ready — the timeout stops
   // mattering. Returns { res, data } in the SAME shape the old sync fetch used,
   // so every caller works unchanged. `label` prefixes the optional "rendering…" cue.
-  async function _nbGenerateAsync(bodyObj, jwt, label) {
+  // Run ONE async job: start the background worker, then poll for the result.
+  // Returns { res:{ok,status}, data:{imageB64,mime,quality,creditsDeducted,error} }.
+  async function _nbRunOneJob(bodyObj, jwt, label) {
     var jobId = (window.crypto && window.crypto.randomUUID)
       ? window.crypto.randomUUID()
       : ('job-' + Date.now() + '-' + Math.random().toString(36).slice(2));
 
-    // 1) Kick off the background worker — returns 202 immediately.
+    // 1) Kick off the background worker.
+    var startRes;
     try {
-      await fetch('/.netlify/functions/generate-nb-composite-background', {
+      startRes = await fetch('/.netlify/functions/generate-nb-composite-background', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
         body:    JSON.stringify(Object.assign({ jobId: jobId }, bodyObj)),
@@ -57,9 +60,16 @@
     } catch (e) {
       return { res: { ok: false, status: 0 }, data: { error: 'Could not start generation: ' + (e && e.message || e) } };
     }
+    // A non-2xx on the START call is a real failure (bad auth, server error) — surface
+    // it instead of polling a job that never got enqueued.
+    if (!startRes.ok) {
+      var sd = {};
+      try { sd = await startRes.json(); } catch(_) {}
+      return { res: { ok: false, status: startRes.status }, data: { error: sd.error || sd.message || ('Could not start generation (HTTP ' + startRes.status + ')') } };
+    }
 
     // 2) Poll for the result.
-    var POLL_MS = 3000, MAX_MS = 180000, waited = 0, toldWaiting = false;
+    var POLL_MS = 3000, MAX_MS = 180000, waited = 0, toldWaiting = false, sawRow = false, noRow = 0;
     while (waited < MAX_MS) {
       await new Promise(function (r) { setTimeout(r, POLL_MS); });
       waited += POLL_MS;
@@ -70,21 +80,49 @@
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
           body:    JSON.stringify({ jobId: jobId }),
         });
-        try { pd = await pr.json(); } catch(_) { pd = {}; }
       } catch(_) { continue; } // transient network blip → keep polling
+      // Hard auth / ownership / not-found are terminal — don't spin for 3 minutes.
+      if (pr.status === 401 || pr.status === 403 || pr.status === 404) {
+        var ed = {};
+        try { ed = await pr.json(); } catch(_) {}
+        return { res: { ok: false, status: pr.status }, data: { error: ed.error || ('Poll failed (HTTP ' + pr.status + ')') } };
+      }
+      if (!pr.ok) continue; // transient 5xx → keep polling
+      try { pd = await pr.json(); } catch(_) { pd = {}; }
       if (pd.status === 'done') {
         return { res: { ok: true, status: 200 }, data: { imageB64: pd.imageB64, mime: pd.mime, quality: pd.quality, creditsDeducted: pd.credits } };
       }
       if (pd.status === 'error') {
         return { res: { ok: false, status: pd.code || 502 }, data: { error: pd.error || 'Generation failed' } };
       }
-      // still pending — one gentle cue for long renders
+      // Still pending. The worker writes a 'pending' row almost immediately, so if no
+      // row EVER appears, background functions probably aren't running on this site.
+      if (pd.exists === false) { noRow++; } else { sawRow = true; noRow = 0; }
+      if (!sawRow && noRow >= 8) { // ~24s with no row at all
+        return { res: { ok: false, status: 503 }, data: { error: 'Generation never started — background functions may be disabled for this site (check the Netlify plan).' } };
+      }
       if (!toldWaiting && waited >= 12000 && typeof showToast === 'function') {
         toldWaiting = true;
         showToast((label ? label + ': ' : '') + 'still rendering…', 'info', 4000);
       }
     }
     return { res: { ok: false, status: 504 }, data: { error: 'Generation timed out (no result after polling).' } };
+  }
+
+  // Public entry: runs a job and auto-retries the WHOLE job on a rate limit (429).
+  // A 429 produced no image and charged nothing, so re-submitting is safe.
+  async function _nbGenerateAsync(bodyObj, jwt, label) {
+    var RL_WAITS = [0, 6000, 12000]; // up to 3 attempts
+    var out;
+    for (var a = 0; a < RL_WAITS.length; a++) {
+      if (RL_WAITS[a]) {
+        if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limited — retrying in ' + (RL_WAITS[a] / 1000) + 's…', 'warning', RL_WAITS[a]);
+        await new Promise(function (r) { setTimeout(r, RL_WAITS[a]); });
+      }
+      out = await _nbRunOneJob(bodyObj, jwt, label);
+      if (!(out.res && out.res.status === 429) || a === RL_WAITS.length - 1) return out;
+    }
+    return out;
   }
   window._nbGenerateAsync = _nbGenerateAsync;
 

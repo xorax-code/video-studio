@@ -300,8 +300,8 @@
       times.push({ start: t, end: Math.min(t + interval, dur) });
     }
     const _sc1 = document.getElementById('segmentsContainer');
-    if (_sc1) _sc1.innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>';
+    if (_sc1) { _sc1.style.cssText = 'flex:1;overflow:auto;padding:14px;';
+      _sc1.innerHTML = '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + times.length + '</span></div>'; }
     const savedPlayhead = videoEl.currentTime;
     for (let i = 0; i < times.length; i++) {
       const frameDataUrl = await captureFrame(times[i].start);
@@ -378,8 +378,8 @@
     canvas.height = thumbH;
 
     const _sc2 = document.getElementById('segmentsContainer');
-    if (_sc2) _sc2.innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">🎞 Scanning for scene cuts &amp; object changes… <span id="captureProgress">0%</span></div>';
+    if (_sc2) { _sc2.style.cssText = 'flex:1;overflow:auto;padding:14px;';
+      _sc2.innerHTML = '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">🎞 Scanning for scene cuts &amp; object changes… <span id="captureProgress">0%</span></div>'; }
 
     const cutTimes = [0];
     let prevData = null;
@@ -479,8 +479,8 @@
 
     // Capture start frames at full resolution
     const _sc3 = document.getElementById('segmentsContainer');
-    if (_sc3) _sc3.innerHTML =
-      '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + segments.length + '</span></div>';
+    if (_sc3) { _sc3.style.cssText = 'flex:1;overflow:auto;padding:14px;';
+      _sc3.innerHTML = '<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">Capturing frames… <span id="captureProgress">0/' + segments.length + '</span></div>'; }
 
     canvas.width = videoEl.videoWidth || 360;
     canvas.height = videoEl.videoHeight || 640;
@@ -1263,6 +1263,26 @@
     }, 80);
     showToast('Seg ' + (segIdx + 2) + ' script added as continuation clip on Seg ' + (segIdx + 1) + '.', 'success', 3000);
   }
+
+  // Fold the NEXT segment INTO this one as a continuation clip, then remove it.
+  // Used by the between-card "🔗 Cont." connector: the right scene becomes a
+  // continuation clip of the left scene (same start frame, its script as speech).
+  function foldNextAsContinuation(i) {
+    var src = segments[i + 1];
+    if (!src) { showToast('No next segment to fold in.', 'warning'); return; }
+    var speech = (src.script || '').trim();
+    if (!speech) { showToast('Seg ' + (i + 2) + ' has no script yet — add it first.', 'warning'); return; }
+    pushUndo('Fold Seg ' + (i + 2) + ' into Seg ' + (i + 1));
+    if (!segments[i].veoExtras) segments[i].veoExtras = [];
+    segments[i].veoExtras.push({ speech: '', action: '', veoPrompt: '' });
+    var extraIdx = segments[i].veoExtras.length - 1;
+    updateVeoExtraSpeech(i, extraIdx, speech); // sets speech + builds the continuation Veo 3 JSON
+    segments.splice(i + 1, 1);                  // remove the source scene — now a continuation of i
+    renderSegments();
+    saveSegments();
+    showToast('Seg ' + (i + 2) + ' folded into Seg ' + (i + 1) + ' as a continuation clip.', 'success', 3500);
+  }
+  window.foldNextAsContinuation = foldNextAsContinuation;
 
   // --- Copy NB Global Rules — paste this into the NB agent FIRST, before any batch ---
   function copyNBGlobalRules() {
@@ -2170,6 +2190,39 @@
     strip.innerHTML = `<div style="display:flex;gap:2px;align-items:center;">${blocks}</div>`;
   }
 
+  // ── Timeline zoom (semantic overview ↔ edit) ─────────────────────────────
+  // Uses the CSS `zoom` property so the scroll area stays correct (unlike a
+  // transform). 0.4 = wide overview of every scene, 1 = full editable cards.
+  function setSegZoom(z) {
+    z = Math.max(0.4, Math.min(1, Math.round(z * 100) / 100));
+    window._segZoom = z;
+    var c = document.getElementById('segmentsContainer');
+    if (c) c.style.zoom = z;
+    var lbl = document.getElementById('segZoomLbl');
+    if (lbl) lbl.textContent = Math.round(z * 100) + '%';
+  }
+  window.setSegZoom = setSegZoom;
+
+  function _ensureSegZoomControl() {
+    var c = document.getElementById('segmentsContainer');
+    if (!c || !c.parentElement) return;
+    var parent = c.parentElement;
+    if (getComputedStyle(parent).position === 'static') parent.style.position = 'relative';
+    if (document.getElementById('segZoomBar')) return;
+    var bar = document.createElement('div');
+    bar.id = 'segZoomBar';
+    bar.innerHTML =
+      '<button title="Zoom out (Ctrl + scroll)" onclick="setSegZoom((window._segZoom||1)-0.1)">−</button>'
+      + '<span id="segZoomLbl">' + Math.round((window._segZoom || 1) * 100) + '%</span>'
+      + '<button title="Zoom in (Ctrl + scroll)" onclick="setSegZoom((window._segZoom||1)+0.1)">+</button>';
+    parent.appendChild(bar);
+    c.addEventListener('wheel', function (e) {
+      if (!(e.ctrlKey || e.metaKey)) return; // Ctrl/Cmd + wheel zooms; plain wheel scrolls
+      e.preventDefault();
+      setSegZoom((window._segZoom || 1) + (e.deltaY < 0 ? 0.1 : -0.1));
+    }, { passive: false });
+  }
+
   function renderSegments() {
     const container = document.getElementById('segmentsContainer');
     const countEl = document.getElementById('segmentCount');
@@ -2195,17 +2248,32 @@
       setVideoMini(true);
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
-    container.style.cssText = 'flex:1;overflow-y:auto;overflow-x:hidden;padding:14px;display:grid;grid-template-columns:repeat(auto-fill,minmax(380px,1fr));gap:14px;align-content:start;';
-    // Inject floating card hover CSS once
+    if (typeof window._segZoom !== 'number') window._segZoom = 1;
+    // Horizontal timeline track (ordered left→right) with zoom for the overview.
+    container.style.cssText = 'flex:1;overflow-x:auto;overflow-y:auto;padding:14px;display:flex;flex-direction:row;gap:0;align-items:flex-start;zoom:' + window._segZoom + ';';
+    _ensureSegZoomControl();
+    // Inject floating-card hover CSS + between-card connector + zoom-bar CSS once
     if (!document.getElementById('seg-card-floating-css')) {
       const _fcss = document.createElement('style');
       _fcss.id = 'seg-card-floating-css';
-      _fcss.textContent = '.seg-card-floating:hover{transform:translateY(-4px)!important;box-shadow:0 6px 16px rgba(0,0,0,.4),0 22px 55px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)!important;border-color:rgba(99,102,241,0.38)!important;}';
+      _fcss.textContent =
+        '.seg-card-floating:hover{transform:translateY(-4px)!important;box-shadow:0 6px 16px rgba(0,0,0,.4),0 22px 55px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.06)!important;border-color:rgba(99,102,241,0.38)!important;}'
+        + '.seg-connector{flex:0 0 26px;align-self:stretch;display:flex;align-items:center;justify-content:center;position:relative;cursor:pointer;}'
+        + '.seg-connector .scl{width:2px;height:38%;background:rgba(255,255,255,0.08);border-radius:2px;transition:background .15s;}'
+        + '.seg-connector:hover .scl{background:rgba(99,102,241,0.65);}'
+        + '.seg-connector .sca{position:absolute;top:30px;left:50%;transform:translateX(-50%);display:none;flex-direction:column;gap:5px;z-index:30;background:rgba(18,18,32,0.98);border:1px solid rgba(99,102,241,0.45);border-radius:9px;padding:7px;box-shadow:0 10px 30px rgba(0,0,0,.55);}'
+        + '.seg-connector:hover .sca{display:flex;}'
+        + '.seg-connector .sca button{white-space:nowrap;font-size:10px;font-weight:700;padding:6px 10px;border-radius:6px;cursor:pointer;font-family:inherit;}'
+        + '.seg-connector .sca .scm{background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.42);color:#93c5fd;}'
+        + '.seg-connector .sca .scc{background:rgba(167,139,250,0.12);border:1px solid rgba(167,139,250,0.42);color:#c4b5fd;}'
+        + '#segZoomBar{position:absolute;top:8px;right:14px;z-index:40;display:flex;align-items:center;gap:4px;background:rgba(18,18,32,0.92);border:1px solid var(--border-2);border-radius:8px;padding:3px 5px;}'
+        + '#segZoomBar button{width:22px;height:22px;border-radius:5px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);font-size:13px;cursor:pointer;font-family:inherit;line-height:1;}'
+        + '#segZoomBar span{font-size:10px;color:var(--text-3);min-width:34px;text-align:center;font-family:monospace;}';
       document.head.appendChild(_fcss);
     }
     container.innerHTML = segments.map((seg, i) => `
       <div id="seg-card-${i}" class="seg-card-floating"
-        style="display:flex;flex-direction:column;gap:7px;width:100%;border:1px solid ${seg.done ? 'rgba(34,197,94,0.55)' : 'rgba(255,255,255,0.07)'};border-radius:14px;padding:12px;background:${seg.done ? 'rgba(34,197,94,0.07)' : 'linear-gradient(145deg,rgba(24,24,40,0.94) 0%,rgba(14,14,26,0.97) 100%)'};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:relative;box-shadow:0 2px 4px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.04);transition:transform 0.22s cubic-bezier(.22,.68,0,1.2),box-shadow 0.22s,border-color 0.2s;">
+        style="display:flex;flex-direction:column;gap:7px;width:380px;flex:0 0 380px;border:1px solid ${seg.done ? 'rgba(34,197,94,0.55)' : 'rgba(255,255,255,0.07)'};border-radius:14px;padding:12px;background:${seg.done ? 'rgba(34,197,94,0.07)' : 'linear-gradient(145deg,rgba(24,24,40,0.94) 0%,rgba(14,14,26,0.97) 100%)'};backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);position:relative;box-shadow:0 2px 4px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.38),inset 0 1px 0 rgba(255,255,255,.04);transition:transform 0.22s cubic-bezier(.22,.68,0,1.2),box-shadow 0.22s,border-color 0.2s;">
 
         <!-- Card header: seg# + time badge + done badge + remove -->
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
@@ -2456,18 +2524,16 @@
           <button onclick="addVeoExtra(${i})" style="width:100%;padding:5px 0;font-size:10px;font-weight:600;background:rgba(99,102,241,0.07);border:1px solid rgba(99,102,241,0.25);border-radius:5px;color:rgba(129,140,248,0.85);cursor:pointer;font-family:inherit;margin-top:${(seg.veoExtras && seg.veoExtras.length > 0) ? '6px' : '4px'};">＋ Add Continuation Clip</button>
         </div>
 
-        <!-- Card footer: Merge + Continue buttons -->
-        ${i < segments.length - 1 ? `
-        <div style="display:flex;gap:5px;border-top:1px solid rgba(255,255,255,0.05);padding-top:8px;margin-top:2px;">
-          <button onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2}" style="flex:1;background:rgba(96,165,250,0.1);border:1px solid rgba(96,165,250,0.35);border-radius:5px;color:#93c5fd;font-size:9px;font-weight:600;padding:4px 0;cursor:pointer;font-family:inherit;">⊕ Merge ↓</button>
-          <button onclick="addVeoExtraFromNextSeg(${i})" title="Add next seg as continuation clip" style="flex:1;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.32);border-radius:5px;color:#c4b5fd;font-size:9px;font-weight:600;padding:4px 0;cursor:pointer;font-family:inherit;">＋ Cont. ↓</button>
-        </div>` : ''}
+        <!-- Merge/Continuation moved to the between-card connector (renders between cards) -->
 
       </div>
       ${i < segments.length - 1 ? `
-      <div style="display:none;">
-        <button onclick="mergeSegments(${i},${i+1})">⊕ Merge</button>
-        <button onclick="addVeoExtraFromNextSeg(${i})">＋ Cont.</button>
+      <div class="seg-connector" title="Merge or chain these two scenes">
+        <div class="scl"></div>
+        <div class="sca">
+          <button class="scm" onclick="mergeSegments(${i},${i+1})" title="Merge Seg ${i+1} + Seg ${i+2} into one clip">⊕ Merge</button>
+          <button class="scc" onclick="foldNextAsContinuation(${i})" title="Make Seg ${i+2} a continuation clip of Seg ${i+1}">🔗 Cont.</button>
+        </div>
       </div>` : ''}
 `).join('');
 

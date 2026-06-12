@@ -306,6 +306,10 @@ const runComposite = async (event) => {
   // Max Quality (Nano Banana Pro on Vertex) — costs more credits than the default Flash frame
   const wantPro     = (body.quality === 'pro' || body.maxQuality === true);
   const composeCost = wantPro ? CREDIT_COST_PRO : CREDIT_COST;
+  // Async path: the background worker charges AFTER it has persisted the image to
+  // nb_jobs, so a crash/timeout can't charge-without-delivering. In that mode we
+  // still credit-GATE here (block if balance too low) but skip the live deduction.
+  const deferCharge = (body.deferCharge === true);
 
   // Pre-fetch a Vertex access token once — shared by the image model and the pose
   // analysis. Null if Vertex isn't configured or the token exchange fails; both
@@ -327,6 +331,7 @@ const runComposite = async (event) => {
     }
   }
   async function _chargeCompose(cost) {
+    if (deferCharge) return; // background worker deducts after the image is persisted
     const c = (typeof cost === 'number') ? cost : composeCost;
     const ok = await updateUserMeta(user.id, { credits_balance: _composeBalance - c });
     if (!ok) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
@@ -582,6 +587,18 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
 // Sync handler (kept for the Studio/creative path) + exports reused by the
 // background worker. runComposite(event) returns the same { statusCode, headers,
 // body } shape; the background function reads body for the image and stores it.
-exports.handler     = runComposite;
-exports.runComposite = runComposite;
-exports.getAuthUser  = getAuthUser;
+// Credit charge used by the background worker AFTER the image is persisted to
+// nb_jobs (so a failure can never charge-without-delivering).
+async function chargeUserCredits(userId, cost) {
+  try {
+    const admin = await getAdminUser(userId);
+    if (!admin) return false;
+    const bal = admin.app_metadata?.credits_balance ?? 0;
+    return await updateUserMeta(userId, { credits_balance: Math.max(0, bal - cost) });
+  } catch (e) { console.error('chargeUserCredits failed:', e.message); return false; }
+}
+
+exports.handler          = runComposite;
+exports.runComposite     = runComposite;
+exports.getAuthUser      = getAuthUser;
+exports.chargeUserCredits = chargeUserCredits;

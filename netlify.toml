@@ -78,3 +78,11 @@
 [functions.producer-ai]
   node_version = "18"
   timeout = 26
+
+# Async image composite. The "-background" worker auto-gets the 15-min budget —
+# do NOT add a timeout here (it would cap it). poll is a trivial DB read.
+[functions.generate-nb-composite-background]
+  node_version = "18"
+
+[functions.poll-nb-composite]
+  node_version = "18"
