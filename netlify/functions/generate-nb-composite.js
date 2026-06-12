@@ -17,13 +17,17 @@
 const https  = require('https');
 const crypto = require('crypto');
 
-const MODEL           = 'gemini-3.1-flash-image';       // default (Flash) — Gemini Developer API
-const PRO_MODEL       = 'gemini-3-pro-image-preview';   // "Max Quality" (Nano Banana Pro) — Vertex AI
-const ANALYSIS_MODEL  = 'gemini-2.0-flash';
-const GEMINI_HOST     = 'generativelanguage.googleapis.com';
-const VERTEX_LOCATION = 'us-central1';
+const MODEL                 = 'gemini-3.1-flash-image';     // default (Flash) — now runs on Vertex AI (Gemini Dev API = fallback)
+const PRO_MODEL             = 'gemini-3-pro-image-preview'; // "Max Quality" (Nano Banana Pro) — Vertex AI
+const ANALYSIS_MODEL        = 'gemini-2.0-flash';          // pose analysis on the Gemini Dev API (fallback only)
+const VERTEX_ANALYSIS_MODEL = 'gemini-2.0-flash-001';      // pose analysis on Vertex AI (primary)
+const GEMINI_HOST           = 'generativelanguage.googleapis.com';
+const VERTEX_LOCATION       = 'us-central1';
 const CREDIT_COST     = 2; // credits per composite frame, default Flash quality
 const CREDIT_COST_PRO = 5; // credits per composite frame, Max Quality (Pro) — ~2x the real cost
+// Vertex-only mode: while burning the Google Cloud credit, do NOT fall back to the
+// (empty) Gemini Developer API key. Flip to true to re-enable the Gemini safety net.
+const ALLOW_GEMINI_FALLBACK = false;
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -68,30 +72,60 @@ function _hasImage(data) {
   return ((data && data.candidates) || []).some(c => ((c && c.content && c.content.parts) || []).some(p => p && p.inlineData && p.inlineData.data));
 }
 
-// Send the image request to the chosen model. When `wantPro`, try Nano Banana Pro
-// on Vertex first; on any failure (model not enabled, error, no image) fall back to
-// the Flash model on the Gemini Developer API. Returns { status, data, usedPro }.
-async function callImageModel(requestObj, apiKey, wantPro) {
+// Generic Vertex AI generateContent call (Bearer token). Returns { status, data }.
+async function vertexGenerateContent(modelId, reqJson, token, location) {
+  const loc  = location || VERTEX_LOCATION;
+  const path = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${loc}/publishers/google/models/${modelId}:generateContent`;
+  return httpsRequest({
+    hostname: `${loc}-aiplatform.googleapis.com`, path, method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+  }, reqJson);
+}
+
+// Send the image request to the chosen model.
+//  - wantPro  → Nano Banana Pro on Vertex first.
+//  - default  → Flash (gemini-3.1-flash-image) on Vertex first (higher limits, one billing
+//               lane with Veo). The Gemini Developer API is only a fallback now.
+// `vtxToken` is a pre-fetched Vertex access token (or null). Returns { status, data, usedPro }.
+async function callImageModel(requestObj, apiKey, wantPro, vtxToken) {
   const reqJson = JSON.stringify(requestObj);
-  if (wantPro && process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+
+  // 1) Vertex Pro (only when Max Quality requested)
+  if (wantPro && vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
     try {
-      const token = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-      const path = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/${PRO_MODEL}:generateContent`;
-      const r = await httpsRequest({
-        hostname: `${VERTEX_LOCATION}-aiplatform.googleapis.com`, path, method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
-      }, reqJson);
+      const r = await vertexGenerateContent(PRO_MODEL, reqJson, vtxToken);
       if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: true };
-      console.warn('generate-nb-composite: Pro image unavailable, falling back to Flash —', r.status, (r.data && r.data.error && r.data.error.message) || '');
+      console.warn('generate-nb-composite: Vertex Pro unavailable, trying Vertex Flash —', r.status, (r.data && r.data.error && r.data.error.message) || '');
     } catch (e) {
-      console.warn('generate-nb-composite: Pro image error, falling back to Flash —', e.message);
+      console.warn('generate-nb-composite: Vertex Pro error, trying Vertex Flash —', e.message);
     }
   }
-  const r2 = await httpsRequest({
-    hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
-  }, reqJson);
-  return { status: r2.status, data: r2.data, usedPro: false };
+
+  // 2) Vertex Flash (the default path for every standard frame)
+  let lastVertex = null;
+  if (vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const r = await vertexGenerateContent(MODEL, reqJson, vtxToken);
+      if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: false };
+      lastVertex = r;
+      console.warn('generate-nb-composite: Vertex Flash unavailable —', r.status, (r.data && r.data.error && r.data.error.message) || '');
+    } catch (e) {
+      console.warn('generate-nb-composite: Vertex Flash error —', e.message);
+    }
+  }
+
+  // 3) Fallback: Flash on the Gemini Developer API — disabled in Vertex-only mode
+  if (ALLOW_GEMINI_FALLBACK && apiKey) {
+    const r2 = await httpsRequest({
+      hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+    }, reqJson);
+    return { status: r2.status, data: r2.data, usedPro: false };
+  }
+
+  // Vertex-only: surface the Vertex outcome (or a clear error) instead of the empty key.
+  if (lastVertex) return { status: lastVertex.status || 502, data: lastVertex.data, usedPro: false };
+  return { status: 502, data: { error: { message: 'Vertex image generation unavailable (Gemini fallback disabled).' } }, usedPro: false };
 }
 
 // ── Supabase auth check ───────────────────────────────────────────────────────
@@ -128,7 +162,7 @@ async function updateUserMeta(userId, meta) {
 }
 
 // ── Stage 1: Pose analysis ────────────────────────────────────────────────────
-async function analyzeFramePose(frameImg, apiKey) {
+async function analyzeFramePose(frameImg, apiKey, vtxToken) {
   const prompt = `You are analyzing a video frame for photo compositing. A person is visible.
 
 Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON only):
@@ -174,24 +208,41 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
     },
   });
 
-  const path = `/v1beta/models/${ANALYSIS_MODEL}:generateContent?key=${apiKey}`;
+  // Pull the structured JSON out of a generateContent response (shared by both paths)
+  function _parsePose(res, src) {
+    if (!res || res.status !== 200 || !res.data) { console.warn('analyzeFramePose: ' + src + ' non-200:', res && res.status); return null; }
+    const raw = (res.data.candidates && res.data.candidates[0] && res.data.candidates[0].content
+      && res.data.candidates[0].content.parts && res.data.candidates[0].content.parts[0]
+      && res.data.candidates[0].content.parts[0].text) || '';
+    if (!raw) return null;
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      const parsed = JSON.parse(cleaned);
+      console.log('analyzeFramePose: OK (' + src + ') — prop:', parsed.prop, '| arm:', parsed.arm_instruction);
+      return parsed;
+    } catch(e) { console.warn('analyzeFramePose: parse error (' + src + '):', e.message); return null; }
+  }
+
+  // 1) Vertex AI first (gemini-2.0-flash-001) — same billing lane as the images
+  if (vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const rv = await vertexGenerateContent(VERTEX_ANALYSIS_MODEL, reqBody, vtxToken);
+      const pv = _parsePose(rv, 'vertex');
+      if (pv) return pv;
+      console.warn('analyzeFramePose: vertex returned no usable result, falling back to Gemini Dev API');
+    } catch(e) { console.warn('analyzeFramePose: vertex error, falling back to Gemini Dev API:', e.message); }
+  }
+
+  // 2) Fallback: Gemini Developer API — disabled in Vertex-only mode (pose analysis
+  //    is optional, so returning null just skips the lock block, no hard failure).
+  if (!ALLOW_GEMINI_FALLBACK || !apiKey) return null;
   try {
     const res = await httpsRequest({
       hostname: GEMINI_HOST,
-      path, method: 'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(reqBody),
-      },
+      path: `/v1beta/models/${ANALYSIS_MODEL}:generateContent?key=${apiKey}`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) },
     }, reqBody);
-
-    if (res.status !== 200 || !res.data) { console.warn('analyzeFramePose: non-200:', res.status); return null; }
-    const raw = res.data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-    if (!raw) return null;
-    const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-    const parsed = JSON.parse(cleaned);
-    console.log('analyzeFramePose: OK — prop:', parsed.prop, '| arm:', parsed.arm_instruction);
-    return parsed;
+    return _parsePose(res, 'gemini-api');
   } catch(e) {
     console.warn('analyzeFramePose: error:', e.message);
     return null;
@@ -229,9 +280,10 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'GEMINI_API_KEY not configured.' }) };
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  const _vertexConfigured = !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_CLOUD_PROJECT_ID);
+  if (!apiKey && !_vertexConfigured) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'No image backend configured (set GEMINI_API_KEY or a Vertex service account).' }) };
   }
 
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
@@ -251,6 +303,15 @@ exports.handler = async (event) => {
   // Max Quality (Nano Banana Pro on Vertex) — costs more credits than the default Flash frame
   const wantPro     = (body.quality === 'pro' || body.maxQuality === true);
   const composeCost = wantPro ? CREDIT_COST_PRO : CREDIT_COST;
+
+  // Pre-fetch a Vertex access token once — shared by the image model and the pose
+  // analysis. Null if Vertex isn't configured or the token exchange fails; both
+  // calls then fall back to the Gemini Developer API.
+  let vtxToken = null;
+  if (_vertexConfigured) {
+    try { vtxToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); }
+    catch(e) { console.warn('generate-nb-composite: Vertex token exchange failed, using Gemini Dev API —', e.message); }
+  }
 
   // ── Credit gate (check upfront; deduct the ACTUAL cost after a frame is produced) ──
   let _composeBalance = 0;
@@ -318,33 +379,30 @@ exports.handler = async (event) => {
     }
     creativeParts.push({ text: instruction || 'Generate a high-quality image based on the reference photos.' });
 
-    const creativeBody = JSON.stringify({
+    const creativeReq = {
       systemInstruction: { parts: [{ text: 'You are a professional photo editor and image generator. Follow the user\'s instruction exactly and creatively. Use any provided reference photos as visual guides.' }] },
       contents: [{ role: 'user', parts: creativeParts }],
       generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.7 },
-    });
+    };
 
+    // Routes Vertex-first (Flash, or Pro when Max Quality), Gemini Dev API fallback.
     let creativeResult;
     try {
-      creativeResult = await httpsRequest({
-        hostname: GEMINI_HOST,
-        path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`,
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(creativeBody) },
-      }, creativeBody);
+      creativeResult = await callImageModel(creativeReq, apiKey, wantPro, vtxToken);
     } catch(e) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) };
     }
 
     if (creativeResult.status === 429) return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit — please wait and retry.' }) };
     if (!creativeResult.data || creativeResult.status !== 200 || creativeResult.data.error) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: creativeResult.data?.error?.message || 'Gemini error ' + creativeResult.status }) };
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: (creativeResult.data && creativeResult.data.error && creativeResult.data.error.message) || ('Image model error ' + creativeResult.status) }) };
     }
     for (const candidate of creativeResult.data.candidates || []) {
       for (const part of candidate?.content?.parts || []) {
         if (part.inlineData?.data) {
-          await _chargeCompose();
-          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: CREDIT_COST }) };
+          const _cc = creativeResult.usedPro ? CREDIT_COST_PRO : CREDIT_COST;
+          await _chargeCompose(_cc);
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: _cc, quality: creativeResult.usedPro ? 'pro' : 'flash' }) };
         }
       }
     }
@@ -354,7 +412,7 @@ exports.handler = async (event) => {
   // ── Stage 1: Pose analysis ────────────────────────────────────────────────
   let poseAnalysis = null;
   if (hasFrame) {
-    poseAnalysis = await analyzeFramePose(frameImg, apiKey);
+    poseAnalysis = await analyzeFramePose(frameImg, apiKey, vtxToken);
   }
 
   // ── Stage 2: Appearance transfer via Nano Banana 2 ───────────────────────
@@ -464,7 +522,7 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
 
   let result;
   try {
-    result = await callImageModel(requestObj, apiKey, wantPro);
+    result = await callImageModel(requestObj, apiKey, wantPro, vtxToken);
   } catch(e) {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) };
   }

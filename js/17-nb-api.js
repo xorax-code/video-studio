@@ -36,6 +36,32 @@
     return { b64, mime };
   }
 
+  // ── Shared composite POST with auto-retry on rate limit ───────────────────
+  // On Vertex's Dynamic Shared Quota a 429 just means the shared pool was busy
+  // for a moment, so we back off briefly and retry, showing a cue each time.
+  // Returns { res, data }. `label` (e.g. "Hand", "Scene 3") prefixes the cue.
+  var _NB_RETRY_WAITS = [4000, 8000, 16000]; // ~4s, 8s, 16s
+  async function _nbPostComposite(bodyObj, jwt, label) {
+    var res = null, data = {};
+    for (var i = 0; i <= _NB_RETRY_WAITS.length; i++) {
+      res = await fetch('/.netlify/functions/generate-nb-composite', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify(bodyObj),
+      });
+      data = {};
+      try { data = await res.json(); } catch(_) {}
+      if (res.status !== 429) break;            // only a rate limit is worth retrying
+      if (i < _NB_RETRY_WAITS.length) {
+        var sec = Math.round(_NB_RETRY_WAITS[i] / 1000);
+        if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limit — retrying in ' + sec + 's…', 'warning', _NB_RETRY_WAITS[i]);
+        await new Promise(function (r) { setTimeout(r, _NB_RETRY_WAITS[i]); });
+      }
+    }
+    return { res: res, data: data };
+  }
+  window._nbPostComposite = _nbPostComposite;
+
   // ── Generate NB composite for a single segment ────────────────────────────
   async function generateNbComposite(segIdx) {
     var seg = segments[segIdx];
@@ -227,10 +253,10 @@
     }
 
     // ── Request with 429 retry-backoff ───────────────────────────────────────
-    // Vertex AI image generation has a tight QPM quota (~5/min).
-    // On 429 "Resource exhausted" we wait and retry up to 3 times.
+    // On Vertex Dynamic Shared Quota a 429 just means the shared pool was busy
+    // for a moment and clears in seconds — so we back off briefly, not for minutes.
     var _NB_MAX_RETRIES = 3;
-    var _NB_RETRY_BASE  = 30000; // 30s initial wait; doubles each retry
+    var _NB_RETRY_BASE  = 4000; // 4s initial wait; doubles each retry (4s, 8s, 16s)
 
     for (var _attempt = 0; _attempt <= _NB_MAX_RETRIES; _attempt++) {
       try {
@@ -357,19 +383,14 @@
       showToast('Generating her hand…', 'info', 4000);
       var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 1280, 0.9);
       var aParts = _nbSplitDataUrl(avatarCompressed);
-      var res = await fetch('/.netlify/functions/generate-nb-composite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({
-          instruction: handInstruction,
-          avatarDesc: avDesc,
-          avatarB64: aParts.b64,
-          avatarMime: aParts.mime,
-          // no frame → generate mode produces the hand from the avatar's appearance
-        }),
-      });
-      var data = {};
-      try { data = await res.json(); } catch(_) {}
+      var _hr = await _nbPostComposite({
+        instruction: handInstruction,
+        avatarDesc: avDesc,
+        avatarB64: aParts.b64,
+        avatarMime: aParts.mime,
+        // no frame → generate mode produces the hand from the avatar's appearance
+      }, jwt, 'Hand');
+      var res = _hr.res, data = _hr.data;
       if (!res.ok || !data.imageB64) {
         showToast('Hand generation failed: ' + (data.error || ('HTTP ' + res.status)), 'error', 8000);
         setBtn(_origLabel || '🤚 Lock her hand', false);
@@ -459,23 +480,41 @@
     try {
       var compressed = await _nbCompressImage(originalDataUrl, 1024, 0.9);
       var aParts = _nbSplitDataUrl(compressed);
-      var res = await fetch('/.netlify/functions/generate-nb-composite', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({
-          instruction: instruction,
-          avatarDesc:  avDesc,
-          avatarB64:   aParts.b64,
-          avatarMime:  aParts.mime,
-          // no quality:'pro' → Flash model (less photoreal = more likely to pass)
-          // no frame → generate mode produces the stylized portrait from the avatar
-        }),
+      var reqBody = JSON.stringify({
+        instruction: instruction,
+        avatarDesc:  avDesc,
+        avatarB64:   aParts.b64,
+        avatarMime:  aParts.mime,
+        // no quality:'pro' → Flash model (less photoreal = more likely to pass)
+        // no frame → generate mode produces the stylized portrait from the avatar
       });
-      var data = {};
-      try { data = await res.json(); } catch(_) {}
-      console.log('[AvatarPrep] composite HTTP ' + res.status + ', image=' + (!!data.imageB64) + (data.error ? ', error=' + data.error : ''));
-      if (!res.ok || !data.imageB64) {
-        if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + (data.error || ('HTTP ' + res.status)) + '). Very photoreal faces may get blocked by Veo.', 'warning', 8000);
+
+      // The default Flash composite runs on the Gemini Developer API, which has
+      // tight per-minute/per-day image caps. Per-minute limits reset quickly, so
+      // on a 429 we wait and retry instead of dropping back to the photoreal photo.
+      var waits = [0, 12000, 22000];
+      var res = null, data = {};
+      for (var attempt = 0; attempt < waits.length; attempt++) {
+        if (waits[attempt]) {
+          if (typeof showToast === 'function') showToast('Image model is rate-limited — retrying in ' + (waits[attempt] / 1000) + 's…', 'info', waits[attempt]);
+          await new Promise(function (r) { setTimeout(r, waits[attempt]); });
+        }
+        res = await fetch('/.netlify/functions/generate-nb-composite', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+          body: reqBody,
+        });
+        data = {};
+        try { data = await res.json(); } catch(_) {}
+        console.log('[AvatarPrep] attempt ' + (attempt + 1) + ' → HTTP ' + res.status + ', image=' + (!!data.imageB64) + (data.error ? ', error=' + data.error : ''));
+        if (res.status !== 429) break; // only a rate limit is worth retrying
+      }
+
+      if (!res || !res.ok || !data.imageB64) {
+        var why = (res && res.status === 429)
+          ? 'Gemini image quota is maxed right now'
+          : (data.error || ('HTTP ' + (res ? res.status : '?')));
+        if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + why + '). Wait a minute and re-upload. Very photoreal faces may get blocked by Veo until it succeeds.', 'warning', 9000);
         return; // graceful — original avatar stays in place
       }
       var styledUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
@@ -855,20 +894,14 @@
       var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, 1280, 0.9);
       var avatarParts      = _nbSplitDataUrl(avatarCompressed);
 
-      var res = await fetch('/.netlify/functions/generate-nb-composite', {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({
-          instruction,
-          avatarB64:  avatarParts.b64,
-          avatarMime: avatarParts.mime,
-          frameB64:   null,
-          frameMime:  'image/jpeg',
-        }),
-      });
-
-      var data;
-      try { data = await res.json(); } catch(_) { data = {}; }
+      var _mr = await _nbPostComposite({
+        instruction,
+        avatarB64:  avatarParts.b64,
+        avatarMime: avatarParts.mime,
+        frameB64:   null,
+        frameMime:  'image/jpeg',
+      }, jwt, 'Reference');
+      var res = _mr.res, data = _mr.data;
 
       if (!res.ok || data.error || !data.imageB64) {
         var errMsg = data.error || ('HTTP ' + res.status);

@@ -29,10 +29,14 @@
  * Requires env var: GEMINI_API_KEY
  */
 
-const https = require('https');
+const https  = require('https');
+const crypto = require('crypto');
 
-const MODEL       = 'gemini-2.5-flash';
-const GEMINI_HOST = 'generativelanguage.googleapis.com';
+const MODEL           = 'gemini-2.5-flash'; // same model id on Vertex AI and the Gemini Dev API
+const GEMINI_HOST     = 'generativelanguage.googleapis.com';
+const VERTEX_LOCATION = 'us-central1';
+// Vertex-only while burning the Google Cloud credit; set true to re-enable the Gemini key fallback.
+const ALLOW_GEMINI_FALLBACK = false;
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -51,6 +55,26 @@ function httpsRequest(options, body) {
     if (body) req.write(body);
     req.end();
   });
+}
+
+// ── OAuth2: service account → Vertex access token ────────────────────────────
+async function getAccessToken(saJson) {
+  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  const now = Math.floor(Date.now() / 1000);
+  const claim = { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now };
+  const header   = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload  = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  const unsigned = `${header}.${payload}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, 'base64url');
+  const reqBody = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${unsigned}.${sig}`;
+  const res = await httpsRequest({
+    hostname: 'oauth2.googleapis.com', path: '/token', method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(reqBody) },
+  }, reqBody);
+  if (res.data && res.data.access_token) return res.data.access_token;
+  throw new Error('Token exchange failed');
 }
 
 // ── Supabase auth check ───────────────────────────────────────────────────────
@@ -109,9 +133,10 @@ exports.handler = async (event) => {
     return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) {
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'GEMINI_API_KEY not configured.' }) };
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  const _vertexConfigured = !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_CLOUD_PROJECT_ID);
+  if (!apiKey && !_vertexConfigured) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'No text backend configured (set GEMINI_API_KEY or a Vertex service account).' }) };
   }
 
   // Auth
@@ -182,19 +207,37 @@ exports.handler = async (event) => {
 
   console.log(`enhance-veo-prompt: user=${user.id}, model=${MODEL}, hasFrame=${hasFrame}, casual="${casual.slice(0,80)}"`);
 
-  let result;
-  try {
-    result = await httpsRequest({
-      hostname: GEMINI_HOST,
-      path:     apiPath,
-      method:   'POST',
-      headers: {
-        'Content-Type':   'application/json',
-        'Content-Length': Buffer.byteLength(reqBody),
-      },
-    }, reqBody);
-  } catch(e) {
-    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach Gemini API: ' + e.message }) };
+  let result = null;
+  // 1) Vertex AI first (same model id, one billing lane with the rest of the app)
+  if (_vertexConfigured) {
+    try {
+      const token = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const vpath = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${VERTEX_LOCATION}/publishers/google/models/${MODEL}:generateContent`;
+      const rv = await httpsRequest({
+        hostname: `${VERTEX_LOCATION}-aiplatform.googleapis.com`, path: vpath, method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) },
+      }, reqBody);
+      if (rv.status === 200 && rv.data && !rv.data.error) result = rv;
+      else console.warn('enhance-veo-prompt: Vertex non-200/err, falling back to Gemini Dev API —', rv.status, (rv.data && rv.data.error && rv.data.error.message) || '');
+    } catch(e) {
+      console.warn('enhance-veo-prompt: Vertex error, falling back to Gemini Dev API —', e.message);
+    }
+  }
+  // 2) Fallback: Gemini Developer API — disabled in Vertex-only mode
+  if (!result) {
+    if (!ALLOW_GEMINI_FALLBACK || !apiKey) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Vertex unavailable (Gemini fallback disabled).' }) };
+    }
+    try {
+      result = await httpsRequest({
+        hostname: GEMINI_HOST,
+        path:     apiPath,
+        method:   'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) },
+      }, reqBody);
+    } catch(e) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach the text model: ' + e.message }) };
+    }
   }
 
   if (result.status === 429) {

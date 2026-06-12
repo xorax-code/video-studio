@@ -616,13 +616,19 @@
         images.push({ b64: compressed.slice(comma + 1), mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg' });
       }
 
-      var payload = JSON.stringify({ instruction: instruction, images: images, creative: true });
+      var payloadObj = { instruction: instruction, images: images, creative: true };
 
       function _doFetch() {
+        // Use the shared retry helper (auto-retries on a Vertex DSQ 429) when available
+        if (typeof window._nbPostComposite === 'function') {
+          return window._nbPostComposite(payloadObj, jwt, 'Studio')
+            .then(function(r) { return { ok: !!(r.res && r.res.ok), data: r.data || {} }; })
+            .catch(function(e) { return { ok: false, data: { error: e.message } }; });
+        }
         return fetch('/.netlify/functions/generate-nb-composite', {
           method:  'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body: payload,
+          body: JSON.stringify(payloadObj),
         }).then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
           .catch(function(e) { return { ok: false, data: { error: e.message } }; });
       }
