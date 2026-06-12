@@ -22,7 +22,8 @@ const PRO_MODEL             = 'gemini-3-pro-image-preview'; // "Max Quality" (Na
 const ANALYSIS_MODEL        = 'gemini-2.0-flash';          // pose analysis on the Gemini Dev API (fallback only)
 const VERTEX_ANALYSIS_MODEL = 'gemini-2.0-flash-001';      // pose analysis on Vertex AI (primary)
 const GEMINI_HOST           = 'generativelanguage.googleapis.com';
-const VERTEX_LOCATION       = 'us-central1';
+const VERTEX_LOCATION       = 'us-central1'; // text models (pose analysis) are served regionally
+const VERTEX_IMAGE_LOCATION = 'global';      // Gemini 3.x image models are ONLY on the global endpoint
 const CREDIT_COST     = 2; // credits per composite frame, default Flash quality
 const CREDIT_COST_PRO = 5; // credits per composite frame, Max Quality (Pro) — ~2x the real cost
 // Vertex-only mode: while burning the Google Cloud credit, do NOT fall back to the
@@ -75,9 +76,11 @@ function _hasImage(data) {
 // Generic Vertex AI generateContent call (Bearer token). Returns { status, data }.
 async function vertexGenerateContent(modelId, reqJson, token, location) {
   const loc  = location || VERTEX_LOCATION;
+  // The global endpoint uses the bare host (no region prefix); regions are prefixed.
+  const host = (loc === 'global') ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
   const path = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${loc}/publishers/google/models/${modelId}:generateContent`;
   return httpsRequest({
-    hostname: `${loc}-aiplatform.googleapis.com`, path, method: 'POST',
+    hostname: host, path, method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
   }, reqJson);
 }
@@ -93,7 +96,7 @@ async function callImageModel(requestObj, apiKey, wantPro, vtxToken) {
   // 1) Vertex Pro (only when Max Quality requested)
   if (wantPro && vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
     try {
-      const r = await vertexGenerateContent(PRO_MODEL, reqJson, vtxToken);
+      const r = await vertexGenerateContent(PRO_MODEL, reqJson, vtxToken, VERTEX_IMAGE_LOCATION);
       if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: true };
       console.warn('generate-nb-composite: Vertex Pro unavailable, trying Vertex Flash —', r.status, (r.data && r.data.error && r.data.error.message) || '');
     } catch (e) {
@@ -105,7 +108,7 @@ async function callImageModel(requestObj, apiKey, wantPro, vtxToken) {
   let lastVertex = null;
   if (vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
     try {
-      const r = await vertexGenerateContent(MODEL, reqJson, vtxToken);
+      const r = await vertexGenerateContent(MODEL, reqJson, vtxToken, VERTEX_IMAGE_LOCATION);
       if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: false };
       lastVertex = r;
       console.warn('generate-nb-composite: Vertex Flash unavailable —', r.status, (r.data && r.data.error && r.data.error.message) || '');
