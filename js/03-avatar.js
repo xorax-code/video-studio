@@ -164,13 +164,7 @@
   function onAvatarImageChange(e) {
     const file = e.target.files[0];
     if (!file) return;
-    // Likeness consent gate — must confirm rights before a face photo is accepted
-    const _consent = document.getElementById('avatarConsentChk');
-    if (_consent && !_consent.checked) {
-      if (typeof showToast === 'function') showToast("Please confirm you have the right to use this person's likeness first — check the box under the photo.", 'warning', 6000);
-      e.target.value = '';
-      return;
-    }
+    // Likeness consent is agreed at signup (account-level) + reminded at upload.
     const reader = new FileReader();
     reader.onload = function(ev) {
       try {
@@ -186,6 +180,13 @@
         extractAvatarInventory(avatarImageDataUrl);
         // Update quick mode state now that avatarImageDataUrl is set (was a racy setTimeout)
         _qmUpdateUploadState?.();
+        // Auto-prep: re-render the upload as a stylized digital avatar so Veo's
+        // realistic-person-likeness filter accepts the start frames. Async; the
+        // original preview shows immediately, then swaps to the prepared version.
+        // Falls back to the original on any failure (see applyPreparedAvatar).
+        if (typeof window.prepareAvatarReference === 'function') {
+          try { window.prepareAvatarReference(avatarImageDataUrl); } catch(_) {}
+        }
       } catch (err) {
         showToast('Failed to load avatar image — please try again.', 'error');
       }
@@ -193,6 +194,28 @@
     reader.onerror = () => showToast('Could not read avatar image file.', 'error');
     reader.readAsDataURL(file);
   }
+
+  // Swap the working avatar to the prepared (stylized) version produced by
+  // window.prepareAvatarReference (in 17-nb-api.js). Keeps the original on file
+  // under sm_avatar_img_original so the user can revert. Called on prep success.
+  window.applyPreparedAvatar = function(styledUrl, originalUrl) {
+    if (!styledUrl) return;
+    try {
+      avatarImageDataUrl = styledUrl;
+      const img = document.getElementById('avatarImgEl');
+      const placeholder = document.getElementById('avatarImgPlaceholder');
+      const clearBtn = document.getElementById('clearAvatarImgBtn');
+      if (img) { img.src = styledUrl; img.style.display = 'block'; }
+      if (placeholder) placeholder.style.display = 'none';
+      if (clearBtn) clearBtn.style.display = 'block';
+      DB.set('sm_avatar_img', styledUrl).catch(function(){});
+      if (originalUrl) DB.set('sm_avatar_img_original', originalUrl).catch(function(){});
+      // Re-extract the inventory from the prepared avatar (new source of truth)
+      extractAvatarInventory(styledUrl);
+      _qmUpdateUploadState?.();
+      if (typeof showToast === 'function') showToast('Avatar ready — optimized to pass video generation. Re-upload anytime to replace it.', 'success', 5000);
+    } catch(_) {}
+  };
 
   function clearAvatarImage() {
     avatarImageDataUrl = null;

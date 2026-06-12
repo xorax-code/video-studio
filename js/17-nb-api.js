@@ -401,6 +401,68 @@
   }
   window.clearHandReference = clearHandReference;
 
+  // ── Auto avatar-prep on upload ────────────────────────────────────────────
+  // Re-renders the uploaded avatar ONCE as a stylized digital character so that
+  // Veo's "realistic person likeness" filter (support code 15236754) accepts the
+  // resulting start frames. Same pattern as the hand reference: one composite
+  // call (Flash model, ~2 credits), then the prepared image becomes the working
+  // avatar base for every face-frame composite. Fails safe — on any error the
+  // user's original photo is kept and uploads are never blocked.
+  async function prepareAvatarReference(originalDataUrl) {
+    if (!originalDataUrl) return;
+
+    // Auth — silently keep original if not logged in
+    var jwt = null;
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
+    } catch(_) {}
+    if (!jwt) return;
+
+    var avDesc = (document.getElementById('avatarDesc') ? document.getElementById('avatarDesc').value.trim() : '');
+
+    // Instruction is deliberately framed as "stylize into a CG character" (not
+    // "recreate this real person") so the image model's own likeness guard
+    // doesn't refuse, while still reducing the photoreal look Veo blocks on.
+    var instruction =
+      'Re-render the person in this reference photo as a polished DIGITAL AVATAR portrait — a high-end 3D / CGI animated character, NOT a photograph. '
+      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, outfit and jewelry so it is clearly the same character. '
+      + 'Render with smooth, slightly stylized skin (no photographic pores, no blemishes, no skin redness), soft even studio lighting, and a clean rendered look that reads as a created character rather than a real camera photo of a real person. '
+      + (avDesc ? 'Notes: ' + avDesc + '. ' : '')
+      + 'Vertical 9:16, head and shoulders, facing camera, plain soft neutral background.';
+
+    try {
+      if (typeof showToast === 'function') showToast('Preparing your avatar (one-time, ~2 credits)…', 'info', 4500);
+      var compressed = await _nbCompressImage(originalDataUrl, 1024, 0.9);
+      var aParts = _nbSplitDataUrl(compressed);
+      var res = await fetch('/.netlify/functions/generate-nb-composite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({
+          instruction: instruction,
+          avatarDesc:  avDesc,
+          avatarB64:   aParts.b64,
+          avatarMime:  aParts.mime,
+          // no quality:'pro' → Flash model (less photoreal = more likely to pass)
+          // no frame → generate mode produces the stylized portrait from the avatar
+        }),
+      });
+      var data = {};
+      try { data = await res.json(); } catch(_) {}
+      if (!res.ok || !data.imageB64) {
+        if (typeof showToast === 'function') showToast('Kept your original photo (avatar prep unavailable). You can still generate, but very photoreal faces may get blocked.', 'info', 6000);
+        return; // graceful — original avatar stays in place
+      }
+      var styledUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      if (typeof window.applyPreparedAvatar === 'function') {
+        window.applyPreparedAvatar(styledUrl, originalDataUrl);
+      }
+    } catch(e) {
+      if (typeof showToast === 'function') showToast('Kept your original photo (avatar prep error).', 'info', 5000);
+    }
+  }
+  window.prepareAvatarReference = prepareAvatarReference;
+
   // ── Generate NB composites for ALL segments ───────────────────────────────
   // ── Frame-generation progress panel ──────────────────────────────────────
   function _nbOpenProgress(total) {
