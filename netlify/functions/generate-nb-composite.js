@@ -421,8 +421,13 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
   const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Avoid adding a second person, a duplicate of the subject, or any extra human figure standing or seated in the background that was not already in Photo 1. Avoid male/masculine arm hair, hairy forearms, knuckle hair, or a man's hand/arm when the avatar is a woman; avoid keeping the original person's shirt or clothing on the avatar. Remove any burned-in text, captions, or subtitles from the output.${faceOutOfFrame ? ' This frame is a hand/arm shot with NO person — avoid adding any face, head, hair, full body, or background person; avoid zooming out, re-framing, or changing the crop. Show only the same hand/arm holding the product.' : ''}`;
-  // Push for a crisp, photorealistic result (Veo's start frame quality flows into the video)
-  const qualityLine = '\n\nQUALITY: ultra-sharp focus and fine natural detail; realistic skin with visible pores, texture, and subtle imperfections (never plastic, waxy, airbrushed, or over-smoothed); crisp, legible product label text; true-to-life color and lighting; shot on a professional camera, high resolution. Avoid blur, softness, low detail, banding, or an obviously AI-generated look.';
+  // Push for a crisp, photorealistic result ONLY in Max Quality mode. This "shot on a real
+  // camera / not AI" push is exactly what trips Veo's real-person safety filter on face
+  // shots, so for the default (non-pro) path we leave it off — that's the state that
+  // reliably passes Veo for talking-head frames.
+  const qualityLine = wantPro
+    ? '\n\nQUALITY: ultra-sharp focus and fine natural detail; realistic skin with visible pores, texture, and subtle imperfections (never plastic, waxy, airbrushed, or over-smoothed); crisp, legible product label text; true-to-life color and lighting; shot on a professional camera, high resolution. Avoid blur, softness, low detail, banding, or an obviously AI-generated look.'
+    : '';
   const fullPrompt = userPrompt + negLine + qualityLine;
 
   const parts = [];
