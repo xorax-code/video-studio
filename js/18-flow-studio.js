@@ -616,7 +616,9 @@
         images.push({ b64: compressed.slice(comma + 1), mime: compressed.slice(5, comma).split(';')[0] || 'image/jpeg' });
       }
 
-      var payloadObj = { instruction: instruction, images: images, creative: true };
+      var _imgModelEl = document.getElementById('fsImgModel');
+      var _imgQuality = (_imgModelEl && _imgModelEl.value === 'pro') ? 'pro' : 'flash';
+      var payloadObj = { instruction: instruction, images: images, creative: true, quality: _imgQuality };
 
       function _doFetch() {
         // Use the shared retry helper (auto-retries on a Vertex DSQ 429) when available
@@ -719,9 +721,18 @@
         negative_prompt: veoFields.negative_prompt || 'text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, blurry',
       });
 
-      var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-      var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-      var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+      // Prefer the per-render quality selector in the Studio toolbar; fall back to the
+      // account default if it isn't present.
+      var _selModelEl = document.getElementById('fsVidModel');
+      var _selModel   = _selModelEl && _selModelEl.value;
+      var modelKey;
+      if (_selModel === 'lite' || _selModel === 'fast' || _selModel === 'standard') {
+        modelKey = _selModel;
+      } else {
+        var adm = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
+        var _dm = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
+        modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+      }
 
       var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg, refFrameUrl);
 
