@@ -112,12 +112,15 @@
   // Public entry: runs a job and auto-retries the WHOLE job on a rate limit (429).
   // A 429 produced no image and charged nothing, so re-submitting is safe.
   async function _nbGenerateAsync(bodyObj, jwt, label) {
-    var RL_WAITS = [0, 6000, 12000]; // up to 3 attempts
+    // Longer, exponential backoff for the image model's tight quota; jitter de-syncs
+    // concurrent retries so they don't all re-hit the limit at the same instant.
+    var RL_WAITS = [0, 8000, 20000, 40000]; // up to 4 attempts (~68s of backoff)
     var out;
     for (var a = 0; a < RL_WAITS.length; a++) {
       if (RL_WAITS[a]) {
-        if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limited — retrying in ' + (RL_WAITS[a] / 1000) + 's…', 'warning', RL_WAITS[a]);
-        await new Promise(function (r) { setTimeout(r, RL_WAITS[a]); });
+        var _w = RL_WAITS[a] + Math.floor(Math.random() * 2500);
+        if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limited — retrying in ' + Math.round(_w / 1000) + 's…', 'warning', _w);
+        await new Promise(function (r) { setTimeout(r, _w); });
       }
       out = await _nbRunOneJob(bodyObj, jwt, label);
       if (!(out.res && out.res.status === 429) || a === RL_WAITS.length - 1) return out;
@@ -638,11 +641,14 @@
     var n = toGen.length;
     _nbOpenProgress(n);
 
-    // Generate several frames concurrently. Vertex Dynamic Shared Quota handles
-    // parallel requests, and each frame already retries on a brief 429 — so the
-    // old one-at-a-time + 15s spacing (left over from the legacy ~5/min fixed
-    // quota) is gone. A small worker pool keeps it fast without bursting too hard.
-    var _CONCURRENCY = 2; // 2-wide: parallel speed without DSQ throughput contention pushing gens past the 26s cap
+    // Concurrency is TIER-AWARE. The image model's quota is tight, so firing many
+    // frames at once trips 429s (the batch that failed scenes 3/4/6/7). Default to
+    // SERIAL (1-wide) so the per-frame ~25s gen naturally spaces requests under the
+    // quota — reliable for everyone. The top tier gets parallel speed; its 429s are
+    // caught by the stronger backoff + auto-retry.
+    var _nbTier = (typeof window !== 'undefined' && window._stripeTier) ? window._stripeTier : 'free';
+    var _nbTopTier = (_nbTier === 'scale' || _nbTier === 'agency');
+    var _CONCURRENCY = _nbTopTier ? 2 : 1;
     var _next = 0;
     async function _nbWorker() {
       while (true) {
