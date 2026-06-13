@@ -206,6 +206,7 @@
     _restoreCtaState();
     // Sync the Lite/Fast/Standard toggle to whatever model is saved
     _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Lite');
+    if (typeof window._initVeoAspect === 'function') window._initVeoAspect();
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();

@@ -1315,6 +1315,32 @@ Production rules:
     _syncVeoModelToggle(model);
   }
 
+  // ── Aspect ratio (9:16 vertical / 16:9 landscape) ─────────────────────────
+  // Stored globally on window._veoAspectRatio (read by 15-veo-api.js) and
+  // persisted in admin settings so the choice survives reloads. Veo accepts
+  // only these two ratios; square is handled at export time as a crop.
+  function setVeoAspect(val) {
+    const aspect = (val === '16:9') ? '16:9' : '9:16';
+    window._veoAspectRatio = aspect;
+    const s = getAdminSettings();
+    s.defaultAspect = aspect;
+    saveAdminSettings(s);
+    _syncVeoAspectControls(aspect);
+  }
+  function _syncVeoAspectControls(aspect) {
+    ['fsVidAspect', 'prodVidAspect'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el && el.value !== aspect) el.value = aspect;
+    });
+  }
+  function _initVeoAspect() {
+    const a = (getAdminSettings().defaultAspect === '16:9') ? '16:9' : '9:16';
+    window._veoAspectRatio = a;
+    _syncVeoAspectControls(a);
+  }
+  window.setVeoAspect = setVeoAspect;
+  window._initVeoAspect = _initVeoAspect;
+
   function _syncVeoModelToggle(model) {
     const fastBtn = document.getElementById('veoModelFastBtn');
     const liteBtn = document.getElementById('veoModelLiteBtn');

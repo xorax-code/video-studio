@@ -286,7 +286,7 @@ async function registerVeoOp(opName, userId, cost, kind) {
 }
 
 // ── Start Vertex AI Veo generation ────────────────────────────────────────────
-async function startVertexGeneration(prompt, durationSecs, modelId, startImageB64, startImageMime, accessToken) {
+async function startVertexGeneration(prompt, durationSecs, modelId, startImageB64, startImageMime, accessToken, aspectRatio) {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const gcsBucket = process.env.GOOGLE_CLOUD_STORAGE_BUCKET; // e.g. gs://my-veo-outputs
   const path      = `/v1/projects/${projectId}/locations/${LOCATION}/publishers/google/models/${modelId}:predictLongRunning`;
@@ -302,7 +302,7 @@ async function startVertexGeneration(prompt, durationSecs, modelId, startImageB6
   const body = JSON.stringify({
     instances:  [instance],
     parameters: {
-      aspectRatio:      '9:16',
+      aspectRatio:      (aspectRatio === '16:9') ? '16:9' : '9:16',
       durationSeconds:  durationSecs,
       storageUri:       gcsBucket,   // GCS bucket for output videos
       generateAudio:    true,        // include synchronized audio in output
@@ -368,9 +368,12 @@ exports.handler = async (event) => {
     startImageMime = null,
     frameB64      = null,   // optional reference frame for scene analysis
     frameMime     = 'image/jpeg',
+    aspectRatio   = '9:16', // Veo supports '9:16' (vertical) or '16:9' (landscape)
   } = body;
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
+  // Veo 3 only accepts these two ratios; anything else falls back to vertical.
+  const aspect   = (aspectRatio === '16:9') ? '16:9' : '9:16';
   const dur      = (durationSecs === 8) ? 8 : 6;
   const modelKey = (model === 'fast') ? 'fast' : (model === 'standard') ? 'standard' : 'lite';
   const cost     = CREDIT_COSTS[modelKey];
@@ -428,7 +431,7 @@ exports.handler = async (event) => {
   // ── Start Vertex AI generation ────────────────────────────────────────────
   let vtxResult;
   try {
-    vtxResult = await startVertexGeneration(finalPrompt, dur, modelId, startImageB64, startImageMime, accessToken);
+    vtxResult = await startVertexGeneration(finalPrompt, dur, modelId, startImageB64, startImageMime, accessToken, aspect);
   } catch(e) {
     const refunded2 = await addCredits(userId, cost);
     if (!refunded2) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex start error; balance may be wrong`);

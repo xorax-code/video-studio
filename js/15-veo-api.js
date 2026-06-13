@@ -357,6 +357,9 @@
     var dur    = parseInt(durationSecs, 10) || 6;
     if (dur !== 6 && dur !== 8) dur = 6;
     var model  = (modelKey === 'fast') ? 'fast' : (modelKey === 'standard') ? 'standard' : 'lite';
+    // Aspect ratio is a session-level choice the UI stores globally; Veo only
+    // accepts '9:16' (vertical) or '16:9' (landscape). Default vertical.
+    var aspect = (window._veoAspectRatio === '16:9') ? '16:9' : '9:16';
 
     // ── Strip data URL prefix → raw base64 + mimeType ────────────────────
     function _splitDataUrl(dataUrl) {
@@ -398,6 +401,7 @@
         startImageMime:  startImageMime,
         frameB64:        frameB64,    // reference frame for Gemini scene analysis
         frameMime:       frameMime,
+        aspectRatio:     aspect,
       }),
     });
 
@@ -862,6 +866,31 @@
     }
   }
   window.regenSingleScene = regenSingleScene;
+
+  // ── Regenerate just the START FRAME (NB composite) for one scene ──────────
+  // Produces a fresh pose/composite for the scene without re-rendering video.
+  // The user can then hit "↺ Regen" to render a new clip from the new frame.
+  async function regenSceneFrame(segIdx) {
+    var seg = (window.segments || [])[segIdx];
+    if (!seg) { showToast('Segment not found.', 'error'); return; }
+    if (typeof window.generateNbComposite !== 'function') {
+      showToast('Frame generator unavailable — refresh and try again.', 'error'); return;
+    }
+    var btn = document.getElementById('regenFrameBtn-' + segIdx);
+    if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    try {
+      var ok = await window.generateNbComposite(segIdx);
+      if (ok) {
+        showToast('New start frame for Scene ' + (segIdx + 1) + ' — hit ↺ Regen to render the video.', 'success', 6000);
+        if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      }
+    } catch (e) {
+      showToast('Frame regen failed (Scene ' + (segIdx + 1) + '): ' + (e && e.message || e), 'error', 8000);
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '↺ Frame'; }
+    }
+  }
+  window.regenSceneFrame = regenSceneFrame;
 
   // ── Regenerate a single continuation (extra) clip ──────────────────────────
   async function regenExtraClip(segIdx, extraIdx) {

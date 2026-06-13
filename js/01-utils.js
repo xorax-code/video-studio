@@ -546,6 +546,7 @@
     maxTabRefresh: 0,
     cooldownSec: 120,
     defaultModel: 'Veo 3.1 Lite',
+    defaultAspect: '9:16',
     creditBudget: 0,
     nbPromptDefault: '',
     veoPromptDefault: '',

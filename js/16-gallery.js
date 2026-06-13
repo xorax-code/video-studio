@@ -653,6 +653,37 @@
     if (icon) icon.textContent = _assemblerCollapsed ? '▶' : '▼';
   };
 
+  // ── Platform export presets ─────────────────────────────────────────────
+  // Names the exported file for the target platform and nudges the user toward
+  // the right aspect ratio. We do NOT re-crop here (that would degrade the clip
+  // and turn this into a video editor) — the aspect is chosen at generation.
+  var _PLATFORMS = {
+    tiktok:  { name: 'tiktok',  label: 'TikTok',          aspect: '9:16' },
+    reels:   { name: 'reels',   label: 'Instagram Reels', aspect: '9:16' },
+    shorts:  { name: 'shorts',  label: 'YouTube Shorts',  aspect: '9:16' },
+    youtube: { name: 'youtube', label: 'YouTube',         aspect: '16:9' },
+  };
+  window._exportPlatform = 'generic';
+  window.setExportPlatform = function (val) {
+    window._exportPlatform = _PLATFORMS[val] ? val : 'generic';
+    var p = _PLATFORMS[val];
+    if (p && typeof showToast === 'function') {
+      var cur = (window._veoAspectRatio === '16:9') ? '16:9' : '9:16';
+      if (cur !== p.aspect) {
+        showToast(p.label + ' wants ' + p.aspect + '. Your clips are ' + cur + ' — regenerate at ' + p.aspect + ' for a perfect fit (no cropping applied).', 'warning', 8000);
+      } else {
+        showToast('Export named for ' + p.label + ' (' + p.aspect + '). Your clips already match.', 'success', 4000);
+      }
+    }
+  };
+  // Build a platform-tagged filename, e.g. "affiliateos-tiktok-1080p.mp4".
+  function _exportFilename(resTag) {
+    var p = _PLATFORMS[window._exportPlatform];
+    var plat = p ? ('-' + p.name) : '';
+    return 'affiliateos' + plat + (resTag ? '-' + resTag : '') + '.mp4';
+  }
+  window._exportFilename = _exportFilename;
+
   // ── Export ─────────────────────────────────────────────────────────────────
   // Strategy:
   //   • 1 clip, no trim  → direct MP4 download (instant)
@@ -668,7 +699,7 @@
     if (clips.length === 1 && !needsTrim) {
       var a = document.createElement('a');
       a.href = clips[0].blobUrl;
-      a.download = 'scene-' + (clips[0].segIdx + 1) + '.mp4';
+      a.download = _exportFilename('720p');
       a.click();
       if (typeof showToast === 'function') showToast('Clip downloaded.', 'success');
       return;
@@ -753,7 +784,7 @@
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Stitch job failed.');
         if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
-          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = 'assembled-1080p.mp4'; a.click();
+          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = _exportFilename('1080p'); a.click();
           if (typeof showToast === 'function') showToast('1080p video ready — download started!', 'success', 5000);
           done();
           return;
@@ -817,7 +848,7 @@
       var url = URL.createObjectURL(zipBlob);
       var a   = document.createElement('a');
       a.href  = url;
-      a.download = 'video-clips.zip';
+      a.download = _exportFilename('720p').replace(/\.mp4$/, '-clips.zip');
       a.click();
       setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 
@@ -945,7 +976,7 @@
       var blob = new Blob([data], { type: 'video/mp4' });
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement('a');
-      a.href = url; a.download = 'assembled-video.mp4'; a.click();
+      a.href = url; a.download = _exportFilename('720p'); a.click();
       setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
 
       setProgress(100, 'Done!');
