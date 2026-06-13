@@ -437,19 +437,38 @@
     if (name === 'billing') renderBillingTab();
   }
 
-  // ── Stripe price IDs — used by legacy startCheckout() (backend flow) ──
+  // ── Billing period for the in-app upgrade flow (monthly | annual) ──
+  if (!window._billingPeriod) window._billingPeriod = 'monthly';
+
+  // ── Stripe price IDs — used by startCheckout() (backend Checkout flow) ──
+  // Paste the price IDs here. The '_HERE' placeholder makes startCheckout()
+  // fall back to the manual upgrade modal until real IDs are filled in.
   const STRIPE_PRICES = {
-    starter: 'price_1TaviyJEBUETI2v87J63pMtV',
-    pro:     'price_1TavjOJEBUETI2v85qh8DA6Z',
-    agency:  'price_1TavlqJEBUETI2v8JSHkL5Ez',
+    starter: 'price_1ThbCQJEBUETI2v8B0RUf3Hc',
+    creator: 'price_1ThbDVJEBUETI2v808FvsWXp',
+    scale:   'price_1ThbEGJEBUETI2v832pxuu1R',
+  };
+  const STRIPE_PRICES_ANNUAL = {
+    starter: 'price_1ThbCzJEBUETI2v8yY6LXCoE',
+    creator: 'price_1ThbDqJEBUETI2v8FNG7EGpO',
+    scale:   'price_1ThbEdJEBUETI2v8GlEC4v0k',
   };
 
-  // ── Stripe Payment Links — no backend needed, redirects directly to Stripe ──
+  // ── Stripe Payment Links — paste the SAME URLs used on the landing page ──
   const STRIPE_PAYMENT_LINKS = {
-    starter: 'https://buy.stripe.com/eVqfZif9JcHR4rE3bm2go0s',
-    pro:     'https://buy.stripe.com/28E00kgdN9vF6zMaDO2go0t',
-    agency:  'https://buy.stripe.com/cNi5kEbXxcHRbU64fq2go0u',
+    starter: 'https://buy.stripe.com/dRmcN6f9JazJ7DQh2c2go0v',
+    creator: 'https://buy.stripe.com/cNi00k3r137he2eeU42go0y',
+    scale:   'https://buy.stripe.com/7sYbJ22mX9vF3nAfY82go0A',
   };
+  const STRIPE_PAYMENT_LINKS_ANNUAL = {
+    starter: 'https://buy.stripe.com/cNi00kd1B9vFgam5ju2go0w',
+    creator: 'https://buy.stripe.com/7sYcN6d1B7nxaQ26ny2go0z',
+    scale:   'https://buy.stripe.com/28EbJ2d1B0Z99LY9zK2go0B',
+  };
+
+  // Period-aware lookups (return the monthly or annual value based on _billingPeriod)
+  function _pid(planKey)   { return (window._billingPeriod === 'annual' ? STRIPE_PRICES_ANNUAL : STRIPE_PRICES)[planKey]; }
+  function _plink(planKey) { return (window._billingPeriod === 'annual' ? STRIPE_PAYMENT_LINKS_ANNUAL : STRIPE_PAYMENT_LINKS)[planKey]; }
 
   // ── Promo codes ──────────────────────────────────────────────
   // type:'unlock'   → unlocks `tier` immediately — validated SERVER-SIDE via /.netlify/functions/validate-promo
@@ -486,7 +505,7 @@
     if (!promo) return;
     if (promo.type === 'unlock') {
       // Unlock tier overrides Stripe tier unless Stripe has a higher tier
-      const order = ['free','starter','pro','agency'];
+      const order = ['free','starter','creator','scale'];
       const stripeIdx = order.indexOf(window._stripeTier || 'free');
       const promoIdx  = order.indexOf(promo.tier);
       if (promoIdx > stripeIdx) window._stripeTier = promo.tier;
@@ -537,7 +556,7 @@
       localStorage.setItem(PROMO_STORAGE_KEY, JSON.stringify({ code, ...def }));
       window._activePromo = { code, ...def };
 
-      const order = ['free', 'starter', 'pro', 'agency'];
+      const order = ['free', 'starter', 'creator', 'scale'];
       const stripeIdx = order.indexOf(window._stripeTier || 'free');
       const promoIdx  = order.indexOf(def.tier);
       if (promoIdx > stripeIdx) window._stripeTier = def.tier;
@@ -612,7 +631,8 @@
     }
 
     const starterUrl = buildLink('starter');
-    const proUrl     = buildLink('pro');
+    const creatorUrl = buildLink('creator');
+    const scaleUrl   = buildLink('scale');
 
     const wall = document.createElement('div');
     wall.id = 'trialExpiredWall';
@@ -634,24 +654,35 @@
           <!-- Starter -->
           <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-2);border-radius:14px;padding:18px 20px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
             <div style="flex:1;min-width:160px;">
-              <div style="font-size:0.95rem;font-weight:700;color:var(--text-1);margin-bottom:3px;">Starter <span style="font-size:0.8rem;font-weight:600;color:var(--text-3);">$47/mo</span></div>
-              <div style="font-size:0.78rem;color:var(--text-3);line-height:1.5;">Full Video Replicator · Veo 3 + NB Pro · 5 accounts · Viral scripts</div>
+              <div style="font-size:0.95rem;font-weight:700;color:var(--text-1);margin-bottom:3px;">Starter <span style="font-size:0.8rem;font-weight:600;color:var(--text-3);">$19/mo</span></div>
+              <div style="font-size:0.78rem;color:var(--text-3);line-height:1.5;">1,000 credits/mo · Full Video Replicator · Veo 3 + NB Pro · 5 accounts · Viral scripts</div>
             </div>
             ${starterUrl
               ? `<a href="${starterUrl}" target="_blank" rel="noopener" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--text-1);font-size:0.82rem;font-weight:700;text-decoration:none;white-space:nowrap;transition:border-color 0.2s;" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border-2)'">Choose Starter →</a>`
               : `<button onclick="openUpgradeModal('starter')" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--text-1);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Choose Starter →</button>`}
           </div>
 
-          <!-- Pro (highlighted) -->
+          <!-- Creator (highlighted) -->
           <div style="background:rgba(124,106,247,0.06);border:1.5px solid rgba(124,106,247,0.4);border-radius:14px;padding:18px 20px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;position:relative;">
             <div style="position:absolute;top:-10px;left:18px;background:var(--grad-accent);color:#fff;font-size:0.67rem;font-weight:800;letter-spacing:0.08em;text-transform:uppercase;padding:3px 10px;border-radius:20px;">Most Popular</div>
             <div style="flex:1;min-width:160px;">
-              <div style="font-size:0.95rem;font-weight:700;color:var(--text-1);margin-bottom:3px;">Pro <span style="font-size:0.8rem;font-weight:600;color:var(--text-3);">$97/mo</span></div>
-              <div style="font-size:0.78rem;color:var(--text-3);line-height:1.5;">Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI</div>
+              <div style="font-size:0.95rem;font-weight:700;color:var(--text-1);margin-bottom:3px;">Creator <span style="font-size:0.8rem;font-weight:600;color:var(--text-3);">$39/mo</span></div>
+              <div style="font-size:0.78rem;color:var(--text-3);line-height:1.5;">2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI</div>
             </div>
-            ${proUrl
-              ? `<a href="${proUrl}" target="_blank" rel="noopener" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:0.82rem;font-weight:700;text-decoration:none;white-space:nowrap;">Choose Pro →</a>`
-              : `<button onclick="openUpgradeModal('pro')" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Choose Pro →</button>`}
+            ${creatorUrl
+              ? `<a href="${creatorUrl}" target="_blank" rel="noopener" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:0.82rem;font-weight:700;text-decoration:none;white-space:nowrap;">Choose Creator →</a>`
+              : `<button onclick="openUpgradeModal('creator')" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--grad-accent);border:none;color:#fff;font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Choose Creator →</button>`}
+          </div>
+
+          <!-- Scale -->
+          <div style="background:rgba(255,255,255,0.03);border:1px solid var(--border-2);border-radius:14px;padding:18px 20px;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:160px;">
+              <div style="font-size:0.95rem;font-weight:700;color:var(--text-1);margin-bottom:3px;">Scale <span style="font-size:0.8rem;font-weight:600;color:var(--text-3);">$99/mo</span></div>
+              <div style="font-size:0.78rem;color:var(--text-3);line-height:1.5;">6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access</div>
+            </div>
+            ${scaleUrl
+              ? `<a href="${scaleUrl}" target="_blank" rel="noopener" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--text-1);font-size:0.82rem;font-weight:700;text-decoration:none;white-space:nowrap;">Choose Scale →</a>`
+              : `<button onclick="openUpgradeModal('scale')" style="flex-shrink:0;padding:10px 20px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border-2);color:var(--text-1);font-size:0.82rem;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;">Choose Scale →</button>`}
           </div>
 
         </div>
@@ -736,13 +767,21 @@
   };
 
   const PLAN_INFO = {
-    free:    { label: 'Free Trial', price: '$0',      desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
-    starter: { label: 'Starter',   price: '$47/mo',  desc: '1,000 credits/mo (~8 videos) · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
-    pro:     { label: 'Pro',       price: '$97/mo',  desc: '4,000 credits/mo (~33 videos) · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
-    agency:  { label: 'Agency',    price: '$197/mo', desc: 'Everything in Pro · Multiple avatars · Team seats · White-label exports' },
+    free:    { label: 'Free Trial', price: '$0',     desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
+    starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo (~10 videos) · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
+    creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo (~25 videos) · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
+    scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo (~65 videos) · Lowest cost per credit · Priority AI processing · Early access to new features' },
+    // legacy aliases so any existing accounts still tagged pro/agency render correctly
+    pro:     { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo (~25 videos) · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
+    agency:  { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo (~65 videos) · Lowest cost per credit · Priority AI processing · Early access to new features' },
   };
 
-  const PLAN_ORDER = ['free', 'starter', 'pro', 'agency'];
+  const PLAN_ORDER = ['free', 'starter', 'creator', 'scale'];
+
+  window.setBillingPeriod = function setBillingPeriod(p) {
+    window._billingPeriod = (p === 'annual') ? 'annual' : 'monthly';
+    if (typeof renderBillingTab === 'function') renderBillingTab();
+  };
 
   function renderBillingTab() {
     const container = document.getElementById('billingTabContent');
@@ -762,7 +801,7 @@
       const info      = PLAN_INFO[planKey];
       const isCurrent = planKey === tier;
       const isUpgrade = idx > tierIdx;
-      const isRec     = planKey === 'pro';   // Pro = "Most Popular"
+      const isRec     = planKey === 'creator';   // Creator = "Most Popular"
 
       // Feature checklist from the desc string
       const feats = info.desc.split(' · ').map(f =>
@@ -770,10 +809,14 @@
            <span style="color:#34d399;flex-shrink:0;font-weight:800;">✓</span><span>${f}</span>
          </div>`).join('');
 
-      // Price: split main amount from the /period suffix
-      const _pParts   = info.price.split('/');
+      // Price: split main amount from the /period suffix (period-aware)
+      const _isAnnual = window._billingPeriod === 'annual';
+      const _showPrice = (_isAnnual && info.priceAnnual) ? info.priceAnnual : info.price;
+      const _pParts   = _showPrice.split('/');
       const priceMain = _pParts[0];
       const period    = _pParts.length > 1 ? '/' + _pParts.slice(1).join('/') : '';
+      const annualNote = (_isAnnual && info.annualTotal && planKey !== 'free')
+        ? `<div style="font-size:9.5px;color:#34d399;margin-top:-2px;">billed ${info.annualTotal}</div>` : '';
 
       // Per-card CTA
       let cta;
@@ -793,6 +836,7 @@
         ${isRec ? `<div style="position:absolute;top:-9px;left:50%;transform:translateX(-50%);background:var(--grad-accent);color:#fff;font-size:9px;font-weight:800;letter-spacing:0.06em;padding:3px 11px;border-radius:99px;white-space:nowrap;">★ MOST POPULAR</div>` : ''}
         <div style="font-size:11.5px;font-weight:800;letter-spacing:0.05em;text-transform:uppercase;color:${isRec ? '#34d399' : 'var(--text-2)'};">${info.label}</div>
         <div style="display:flex;align-items:baseline;gap:3px;"><span style="font-size:26px;font-weight:900;letter-spacing:-1px;color:var(--text-1);">${priceMain}</span><span style="font-size:12px;color:var(--text-3);">${period}</span></div>
+        ${annualNote}
         <div style="display:flex;flex-direction:column;gap:6px;margin:6px 0 12px;">${feats}</div>
         ${cta}
       </div>`;
@@ -846,6 +890,12 @@
       </div>
 
       <div class="uset-section-title">Subscription Plans</div>
+      <div style="display:flex;justify-content:center;margin:6px 0 14px;">
+        <div style="display:inline-flex;background:var(--surface-3);border:1px solid var(--border-2);border-radius:9px;padding:3px;gap:2px;">
+          <button onclick="setBillingPeriod('monthly')" style="padding:6px 16px;border:none;border-radius:7px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;${window._billingPeriod !== 'annual' ? 'background:var(--grad-accent);color:#fff;' : 'background:transparent;color:var(--text-3);'}">Monthly</button>
+          <button onclick="setBillingPeriod('annual')" style="padding:6px 16px;border:none;border-radius:7px;font-family:inherit;font-size:11.5px;font-weight:700;cursor:pointer;${window._billingPeriod === 'annual' ? 'background:var(--grad-accent);color:#fff;' : 'background:transparent;color:var(--text-3);'}">Annual <span style="font-size:9px;opacity:0.85;">· save 17%</span></button>
+        </div>
+      </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;align-items:stretch;margin-bottom:20px;padding-top:12px;">
         ${plansHtml}
       </div>
@@ -899,15 +949,14 @@
   function _renderCreditsSection() {
     const balance  = typeof window.userCredits === 'number' ? window.userCredits : 0;
     const tier     = window._stripeTier || 'free';
-    const monthly  = { free: 50, starter: 1000, pro: 4000, agency: 5000 }[tier] || 50;
+    const monthly  = { free: 50, starter: 1000, creator: 2500, scale: 6500, pro: 2500, agency: 6500 }[tier] || 50;
     const pct      = Math.min(100, Math.round((balance / monthly) * 100));
     const barColor = balance <= 50 ? '#f87171' : balance <= monthly * 0.25 ? '#fbbf24' : '#34d399';
 
     const TOPUP_PACKS = [
-      { id: 'boost',    credits: 500,   price: '$5',  label: 'Boost' },
-      { id: 'standard', credits: 2000,  price: '$18', label: 'Standard' },
-      { id: 'pro_pack', credits: 5000,  price: '$40', label: 'Pro Pack' },
-      { id: 'ultra',    credits: 10000, price: '$75', label: 'Ultra' },
+      { id: 'p1000', credits: 1000, price: '$20', label: '' },
+      { id: 'p2500', credits: 2500, price: '$45', label: 'Save 10%' },
+      { id: 'p5000', credits: 5000, price: '$80', label: 'Best value' },
     ];
 
     const packsHtml = TOPUP_PACKS.map(p => `
@@ -973,7 +1022,8 @@
 
   function openUpgradeModal(planKey) {
     const info        = PLAN_INFO[planKey] || { label: planKey, price: '', desc: '' };
-    const paymentLink = STRIPE_PAYMENT_LINKS[planKey] || null;
+    const _isAnnual   = window._billingPeriod === 'annual';
+    const paymentLink = _plink(planKey) || null;
     const existing    = document.getElementById('upgradeModal');
     if (existing) existing.remove();
 
@@ -989,18 +1039,19 @@
       if (qs) checkoutUrl += (checkoutUrl.includes('?') ? '&' : '?') + qs;
     }
 
-    // Compute display price — apply discount promo if active
+    // Compute display price — period-aware, apply discount promo if active
     const _promo = window._activePromo;
-    let displayPrice = info.price;
+    const _basePrice = (_isAnnual && info.priceAnnual) ? info.priceAnnual : info.price;
+    let displayPrice = _basePrice + (_isAnnual && info.annualTotal ? ' · ' + info.annualTotal : '');
     let promoLine = '';
-    if (_promo && _promo.type === 'discount' && info.price) {
-      const baseNum = parseFloat((info.price || '').replace(/[^0-9.]/g, ''));
+    if (_promo && _promo.type === 'discount' && _basePrice) {
+      const baseNum = parseFloat((_basePrice || '').replace(/[^0-9.]/g, ''));
       if (!isNaN(baseNum) && baseNum > 0) {
         const discounted = (baseNum * (1 - _promo.pct / 100)).toFixed(2);
-        const period = info.price.includes('/mo') ? '/mo' : '';
+        const period = _basePrice.includes('/mo') ? '/mo' : '';
         displayPrice = `$${discounted}${period}`;
         const _safeCode = String(_promo.code || '').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
-        promoLine = `<div style="font-size:10px;color:var(--success,#4ade80);margin-top:4px;text-align:center;">${_promo.pct}% off applied · was <s style="opacity:0.6;">${info.price}</s> · code: ${_safeCode}</div>`;
+        promoLine = `<div style="font-size:10px;color:var(--success,#4ade80);margin-top:4px;text-align:center;">${_promo.pct}% off applied · was <s style="opacity:0.6;">${_basePrice}</s> · code: ${_safeCode}</div>`;
       }
     }
 
@@ -1018,11 +1069,11 @@
       : `<div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;align-items:center;gap:10px;margin-bottom:12px;">
            <span style="font-size:18px;flex-shrink:0;">🚀</span>
            <div>
-             <div style="font-size:11.5px;font-weight:700;color:var(--text-1);margin-bottom:2px;">Agency billing coming soon</div>
-             <div style="font-size:10.5px;color:var(--text-3);">Contact us for early access to the Agency plan.</div>
+             <div style="font-size:11.5px;font-weight:700;color:var(--text-1);margin-bottom:2px;">Checkout is being set up</div>
+             <div style="font-size:10.5px;color:var(--text-3);">This plan's payment link isn't live yet — contact us and we'll get you upgraded.</div>
            </div>
          </div>
-         <a href="mailto:support@affiliateos.app?subject=Upgrade%20to%20Agency%20Plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
+         <a href="mailto:support@affiliateos.app?subject=Upgrade%20my%20plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
 
     const modal = document.createElement('div');
     modal.id = 'upgradeModal';
@@ -1035,7 +1086,7 @@
           <div style="width:38px;height:38px;border-radius:10px;background:var(--grad-accent);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">⚡</div>
           <div>
             <div style="font-size:15px;font-weight:800;color:var(--text-1);">Upgrade to ${info.label}</div>
-            <div style="font-size:12px;color:var(--text-3);margin-top:1px;">${info.price} · ${info.desc}</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:1px;">${_basePrice} · ${info.desc}</div>
           </div>
         </div>
 
@@ -1118,7 +1169,7 @@
 
   async function startCheckout(planKey) {
     // Legacy — kept for when Stripe functions are deployed
-    const priceId = STRIPE_PRICES[planKey];
+    const priceId = _pid(planKey);
     if (!priceId || priceId.includes('_HERE')) {
       openUpgradeModal(planKey);
       return;
@@ -1162,15 +1213,13 @@
           </div>
         </div>
 
-        <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:20px;">
+        <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:20px;">
           <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Change or upgrade plan</div>
-            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Select a plan from the Subscription Plans list below. Paid billing via Stripe is coming — for now, use a promo code or contact us.</div>
+            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Cancel, change plan, or update payment</div>
+            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Manage everything yourself in Stripe's secure billing portal. If you cancel, you keep full access until the end of your current billing period — no email needed.</div>
           </div>
-          <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;">
-            <div style="font-size:12px;font-weight:700;color:var(--text-1);margin-bottom:4px;">Cancel subscription</div>
-            <div style="font-size:11px;color:var(--text-3);line-height:1.6;">To cancel, email <a href="mailto:support@aiscaling.io" style="color:var(--accent-2);">support@aiscaling.io</a> — we process cancellations within 24 hours.</div>
-          </div>
+          <button onclick="window.openStripePortal(this)" style="width:100%;padding:11px;border-radius:9px;background:var(--grad-accent);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Open billing portal</button>
+          <div style="font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">Having trouble? Email <a href="mailto:support@aiscaling.io" style="color:var(--accent-2);">support@aiscaling.io</a></div>
         </div>
 
         <button onclick="document.getElementById('billingPortalModal').remove()" style="width:100%;padding:10px;border-radius:9px;background:none;border:1px solid var(--border-2);color:var(--text-3);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
@@ -1179,6 +1228,36 @@
     document.body.appendChild(modal);
     modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
   }
+
+  // Open the Stripe Customer Portal so users can self-cancel / change plan / update card.
+  // Cancellations are configured (in Stripe) to take effect at period end, so access continues
+  // until the paid period runs out. No email needed.
+  window.openStripePortal = async function openStripePortal(btn) {
+    const customerId = window._stripeCustomerId || null;
+    if (!customerId) {
+      showToast('No active paid subscription to manage yet.', 'info', 4000);
+      return;
+    }
+    if (!_sb) { showToast('Please sign in first.', 'warning'); return; }
+    const { data: { session } } = await _sb.auth.getSession().catch(() => ({ data: { session: null } }));
+    if (!session) { showToast('Please sign in first.', 'warning'); return; }
+    const orig = btn ? btn.textContent : '';
+    if (btn) { btn.disabled = true; btn.textContent = 'Opening…'; }
+    try {
+      const res = await fetch('/.netlify/functions/create-portal-session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ customerId }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.url) { window.location.href = data.url; return; }
+      showToast('Could not open billing portal: ' + (data.error || ('Server error ' + res.status)), 'error', 5000);
+    } catch (err) {
+      showToast('Network error: ' + err.message, 'error');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = orig; }
+    }
+  };
 
   // ── Credit chip: updates the topbar balance display ──────────────────────
   function updateCreditChip(balance) {
@@ -1223,10 +1302,9 @@
     if (existing) existing.remove();
 
     const PACKS = [
-      { id: 'boost',    credits: 500,   price: '$5',  label: 'Boost',    desc: '~2.5 videos' },
-      { id: 'standard', credits: 2000,  price: '$18', label: 'Standard', desc: '~10 videos'  },
-      { id: 'pro_pack', credits: 5000,  price: '$40', label: 'Pro Pack', desc: '~25 videos'  },
-      { id: 'ultra',    credits: 10000, price: '$75', label: 'Ultra',    desc: '~50 videos'  },
+      { id: 'p1000', credits: 1000, price: '$20', label: '1,000 Credits', desc: '~10 videos' },
+      { id: 'p2500', credits: 2500, price: '$45', label: '2,500 Credits', desc: '~25 videos · save 10%' },
+      { id: 'p5000', credits: 5000, price: '$80', label: '5,000 Credits', desc: '~50 videos · best value' },
     ];
 
     const modal = document.createElement('div');

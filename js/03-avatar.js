@@ -185,7 +185,10 @@
         // original preview shows immediately, then swaps to the prepared version.
         // Falls back to the original on any failure (see applyPreparedAvatar).
         if (typeof window.prepareAvatarReference === 'function') {
-          try { window.prepareAvatarReference(avatarImageDataUrl); } catch(_) {}
+          // Keep the promise so composite generation can await prep — guarantees the
+          // de-photorealized avatar (not the raw photo) is what reaches the frames.
+          try { window._avatarPrepPromise = window.prepareAvatarReference(avatarImageDataUrl); }
+          catch(_) { window._avatarPrepPromise = null; }
         }
       } catch (err) {
         showToast('Failed to load avatar image — please try again.', 'error');

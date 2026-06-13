@@ -270,8 +270,8 @@
     if (window.location.protocol === 'file:') {
       const _wall = document.getElementById('authWall');
       if (_wall) _wall.classList.remove('visible');
-      window._stripeTier    = 'agency';
-      window._stripeBaseTier = 'agency';
+      window._stripeTier    = 'scale';
+      window._stripeBaseTier = 'scale';
       window.userCredits    = 9999;
       updateUserChip('Local Preview');
       initApp().catch(e => console.error('initApp failed (file bypass):', e));
@@ -289,8 +289,8 @@
       _devUnlock = (localStorage.getItem('aff_dev_unlock') === _DEV_PIN);
     } catch(_) {}
     if (window.location.hostname === 'dev--aiscaling.netlify.app' && _devUnlock) {
-      window._stripeTier    = 'agency';
-      window._stripeBaseTier = 'agency';
+      window._stripeTier    = 'scale';
+      window._stripeBaseTier = 'scale';
       window.userCredits    = 9999; // unlimited credits for dev testing
       // Restore any cached session so /.netlify/functions/* get a valid Bearer token
       if (_sb) {
@@ -339,7 +339,7 @@
       window._supabaseUid      = session.user.id   || '';
       // Credit balance from app_metadata — default 50 for free/new users, plan amount for paid
       const _savedCredits = session.user.app_metadata?.credits_balance;
-      const _defaultCredits = { free: 50, starter: 1000, pro: 4000, agency: 5000 }[window._stripeTier] || 50;
+      const _defaultCredits = { free: 50, starter: 1000, creator: 2500, scale: 6500, pro: 2500, agency: 6500 }[window._stripeTier] || 50;
       window.userCredits = (typeof _savedCredits === 'number') ? _savedCredits : _defaultCredits;
       applyPromoOverride();
       // Prefer display name from settings, fall back to email

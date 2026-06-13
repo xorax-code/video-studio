@@ -20,12 +20,15 @@
  *   invoice.payment_failed                    -> (logged, no downgrade on first failure)
  */
 
-// Monthly credits per plan
+// Monthly credits per plan (reset each cycle; purchased top-ups are preserved separately)
 const PLAN_MONTHLY_CREDITS = {
   free:    50,
   starter: 1000,
-  pro:     4000,
-  agency:  5000,
+  creator: 2500,
+  scale:   6500,
+  // legacy aliases (old tier names) -> map to current grants
+  pro:     2500,
+  agency:  6500,
 };
 
 const https  = require('https');
@@ -51,13 +54,33 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
   } catch { return false; }
 }
 
-// Tier mapping
+// Tier mapping (legacy env-var fallback; only used if a price has no `plan` metadata)
 function tierFromPriceId(priceId) {
   if (!priceId) return 'starter';
-  if (priceId === process.env.STRIPE_PRICE_AGENCY)  return 'agency';
-  if (priceId === process.env.STRIPE_PRICE_PRO)     return 'pro';
-  if (priceId === process.env.STRIPE_PRICE_STARTER) return 'starter';
+  if (priceId === process.env.STRIPE_PRICE_SCALE)          return 'scale';
+  if (priceId === process.env.STRIPE_PRICE_CREATOR)        return 'creator';
+  if (priceId === process.env.STRIPE_PRICE_STARTER)        return 'starter';
+  // annual prices
+  if (priceId === process.env.STRIPE_PRICE_SCALE_ANNUAL)   return 'scale';
+  if (priceId === process.env.STRIPE_PRICE_CREATOR_ANNUAL) return 'creator';
+  if (priceId === process.env.STRIPE_PRICE_STARTER_ANNUAL) return 'starter';
+  // legacy names
+  if (priceId === process.env.STRIPE_PRICE_AGENCY)  return 'scale';
+  if (priceId === process.env.STRIPE_PRICE_PRO)     return 'creator';
   return 'starter'; // default to starter for any unrecognised paid price
+}
+
+// Resolve { tier, credits } from a Stripe price object.
+// Preferred path: read price.metadata.plan + price.metadata.credits set in the Stripe dashboard.
+// This means NO price IDs need to be hardcoded — works for monthly + annual + any future price.
+function planFromPrice(price) {
+  const md   = (price && price.metadata) || {};
+  const tier = (md.plan || tierFromPriceId(price && price.id) || 'starter').toLowerCase();
+  let credits = parseInt(md.credits, 10);
+  if (!Number.isFinite(credits) || credits <= 0) {
+    credits = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
+  }
+  return { tier, credits };
 }
 
 // Stripe helper: GET
@@ -227,10 +250,15 @@ exports.handler = async (event) => {
           if (credits > 0) {
             const adminUser = await getAdminUser(userId);
             if (!adminUser) { console.error('stripe-webhook: getAdminUser returned null for user ' + userId + ' during top-up; aborting credit write'); break; }
-            const currentBalance = (adminUser.app_metadata && adminUser.app_metadata.credits_balance) || 0;
+            const meta           = adminUser.app_metadata || {};
+            const currentBalance = meta.credits_balance || 0;
+            // Top-ups are added to the spendable balance AND tracked in credits_topup,
+            // a reserve counter so they survive the monthly plan reset (plan-first spend).
+            const currentTopup   = meta.credits_topup || 0;
             const newBalance     = currentBalance + credits;
-            await updateUserMeta(userId, { credits_balance: newBalance });
-            console.log('User ' + userId + ' top-up: +' + credits + ' credits (pack: ' + (session.metadata && session.metadata.pack_id) + ', new balance: ' + newBalance + ')');
+            const newTopup       = currentTopup + credits;
+            await updateUserMeta(userId, { credits_balance: newBalance, credits_topup: newTopup });
+            console.log('User ' + userId + ' top-up: +' + credits + ' credits (pack: ' + (session.metadata && session.metadata.pack_id) + ', balance: ' + newBalance + ', topup reserve: ' + newTopup + ')');
           }
           break;
         }
@@ -239,31 +267,34 @@ exports.handler = async (event) => {
         const customerId     = session.customer;
         const subscriptionId = session.subscription;
 
-        // Fetch subscription to get price ID -> tier
+        // Fetch subscription to get price -> tier + monthly credits (from price metadata)
         let tier = 'starter';
+        let planCredits = PLAN_MONTHLY_CREDITS.starter;
         if (subscriptionId) {
           const sub = await stripeGet('/v1/subscriptions/' + subscriptionId);
           if (!sub) { console.error('stripe-webhook: failed to fetch sub ' + subscriptionId); break; }
-          const priceId = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
-          tier = tierFromPriceId(priceId);
+          const price = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
+          const plan  = planFromPrice(price);
+          tier = plan.tier; planCredits = plan.credits;
         }
 
-        // Allocate monthly credits for the new plan
-        const planCredits = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
-        const adminUser   = await getAdminUser(userId);
+        const adminUser = await getAdminUser(userId);
         if (!adminUser) { console.error('stripe-webhook: getAdminUser returned null for user ' + userId + ' during subscription checkout; aborting credit write'); break; }
-        const currentBalance = (adminUser.app_metadata && adminUser.app_metadata.credits_balance) || 0;
-        // On new subscription, set to plan credits (or keep existing if higher -- carried over from trial)
-        const newBalance     = Math.max(currentBalance, planCredits);
+        const meta           = adminUser.app_metadata || {};
+        const currentBalance = meta.credits_balance || 0;
+        // Preserve any unspent top-up credits (plan-first accounting), then grant fresh plan credits.
+        const topupReserve   = Math.min(currentBalance, meta.credits_topup || 0);
+        const newBalance     = planCredits + topupReserve;
 
         await updateUserMeta(userId, {
           stripe_tier:            tier,
           stripe_customer_id:     customerId,
           stripe_subscription_id: subscriptionId,
           credits_balance:        newBalance,
+          credits_topup:          topupReserve,
           credits_plan_monthly:   planCredits,
         });
-        console.log('User ' + userId + ' upgraded to ' + tier + ', credits set to ' + newBalance);
+        console.log('User ' + userId + ' upgraded to ' + tier + ', credits set to ' + newBalance + ' (plan ' + planCredits + ' + topup ' + topupReserve + ')');
         break;
       }
 
@@ -271,15 +302,42 @@ exports.handler = async (event) => {
       case 'customer.subscription.updated': {
         const sub        = stripeEvent.data.object;
         const customerId = sub.customer;
-        const priceId    = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
+        const price      = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
         // Keep users on paid tier while past_due or trialing -- only downgrade on terminal states
         const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
-        const tier = PAID_STATUSES.has(sub.status) ? (tierFromPriceId(priceId) || 'free') : 'free';
+        const paid = PAID_STATUSES.has(sub.status);
+        const plan = planFromPrice(price);
+        const tier = paid ? (plan.tier || 'free') : 'free';
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {
-          await updateUserMeta(userId, { stripe_tier: tier, stripe_subscription_id: sub.id });
-          console.log('User ' + userId + ' plan updated to ' + tier);
+          const metaUpdate = { stripe_tier: tier, stripe_subscription_id: sub.id };
+          const adminUser  = await getAdminUser(userId);
+          const meta       = (adminUser && adminUser.app_metadata) || null;
+
+          // Tier ranking so we only grant credits on a real UPGRADE (not on every update event).
+          // Idempotent: after granting, stored stripe_tier == new tier, so repeat events won't re-grant.
+          const TIER_RANK  = { free: 0, starter: 1, creator: 2, scale: 3, pro: 2, agency: 3 };
+          const prevTier   = (meta && meta.stripe_tier) || 'free';
+          const isUpgrade  = !!meta && paid && (TIER_RANK[tier] || 0) > (TIER_RANK[prevTier] || 0);
+
+          if (isUpgrade) {
+            // Mid-cycle upgrade: grant the new tier's monthly credits right away.
+            // Preserve unspent top-ups (plan-first); old plan credits do not roll over.
+            const planCredits    = plan.credits;
+            const currentBalance = meta.credits_balance || 0;
+            const topupReserve   = Math.min(currentBalance, meta.credits_topup || 0);
+            metaUpdate.credits_balance      = planCredits + topupReserve;
+            metaUpdate.credits_topup        = topupReserve;
+            metaUpdate.credits_plan_monthly = planCredits;
+            console.log('User ' + userId + ' UPGRADED ' + prevTier + ' -> ' + tier + ', credits granted to ' + (planCredits + topupReserve) + ' (plan ' + planCredits + ' + topup ' + topupReserve + ')');
+          } else {
+            // Downgrade or non-plan update: keep current balance until next renewal; just refresh the record.
+            if (paid) metaUpdate.credits_plan_monthly = plan.credits;
+            console.log('User ' + userId + ' plan updated to ' + tier + ' (no immediate credit change)');
+          }
+
+          await updateUserMeta(userId, metaUpdate);
         }
         break;
       }
@@ -292,8 +350,9 @@ exports.handler = async (event) => {
           await updateUserMeta(userId, {
             stripe_tier: 'free',
             credits_balance: PLAN_MONTHLY_CREDITS.free,
+            credits_topup: 0,
           });
-          console.log('User ' + userId + ' downgraded to free + credits reset to ' + PLAN_MONTHLY_CREDITS.free);
+          console.log('User ' + userId + ' downgraded to free + credits reset to ' + PLAN_MONTHLY_CREDITS.free + ' (topups cleared)');
         }
         break;
       }
@@ -303,9 +362,9 @@ exports.handler = async (event) => {
       case 'customer.subscription.created': {
         const sub        = stripeEvent.data.object;
         const customerId = sub.customer;
-        const priceId    = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
+        const price      = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
         const PAID_STATUSES = new Set(['active', 'trialing', 'past_due']);
-        const tier = PAID_STATUSES.has(sub.status) ? (tierFromPriceId(priceId) || 'starter') : 'free';
+        const tier = PAID_STATUSES.has(sub.status) ? (planFromPrice(price).tier || 'starter') : 'free';
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {
@@ -332,29 +391,32 @@ exports.handler = async (event) => {
         // billing_reason: 'subscription_create' = first charge, 'subscription_cycle' = renewal
         const isRenewal = invoice.billing_reason === 'subscription_cycle';
 
-        // Fetch the subscription to get current price -> tier
+        // Fetch the subscription to get current price -> tier (+ credits from price metadata)
         const sub     = await stripeGet('/v1/subscriptions/' + subscriptionId);
         if (!sub) { console.error('stripe-webhook: failed to fetch sub ' + subscriptionId + ' on payment'); break; }
-        const priceId = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price && sub.items.data[0].price.id;
-        const tier    = tierFromPriceId(priceId) || 'starter';
+        const tier    = planFromPrice(sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price).tier || 'starter';
 
         const userId = await findUserByCustomerId(customerId);
         if (userId) {
           const metaUpdate = { stripe_tier: tier };
 
           if (isRenewal) {
-            // Monthly renewal: add plan credits on top of current balance (unused credits carry over)
-            // Cap at 2x the monthly plan amount to prevent infinite accumulation
-            const planCredits = PLAN_MONTHLY_CREDITS[tier] || PLAN_MONTHLY_CREDITS.starter;
-            const adminUser   = await getAdminUser(userId);
+            // Monthly renewal: RESET the plan grant (no rollover of unused plan credits).
+            // Purchased top-ups are preserved: with plan-first spend, the unspent top-up
+            // reserve = min(currentBalance, credits_topup). New balance = fresh plan + that reserve.
+            const adminUser = await getAdminUser(userId);
             if (!adminUser) { console.error('stripe-webhook: getAdminUser returned null for user ' + userId + ' during renewal; aborting credit write'); break; }
-            const currentBalance = (adminUser.app_metadata && adminUser.app_metadata.credits_balance) || 0;
-            const maxBalance     = planCredits * 2;
-            const addAmount      = Math.min(planCredits, Math.max(0, maxBalance - currentBalance));
-            const newBalance     = currentBalance + addAmount;
+            const rmeta          = adminUser.app_metadata || {};
+            // Prefer the price's metadata credits for the renewing price
+            const rprice         = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
+            const planCredits    = planFromPrice(rprice).credits;
+            const currentBalance = rmeta.credits_balance || 0;
+            const topupReserve   = Math.min(currentBalance, rmeta.credits_topup || 0);
+            const newBalance     = planCredits + topupReserve;
             metaUpdate.credits_balance      = newBalance;
+            metaUpdate.credits_topup        = topupReserve;
             metaUpdate.credits_plan_monthly = planCredits;
-            console.log('User ' + userId + ' renewal -> +' + addAmount + ' credits (balance: ' + newBalance + ', tier: ' + tier + ')');
+            console.log('User ' + userId + ' renewal -> reset to ' + newBalance + ' credits (plan ' + planCredits + ' + topup ' + topupReserve + ', tier: ' + tier + ')');
           }
 
           await updateUserMeta(userId, metaUpdate);

@@ -348,7 +348,8 @@
   //                  Gemini 2.0 Flash for scene analysis (setting/camera/lighting/props).
   //                  Separate from imageDataUrl — the start image may be the avatar
   //                  composite, but scene analysis always needs the raw source frame.
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl) {
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel) {
+    softenLevel = softenLevel | 0; // 0 = default; higher = softer start frame (safety-filter retries)
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -370,8 +371,11 @@
     // likeness" filter (code 15236754) passes — gallery/final video keep the
     // full-res frame; only Veo's input is down-ressed. 720px @ 0.72 sits just
     // under the photoreal-face threshold that was blocking clips.
+    // Softening levels — escalated automatically when a clip is filtered for likeness.
+    var _softenSteps = [ [660, 0.70], [560, 0.64], [470, 0.58] ];
+    var _ss = _softenSteps[Math.max(0, Math.min(_softenSteps.length - 1, softenLevel))];
     var _veoStartUrl = imageDataUrl
-      ? await _veoSoftenStartFrame(imageDataUrl, 720, 0.72)
+      ? await _veoSoftenStartFrame(imageDataUrl, _ss[0], _ss[1])
       : imageDataUrl;
 
     var _start = _splitDataUrl(_veoStartUrl);

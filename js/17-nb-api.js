@@ -135,7 +135,8 @@
   window._nbPostComposite = _nbPostComposite;
 
   // ── Generate NB composite for a single segment ────────────────────────────
-  async function generateNbComposite(segIdx) {
+  async function generateNbComposite(segIdx, stylizeLevel) {
+    stylizeLevel = stylizeLevel | 0; // 0 = base polished look; higher = more stylized (used by safety-filter retries)
     var seg = segments[segIdx];
     if (!seg) { showToast('Segment not found.', 'error'); return false; }
 
@@ -149,6 +150,11 @@
       showToast('Upload your avatar photo first.', 'warning');
       return false;
     }
+
+    // Wait for the one-time avatar prep (stylize) to finish so the de-photorealized
+    // avatar base is used for the frame — not the raw uploaded photo. Resolves
+    // instantly once prep is done; never blocks if prep failed or wasn't started.
+    if (window._avatarPrepPromise) { try { await window._avatarPrepPromise; } catch(_) {} }
 
     // Get JWT for auth
     var jwt = null;
@@ -241,6 +247,19 @@
 
     var _segAction = (seg.action || '').trim();
 
+    // ── Locked background ──────────────────────────────────────────────────
+    // When the user has locked a background (useAvatarBg + extracted bgDescription),
+    // it MUST win over the scene's own setting on every frame — Producer presets
+    // (e.g. the apothecary) were overriding it. Force it into the setting/bg fields
+    // here, and a hard override directive is appended to the instruction below.
+    var _lockedBg = '';
+    try {
+      if ((typeof useAvatarBg !== 'undefined' && useAvatarBg) && (typeof bgDescription !== 'undefined' && bgDescription)) {
+        _lockedBg = String(bgDescription).trim();
+      }
+    } catch(_) {}
+    if (_lockedBg) { _nbBgRef = _lockedBg; _nbSetting = _lockedBg; }
+
     if (hasFrame) {
       // ── Compositing mode ──────────────────────────────────────────────────────
       // The NB prompt JSON's `instruction` field (_nbCore) is a complete NB Pro
@@ -272,7 +291,7 @@
         _hfParts.push('TRANSFER BLOCK: No text, logos, labels, or graphical overlays from Photo 2 in the output.');
         _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
         if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
-        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single photorealistic image. ONE person only.');
+        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single polished, natural, REALISTIC image — smooth even skin, gentle soft lighting, premium look; lightly softened rather than a sharp, hyper-detailed photograph of a specific real individual. Not illustrated, not cartoon. ONE person only.');
         instruction = _hfParts.join(' ');
       }
 
@@ -291,7 +310,7 @@
       if (_nbCore) {
         _gParts.push(_nbCore);
       } else {
-        _gParts.push('Generate a photorealistic vertical 9:16 lifestyle photo of this exact person facing the camera with a natural engaged expression.');
+        _gParts.push('Generate a polished, natural, REALISTIC vertical 9:16 portrait of this person facing the camera with a natural engaged expression — smooth even skin, soft lighting, lightly softened rather than a sharp, hyper-detailed photograph of a specific real individual. Not illustrated, not cartoon.');
       }
 
       // Scene / setting / background
@@ -313,7 +332,7 @@
 
       // Technical
       _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '.');
-      _gParts.push('Style: ' + (_nbStyle || 'photorealistic lifestyle editorial — real room, real lighting, real decor') + '. Single image. ONE person only. No text overlays, no watermarks.');
+      _gParts.push('Style: ' + (_nbStyle || 'natural realistic lifestyle — soft even lighting, smooth idealized skin, premium look, lightly softened (not a sharp, hyper-detailed photograph of a specific real individual); not illustrated, not cartoon') + '. Single image. ONE person only. No text overlays, no watermarks.');
 
       instruction = _gParts.join(' ');
     }
@@ -322,6 +341,23 @@
     // Generate mode (Producer): the backend adds its own "EXACT PRODUCT" directive.
     if (hasProduct && hasFrame) {
       instruction += ' PRODUCT REPLACE (critical): The object held in the hand must be REPLACED with the product shown in Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose, but the held product\'s shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep or blend the original product from the scene frame.';
+    }
+
+    // ── Global render-style override (escalates on safety-filter retries) ────
+    // Veo's likeness filter trips on faces that read as a real, identifiable
+    // photographed person. This pushes the PERSON toward a polished digital-creator
+    // render while keeping the scene premium. Higher stylizeLevel = softer/more
+    // stylized, used automatically when a clip gets filtered (see veo retry).
+    var _styleLevels = [
+      ' RENDER STYLE: natural, REALISTIC look — smooth, evenly-lit, gently idealized skin; like a polished real lifestyle photo, lightly softened (not a sharp, hyper-detailed documentary photo of a specific real individual). Not illustrated, not cartoon, not 3D/CGI.',
+      ' RENDER STYLE (softer): realistic but noticeably soft — reduce fine facial detail and skin pores, gentle glamour-soft focus; still a real-looking person, just less sharply photographic.',
+      ' RENDER STYLE (max softening): smooth, simplified, soft-focus rendering of the face with minimal fine detail; keep it human and natural-looking but clearly not a sharp photograph of a specific real individual.'
+    ];
+    instruction += _styleLevels[Math.max(0, Math.min(_styleLevels.length - 1, stylizeLevel))];
+
+    // Locked background wins over any scene setting mentioned above.
+    if (_lockedBg) {
+      instruction += ' BACKGROUND LOCK (critical, overrides everything else): The environment/background behind the person MUST be exactly: ' + _lockedBg + '. Replace and IGNORE any other room, shop, store, indoor setting, or location described above. Keep the person, their outfit, and their action the same, but place them in THIS exact background on every single frame.';
     }
 
     // ── Generate via the async background worker (no 26s timeout) ────────────
@@ -343,16 +379,20 @@
     }, jwt, 'Scene ' + (segIdx + 1));
     var res = _ar.res, data = _ar.data;
 
-    if (!res.ok || data.error) {
-      var msg = data.error || ('HTTP ' + res.status);
-      console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed:', msg);
-      showToast('NB gen failed (Scene ' + (segIdx + 1) + '): ' + msg, 'error', 20000);
-      return false;
-    }
-    if (!data.imageB64) {
-      var noImgMsg = data.error || 'No image returned (safety filter or bad response)';
-      console.error('[NB Composite] Scene ' + (segIdx + 1) + ' — no image:', noImgMsg);
-      showToast('NB gen returned no image for Scene ' + (segIdx + 1) + ': ' + noImgMsg, 'error', 20000);
+    // Failure (HTTP/error OR no image — the "Model returned no image" / safety-filter
+    // case that killed Scene 5). Auto-retry up to 2x with a softer render, which both
+    // clears the image filter and rides out transient API blips. Each retry is a cheap
+    // Flash image gen (~2 credits).
+    if (!res.ok || data.error || !data.imageB64) {
+      var msg = data.error || (!data.imageB64 ? 'no image returned (safety filter or transient error)' : ('HTTP ' + res.status));
+      if (stylizeLevel < 2) {
+        console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' failed (' + msg + ') — auto-retrying softer (level ' + (stylizeLevel + 1) + ')');
+        if (typeof showToast === 'function') showToast('Scene ' + (segIdx + 1) + ' didn’t render — retrying with a softer version…', 'info', 4500);
+        await new Promise(function (r) { setTimeout(r, 1200); }); // brief backoff for transient errors
+        return await generateNbComposite(segIdx, stylizeLevel + 1);
+      }
+      console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed after retries:', msg);
+      showToast('NB gen failed for Scene ' + (segIdx + 1) + ' after retries: ' + msg, 'error', 20000);
       return false;
     }
 
@@ -500,9 +540,9 @@
     // "recreate this real person") so the image model's own likeness guard
     // doesn't refuse, while still reducing the photoreal look Veo blocks on.
     var instruction =
-      'Re-render the person in this reference photo as a polished DIGITAL AVATAR portrait — a high-end 3D / CGI animated character, NOT a photograph. '
-      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, outfit and jewelry so it is clearly the same character. '
-      + 'Render with smooth, slightly stylized skin (no photographic pores, no blemishes, no skin redness), soft even studio lighting, and a clean rendered look that reads as a created character rather than a real camera photo of a real person. '
+      'Re-render the person in this reference photo as a clean, natural, REALISTIC portrait — a polished real-looking photo. Do NOT make it illustrated, cartoon, anime, 3D, or CGI. '
+      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, outfit and jewelry so it is clearly the same person. '
+      + 'Render with smooth, even, flattering skin (gently idealized — minimal harsh pores, blemishes, or redness), soft even studio lighting, like a high-quality lifestyle photo that is lightly softened rather than a sharp, hyper-detailed documentary photograph of a specific real individual. '
       + (avDesc ? 'Notes: ' + avDesc + '. ' : '')
       + 'Vertical 9:16, head and shoulders, facing camera, plain soft neutral background.';
 

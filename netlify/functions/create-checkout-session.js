@@ -4,9 +4,12 @@
  *
  * Required env vars (set in Netlify dashboard -> Environment Variables):
  *   STRIPE_SECRET_KEY      -- sk_live_... or sk_test_...
- *   STRIPE_PRICE_STARTER   -- price_... for $19/mo Starter plan
- *   STRIPE_PRICE_PRO       -- price_... for $49/mo Pro plan
- *   STRIPE_PRICE_AGENCY    -- price_... for $99/mo Agency plan
+ *   STRIPE_PRICE_STARTER          -- price_... for $19/mo Starter (monthly)
+ *   STRIPE_PRICE_CREATOR          -- price_... for $39/mo Creator (monthly)
+ *   STRIPE_PRICE_SCALE            -- price_... for $99/mo Scale (monthly)
+ *   STRIPE_PRICE_STARTER_ANNUAL   -- price_... for $190/yr Starter (annual)
+ *   STRIPE_PRICE_CREATOR_ANNUAL   -- price_... for $390/yr Creator (annual)
+ *   STRIPE_PRICE_SCALE_ANNUAL     -- price_... for $990/yr Scale (annual)
  *   SUPABASE_URL           -- https://xxx.supabase.co
  *   SUPABASE_ANON_KEY      -- anon key for JWT validation
  */
@@ -118,6 +121,12 @@ exports.handler = async (event) => {
   // Whitelist valid price IDs -- prevents clients from passing arbitrary Stripe prices
   const VALID_PRICES = new Set([
     process.env.STRIPE_PRICE_STARTER,
+    process.env.STRIPE_PRICE_CREATOR,
+    process.env.STRIPE_PRICE_SCALE,
+    process.env.STRIPE_PRICE_STARTER_ANNUAL,
+    process.env.STRIPE_PRICE_CREATOR_ANNUAL,
+    process.env.STRIPE_PRICE_SCALE_ANNUAL,
+    // legacy names — harmless if unset
     process.env.STRIPE_PRICE_PRO,
     process.env.STRIPE_PRICE_AGENCY,
   ].filter(Boolean));

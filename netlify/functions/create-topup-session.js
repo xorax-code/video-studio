@@ -4,15 +4,14 @@
  *
  * Required env vars:
  *   STRIPE_SECRET_KEY          — sk_live_... or sk_test_...
- *   STRIPE_TOPUP_BOOST         — price_... for 500 credits / $5
- *   STRIPE_TOPUP_STANDARD      — price_... for 2,000 credits / $18
- *   STRIPE_TOPUP_PRO_PACK      — price_... for 5,000 credits / $40
- *   STRIPE_TOPUP_ULTRA         — price_... for 10,000 credits / $75
+ *   STRIPE_TOPUP_1000          — price_... for the $20 / 1,000-credit top-up
+ *   STRIPE_TOPUP_2500          — price_... for the $45 / 2,500-credit top-up
+ *   STRIPE_TOPUP_5000          — price_... for the $80 / 5,000-credit top-up
  *   SUPABASE_URL               — https://xxx.supabase.co
  *   SUPABASE_ANON_KEY          — anon key for JWT validation
  *
  * POST body (JSON):
- *   { packId: 'boost' | 'standard' | 'pro_pack' | 'ultra' }
+ *   { packId: 'p1000' | 'p2500' | 'p5000' }
  *
  * Authorization header: Bearer <supabase_jwt>
  */
@@ -25,10 +24,9 @@ const APP_URL = 'https://aiscaling.netlify.app';
 // ── Top-up pack definitions ───────────────────────────────────────────────────
 // priceId comes from env vars — set in Netlify dashboard after creating in Stripe
 const TOPUP_PACKS = {
-  boost:    { credits: 500,   label: 'Boost — 500 Credits',         envKey: 'STRIPE_TOPUP_BOOST'    },
-  standard: { credits: 2000,  label: 'Standard — 2,000 Credits',    envKey: 'STRIPE_TOPUP_STANDARD' },
-  pro_pack: { credits: 5000,  label: 'Pro Pack — 5,000 Credits',    envKey: 'STRIPE_TOPUP_PRO_PACK' },
-  ultra:    { credits: 10000, label: 'Ultra — 10,000 Credits',      envKey: 'STRIPE_TOPUP_ULTRA'    },
+  p1000: { credits: 1000, label: '1,000 Credits — $20', envKey: 'STRIPE_TOPUP_1000' },
+  p2500: { credits: 2500, label: '2,500 Credits — $45', envKey: 'STRIPE_TOPUP_2500' },
+  p5000: { credits: 5000, label: '5,000 Credits — $80', envKey: 'STRIPE_TOPUP_5000' },
 };
 
 // ── Stripe POST helper ────────────────────────────────────────────────────────
