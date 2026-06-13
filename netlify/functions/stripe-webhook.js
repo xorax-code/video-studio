@@ -415,16 +415,25 @@ exports.handler = async (event) => {
             const adminUser = await getAdminUser(userId);
             if (!adminUser) { console.error('stripe-webhook: getAdminUser returned null for user ' + userId + ' during renewal; aborting credit write'); break; }
             const rmeta          = adminUser.app_metadata || {};
-            // Prefer the price's metadata credits for the renewing price
-            const rprice         = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
-            const planCredits    = planFromPrice(rprice).credits;
-            const currentBalance = rmeta.credits_balance || 0;
-            const topupReserve   = Math.min(currentBalance, rmeta.credits_topup || 0);
-            const newBalance     = planCredits + topupReserve;
-            metaUpdate.credits_balance      = newBalance;
-            metaUpdate.credits_topup        = topupReserve;
-            metaUpdate.credits_plan_monthly = planCredits;
-            console.log('User ' + userId + ' renewal -> reset to ' + newBalance + ' credits (plan ' + planCredits + ' + topup ' + topupReserve + ', tier: ' + tier + ')');
+            // Idempotency: Stripe redelivers webhooks (on non-2xx, network blips, or
+            // at-least-once delivery). If we already processed THIS renewal invoice,
+            // don't reset the balance again — that would restore credits the user
+            // already spent this cycle.
+            if (rmeta.last_renewal_invoice === invoice.id) {
+              console.log('User ' + userId + ' renewal invoice ' + invoice.id + ' already processed — skipping credit reset');
+            } else {
+              // Prefer the price's metadata credits for the renewing price
+              const rprice         = sub.items && sub.items.data && sub.items.data[0] && sub.items.data[0].price;
+              const planCredits    = planFromPrice(rprice).credits;
+              const currentBalance = rmeta.credits_balance || 0;
+              const topupReserve   = Math.min(currentBalance, rmeta.credits_topup || 0);
+              const newBalance     = planCredits + topupReserve;
+              metaUpdate.credits_balance      = newBalance;
+              metaUpdate.credits_topup        = topupReserve;
+              metaUpdate.credits_plan_monthly = planCredits;
+              metaUpdate.last_renewal_invoice = invoice.id;  // mark processed
+              console.log('User ' + userId + ' renewal -> reset to ' + newBalance + ' credits (plan ' + planCredits + ' + topup ' + topupReserve + ', tier: ' + tier + ')');
+            }
           }
 
           await updateUserMeta(userId, metaUpdate);

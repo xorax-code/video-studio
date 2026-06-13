@@ -4,7 +4,7 @@
   // No Gemini API key needed in the browser.
 
   var _GEMINI_POLL_MS  = 6000;   // poll every 6s
-  var _GEMINI_TIMEOUT  = 600000; // 10 min max — Veo 3 under load can exceed 6 min
+  var _GEMINI_TIMEOUT  = 900000; // 15 min max — wider window so genuine completions under load aren't cut off (a false timeout → user regenerates → a second paid clip)
 
   // ── Generate mode: 'api' (server-side, credits) | 'flow' (manual Google Flow) ──
   function getGenerateMode() {
@@ -444,8 +444,15 @@
       }
       // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
+        // Auto-soften retry: if the safety filter blocked this clip, the server has
+        // already refunded it (refunded:true), so re-render the start frame softer and
+        // try again — up to 3 total attempts. Only on `filtered`, never generic errors.
+        if (pollData.filtered && softenLevel < 2 && imageDataUrl) {
+          if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/3)…', 'info', 4500);
+          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1);
+        }
         // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
-        var _errMsg = pollData.filtered ? ('🚫 ' + pollData.error) : pollData.error;
+        var _errMsg = pollData.filtered ? ('🚫 ' + pollData.error + ' (credits refunded)') : pollData.error;
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
@@ -457,7 +464,7 @@
         return { videoUrl: pollData.videoUrl, mimeType: pollData.mimeType || 'video/mp4' };
       }
     }
-    throw new Error('Generation timed out (10 min). Veo may be under high load — try again or reduce clip duration.');
+    throw new Error('Still rendering after 15 min — Veo is under heavy load. Check your gallery in a few minutes before regenerating (a regenerate starts a new paid clip).');
   }
 
   // ── Fetch video as blob URL for in-browser playback ──────────────────────
@@ -687,7 +694,7 @@
         _setCardStatus(segIdx, 'generating', 'Generating ' + clipLabel + '… (~1 min)');
 
         var durSecs = 6;
-        try { var _po = JSON.parse(item.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+        try { var _po = JSON.parse(item.veoPrompt || '{}'); durSecs = parseInt(_po.duration, 10) || 6; } catch(_) {}
 
         try {
           // All clips (primary + continuations) use the same NB composite start frame

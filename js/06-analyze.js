@@ -4596,10 +4596,20 @@ TECHNICAL SPECS:
         if (_psSentences.length) _doSplit(_psSentences);
       }
 
+      // Guard: if segmentation produced nothing (e.g. a script with no sentence
+      // punctuation, or a non-Latin script), don't build prompts on an empty/stale
+      // set and then falsely report success.
+      if (!segments || !segments.length) {
+        showToast('Couldn’t break that script into scenes — add sentence breaks (periods or line breaks) or a bit more text, then try again.', 'warning', 7000);
+        return; // finally{} re-enables the button
+      }
+
+      // generateAllSegmentPrompts already builds the NB prompts, so the separate
+      // _doGenerateAllNBPrompts pass was duplicate work (built then immediately
+      // overwritten) — removed.
       var _producerSteps = [
-        ['Step 2/4 — Building visual NB prompts…',  buildProducerFrameNBPrompts],
-        ['Step 3/4 — Generating NB prompts…',       _doGenerateAllNBPrompts],
-        ['Step 4/4 — Generating segment prompts…',  generateAllSegmentPrompts],
+        ['Step 2/3 — Building visual prompts…',   buildProducerFrameNBPrompts],
+        ['Step 3/3 — Generating scene prompts…',  generateAllSegmentPrompts],
       ];
       for (var _si = 0; _si < _producerSteps.length; _si++) {
         showToast(_producerSteps[_si][0], 'info');

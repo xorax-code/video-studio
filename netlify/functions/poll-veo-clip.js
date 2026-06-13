@@ -18,8 +18,11 @@ const crypto = require('crypto');
 
 const LOCATION = 'us-central1';
 
-// OAuth2: service account -> access token
+// OAuth2: service account -> access token. Cached per warm Lambda container
+// (tokens last 1h) so we don't RSA-sign + round-trip on every 6s poll.
+let _vtxTokenCache = { token: null, exp: 0 };
 async function getAccessToken(saJson) {
+  if (_vtxTokenCache.token && Date.now() < _vtxTokenCache.exp) return _vtxTokenCache.token;
   const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
   const now = Math.floor(Date.now() / 1000);
   const claim = {
@@ -49,7 +52,7 @@ async function getAccessToken(saJson) {
       res.on('end', () => {
         try {
           const data = JSON.parse(Buffer.concat(chunks).toString());
-          if (data.access_token) resolve(data.access_token);
+          if (data.access_token) { _vtxTokenCache = { token: data.access_token, exp: Date.now() + 3300000 }; resolve(data.access_token); }
           else reject(new Error('Token exchange failed: ' + JSON.stringify(data)));
         } catch(e) { reject(e); }
       });
@@ -171,13 +174,61 @@ function validateJwt(jwt) {
       res.on('end', () => {
         try {
           const data = JSON.parse(Buffer.concat(chunks).toString());
-          resolve(res.statusCode === 200 && !!data.id);
-        } catch { resolve(false); }
+          resolve(res.statusCode === 200 && data && data.id ? data : null);
+        } catch { resolve(null); }
       });
     });
-    req.on('error', () => resolve(false));
+    req.on('error', () => resolve(null));
     req.end();
   });
+}
+
+// ── Operation registry (ownership + refunds) via service role ────────────────
+function sbAdmin(path, opts) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  opts = opts || {};
+  return new Promise((resolve) => {
+    const url = new URL(process.env.SUPABASE_URL + '/rest/v1/' + path);
+    const data = opts.body || null;
+    const headers = Object.assign({ 'apikey': svc, 'Authorization': 'Bearer ' + svc }, opts.headers || {});
+    if (data) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = Buffer.byteLength(data); }
+    const req = https.request({ hostname: url.hostname, path: url.pathname + url.search, method: opts.method || 'GET', headers }, (res) => {
+      const chunks = []; res.on('data', c => chunks.push(c));
+      res.on('end', () => { try { resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks).toString() || 'null') }); } catch { resolve({ status: res.statusCode, data: null }); } });
+    });
+    req.on('error', () => resolve({ status: 0, data: null }));
+    if (data) req.write(data);
+    req.end();
+  });
+}
+// Returns { user_id, cost, status } for a registered op, or null if not found.
+async function getVeoOp(opName) {
+  const r = await sbAdmin('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&select=user_id,cost,status', {});
+  if (r.status === 200 && Array.isArray(r.data) && r.data.length) return r.data[0];
+  return null;
+}
+// Atomically claim a pending op (UPDATE ... WHERE status='pending' is the lock so
+// repeated polls / concurrent tabs can't double-refund), then add the cost back.
+// Returns the refunded amount (0 if it was already handled or not pending).
+async function refundVeoOp(opName, op) {
+  if (!op || op.status !== 'pending' || !op.cost) return 0;
+  const claim = await sbAdmin('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&status=eq.pending',
+    { method: 'PATCH', headers: { 'Prefer': 'return=representation' }, body: JSON.stringify({ status: 'refunded' }) });
+  if (!(claim.status === 200 && Array.isArray(claim.data) && claim.data.length)) return 0; // someone else claimed it
+  const credited = await sbAdmin('rpc/add_credits', { method: 'POST', body: JSON.stringify({ p_user: op.user_id, p_amount: op.cost }) });
+  if (credited.status !== 200) {
+    // Claimed the row but the credit write failed — roll status back to 'pending' so a
+    // later poll retries the refund, and log loudly. Prevents permanently-lost credits.
+    console.error('CRITICAL refundVeoOp: add_credits failed for op ' + opName + ' user ' + op.user_id + ' cost ' + op.cost + ' — rolling back to pending');
+    await sbAdmin('veo_operations?op_name=eq.' + encodeURIComponent(opName), { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'pending' }) }).catch(function(){});
+    return 0;
+  }
+  return op.cost;
+}
+// Mark a succeeded op done so it can never be refunded afterward.
+function markVeoOpDone(opName) {
+  return sbAdmin('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&status=eq.pending',
+    { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'done' }) }).catch(function(){});
 }
 
 // Main handler
@@ -197,14 +248,22 @@ exports.handler = async (event) => {
   const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
   const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
   if (!jwt) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
-  const valid = await validateJwt(jwt);
-  if (!valid) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
+  const authUser = await validateJwt(jwt);
+  if (!authUser) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON.' }) }; }
   const { operationName } = body;
   if (!operationName || typeof operationName !== 'string') {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'operationName is required.' }) };
+  }
+  // Ownership check: refuse only a CONFIRMED cross-user access (row exists with a
+  // different owner) — closes the IDOR. A missing row (registry write lagged/failed)
+  // is allowed through so we never break a legit poll; it just can't be refunded.
+  const _op = await getVeoOp(operationName);
+  if (_op && _op.user_id !== authUser.id) {
+    console.warn('poll-veo-clip: user ' + authUser.id + ' attempted op owned by ' + _op.user_id);
+    return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden.' }) };
   }
   let accessToken;
   try {
@@ -225,16 +284,18 @@ exports.handler = async (event) => {
     // FIX: 4xx errors (404=op not found, 401/403=auth) are terminal — mark done:true with error
     // so the frontend stops polling rather than looping forever on a dead operation.
     const isTerminal = pollResult.status === 404 || pollResult.status === 403 || pollResult.status === 401;
+    const _r4 = isTerminal ? await refundVeoOp(operationName, _op) : 0;
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: isTerminal, error: errMsg }) };
+      body: JSON.stringify({ done: isTerminal, error: errMsg, refunded: _r4 > 0, refundedCredits: _r4 }) };
   }
   if (pd.error) {
     // FIX: Google LRO spec sets done:true when an operation fails with an error field.
     // Returning done:false here caused the frontend to keep polling forever on a terminal
     // Vertex AI error (e.g. quota exceeded, invalid request, model error).
     // Now we respect pd.done — if Vertex marked the op done, we stop polling immediately.
+    const _re = pd.done ? await refundVeoOp(operationName, _op) : 0;
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: !!pd.done, error: pd.error.message || 'Generation failed on server.' }) };
+      body: JSON.stringify({ done: !!pd.done, error: pd.error.message || 'Generation failed on server.', refunded: _re > 0, refundedCredits: _re }) };
   }
   if (!pd.done) {
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
@@ -351,8 +412,9 @@ exports.handler = async (event) => {
     // empty (or raiFilteredCount > 0), meaning Google's safety system blocked it.
     // Stop polling immediately — retrying the same prompt will get the same result.
     if (samplesFound || raiFilteredCount > 0) {
+      const _rf = await refundVeoOp(operationName, _op); // refund the blocked clip
       return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ done: true, filtered: true,
+        body: JSON.stringify({ done: true, filtered: true, refunded: _rf > 0, refundedCredits: _rf,
           error: "Google's safety filter blocked this scene. Try rewording the scene description — avoid specific people, brand names, or violent/explicit actions." }) };
     }
 
@@ -360,8 +422,9 @@ exports.handler = async (event) => {
     // done:true but no video URI anywhere in the response. Vertex AI won't change
     // its answer on re-poll, so stop immediately rather than burning 10 minutes.
     console.warn('poll-veo-clip: unknown done response — stopping immediately');
+    const _ru = await refundVeoOp(operationName, _op);
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: true,
+      body: JSON.stringify({ done: true, refunded: _ru > 0, refundedCredits: _ru,
         error: 'Generation completed but no video was returned. This is usually a content filter or a Vertex AI error — try regenerating this clip.' }) };
   }
 
@@ -373,11 +436,14 @@ exports.handler = async (event) => {
     console.log('poll-veo-clip: signed URL created (48h) for', gcsUri.slice(0, 80));
   } catch(e) {
     console.error('poll-veo-clip: signed URL failed:', e.message);
-    // Signed URL creation failed — return error rather than a useless gs:// URI
+    // Signed URL creation failed — refund and return error rather than a useless gs:// URI
+    const _rs = await refundVeoOp(operationName, _op);
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: true, error: 'Video generated but download link failed: ' + e.message }) };
+      body: JSON.stringify({ done: true, refunded: _rs > 0, refundedCredits: _rs, error: 'Video generated but download link failed: ' + e.message }) };
   }
 
+  // Success — mark the op done so it can never be refunded later.
+  await markVeoOpDone(operationName);
   return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ done: true, videoUrl: signedUrl, mime: mimeType }) };
+    body: JSON.stringify({ done: true, videoUrl: signedUrl, mimeType: mimeType }) };
 };

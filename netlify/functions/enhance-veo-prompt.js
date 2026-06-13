@@ -150,17 +150,22 @@ exports.handler = async (event) => {
   }
   if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
 
-  // Credit gate — block users with no credits (fail-open if admin key unavailable)
+  // Credit gate — FAIL-CLOSED: if we can't confirm the balance we refuse (rather
+  // than handing out free unlimited calls when the service key is missing/unreachable).
   const _svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const _COST = 1;
-  let _bal = null;
-  if (_svc && process.env.SUPABASE_URL) {
-    try {
-      const _r = await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + user.id, { headers: { 'Authorization': 'Bearer ' + _svc, 'apikey': _svc } });
-      if (_r.ok) { const _d = await _r.json(); _bal = _d?.app_metadata?.credits_balance ?? 0; }
-    } catch(_) {}
+  if (!_svc || !process.env.SUPABASE_URL) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Server configuration error.' }) };
   }
-  if (_bal != null && _bal < _COST) {
+  let _bal = null;
+  try {
+    const _r = await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + user.id, { headers: { 'Authorization': 'Bearer ' + _svc, 'apikey': _svc } });
+    if (_r.ok) { const _d = await _r.json(); _bal = _d?.app_metadata?.credits_balance ?? 0; }
+  } catch(_) {}
+  if (_bal == null) {
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'Could not verify your credit balance — please try again.' }) };
+  }
+  if (_bal < _COST) {
     return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: 'Out of credits.', balance: _bal, cost: _COST }) };
   }
 
@@ -276,9 +281,14 @@ exports.handler = async (event) => {
 
   console.log(`enhance-veo-prompt: OK — action: "${(parsed.action || '').slice(0, 80)}"`);
 
-  if (_svc && _bal != null) {
-    try { await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + user.id, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + _svc, 'apikey': _svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: _bal - _COST } }) }); } catch(_) {}
-  }
+  // Atomic deduction via spend_credits() — no read-modify-write race.
+  try {
+    await fetch(process.env.SUPABASE_URL + '/rest/v1/rpc/spend_credits', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + _svc, 'apikey': _svc, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_user: user.id, p_amount: _COST }),
+    });
+  } catch(_) {}
 
   return {
     statusCode: 200,

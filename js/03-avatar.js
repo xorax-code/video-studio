@@ -14,6 +14,7 @@
     configurable: true,
   });
   let avatarInventory = ''; // auto-extracted appearance catalogue for verifying generations
+  let _avatarInvSeq = 0;    // bumped per extractAvatarInventory call; stale calls discard their result
   let productImageDataUrl = null;  // product reference photo for consistent image gen
   let bgImageDataUrl = null;
   let bgFromAvatar = false; // true when background was taken from the avatar photo (Photo 1)
@@ -213,8 +214,9 @@
       if (clearBtn) clearBtn.style.display = 'block';
       DB.set('sm_avatar_img', styledUrl).catch(function(){});
       if (originalUrl) DB.set('sm_avatar_img_original', originalUrl).catch(function(){});
-      // Re-extract the inventory from the prepared avatar (new source of truth)
-      extractAvatarInventory(styledUrl);
+      // Inventory was already extracted from the uploaded photo (and now survives this
+      // image-swap via the sequence guard), so we no longer re-analyze here — that was
+      // a duplicate GPT-4o vision call on every upload.
       _qmUpdateUploadState?.();
       if (typeof showToast === 'function') showToast('Avatar ready — optimized to pass video generation. Re-upload anytime to replace it.', 'success', 5000);
     } catch(_) {}
@@ -496,6 +498,7 @@
   // Vision. Runs automatically whenever a new avatar is set.
   async function extractAvatarInventory(dataUrl) {
     if (!dataUrl) return;
+    const _mySeq = ++_avatarInvSeq;  // newer calls win; this one discards if superseded
     const field  = document.getElementById('avatarInventory');
     const status = document.getElementById('avatarInventoryStatus');
     // A new avatar was just set — clear any previous inventory immediately so a
@@ -566,7 +569,8 @@ CRITICAL RULES:
 Keep it under 140 words total. No intro, no commentary — just the five labelled lines.`;
     try {
       const _ak = getApiKey();
-      const res = await _fetchWithRetry('/.netlify/functions/openai-chat', {
+      const res = await Promise.race([
+        _fetchWithRetry('/.netlify/functions/openai-chat', {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, _ak ? { 'X-Api-Key': _ak } : {}),
         body: JSON.stringify({
@@ -577,7 +581,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
             { type: 'image_url', image_url: { url: sendUrl, detail: 'high' } }
           ]}]
         })
-      }, 2);
+      }, 2),
+        new Promise(function(_, rej){ setTimeout(function(){ rej(new Error('analysis timed out — tap Retry')); }, 45000); })
+      ]);
       let data;
       try { data = await res.json(); } catch(_) { data = {}; }
       if (!res.ok && !data.error) { data.error = { message: 'HTTP ' + res.status + ' — API error' }; }
@@ -607,8 +613,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
         if (retryBtn) retryBtn.style.display = '';
         return;
       }
-      // Guard: discard if a newer avatar was set while this request was in flight
-      if (avatarImageDataUrl !== dataUrl) return;
+      // Guard: discard only if a NEWER extraction started while this was in flight.
+      // (Don't compare against avatarImageDataUrl — avatar prep legitimately swaps it
+      // to the stylized image mid-flight, which would wrongly discard a valid result.)
+      if (_mySeq !== _avatarInvSeq) return;
       avatarInventory = text;
       if (field) field.value = text;
       DB.set('sm_avatar_inventory', text).catch(e => console.warn('DB avatar inventory save error:', e));

@@ -85,30 +85,35 @@ exports.handler = async (event) => {
   if (!/^cus_[A-Za-z0-9]+$/.test(customerId)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid customerId format.' }) };
   }
-  // FIX H-7: verify supplied customerId belongs to the authenticated user
-  // Fetch full app_metadata via service role to check stripe_customer_id
+  // FIX H-7: verify the supplied customerId belongs to the authenticated user.
+  // FAIL-CLOSED: the portal can cancel subscriptions and change payment methods, so
+  // if we cannot positively confirm ownership we refuse rather than open it.
   const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (svcKey) {
-    try {
-      const adminUrl = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${authUser.id}`);
-      const adminData = await new Promise((resolve) => {
-        const req = https.request({
-          hostname: adminUrl.hostname, path: adminUrl.pathname, method: 'GET',
-          headers: { 'Authorization': `Bearer ${svcKey}`, 'apikey': svcKey },
-        }, (res) => {
-          const chunks = [];
-          res.on('data', c => chunks.push(c));
-          res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); } });
-        });
-        req.on('error', () => resolve(null));
-        req.end();
+  if (!svcKey) {
+    console.error('create-portal-session: SUPABASE_SERVICE_ROLE_KEY missing — cannot verify ownership.');
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' }) };
+  }
+  let expectedId = null;
+  try {
+    const adminUrl = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${authUser.id}`);
+    const adminData = await new Promise((resolve) => {
+      const req = https.request({
+        hostname: adminUrl.hostname, path: adminUrl.pathname, method: 'GET',
+        headers: { 'Authorization': `Bearer ${svcKey}`, 'apikey': svcKey },
+      }, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); } });
       });
-      const expectedId = adminData?.app_metadata?.stripe_customer_id;
-      if (expectedId && expectedId !== customerId) {
-        console.warn(`Portal session: user ${authUser.id} attempted to access customer ${customerId} (owns ${expectedId})`);
-        return { statusCode: 403, headers, body: JSON.stringify({ error: 'Forbidden.' }) };
-      }
-    } catch (_) { /* If admin check fails, proceed — better than blocking legit users */ }
+      req.on('error', () => resolve(null));
+      req.end();
+    });
+    expectedId = adminData && adminData.app_metadata && adminData.app_metadata.stripe_customer_id;
+  } catch (_) { expectedId = null; }
+  // Require a positive match: no stored customer, lookup failure, or mismatch all → 403.
+  if (!expectedId || expectedId !== customerId) {
+    console.warn(`Portal session: ownership not confirmed for user ${authUser.id} (requested ${customerId}, owns ${expectedId || 'none'})`);
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Could not verify this subscription belongs to your account.' }) };
   }
 
   const formBody = qs.stringify({

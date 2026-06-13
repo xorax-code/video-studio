@@ -86,6 +86,39 @@ function httpsRequest(options, body) {
   });
 }
 
+// ── Operation registry (ownership + refund on FAILED) ────────────────────────
+function _sbUrl(path) { return new URL(process.env.SUPABASE_URL + '/rest/v1/' + path); }
+function _svc() { return process.env.SUPABASE_SERVICE_ROLE_KEY; }
+async function getVeoOp(opName) {
+  const u = _sbUrl('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&select=user_id,cost,status');
+  const r = await httpsRequest({ hostname: u.hostname, path: u.pathname + u.search, method: 'GET', headers: { 'apikey': _svc(), 'Authorization': 'Bearer ' + _svc() } });
+  if (r.status === 200 && Array.isArray(r.data) && r.data.length) return r.data[0];
+  return null;
+}
+async function refundVeoOp(opName, op) {
+  if (!op || op.status !== 'pending' || !op.cost) return 0;
+  const cu = _sbUrl('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&status=eq.pending');
+  const cb = JSON.stringify({ status: 'refunded' });
+  const claim = await httpsRequest({ hostname: cu.hostname, path: cu.pathname + cu.search, method: 'PATCH', headers: { 'apikey': _svc(), 'Authorization': 'Bearer ' + _svc(), 'Content-Type': 'application/json', 'Prefer': 'return=representation', 'Content-Length': Buffer.byteLength(cb) } }, cb);
+  if (!(claim.status === 200 && Array.isArray(claim.data) && claim.data.length)) return 0;
+  const ru = _sbUrl('rpc/add_credits');
+  const ab = JSON.stringify({ p_user: op.user_id, p_amount: op.cost });
+  const credited = await httpsRequest({ hostname: ru.hostname, path: ru.pathname, method: 'POST', headers: { 'apikey': _svc(), 'Authorization': 'Bearer ' + _svc(), 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(ab) } }, ab);
+  if (credited.status !== 200) {
+    console.error('CRITICAL refundVeoOp(upscale): add_credits failed for ' + opName + ' user ' + op.user_id + ' cost ' + op.cost + ' — rolling back to pending');
+    const rb = JSON.stringify({ status: 'pending' });
+    const rbu = _sbUrl('veo_operations?op_name=eq.' + encodeURIComponent(opName));
+    await httpsRequest({ hostname: rbu.hostname, path: rbu.pathname + rbu.search, method: 'PATCH', headers: { 'apikey': _svc(), 'Authorization': 'Bearer ' + _svc(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal', 'Content-Length': Buffer.byteLength(rb) } }, rb).catch(function(){});
+    return 0;
+  }
+  return op.cost;
+}
+function markVeoOpDone(opName) {
+  const u = _sbUrl('veo_operations?op_name=eq.' + encodeURIComponent(opName) + '&status=eq.pending');
+  const b = JSON.stringify({ status: 'done' });
+  return httpsRequest({ hostname: u.hostname, path: u.pathname + u.search, method: 'PATCH', headers: { 'apikey': _svc(), 'Authorization': 'Bearer ' + _svc(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal', 'Content-Length': Buffer.byteLength(b) } }, b).catch(function(){});
+}
+
 // ── Supabase auth check ───────────────────────────────────────────────────────
 async function getAuthUser(jwt) {
   const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/user`);
@@ -181,6 +214,13 @@ exports.handler = async (event) => {
   const { jobName, outputGcsUri, filename } = body;
   if (!jobName) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'jobName is required.' }) };
   if (!outputGcsUri) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'outputGcsUri is required.' }) };
+  // Ownership: refuse a confirmed cross-user job (closes the IDOR). Missing row is
+  // allowed through (registry write may have lagged) but can't be refunded.
+  const _op = await getVeoOp(jobName);
+  if (_op && _op.user_id !== user.id) {
+    console.warn('poll-upscale: user ' + user.id + ' attempted job owned by ' + _op.user_id);
+    return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden.' }) };
+  }
 
   // ── Get access token ──────────────────────────────────────────────────────
   let accessToken;
@@ -218,10 +258,11 @@ exports.handler = async (event) => {
   if (state === 'FAILED') {
     const failErr = result.data.error?.message || 'Transcoder job failed.';
     console.error('poll-upscale: job FAILED:', failErr);
+    const _rf = await refundVeoOp(jobName, _op); // refund the failed render
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ state: 'FAILED', error: failErr }),
+      body: JSON.stringify({ state: 'FAILED', error: failErr, refunded: _rf > 0, refundedCredits: _rf }),
     };
   }
 
@@ -248,6 +289,7 @@ exports.handler = async (event) => {
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not generate download URL: ' + e.message }) };
   }
 
+  await markVeoOpDone(jobName); // success — never refundable now
   return {
     statusCode: 200,
     headers: { ...CORS, 'Content-Type': 'application/json' },

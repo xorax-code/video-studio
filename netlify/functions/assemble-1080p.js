@@ -113,6 +113,27 @@ async function updateUserMeta(userId, meta) {
     headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
   return r.status === 200;
 }
+// Atomic spend: returns new balance, -1 if insufficient/missing, null on error.
+async function spendCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/spend_credits`);
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  if (r.status !== 200) return null;
+  const n = (typeof r.data === 'number') ? r.data : parseInt(r.data, 10);
+  return Number.isFinite(n) ? n : null;
+}
+// Register a paid job so poll-upscale can verify ownership + refund on failure.
+async function registerVeoOp(opName, userId, cost, kind) {
+  try {
+    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
+    const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const b = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'assemble', status: 'pending' });
+    await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+      headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(b) } }, b);
+  } catch (e) { console.error('registerVeoOp failed for ' + opName + ':', e && e.message); }
+}
 
 // Convert a signed storage.googleapis.com URL (or a gs:// URI) → gs:// URI
 function toGcsUri(input) {
@@ -280,14 +301,16 @@ exports.handler = async (event) => {
   const jobName = result.data.name;
   console.log(`assemble-1080p: job created → ${jobName}`);
 
-  // Job submitted successfully — deduct credits (best-effort; logged if it fails)
-  const _newBalance = currentBalance - CREDIT_COST;
-  const _deducted = await updateUserMeta(user.id, { credits_balance: _newBalance });
-  if (!_deducted) console.error(`assemble-1080p: credit deduction failed for user ${user.id} (job ${jobName} already submitted)`);
+  // Job submitted — deduct atomically and register the op so poll-upscale can
+  // verify ownership (IDOR) and refund the cost if the render fails.
+  const _spent   = await spendCredits(user.id, CREDIT_COST);
+  const _charged = (_spent !== -1 && _spent !== null);
+  if (!_charged) console.error(`assemble-1080p: credit deduction failed for user ${user.id} (job ${jobName} already submitted)`);
+  await registerVeoOp(jobName, user.id, _charged ? CREDIT_COST : 0, 'assemble');
 
   return {
     statusCode: 200,
     headers: { ...CORS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobName, outputGcsUri: outputUri, creditsDeducted: CREDIT_COST, newBalance: _newBalance }),
+    body: JSON.stringify({ jobName, outputGcsUri: outputUri, creditsDeducted: _charged ? CREDIT_COST : 0, newBalance: _charged ? _spent : currentBalance }),
   };
 };

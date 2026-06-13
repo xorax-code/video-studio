@@ -333,8 +333,8 @@ const runComposite = async (event) => {
   async function _chargeCompose(cost) {
     if (deferCharge) return; // background worker deducts after the image is persisted
     const c = (typeof cost === 'number') ? cost : composeCost;
-    const ok = await updateUserMeta(user.id, { credits_balance: _composeBalance - c });
-    if (!ok) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
+    const n = await spendCredits(user.id, c); // atomic
+    if (n === null || n === -1) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
   }
 
   const {
@@ -589,13 +589,24 @@ Hard rules for BOTH cases: never add a second person or any human figure that wa
 // body } shape; the background function reads body for the image and stores it.
 // Credit charge used by the background worker AFTER the image is persisted to
 // nb_jobs (so a failure can never charge-without-delivering).
+// Atomic spend via the spend_credits() SQL function — no read-modify-write race
+// (matters when a batch fires several frames near-simultaneously). Returns the new
+// balance, -1 if insufficient/missing, or null on error.
+async function spendCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/spend_credits`);
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  if (r.status !== 200) return null;
+  const n = (typeof r.data === 'number') ? r.data : parseInt(r.data, 10);
+  return Number.isFinite(n) ? n : null;
+}
 async function chargeUserCredits(userId, cost) {
-  try {
-    const admin = await getAdminUser(userId);
-    if (!admin) return false;
-    const bal = admin.app_metadata?.credits_balance ?? 0;
-    return await updateUserMeta(userId, { credits_balance: Math.max(0, bal - cost) });
-  } catch (e) { console.error('chargeUserCredits failed:', e.message); return false; }
+  const n = await spendCredits(userId, cost);
+  if (n === -1)   { console.warn('chargeUserCredits: insufficient balance at charge time for ' + userId + ' (image already delivered)'); return false; }
+  if (n === null) { console.error('chargeUserCredits: spend_credits error for ' + userId); return false; }
+  return true;
 }
 
 exports.handler          = runComposite;

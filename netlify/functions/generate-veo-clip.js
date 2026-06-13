@@ -42,7 +42,11 @@ const ANALYSIS_MODEL = 'gemini-2.0-flash-001'; // fast vision model for scene an
 // scene description. Injected into the Veo prompt as [SCENE GROUND TRUTH] so Veo
 // matches the original video's visual context: setting, camera, lighting, props.
 // Fails silently — if null, the original prompt is used unchanged.
+const _sceneAnalysisCache = new Map(); // memo: identical frame (continuation extras / regens) reuses the analysis
 async function analyzeSceneFrame(frameB64, frameMime, accessToken) {
+  if (!frameB64) return null;
+  const _scKey = frameB64.length + ':' + frameB64.slice(0, 24) + frameB64.slice(-24);
+  if (_sceneAnalysisCache.has(_scKey)) return _sceneAnalysisCache.get(_scKey);
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const prompt = `You are analyzing a video frame for professional video production.
 Examine this image carefully. Return ONLY a valid JSON object with these exact fields (no markdown, no explanation, raw JSON only):
@@ -99,6 +103,8 @@ Examine this image carefully. Return ONLY a valid JSON object with these exact f
     const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
     const parsed = JSON.parse(cleaned);
     console.log('generate-veo-clip: scene analysis OK — setting:', (parsed.setting || '').slice(0, 80));
+    if (_sceneAnalysisCache.size > 200) _sceneAnalysisCache.clear();
+    _sceneAnalysisCache.set(_scKey, parsed);
     return parsed;
   } catch(e) {
     console.warn('generate-veo-clip: analyzeSceneFrame JSON parse failed. Raw:', raw.slice(0, 200));
@@ -124,7 +130,9 @@ function buildSceneBlock(sa) {
 }
 
 // ── OAuth2: service account → access token ────────────────────────────────────
+let _vtxTokenCache = { token: null, exp: 0 };
 async function getAccessToken(saJson) {
+  if (_vtxTokenCache.token && Date.now() < _vtxTokenCache.exp) return _vtxTokenCache.token;
   const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
   const now = Math.floor(Date.now() / 1000);
 
@@ -162,7 +170,7 @@ async function getAccessToken(saJson) {
       res.on('end', () => {
         try {
           const data = JSON.parse(Buffer.concat(chunks).toString());
-          if (data.access_token) resolve(data.access_token);
+          if (data.access_token) { _vtxTokenCache = { token: data.access_token, exp: Date.now() + 3300000 }; resolve(data.access_token); }
           else reject(new Error('Token exchange failed: ' + JSON.stringify(data)));
         } catch(e) { reject(e); }
       });
@@ -240,6 +248,41 @@ async function updateUserMeta(userId, meta) {
     },
   }, body);
   return result.status === 200;
+}
+
+// Atomic credit spend via the spend_credits() SQL function — no read-modify-write
+// race. Returns the NEW balance, or -1 if insufficient / user missing, or null on error.
+async function spendCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/spend_credits`);
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const body = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${svc}`, 'apikey': svc, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, body);
+  if (r.status !== 200) return null;
+  const n = (typeof r.data === 'number') ? r.data : parseInt(r.data, 10);
+  return Number.isFinite(n) ? n : null;
+}
+
+// Atomic refund/grant via add_credits(). Returns true on success.
+async function addCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/add_credits`);
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const body = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${svc}`, 'apikey': svc, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } }, body);
+  return r.status === 200;
+}
+
+// Register a paid operation so the poller can verify ownership (close the IDOR)
+// and refund the cost if the job is filtered/fails. Best-effort (never blocks gen).
+async function registerVeoOp(opName, userId, cost, kind) {
+  try {
+    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
+    const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const body = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'clip', status: 'pending' });
+    await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+      headers: { 'Authorization': `Bearer ${svc}`, 'apikey': svc, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(body) } }, body);
+  } catch (e) { console.error('registerVeoOp failed for ' + opName + ':', e && e.message); }
 }
 
 // ── Start Vertex AI Veo generation ────────────────────────────────────────────
@@ -340,17 +383,19 @@ exports.handler = async (event) => {
   if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
 
   const currentBalance = adminUser.app_metadata?.credits_balance ?? 0;
-  if (currentBalance < cost) {
+
+  // ── Deduct credits atomically (insufficient-funds check + decrement in one
+  //    locked step — no read-modify-write race with concurrent generations). ──
+  const newBalance = await spendCredits(userId, cost);
+  if (newBalance === -1) {
     return {
       statusCode: 402, headers: CORS,
       body: JSON.stringify({ error: 'insufficient_credits', message: `This clip costs ${cost} credits. You have ${currentBalance}.`, balance: currentBalance, cost }),
     };
   }
-
-  // ── Deduct credits upfront ────────────────────────────────────────────────
-  const newBalance = currentBalance - cost;
-  const deducted   = await updateUserMeta(userId, { credits_balance: newBalance });
-  if (!deducted) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
+  if (newBalance === null) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
+  }
 
   // ── Get Vertex AI access token ────────────────────────────────────────────
   let accessToken;
@@ -359,7 +404,7 @@ exports.handler = async (event) => {
     console.log('generate-veo-clip: access token obtained');
   } catch(e) {
     // FIX: log if the refund itself fails so ops can remediate
-    const refunded1 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    const refunded1 = await addCredits(userId, cost);
     if (!refunded1) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after token error; balance may be wrong`);
     console.error('generate-veo-clip: getAccessToken failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not authenticate with generation service. Credits refunded.' }) };
@@ -385,7 +430,7 @@ exports.handler = async (event) => {
   try {
     vtxResult = await startVertexGeneration(finalPrompt, dur, modelId, startImageB64, startImageMime, accessToken);
   } catch(e) {
-    const refunded2 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    const refunded2 = await addCredits(userId, cost);
     if (!refunded2) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex start error; balance may be wrong`);
     console.error('generate-veo-clip: Vertex AI start failed:', e.message);
     return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach generation service. Credits refunded.' }) };
@@ -395,7 +440,7 @@ exports.handler = async (event) => {
   console.log('generate-veo-clip: Vertex AI response:', JSON.stringify(vtxResult.data));
 
   if (!vtxResult.data?.name) {
-    const refunded3 = await updateUserMeta(userId, { credits_balance: currentBalance });
+    const refunded3 = await addCredits(userId, cost);
     if (!refunded3) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after Vertex response error; balance may be wrong`);
     const errMsg = vtxResult.data?.error?.message || `Vertex AI error (HTTP ${vtxResult.status})`;
     if (vtxResult.status === 401 || vtxResult.status === 403) {
@@ -408,6 +453,10 @@ exports.handler = async (event) => {
   }
 
   console.log(`generate-veo-clip: user ${userId} started op ${vtxResult.data.name}, ${cost} credits deducted (balance: ${newBalance})`);
+
+  // Register the op so poll-veo-clip can verify ownership (close IDOR) and refund
+  // the cost if Google's safety filter blocks the clip.
+  await registerVeoOp(vtxResult.data.name, userId, cost, 'clip');
 
   return {
     statusCode: 200,

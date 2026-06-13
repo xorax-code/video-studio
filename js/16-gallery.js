@@ -253,7 +253,20 @@
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Upscale job failed.');
         if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
-          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = filename; a.click();
+          // Fetch the (cross-origin) signed URL as a blob and download THAT. Setting
+          // a.href directly to a cross-origin URL makes the browser ignore `download`
+          // and NAVIGATE to it instead (the "leave website" prompt). A same-origin
+          // blob URL downloads in place with no navigation.
+          try {
+            var _resp = await fetch(pollData.downloadUrl);
+            var _blob = await _resp.blob();
+            var _obj  = URL.createObjectURL(_blob);
+            var a = document.createElement('a'); a.href = _obj; a.download = filename; a.click();
+            setTimeout(function(){ URL.revokeObjectURL(_obj); }, 60000);
+          } catch (_dlErr) {
+            // CORS-blocked fallback: open in a new tab (doesn't navigate the app away).
+            window.open(pollData.downloadUrl, '_blank');
+          }
           if (typeof showToast === 'function') showToast('1080p download started!', 'success', 4000);
           setElState(originalLabel, false);
           return;

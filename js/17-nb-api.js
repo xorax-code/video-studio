@@ -175,7 +175,16 @@
     // which is what reliably passes Veo for talking-head frames (the working state).
     var _nbPx = window._nbMaxQuality ? 1280 : 768;
     var _nbJq = window._nbMaxQuality ? 0.9  : 0.8;
-    var avatarCompressed = await _nbCompressImage(avatarImageDataUrl, _nbPx, _nbJq);
+    // Memoize the avatar compression — a multi-scene batch would otherwise re-encode
+    // the identical avatar once per scene. Cache keyed by source + target px/quality.
+    var avatarCompressed;
+    var _avc = window._nbAvCompCache;
+    if (_avc && _avc.src === avatarImageDataUrl && _avc.px === _nbPx && _avc.jq === _nbJq) {
+      avatarCompressed = _avc.out;
+    } else {
+      avatarCompressed = await _nbCompressImage(avatarImageDataUrl, _nbPx, _nbJq);
+      window._nbAvCompCache = { src: avatarImageDataUrl, px: _nbPx, jq: _nbJq, out: avatarCompressed };
+    }
     var avatarParts = _nbSplitDataUrl(avatarCompressed);
 
     var frameB64 = null, frameMime = 'image/jpeg';
@@ -596,9 +605,10 @@
     var m = document.createElement('div');
     m.id = 'nbFrameProgress';
     m.style.cssText = 'position:fixed;inset:0;z-index:99990;background:rgba(0,0,0,0.80);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:16px;';
-    m.innerHTML = '<div style="background:var(--surface);border:1px solid rgba(56,189,248,0.35);border-radius:14px;padding:20px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;font-family:inherit;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 80px rgba(0,0,0,0.65);">'
-      + '<div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:9px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);display:flex;align-items:center;justify-content:center;font-size:17px;">🖼️</div>'
-      + '<div><div style="font-size:14px;font-weight:800;color:var(--text-1);">Making your start frames</div><div style="font-size:11px;color:var(--text-3);">' + total + ' scene' + (total !== 1 ? 's' : '') + ' · ~15s each · then you review them</div></div></div>'
+    m.innerHTML = '<div id="nbfp-card" style="background:var(--surface);border:1px solid rgba(56,189,248,0.35);border-radius:14px;padding:20px;width:100%;max-width:460px;max-height:88vh;overflow-y:auto;font-family:inherit;display:flex;flex-direction:column;gap:12px;box-shadow:0 24px 80px rgba(0,0,0,0.65);">'
+      + '<div style="display:flex;align-items:center;gap:10px;"><div style="width:34px;height:34px;border-radius:9px;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.35);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">🖼️</div>'
+      + '<div style="flex:1;min-width:0;"><div style="font-size:14px;font-weight:800;color:var(--text-1);">Making your start frames</div><div style="font-size:11px;color:var(--text-3);">' + total + ' scene' + (total !== 1 ? 's' : '') + ' · runs in the background · then you review them</div></div>'
+      + '<button onclick="window._nbMinimizeProgress()" title="Hide — keeps generating in the background" style="background:none;border:none;color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:2px 8px;border-radius:6px;flex-shrink:0;">✕</button></div>'
       + '<div style="display:flex;flex-direction:column;gap:4px;">' + rows + '</div>'
       + '<div><div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-3);margin-bottom:5px;"><span id="nbfp-label">Starting…</span><span id="nbfp-pct">0%</span></div>'
       + '<div style="height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;"><div id="nbfp-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#38bdf8,#34d399);border-radius:3px;transition:width 0.4s;"></div></div></div>'
@@ -620,6 +630,27 @@
     }
   }
   function _nbCloseProgress() { var m = document.getElementById('nbFrameProgress'); if (m) m.remove(); }
+
+  // Minimize the frame-progress panel: drop the full-screen blocking overlay and
+  // dock the card in the bottom-right so the user can keep working. Generation runs
+  // in the background regardless; the review modal still opens automatically when done.
+  window._nbMinimizeProgress = function _nbMinimizeProgress() {
+    var m = document.getElementById('nbFrameProgress'); if (!m) return;
+    var card = document.getElementById('nbfp-card');
+    m.style.background = 'transparent';
+    m.style.backdropFilter = 'none';
+    m.style.pointerEvents = 'none';            // clicks pass through to the app
+    m.style.alignItems = 'flex-end';
+    m.style.justifyContent = 'flex-end';
+    m.style.padding = '16px';
+    if (card) {
+      card.style.pointerEvents = 'auto';        // the card itself stays interactive
+      card.style.maxWidth = '300px';
+      card.style.maxHeight = '60vh';
+      card.style.boxShadow = '0 12px 40px rgba(0,0,0,0.6)';
+    }
+    if (typeof showToast === 'function') showToast('Frames are still generating — you can keep working. The review will open when they’re ready.', 'info', 5000);
+  };
 
   async function generateAllNbComposites() {
     // Include segments that either have an NB prompt OR have a frameDataUrl (person-swap path)
