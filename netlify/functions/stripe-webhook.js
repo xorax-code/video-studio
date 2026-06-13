@@ -57,6 +57,14 @@ function verifyStripeSignature(rawBody, sigHeader, secret) {
 // Tier mapping (legacy env-var fallback; only used if a price has no `plan` metadata)
 function tierFromPriceId(priceId) {
   if (!priceId) return 'starter';
+  // Hardcoded public price IDs (no secrets) so this works without env vars —
+  // the 9 Stripe env vars were exceeding AWS Lambda's 4KB limit and breaking deploys.
+  var _PRICE_MAP = {
+    'price_1ThbCQJEBUETI2v8B0RUf3Hc': 'starter', 'price_1ThbCzJEBUETI2v8yY6LXCoE': 'starter',
+    'price_1ThbDVJEBUETI2v808FvsWXp': 'creator', 'price_1ThbDqJEBUETI2v8FNG7EGpO': 'creator',
+    'price_1ThbEGJEBUETI2v832pxuu1R': 'scale',   'price_1ThbEdJEBUETI2v8GlEC4v0k': 'scale',
+  };
+  if (_PRICE_MAP[priceId]) return _PRICE_MAP[priceId];
   if (priceId === process.env.STRIPE_PRICE_SCALE)          return 'scale';
   if (priceId === process.env.STRIPE_PRICE_CREATOR)        return 'creator';
   if (priceId === process.env.STRIPE_PRICE_STARTER)        return 'starter';

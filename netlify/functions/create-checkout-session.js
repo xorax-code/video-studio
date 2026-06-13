@@ -119,16 +119,20 @@ exports.handler = async (event) => {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing priceId.' }) };
   }
   // Whitelist valid price IDs -- prevents clients from passing arbitrary Stripe prices
+  // Price IDs are PUBLIC Stripe identifiers (not secrets), so they're hardcoded
+  // here rather than env vars — this keeps each function's env under AWS Lambda's
+  // 4KB limit (the 9 Stripe env vars were tipping it over and failing deploys).
   const VALID_PRICES = new Set([
-    process.env.STRIPE_PRICE_STARTER,
-    process.env.STRIPE_PRICE_CREATOR,
-    process.env.STRIPE_PRICE_SCALE,
-    process.env.STRIPE_PRICE_STARTER_ANNUAL,
-    process.env.STRIPE_PRICE_CREATOR_ANNUAL,
-    process.env.STRIPE_PRICE_SCALE_ANNUAL,
-    // legacy names — harmless if unset
-    process.env.STRIPE_PRICE_PRO,
-    process.env.STRIPE_PRICE_AGENCY,
+    'price_1ThbCQJEBUETI2v8B0RUf3Hc', // Starter monthly
+    'price_1ThbCzJEBUETI2v8yY6LXCoE', // Starter annual
+    'price_1ThbDVJEBUETI2v808FvsWXp', // Creator monthly
+    'price_1ThbDqJEBUETI2v8FNG7EGpO', // Creator annual
+    'price_1ThbEGJEBUETI2v832pxuu1R', // Scale monthly
+    'price_1ThbEdJEBUETI2v8GlEC4v0k', // Scale annual
+    // still accept env-var price IDs if any remain set (legacy / future)
+    process.env.STRIPE_PRICE_STARTER, process.env.STRIPE_PRICE_CREATOR, process.env.STRIPE_PRICE_SCALE,
+    process.env.STRIPE_PRICE_STARTER_ANNUAL, process.env.STRIPE_PRICE_CREATOR_ANNUAL, process.env.STRIPE_PRICE_SCALE_ANNUAL,
+    process.env.STRIPE_PRICE_PRO, process.env.STRIPE_PRICE_AGENCY,
   ].filter(Boolean));
   if (!VALID_PRICES.has(priceId)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid priceId.' }) };

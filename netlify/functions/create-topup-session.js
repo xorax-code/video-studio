@@ -23,10 +23,13 @@ const APP_URL = 'https://aiscaling.netlify.app';
 
 // ── Top-up pack definitions ───────────────────────────────────────────────────
 // priceId comes from env vars — set in Netlify dashboard after creating in Stripe
+// Price IDs are PUBLIC Stripe identifiers (not secrets) — hardcoded here instead of
+// env vars to keep the function env under AWS Lambda's 4KB limit. envKey kept as a
+// fallback in case an env override is ever set.
 const TOPUP_PACKS = {
-  p1000: { credits: 1000, label: '1,000 Credits — $20', envKey: 'STRIPE_TOPUP_1000' },
-  p2500: { credits: 2500, label: '2,500 Credits — $45', envKey: 'STRIPE_TOPUP_2500' },
-  p5000: { credits: 5000, label: '5,000 Credits — $80', envKey: 'STRIPE_TOPUP_5000' },
+  p1000: { credits: 1000, label: '1,000 Credits — $20', priceId: 'price_1ThbFDJEBUETI2v8fdHHM7DG', envKey: 'STRIPE_TOPUP_1000' },
+  p2500: { credits: 2500, label: '2,500 Credits — $45', priceId: 'price_1ThggOJEBUETI2v8AgJfsjwU', envKey: 'STRIPE_TOPUP_2500' },
+  p5000: { credits: 5000, label: '5,000 Credits — $80', priceId: 'price_1Thgh7JEBUETI2v80NG7TgPm', envKey: 'STRIPE_TOPUP_5000' },
 };
 
 // ── Stripe POST helper ────────────────────────────────────────────────────────
@@ -127,7 +130,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const priceId = process.env[pack.envKey];
+  const priceId = pack.priceId || process.env[pack.envKey];
   if (!priceId) {
     return {
       statusCode: 500,
