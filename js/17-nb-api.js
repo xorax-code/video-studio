@@ -387,7 +387,14 @@
       productMime,
       handRefB64,
       handRefMime,
-      quality: (window._nbMaxQuality ? 'pro' : 'flash'),
+      // ALWAYS Flash for the Veo start frame. This composite is only a SEED for the
+      // video (pose/composition/identity) — Veo re-renders the final pixels and the
+      // 1080p upscale handles sharpness, so Pro buys almost nothing here. Worse, Pro's
+      // extra photorealism trips Veo's input-image likeness filter (support code
+      // 15236754), which is what broke video generation when "Max Quality" was added.
+      // Pro/Max Quality still applies to standalone Studio image generation (js/18),
+      // where the photo is the deliverable and there's no Veo filter to clear.
+      quality: 'flash',
     }, jwt, 'Scene ' + (segIdx + 1));
     var res = _ar.res, data = _ar.data;
 
