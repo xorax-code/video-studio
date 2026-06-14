@@ -311,7 +311,7 @@
         // NOT a hard cartoon. (Applies even when a scene's saved style said "realistic".)
         _hfParts.push('RENDER STYLE: render as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — just lightly softened and idealized rather than a sharp, hyper-detailed documentary photograph of a specific real individual.');
         // ZOOM-OUT OVERRIDE — a face filling the frame also trips 15236754.
-        _hfParts.push('IMPORTANT FRAMING OVERRIDE: render as a MEDIUM SHOT — subject waist-up with clear headroom and visible surroundings; the face must occupy only a small part of the frame and must NOT fill it. Do not crop in tight on the face.');
+        _hfParts.push('IMPORTANT FRAMING OVERRIDE: ALWAYS render a MEDIUM SHOT, even if the source is a tight close-up or shows two people — pull the camera back so every person is chest-up with clear headroom and visible surroundings, and NO single face is larger than ~25% of the frame height. Err on the side of too wide. Do NOT crop in tight on the face — a large face trips the person filter.');
         instruction = _hfParts.join(' ');
       }
 
@@ -356,7 +356,7 @@
       // See note in the hand-frame branch. Lightly stylized → reads as digital character.
       _gParts.push('RENDER STYLE: render as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — just lightly softened and idealized rather than a sharp, hyper-detailed documentary photograph of a specific real individual.');
       // ZOOM-OUT OVERRIDE — a face filling the frame trips Veo 15236754.
-      _gParts.push('IMPORTANT FRAMING OVERRIDE: render as a MEDIUM SHOT — subject waist-up with clear headroom and visible surroundings; the face must occupy only a small part of the frame and must NOT fill it. Do not crop in tight on the face.');
+      _gParts.push('IMPORTANT FRAMING OVERRIDE: ALWAYS render a MEDIUM SHOT, even if the source is a tight close-up or shows two people — pull the camera back so every person is chest-up with clear headroom and visible surroundings, and NO single face is larger than ~25% of the frame height. Err on the side of too wide. Do NOT crop in tight on the face — a large face trips the person filter.');
       _gParts.push('Style: premium real-looking lifestyle photo. Single image. ONE person only. No text overlays, no watermarks.');
 
       instruction = _gParts.join(' ');
