@@ -447,6 +447,17 @@ exports.handler = async (event) => {
           error: "Veo blocked the start frame as too photoreal a person (code 15236754). Retrying with a softer frame." }) };
     }
 
+    // Recitation / copyright block — Veo refuses to reproduce recognizable copyrighted
+    // material (a wall poster, anatomical chart, brand logo, etc.) seen in the start
+    // frame. Softening won't help; the FRAME must be regenerated with a generic
+    // background. Surface a clear, actionable message (not the generic "no video").
+    if (/recitation/i.test(rawStr)) {
+      const _rc = await refundVeoOp(operationName, _op);
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ done: true, recitation: true, refunded: _rc > 0, refundedCredits: _rc,
+          error: "Veo blocked this for copyright (recitation) — the start frame likely contains a recognizable poster, chart, logo, or artwork. Regenerate the frame with a plain/generic background and try again." }) };
+    }
+
     // ── Content filter confirmed ──────────────────────────────────────────────
     // Vertex AI returned the known response structure but generatedSamples is
     // empty (or raiFilteredCount > 0), meaning Google's safety system blocked it.

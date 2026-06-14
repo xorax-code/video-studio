@@ -527,7 +527,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     _instrParts.push('LIGHTING MATCH: Adjust the avatar\'s lighting to exactly match the color temperature, direction, and shadow quality of the reference frame — no generic studio lighting.');
 
     // Final quality note
-    _instrParts.push('Vertical 9:16, premium lifestyle editorial scene. This image is the first frame of a Veo 3 video clip — render the PERSON as a lightly stylized, premium digital portrait (clearly NOT a literal photograph of a real individual, to clear Veo\'s person filter), while the room, lighting, and decor stay natural and realistic.');
+    _instrParts.push('Vertical 9:16, premium lifestyle editorial scene. This image is the first frame of a Veo 3 video clip — render the PERSON as a polished, REAL-LOOKING photo (natural, photographic, gently idealized; NOT a 3D render, illustration, or cartoon), framed as a medium shot so the face is small in the frame, with the room, lighting, and decor natural and realistic.');
 
     // ── Photo guide ───────────────────────────────────────────────────────────
     const _soPhotoGuide = (bgFromAvatar
@@ -543,7 +543,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
       instruction: _instrParts.join(' '),
       framing:     _framing,
       expression:  isFirst ? 'confident, engaged, slight smile' : 'mid-sentence natural expression, eye contact',
-      style:       'premium lifestyle editorial — natural real room, real light, real decor (NOT AI-art backdrop, NOT studio seamless, NOT blurred gradient); the PERSON rendered as a lightly stylized premium digital portrait, not a literal photograph of a real individual',
+      style:       'premium lifestyle editorial — natural real room, real light, real decor (NOT AI-art backdrop, NOT studio seamless, NOT blurred gradient); the PERSON rendered as a polished, real-looking photo (natural, photographic, gently idealized; NOT a 3D render, illustration, or cartoon), framed as a medium shot with a small face',
       remove_captions: true,
       negative_prompt: 'changed clothing, changed skin tone, changed face, wrong hair, hair color change, hairstyle from reference frame, hair bleed, extra hair accessories from reference, wrong gender avatar, gender swap, age change, ethnicity change, ghosting, double exposure, transparency, semi-transparent person, composite seam, edge halo, color fringing, mismatched lighting, text overlay from reference, numbers on body, date on clothing, labels from reference frame, captions, watermarks, cartoon, illustration, anime, distorted hands, extra fingers, blurry face, multiple people, AI artifacts',
     };
