@@ -231,6 +231,28 @@ function markVeoOpDone(opName) {
     { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: 'done' }) }).catch(function(){});
 }
 
+// Persist a finished clip to the user's cloud library (best-effort, non-fatal).
+// We store the gs:// path, never a signed URL — list-user-videos re-signs on read.
+async function saveUserVideo(userId, gcsUri, mime, label, duration) {
+  if (!userId || !gcsUri) return;
+  try {
+    await sbAdmin('user_videos', {
+      method: 'POST',
+      headers: { 'Prefer': 'return=minimal' },
+      body: JSON.stringify({
+        user_id:  userId,
+        gcs_uri:  gcsUri,
+        mime:     mime || 'video/mp4',
+        label:    label || null,
+        duration: (typeof duration === 'number' && duration > 0) ? duration : null,
+      }),
+    });
+  } catch (e) {
+    // Library save is best-effort — never fail a successful generation over it.
+    console.warn('poll-veo-clip: saveUserVideo failed (non-fatal):', e && e.message);
+  }
+}
+
 // Main handler
 exports.handler = async (event) => {
   const CORS = {
@@ -253,7 +275,7 @@ exports.handler = async (event) => {
   let body;
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON.' }) }; }
-  const { operationName } = body;
+  const { operationName, label, durationSecs } = body;
   if (!operationName || typeof operationName !== 'string') {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'operationName is required.' }) };
   }
@@ -421,10 +443,20 @@ exports.handler = async (event) => {
     // ── Unknown response format ───────────────────────────────────────────────
     // done:true but no video URI anywhere in the response. Vertex AI won't change
     // its answer on re-poll, so stop immediately rather than burning 10 minutes.
+    // Surface the real response shape (keys + short raw snippet) to the client so
+    // this stops being a black box — many "no video" cases are actually a filtered
+    // response in a shape we don't yet detect, or a quota/permission message.
     console.warn('poll-veo-clip: unknown done response — stopping immediately');
     const _ru = await refundVeoOp(operationName, _op);
+    var _respShape = {
+      pdKeys:       Object.keys(pd || {}),
+      responseKeys: pd.response ? Object.keys(pd.response) : null,
+      raiFilteredCount: raiFilteredCount,
+      samplesFound: samplesFound,
+      raw:          rawStr.slice(0, 600),
+    };
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: true, refunded: _ru > 0, refundedCredits: _ru,
+      body: JSON.stringify({ done: true, refunded: _ru > 0, refundedCredits: _ru, debug: _respShape,
         error: 'Generation completed but no video was returned. This is usually a content filter or a Vertex AI error — try regenerating this clip.' }) };
   }
 
@@ -444,6 +476,8 @@ exports.handler = async (event) => {
 
   // Success — mark the op done so it can never be refunded later.
   await markVeoOpDone(operationName);
+  // Auto-save to the user's cloud library (best-effort; stores the gs:// path).
+  await saveUserVideo(authUser.id, gcsUri, mimeType, (typeof label === 'string' ? label.slice(0, 120) : null), parseInt(durationSecs, 10) || null);
   return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
     body: JSON.stringify({ done: true, videoUrl: signedUrl, mimeType: mimeType }) };
 };

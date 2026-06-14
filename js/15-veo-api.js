@@ -375,7 +375,12 @@
     // full-res frame; only Veo's input is down-ressed. 720px @ 0.72 sits just
     // under the photoreal-face threshold that was blocking clips.
     // Softening levels — escalated automatically when a clip is filtered for likeness.
-    var _softenSteps = [ [660, 0.70], [560, 0.64], [470, 0.58] ];
+    // [maxEdge, jpegQuality] per soften level. Level 0 (first attempt) now keeps
+    // far more detail — the old 660px/0.70 floor was the main cause of soft,
+    // "mushy" upscaled output. The de-photorealization in the composite wording +
+    // avatar prep already carry most of the likeness-filter dodge, so we only fall
+    // back to heavy softening when Veo actually blocks a clip (auto-retry below).
+    var _softenSteps = [ [960, 0.85], [720, 0.68], [520, 0.58] ];
     var _ss = _softenSteps[Math.max(0, Math.min(_softenSteps.length - 1, softenLevel))];
     var _veoStartUrl = imageDataUrl
       ? await _veoSoftenStartFrame(imageDataUrl, _ss[0], _ss[1])
@@ -434,7 +439,7 @@
       var pollRes = await fetch('/.netlify/functions/poll-veo-clip', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body:    JSON.stringify({ operationName: operationName }),
+        body:    JSON.stringify({ operationName: operationName, durationSecs: dur }),
       });
 
       var pollData;
@@ -455,6 +460,9 @@
           if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/3)…', 'info', 4500);
           return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1);
         }
+        // Surface the raw Vertex response shape (when the server attaches it) so an
+        // opaque "no video" failure is diagnosable straight from the console.
+        if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
         // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
         var _errMsg = pollData.filtered ? ('🚫 ' + pollData.error + ' (credits refunded)') : pollData.error;
         throw new Error(_errMsg);

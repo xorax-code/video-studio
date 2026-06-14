@@ -997,6 +997,97 @@
     renderGallery();
   };
 
+  // ══ Cloud Video Library ════════════════════════════════════════════════════
+  // Every finished Veo clip is auto-saved server-side (poll-veo-clip). This panel
+  // lists them across devices/sessions and re-downloads on demand. Signed links
+  // are minted fresh by list-user-videos on each load (they expire).
+  async function _clJwt() {
+    var jwt = null;
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (_sbRef) { var _sr = await _sbRef.auth.getSession(); jwt = (_sr && _sr.data && _sr.data.session && _sr.data.session.access_token) || null; }
+    } catch(_) {}
+    if (!jwt) jwt = (typeof window.getAuthToken === 'function' ? window.getAuthToken() : null) || localStorage.getItem('supabase_access_token') || localStorage.getItem('sb-token') || window._authToken || null;
+    return jwt;
+  }
+
+  function _clFmtDate(iso) {
+    try { return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+    catch (_) { return ''; }
+  }
+
+  async function loadCloudLibrary() {
+    var grid = document.getElementById('cloudLibGrid');
+    var status = document.getElementById('cloudLibStatus');
+    if (!grid) return;
+    var jwt = await _clJwt();
+    if (!jwt) { if (status) status.textContent = 'Please log in to see your library.'; return; }
+    if (status) status.textContent = 'Loading…';
+    grid.innerHTML = '';
+    try {
+      var res = await fetch('/.netlify/functions/list-user-videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body: JSON.stringify({ limit: 60 }),
+      });
+      var data = await res.json();
+      if (!res.ok) throw new Error(data && data.error || ('HTTP ' + res.status));
+      var vids = (data && data.videos) || [];
+      if (!vids.length) { if (status) status.textContent = 'No saved videos yet — generate a clip and it will appear here automatically.'; return; }
+      if (status) status.textContent = vids.length + ' video' + (vids.length === 1 ? '' : 's');
+      vids.forEach(function (v) {
+        var card = document.createElement('div');
+        card.className = 'gal-card';
+        card.innerHTML =
+          '<div class="gal-thumb">'
+            + '<video src="' + v.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+            + (v.duration ? '<div class="gal-dur">' + v.duration + 's</div>' : '')
+          + '</div>'
+          + '<div class="gal-meta">'
+            + '<span class="gal-label">' + (v.label ? String(v.label).replace(/[<>]/g, '') : _clFmtDate(v.created_at)) + '</span>'
+            + '<div class="gal-btns">'
+              + '<button class="gal-btn gal-btn-dl" title="Download this video">⬇ Download</button>'
+            + '</div>'
+          + '</div>';
+        var vid = card.querySelector('.gal-video');
+        card.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
+        card.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = 0; } });
+        var dlBtn = card.querySelector('.gal-btn-dl');
+        if (dlBtn) dlBtn.addEventListener('click', function () { _clDownload(v.url, v.id); });
+        grid.appendChild(card);
+      });
+    } catch (e) {
+      if (status) status.textContent = 'Could not load library: ' + (e && e.message || e);
+    }
+  }
+  window.loadCloudLibrary = loadCloudLibrary;
+
+  // Fetch as a blob so the browser saves instead of navigating away from the app.
+  async function _clDownload(url, id) {
+    try {
+      var resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      var blob = await resp.blob();
+      var obj = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = obj; a.download = (typeof window._exportFilename === 'function' ? window._exportFilename('') : ('affiliateos-' + (id || 'video') + '.mp4'));
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(obj); }, 4000);
+    } catch (e) {
+      // Fallback: open in a new tab if the blob fetch fails (e.g. CORS).
+      window.open(url, '_blank');
+    }
+  }
+
+  window.openCloudLibrary = function () {
+    var modal = document.getElementById('cloudLibModal');
+    if (modal) { modal.style.display = 'flex'; loadCloudLibrary(); }
+  };
+  window.closeCloudLibrary = function () {
+    var modal = document.getElementById('cloudLibModal');
+    if (modal) modal.style.display = 'none';
+  };
+
   // Init on load
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initGallery);
