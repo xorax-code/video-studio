@@ -316,8 +316,13 @@ exports.handler = async (event) => {
     // Vertex AI error (e.g. quota exceeded, invalid request, model error).
     // Now we respect pd.done — if Vertex marked the op done, we stop polling immediately.
     const _re = pd.done ? await refundVeoOp(operationName, _op) : 0;
+    // Veo's input-image likeness / usage-guidelines block (support code 15236754)
+    // arrives here as a generic operation error rather than the structured filter
+    // response. Flag it as `filtered` so the client runs its soften-and-retry path.
+    const _errText = pd.error.message || 'Generation failed on server.';
+    const _isFiltered = /15236754|usage guidelines|violat|responsible ai|input image/i.test(_errText);
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({ done: !!pd.done, error: pd.error.message || 'Generation failed on server.', refunded: _re > 0, refundedCredits: _re }) };
+      body: JSON.stringify({ done: !!pd.done, error: _errText, filtered: _isFiltered, refunded: _re > 0, refundedCredits: _re }) };
   }
   if (!pd.done) {
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),

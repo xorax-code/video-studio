@@ -348,6 +348,15 @@
   //                  Gemini 2.0 Flash for scene analysis (setting/camera/lighting/props).
   //                  Separate from imageDataUrl — the start image may be the avatar
   //                  composite, but scene analysis always needs the raw source frame.
+  // Veo's person-likeness / usage-guidelines block on the INPUT IMAGE. Vertex
+  // surfaces this several ways (support code 15236754, "usage guidelines",
+  // "violates", "responsible AI") and NOT always via the structured filter flag,
+  // so we pattern-match the message to trigger the soften-and-retry path.
+  function _isLikenessBlock(msg) {
+    if (!msg) return false;
+    return /15236754|usage guidelines|violat|responsible ai|safety (?:filter|guidelines)|input image/i.test(String(msg));
+  }
+
   async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel) {
     softenLevel = softenLevel | 0; // 0 = default; higher = softer start frame (safety-filter retries)
     var jwt = await _getSupabaseJwt();
@@ -453,10 +462,13 @@
       }
       // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
-        // Auto-soften retry: if the safety filter blocked this clip, the server has
-        // already refunded it (refunded:true), so re-render the start frame softer and
-        // try again — up to 3 total attempts. Only on `filtered`, never generic errors.
-        if (pollData.filtered && softenLevel < 2 && imageDataUrl) {
+        // Auto-soften retry: the safety filter blocked this clip (server already
+        // refunded it), so re-render the start frame softer and try again — up to 3
+        // total attempts. Fires on the structured `filtered` flag OR when the error
+        // text is a likeness/usage-guidelines block (code 15236754), which Vertex
+        // returns through the generic error path without setting `filtered`.
+        var _blocked = pollData.filtered || _isLikenessBlock(pollData.error);
+        if (_blocked && softenLevel < 2 && imageDataUrl) {
           if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/3)…', 'info', 4500);
           return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1);
         }
@@ -464,7 +476,7 @@
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
         // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
-        var _errMsg = pollData.filtered ? ('🚫 ' + pollData.error + ' (credits refunded)') : pollData.error;
+        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a less close-up / less photoreal frame)') : pollData.error;
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
