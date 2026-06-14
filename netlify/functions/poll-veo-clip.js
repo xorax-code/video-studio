@@ -434,6 +434,19 @@ exports.handler = async (event) => {
     var debugInfo = JSON.stringify({ pdKeys: Object.keys(pd), responseKeys: pd.response ? Object.keys(pd.response) : null, raw: rawStr.slice(0, 400) });
     console.error('poll-veo-clip: no GCS URI found. samplesFound=' + samplesFound + ' raiFilteredCount=' + raiFilteredCount + ' debug:', debugInfo);
 
+    // ── Likeness / usage-guidelines block buried in the response ──────────────
+    // Veo's input-image person-likeness block (support code 15236754) often arrives
+    // NOT as a top-level error and NOT via generatedSamples/raiFilteredCount — the
+    // message is nested deep inside the response object. Scan the raw text so we can
+    // flag it as `filtered` (→ client runs its soften-and-retry ladder) and surface
+    // the real reason instead of the generic "no video" message.
+    if (/15236754|usage guidelines|violat|responsible ai/i.test(rawStr)) {
+      const _rl = await refundVeoOp(operationName, _op);
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ done: true, filtered: true, refunded: _rl > 0, refundedCredits: _rl,
+          error: "Veo blocked the start frame as too photoreal a person (code 15236754). Retrying with a softer frame." }) };
+    }
+
     // ── Content filter confirmed ──────────────────────────────────────────────
     // Vertex AI returned the known response structure but generatedSamples is
     // empty (or raiFilteredCount > 0), meaning Google's safety system blocked it.

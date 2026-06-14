@@ -389,7 +389,10 @@
     // "mushy" upscaled output. The de-photorealization in the composite wording +
     // avatar prep already carry most of the likeness-filter dodge, so we only fall
     // back to heavy softening when Veo actually blocks a clip (auto-retry below).
-    var _softenSteps = [ [960, 0.85], [720, 0.68], [520, 0.58] ];
+    // Last level (380px) is a deliberately soft "get it through at any cost" fallback
+    // for extreme face close-ups Veo blocks even when moderately softened. Quality
+    // suffers at that level, but a soft clip beats a hard failure.
+    var _softenSteps = [ [960, 0.85], [700, 0.66], [520, 0.56], [380, 0.5] ];
     var _ss = _softenSteps[Math.max(0, Math.min(_softenSteps.length - 1, softenLevel))];
     var _veoStartUrl = imageDataUrl
       ? await _veoSoftenStartFrame(imageDataUrl, _ss[0], _ss[1])
@@ -468,8 +471,8 @@
         // text is a likeness/usage-guidelines block (code 15236754), which Vertex
         // returns through the generic error path without setting `filtered`.
         var _blocked = pollData.filtered || _isLikenessBlock(pollData.error);
-        if (_blocked && softenLevel < 2 && imageDataUrl) {
-          if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/3)…', 'info', 4500);
+        if (_blocked && softenLevel < 3 && imageDataUrl) {
+          if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/4)…', 'info', 4500);
           return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1);
         }
         // Surface the raw Vertex response shape (when the server attaches it) so an

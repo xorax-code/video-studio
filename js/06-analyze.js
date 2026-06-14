@@ -470,13 +470,18 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
 
     // Per-scene shot/framing — derived from the scene's shot hint (falls back to a sensible default)
     var _shotHint = (_stgSeg && _stgSeg._shot) ? String(_stgSeg._shot).toLowerCase() : '';
+    // NOTE: defaults are intentionally pulled WIDER (medium shot vs tight close-up).
+    // A large photoreal face filling the frame is what trips Veo's input-image
+    // likeness filter (code 15236754); a medium shot with headroom + surrounding
+    // context shrinks the face's footprint so clips clear the filter AND need less
+    // softening (so they look sharper). Only explicit product/detail hints stay tight.
     var _shotDesc = /wide|full/.test(_shotHint)              ? 'wide shot, full body and the surrounding room visible'
-                  : /medium close/.test(_shotHint)           ? 'medium close-up, chest-up, hands and prop visible'
-                  : /close[- ]?up|ecu|macro|detail/.test(_shotHint) ? 'close-up, the product or treated area prominent'
+                  : /medium close/.test(_shotHint)           ? 'medium shot, waist-up, hands and prop visible, room visible around the subject'
+                  : /close[- ]?up|ecu|macro|detail/.test(_shotHint) ? 'medium close-up on the product or treated area (product/hands prominent, face not filling the frame)'
                   : /medium/.test(_shotHint)                 ? 'medium shot, waist-up with the table and props visible'
                   : isFirst                                  ? 'medium shot, waist-up, establishing the scene and the table'
-                  :                                            'medium close-up, chest-up, hands and any prop visible';
-    var _framing = 'vertical 9:16, ' + _shotDesc + ', 85mm equivalent, f/1.8 shallow depth of field';
+                  :                                            'medium shot, waist-up, hands and any prop visible, with the table and room visible around the subject';
+    var _framing = 'vertical 9:16, ' + _shotDesc + ', natural medium camera distance with headroom — the face should NOT fill the frame, 50mm equivalent, gentle depth of field';
 
     // Background / setting lock
     if (frameDesc) {
@@ -982,7 +987,7 @@ Return ONLY a valid JSON object with these fields:
 - starting_frame: describe the person's position, clothing, and pose only — do NOT describe props or background here
 - background: describe the exact background setting visible in the image (wall color, any art/decor, distance). End with: "Background is locked — do not alter, move, or add any elements."
 - foreground_props: list EVERY object on the surface/table with its exact position (e.g. "white jar — center-left, label facing camera"). Note any visible product labels or text and state they must remain legible and unchanged. End with: "All props are locked in place — do not move, add, remove, or rearrange any object. All product labels and text must remain sharp, legible, and identical throughout the clip."
-- camera: "static handheld, slight natural movement, medium close-up to close-up, vertical 9:16"
+- camera: "static handheld, slight natural movement, medium shot — keep the subject waist-up with headroom, face not filling the frame, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
 - duration: MUST be exactly "6 seconds" or "8 seconds" — no other values are valid. Choose 8 if the speech takes longer than 7 seconds to say at a natural pace, otherwise choose 6.
 - negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
@@ -1005,12 +1010,21 @@ No markdown. Return only the JSON object.`
       const data = await res.json();
       let raw = (data.choices?.[0]?.message?.content || '').trim();
       raw = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
-      // Guard: model returned a refusal / plain-text instead of JSON
+      // GPT-4o sometimes wraps the object in a preamble ("Here's the JSON:") despite
+      // being told not to. Extract the JSON object from anywhere in the response rather
+      // than requiring it to START with "{" — only a response with no object at all is
+      // a genuine refusal worth skipping (which then falls back to the template prompt).
       if (!raw.startsWith('{')) {
-        console.warn('[buildVeo3FromNBImage] model returned non-JSON for seg', i, '— skipping. Response:', raw.slice(0, 120));
-        return false;
+        const _s = raw.indexOf('{');
+        const _e = raw.lastIndexOf('}');
+        if (_s !== -1 && _e > _s) {
+          raw = raw.slice(_s, _e + 1);
+        } else {
+          console.warn('[buildVeo3FromNBImage] model returned non-JSON for seg', i, '— skipping. Response:', raw.slice(0, 120));
+          return false;
+        }
       }
-      // Validate it's parseable JSON
+      // Validate it's parseable JSON (try/catch below falls back to template on failure)
       const _parsed = JSON.parse(raw);
       if (_parsed.action) {
         if (isTwoPerson) {

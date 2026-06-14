@@ -303,7 +303,7 @@
         _hfParts.push('TRANSFER BLOCK: No text, logos, labels, or graphical overlays from Photo 2 in the output.');
         _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
         if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
-        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '. Single polished, natural, REALISTIC image — smooth even skin, gentle soft lighting, premium look; lightly softened rather than a sharp, hyper-detailed photograph of a specific real individual. Not illustrated, not cartoon. ONE person only.');
+        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '. Single polished, natural, REALISTIC image — smooth even skin, gentle soft lighting, premium look; lightly softened rather than a sharp, hyper-detailed photograph of a specific real individual. Not illustrated, not cartoon. ONE person only.');
         instruction = _hfParts.join(' ');
       }
 
@@ -343,7 +343,7 @@
       _gParts.push('TRANSFER BLOCK: Do NOT add any text, logos, dates, or labels to the output.');
 
       // Technical
-      _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium close-up, subject centered, 85mm, f/1.8 shallow depth of field') + '.');
+      _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '.');
       _gParts.push('Style: ' + (_nbStyle || 'natural realistic lifestyle — soft even lighting, smooth idealized skin, premium look, lightly softened (not a sharp, hyper-detailed photograph of a specific real individual); not illustrated, not cartoon') + '. Single image. ONE person only. No text overlays, no watermarks.');
 
       instruction = _gParts.join(' ');
