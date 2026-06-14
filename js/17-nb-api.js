@@ -138,8 +138,9 @@
   window._nbPostComposite = _nbPostComposite;
 
   // ── Generate NB composite for a single segment ────────────────────────────
-  async function generateNbComposite(segIdx, stylizeLevel) {
+  async function generateNbComposite(segIdx, stylizeLevel, framingLevel) {
     stylizeLevel = stylizeLevel | 0; // 0 = base polished look; higher = more stylized (used by safety-filter retries)
+    framingLevel = framingLevel | 0; // 0 = normal medium shot; higher = pull back wider (Veo block auto-escalate)
     var seg = segments[segIdx];
     if (!seg) { showToast('Segment not found.', 'error'); return false; }
 
@@ -383,6 +384,16 @@
     ];
     instruction += _styleLevels[Math.max(0, Math.min(_styleLevels.length - 1, stylizeLevel))];
 
+    // Framing escalation — applied when a Veo clip was blocked for being too photoreal
+    // a person: each level pulls the camera back further so the face shrinks (the proven
+    // lever), and strips any wall posters/charts (the recitation lever). Level 0 = none.
+    var _framingEscalation = [
+      '',
+      ' FRAMING ESCALATION (the previous frame was blocked): pull the camera back FURTHER — show the full upper body / waist-up with generous space around the subject; the face must be SMALL, no more than ~18% of the frame height. Remove ALL wall posters, charts, and artwork — use a plain empty wall.',
+      ' FRAMING ESCALATION (blocked again): WIDE shot now — the person is small within the frame with lots of room and plain environment around them, face tiny. Absolutely no posters, charts, diagrams, logos, or artwork anywhere — plain empty background only.'
+    ];
+    instruction += _framingEscalation[Math.max(0, Math.min(_framingEscalation.length - 1, framingLevel))];
+
     // Locked background wins over any scene setting mentioned above.
     if (_lockedBg) {
       instruction += ' BACKGROUND LOCK (critical, overrides everything else): The environment/background behind the person MUST be exactly: ' + _lockedBg + '. Replace and IGNORE any other room, shop, store, indoor setting, or location described above. Keep the person, their outfit, and their action the same, but place them in THIS exact background on every single frame.';
@@ -424,7 +435,7 @@
         console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' failed (' + msg + ') — auto-retrying softer (level ' + (stylizeLevel + 1) + ')');
         if (typeof showToast === 'function') showToast('Scene ' + (segIdx + 1) + ' didn’t render — retrying with a softer version…', 'info', 4500);
         await new Promise(function (r) { setTimeout(r, 1200); }); // brief backoff for transient errors
-        return await generateNbComposite(segIdx, stylizeLevel + 1);
+        return await generateNbComposite(segIdx, stylizeLevel + 1, framingLevel);
       }
       console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed after retries:', msg);
       showToast('NB gen failed for Scene ' + (segIdx + 1) + ' after retries: ' + msg, 'error', 20000);

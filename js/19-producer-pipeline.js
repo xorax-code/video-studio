@@ -253,7 +253,7 @@
             try {
               var startImg = theSeg.nbPreviewDataUrl || theSeg.frameDataUrl || null;
               var result   = await window.generateVeoClipViaAPI(
-                theSeg.veoPrompt, theDur, modelKey, startImg, theSeg.frameDataUrl || null
+                theSeg.veoPrompt, theDur, modelKey, startImg, theSeg.frameDataUrl || null, 0, theSegIdx, 0
               );
 
               theSeg.apiVideoUrl  = result.videoUrl;

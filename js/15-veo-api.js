@@ -357,8 +357,9 @@
     return /15236754|usage guidelines|violat|responsible ai|safety (?:filter|guidelines)|input image/i.test(String(msg));
   }
 
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel) {
-    softenLevel = softenLevel | 0; // 0 = default; higher = softer start frame (safety-filter retries)
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel) {
+    softenLevel  = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
+    framingLevel = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -470,16 +471,34 @@
         // total attempts. Fires on the structured `filtered` flag OR when the error
         // text is a likeness/usage-guidelines block (code 15236754), which Vertex
         // returns through the generic error path without setting `filtered`.
-        var _blocked = pollData.filtered || _isLikenessBlock(pollData.error);
-        if (_blocked && softenLevel < 3 && imageDataUrl) {
+        // A block = likeness filter (15236754), the structured `filtered` flag, OR a
+        // recitation/copyright block. All three are fixed the same way: a wider, cleaner
+        // start frame. Server already refunded the blocked clip, so each retry is safe.
+        var _blocked = pollData.filtered || pollData.recitation || _isLikenessBlock(pollData.error);
+
+        // PREFERRED FIX (auto-escalate): when we know the segment, regenerate its composite
+        // WIDER + poster-stripped (the proven lever — a small face / no posters clears Veo)
+        // and retry. Far more effective than softening, which doesn't beat the face filter.
+        if (_blocked && (typeof segIdx === 'number') && framingLevel < 2 && typeof window.generateNbComposite === 'function') {
+          if (typeof showToast === 'function') showToast('Scene blocked — regenerating a wider, cleaner frame (attempt ' + (framingLevel + 2) + '/3)…', 'info', 6000);
+          var _regenOk = await window.generateNbComposite(segIdx, 0, framingLevel + 1);
+          if (_regenOk) {
+            var _newImg = (window.segments && window.segments[segIdx] && window.segments[segIdx].nbPreviewDataUrl) || imageDataUrl;
+            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newImg, refFrameDataUrl, 0, segIdx, framingLevel + 1);
+          }
+          // If the regen itself failed, fall through to the soften fallback / error below.
+        }
+
+        // FALLBACK (no segIdx — e.g. Flow Studio): soften the same frame and retry.
+        if (_blocked && (typeof segIdx !== 'number') && softenLevel < 3 && imageDataUrl) {
           if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/4)…', 'info', 4500);
-          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1);
+          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1, segIdx, framingLevel);
         }
         // Surface the raw Vertex response shape (when the server attaches it) so an
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
         // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
-        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a less close-up / less photoreal frame)') : pollData.error;
+        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a wider / less close-up frame)') : pollData.error;
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
@@ -726,7 +745,9 @@
         try {
           // All clips (primary + continuations) use the same NB composite start frame
           var _startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-          var result    = await generateVeoClipViaAPI(item.veoPrompt, durSecs, modelKey, _startImg, seg.frameDataUrl || null);
+          // Pass segIdx for PRIMARY clips so a block auto-regenerates a wider/cleaner
+          // composite. Extras share the parent frame, so they use the soften fallback.
+          var result    = await generateVeoClipViaAPI(item.veoPrompt, durSecs, modelKey, _startImg, seg.frameDataUrl || null, 0, (item.isExtra ? undefined : segIdx), 0);
 
           var videoBlob = await _fetchVideoAsBlob(result.videoUrl);
           if (item.isExtra) {
@@ -870,7 +891,7 @@
 
     try {
       var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
-      var result   = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, startImg, seg.frameDataUrl || null);
+      var result   = await generateVeoClipViaAPI(seg.veoPrompt, durSecs, modelKey, startImg, seg.frameDataUrl || null, 0, segIdx, 0);
 
       seg.apiVideoUrl  = result.videoUrl;
       seg.apiVideoMime = result.mimeType || 'video/mp4';

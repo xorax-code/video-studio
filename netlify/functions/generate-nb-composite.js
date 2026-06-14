@@ -452,7 +452,7 @@ CASE A — Photo 1 shows a person's FACE or BODY: Completely replace that person
 
 CASE B — Photo 1 shows ONLY a hand or arm holding the product (NO face, NO body, no person): Keep it as ONLY that hand/arm, but REPLACE its appearance to match the Photo 2 avatar — skin tone, gender, and clothing color. If the avatar is a woman, it MUST be a smooth, hairless, feminine hand and forearm: REMOVE all arm hair, coarse hair, knuckle hair, stubble, and masculine features from the original Photo 1 arm — do NOT keep the original person's hairy or male-looking arm. Photo 2 is ONLY a skin/appearance reference here — it is NOT a person to insert. Do NOT add, draw, or place a face, head, hair, or any standing/seated person ANYWHERE in the image, including the background. Keep the EXACT same crop and framing as Photo 1 — output only the same hand/arm holding the product.
 
-In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1.${_analysisHint}\n\n`;
+In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1. BACKGROUND ART (critical): do NOT reproduce any detailed wall poster, anatomical or medical chart, skin/body diagram, infographic, or framed artwork from Photo 1 — even if Photo 1 clearly shows one. Replace it with a PLAIN blank framed print, an empty wall, or a simple plant. Reproducing a real poster or chart causes a copyright/recitation block and the clip fails.${_analysisHint}\n\n`;
 
   // Hand-lock directive — when a locked hand reference is provided, the hand/wrist
   // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
