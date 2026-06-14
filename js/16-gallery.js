@@ -142,8 +142,10 @@
             + '</button>'
             + (clip.extraIdx === -1
               ? '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + clip.segIdx + ')" title="Download clip">⬇</button>'
+                + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',-1)" title="Zoom / reframe, then download HD">🔍</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
               : '<button class="gal-btn gal-btn-dl" onclick="(function(){var e=segments[' + clip.segIdx + '].veoExtras[' + clip.extraIdx + '];var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (clip.segIdx+1) + '-clip-' + (clip.extraIdx+2) + '.mp4\';a.click();})()" title="Download clip">⬇</button>'
+                + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Zoom / reframe, then download HD">🔍</button>'
             )
           + '</div>'
         + '</div>';
@@ -208,7 +210,7 @@
   };
 
   // ── Shared 1080p upscale helper — works with both <button> and <select> ──
-  async function _doUpscale(videoUrl, filename, elId) {
+  async function _doUpscale(videoUrl, filename, elId, crop) {
     if (!videoUrl) {
       if (typeof showToast === 'function') showToast('No video URL for this clip.', 'error');
       return;
@@ -237,7 +239,7 @@
       if (typeof showToast === 'function') showToast('Starting 1080p upscale…', 'info', 4000);
       var createRes  = await fetch('/.netlify/functions/upscale-video', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ videoUrl: videoUrl }),
+        body: JSON.stringify(crop ? { videoUrl: videoUrl, crop: crop } : { videoUrl: videoUrl }),
       });
       var createData = await createRes.json();
       if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start upscale job.');
@@ -1086,6 +1088,103 @@
   window.closeCloudLibrary = function () {
     var modal = document.getElementById('cloudLibModal');
     if (modal) modal.style.display = 'none';
+  };
+
+  // ══ Per-clip Zoom & Crop (post-generation reframe) ═════════════════════════
+  // Veo's filter only scans the START frame, so we generate WIDE (small face = passes)
+  // then let the user zoom back in on the finished video here. The zoom is baked into
+  // the 1080p HD download server-side (Cloud Transcoder crop) → a real mp4, no quality
+  // loss from client re-encoding. Live preview uses a CSS transform.
+  var _ze = { zoom: 1, panX: 0, panY: 0, vw: 0, vh: 0, segIdx: null, extraIdx: -1, src: null, drag: null };
+
+  function _zeVideoSrc(segIdx, extraIdx) {
+    var seg = (window.segments || [])[segIdx]; if (!seg) return null;
+    if (extraIdx === -1 || extraIdx == null) return seg.apiVideoRaw || seg.apiVideoUrl || null;
+    var ex = seg.veoExtras && seg.veoExtras[extraIdx];
+    return ex ? (ex.apiVideoRaw || ex.apiVideoUrl) : null;
+  }
+
+  function _zeApply() {
+    var v = document.getElementById('zoomEditorVideo'); if (!v) return;
+    var z = _ze.zoom;
+    var lim = (z > 1) ? 1 : 0;
+    _ze.panX = Math.max(-lim, Math.min(lim, _ze.panX));
+    _ze.panY = Math.max(-lim, Math.min(lim, _ze.panY));
+    var maxShift = (z > 1) ? (1 - 1 / z) * 50 : 0; // % of element, pre-scale
+    v.style.transformOrigin = 'center center';
+    v.style.transform = 'translate(' + (_ze.panX * maxShift) + '%,' + (_ze.panY * maxShift) + '%) scale(' + z + ')';
+    var lbl = document.getElementById('zoomEditorLabel'); if (lbl) lbl.textContent = z.toFixed(2) + '×';
+  }
+
+  window.onZoomEditorSlider = function (val) { _ze.zoom = Math.max(1, Math.min(3, parseFloat(val) || 1)); _zeApply(); };
+  window.zoomEditorReset = function () {
+    _ze.zoom = 1; _ze.panX = 0; _ze.panY = 0;
+    var sl = document.getElementById('zoomEditorSlider'); if (sl) sl.value = 1; _zeApply();
+  };
+
+  // Drag-to-pan on the preview stage
+  document.addEventListener('mousemove', function (e) {
+    if (!_ze.drag) return; e.preventDefault();
+    var box = document.getElementById('zoomEditorStage'); if (!box) return;
+    var r = box.getBoundingClientRect();
+    var maxShift = (_ze.zoom > 1) ? (1 - 1 / _ze.zoom) : 0.0001;
+    _ze.panX = _ze.drag.panX + ((e.clientX - _ze.drag.x) / (r.width  * maxShift));
+    _ze.panY = _ze.drag.panY + ((e.clientY - _ze.drag.y) / (r.height * maxShift));
+    _zeApply();
+  });
+  document.addEventListener('mouseup', function () { _ze.drag = null; });
+  window.zoomEditorDragStart = function (e) { _ze.drag = { x: e.clientX, y: e.clientY, panX: _ze.panX, panY: _ze.panY }; };
+
+  window.openZoomEditor = function (segIdx, extraIdx) {
+    extraIdx = (extraIdx == null) ? -1 : extraIdx;
+    var src = _zeVideoSrc(segIdx, extraIdx);
+    if (!src) { if (typeof showToast === 'function') showToast('Generate this clip first, then you can zoom it.', 'warning'); return; }
+    var seg = window.segments[segIdx];
+    var saved = (extraIdx === -1 ? seg._zoom : ((seg.veoExtras && seg.veoExtras[extraIdx] || {})._zoom)) || { zoom: 1, panX: 0, panY: 0 };
+    _ze = { zoom: saved.zoom || 1, panX: saved.panX || 0, panY: saved.panY || 0, vw: 0, vh: 0, segIdx: segIdx, extraIdx: extraIdx, src: src, drag: null };
+    var modal = document.getElementById('zoomEditorModal'); if (!modal) return;
+    var v = document.getElementById('zoomEditorVideo');
+    v.src = src; v.loop = true; v.muted = true; v.play().catch(function () {});
+    v.onloadedmetadata = function () { _ze.vw = v.videoWidth; _ze.vh = v.videoHeight; };
+    var sl = document.getElementById('zoomEditorSlider'); if (sl) sl.value = _ze.zoom;
+    _zeApply();
+    modal.style.display = 'flex';
+  };
+  window.closeZoomEditor = function () {
+    var m = document.getElementById('zoomEditorModal'); if (m) m.style.display = 'none';
+    var v = document.getElementById('zoomEditorVideo'); if (v) { v.pause(); v.removeAttribute('src'); v.load(); }
+  };
+
+  // zoom/pan → Cloud Transcoder crop pixels (center region W/z × H/z, shifted by pan)
+  function _zeCrop() {
+    var W = _ze.vw, H = _ze.vh, z = _ze.zoom;
+    if (!W || !H || z <= 1) return null;
+    var totX = W - W / z, totY = H - H / z;
+    var left = Math.max(0, Math.min(totX, (totX / 2) * (1 + _ze.panX)));
+    var top  = Math.max(0, Math.min(totY, (totY / 2) * (1 + _ze.panY)));
+    return {
+      leftPixels:   Math.round(left),
+      rightPixels:  Math.round(totX - left),
+      topPixels:    Math.round(top),
+      bottomPixels: Math.round(totY - top),
+    };
+  }
+
+  window.zoomEditorSave = function () {
+    var seg = window.segments[_ze.segIdx]; if (!seg) return;
+    var z = { zoom: _ze.zoom, panX: _ze.panX, panY: _ze.panY };
+    if (_ze.extraIdx === -1) seg._zoom = z;
+    else if (seg.veoExtras && seg.veoExtras[_ze.extraIdx]) seg.veoExtras[_ze.extraIdx]._zoom = z;
+    if (typeof saveSegments === 'function') saveSegments();
+    if (typeof showToast === 'function') showToast('Zoom saved for this clip.', 'success', 2500);
+  };
+
+  window.zoomEditorDownloadHD = function () {
+    window.zoomEditorSave();
+    var crop = _zeCrop();
+    var fn = 'scene-' + ((_ze.segIdx || 0) + 1) + (crop ? '-zoom' : '') + '-1080p.mp4';
+    if (typeof showToast === 'function') showToast(crop ? 'Rendering your zoomed 1080p clip…' : 'No zoom set — rendering 1080p…', 'info', 4000);
+    _doUpscale(_ze.src, fn, 'zoomEditorHDBtn', crop);
   };
 
   // Init on load

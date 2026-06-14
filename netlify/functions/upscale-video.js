@@ -185,7 +185,17 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); }
   catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
 
-  let { gcsUri, videoUrl } = body;
+  let { gcsUri, videoUrl, crop } = body;
+
+  // Optional server-side crop (post-generation zoom/reframe). Pixels to trim from each
+  // edge of the INPUT; the output stays 1080×1920 so the cropped region scales up = zoom.
+  // Sanitize to non-negative integers; ignore if it would remove ~everything.
+  let _cropCfg = null;
+  if (crop && typeof crop === 'object') {
+    const _i = function (v) { v = parseInt(v, 10); return (isFinite(v) && v > 0) ? v : 0; };
+    const t = _i(crop.topPixels), b = _i(crop.bottomPixels), l = _i(crop.leftPixels), r = _i(crop.rightPixels);
+    if (t || b || l || r) _cropCfg = { topPixels: t, bottomPixels: b, leftPixels: l, rightPixels: r };
+  }
 
   // Accept either a gs:// URI or the HTTPS signed URL from storage.googleapis.com
   // (poll-veo-clip returns signed HTTPS URLs, not gs:// URIs, to the frontend)
@@ -232,8 +242,7 @@ exports.handler = async (event) => {
   // ── Create Transcoder job ─────────────────────────────────────────────────
   const projectId  = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const apiPath    = `/v1/projects/${projectId}/locations/${LOCATION}/jobs`;
-  const jobBody    = JSON.stringify({
-    inputUri:  gcsUri,
+  const _jobObj = {
     outputUri: outputUri,
     config: {
       elementaryStreams: [
@@ -268,7 +277,16 @@ exports.handler = async (event) => {
         },
       ],
     },
-  });
+  };
+  // No crop → simple top-level inputUri (unchanged behavior). With crop → use an
+  // explicit input carrying a preprocessingConfig.crop (trims edges before the
+  // 1080×1920 scale, producing the zoom/reframe), baked into the mp4 server-side.
+  if (_cropCfg) {
+    _jobObj.config.inputs = [{ key: 'input0', uri: gcsUri, preprocessingConfig: { crop: _cropCfg } }];
+  } else {
+    _jobObj.inputUri = gcsUri;
+  }
+  const jobBody = JSON.stringify(_jobObj);
 
   console.log(`upscale-video: user=${user.id}, input=${gcsUri}, output=${outputUri}`);
 
