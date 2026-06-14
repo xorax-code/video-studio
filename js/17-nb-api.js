@@ -304,6 +304,9 @@
         _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
         if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
         _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '. Single polished, natural, REALISTIC image — smooth even skin, gentle soft lighting, premium look; lightly softened rather than a sharp, hyper-detailed photograph of a specific real individual. Not illustrated, not cartoon. ONE person only.');
+        // ZOOM-OUT OVERRIDE (applies even to scenes whose saved framing was a tight
+        // close-up): a face filling the frame trips Veo's likeness filter (15236754).
+        _hfParts.push('IMPORTANT FRAMING OVERRIDE: render as a MEDIUM SHOT — subject waist-up with clear headroom and visible surroundings; the face must occupy only a small part of the frame and must NOT fill it. Do not crop in tight on the face.');
         instruction = _hfParts.join(' ');
       }
 
@@ -344,6 +347,8 @@
 
       // Technical
       _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '.');
+      // ZOOM-OUT OVERRIDE — see note above. A face filling the frame trips Veo 15236754.
+      _gParts.push('IMPORTANT FRAMING OVERRIDE: render as a MEDIUM SHOT — subject waist-up with clear headroom and visible surroundings; the face must occupy only a small part of the frame and must NOT fill it. Do not crop in tight on the face.');
       _gParts.push('Style: ' + (_nbStyle || 'natural realistic lifestyle — soft even lighting, smooth idealized skin, premium look, lightly softened (not a sharp, hyper-detailed photograph of a specific real individual); not illustrated, not cartoon') + '. Single image. ONE person only. No text overlays, no watermarks.');
 
       instruction = _gParts.join(' ');
