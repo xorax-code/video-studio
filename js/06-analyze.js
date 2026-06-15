@@ -21,7 +21,11 @@
       return 'person pours or adds ingredient with a natural deliberate motion — glances at the pour, then back to camera';
     if (/(drink|drinking|sip|sipping|swallow|take.*sip|taste|tasting|chug|gulp)/.test(t))
       return 'person takes a sip or drinks — natural smooth motion, reacts with a satisfied expression looking back at camera';
-    if (/(hold.*up|hold.*out|show|showing|look.*at|here.*is|this.*is|see.*this|reveal|check.*this|look.*at.*this)/.test(t))
+    // Only an explicit HOLDING verb implies a held product. Weak conversational
+    // phrases ("this is", "show", "look at", "here is", "reveal") are NOT reliable
+    // signals — they fall through to a neutral talking action so we never invent a
+    // prop the person isn't actually holding (esp. in replicator scene-matching).
+    if (/(hold.*up|hold.*out|holding.*up|holds.*up)/.test(t))
       return 'person holds product up toward camera with a confident display — slight smile, direct eye contact';
     if (/(mix|mixing|stir|stirring|blend|blending|shake|shaking|whisk|whisking)/.test(t) && /(bowl|container|cup|jar|bottle|glass|pan|spoon)/.test(t))
       return 'person mixes or stirs with a smooth consistent motion — watches the motion, then returns to camera eye contact';
@@ -50,7 +54,7 @@
     if (/(stomach|gut|liver|organ|model|fat.*model|body.*model|digestive)/.test(t))
       return 'person holds or gestures toward an anatomical prop or model — demonstrates effect with a deliberate hand motion';
     if (/(watch|watch.*what|look.*what|look.*how|see.*how|see.*what|i.*show)/.test(t))
-      return 'person holds demonstration prop or object toward camera — gestures to draw attention to a visual effect';
+      return 'person gestures toward the camera to draw attention — animated, purposeful delivery (no held prop unless the script names one)';
     // ── Scene position fallbacks ─────────────────────────────────────────────
     if (sceneIndex === 0)
       return 'person delivers opening hook directly to camera — confident eye contact, slight forward lean, engaging energy';

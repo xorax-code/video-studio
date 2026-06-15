@@ -2892,6 +2892,50 @@
   }
 
   // --- Vision-based NB prompt builder: analyzes the frame to tailor the instruction ---
+  // Vision call with Vertex-Gemini PRIMARY (configurable safety → fewer refusals) and
+  // OpenAI gpt-4o FALLBACK. Accepts the SAME OpenAI chat-completions (url, opts) the
+  // analyzer builds, and returns an OpenAI-shaped response { ok, status, json() ->
+  // {choices:[{message:{content}}]} } so all downstream parsing is unchanged.
+  async function _visionChatWithFallback(openaiUrl, opts) {
+    try {
+      var _body = JSON.parse(opts.body || '{}');
+      var _content = _body && _body.messages && _body.messages[0] && _body.messages[0].content;
+      var _txt = '', _imgUrl = '';
+      if (Array.isArray(_content)) {
+        for (var _i = 0; _i < _content.length; _i++) {
+          var _p = _content[_i];
+          if (_p && _p.type === 'text' && !_txt) _txt = _p.text || '';
+          if (_p && _p.type === 'image_url' && _p.image_url && !_imgUrl) _imgUrl = _p.image_url.url || '';
+        }
+      }
+      if (_txt && _imgUrl && _imgUrl.indexOf('data:') === 0) {
+        var _comma = _imgUrl.indexOf(',');
+        var _mime  = _imgUrl.slice(5, _comma).split(';')[0] || 'image/jpeg';
+        var _b64   = _imgUrl.slice(_comma + 1);
+        var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+        var _jwt = null;
+        if (_sbRef) { try { var _s = await _sbRef.auth.getSession(); _jwt = (_s && _s.data && _s.data.session && _s.data.session.access_token) || null; } catch (_e) {} }
+        if (_jwt) {
+          var _vr = await fetch('/.netlify/functions/analyze-frame', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + _jwt },
+            body:    JSON.stringify({ promptText: _txt, imageB64: _b64, imageMime: _mime }),
+          });
+          if (_vr.ok) {
+            var _vd = await _vr.json().catch(function () { return {}; });
+            if (_vd && _vd.text) {
+              var _gemContent = _vd.text;
+              return { ok: true, status: 200, json: async function () { return { choices: [{ message: { content: _gemContent } }] }; } };
+            }
+          }
+          console.warn('[analyze-frame] Vertex Gemini returned no usable text — falling back to gpt-4o');
+        }
+      }
+    } catch (e) { console.warn('[analyze-frame] Vertex path error — falling back to gpt-4o:', e && e.message); }
+    // Fallback: the original OpenAI gpt-4o call, behavior unchanged.
+    return _fetchWithRetry(openaiUrl, opts);
+  }
+
   async function buildNBPromptFromImage(i) {
     const seg = segments[i];
     if (!seg || !seg.frameDataUrl) return false;
@@ -2909,7 +2953,7 @@
 
     // Pre-compute all injected notes — avoids nested template literals (Windows Node compat)
     const _scriptNote = _nbScript
-      ? '\n\n── SCENE SCRIPT (use to identify props and context) ──\n"' + _nbScript + '"\nThe presenter says this while performing actions in this frame. Use the script to correctly name any ambiguous products, tools, containers, or props you see. CRITICAL — PRODUCT NAME OVERRIDE: If the script mentions a specific product name (e.g. "QUIA toner pads"), that name is AUTHORITATIVE. Use the script name even if you can see a different brand name on the container in the video frame — the frame may show a competitor product being replaced.'
+      ? '\n\n── SCENE SCRIPT (context only — the FRAME is the source of truth for what is physically present) ──\n"' + _nbScript + '"\nThe presenter says this while performing actions in this frame. Use the script ONLY to correctly NAME a product/tool/container that is ACTUALLY VISIBLE or being HELD in this frame. PRODUCT NAME OVERRIDE (rename only): if a product IS visibly in the scene or in the person\'s hands and the script names a specific product (e.g. "QUIA toner pads"), use the script name even if a different brand shows on the container — the frame may show a competitor being replaced. ⚠️ DO NOT INVENT PRODUCTS: if the person is NOT holding or using any product in this frame (empty hands, receiving a treatment, simply talking, etc.), do NOT add, mention, or place any product or held object — the script naming a product does NOT mean one must appear on screen. Whether the person is holding anything, and what it is, is determined ONLY by what is visible in the frame — never by the script.'
       : '';
     const _notesNote = sceneNotes
       ? '\n\n⚠️ USER-PROVIDED SCENE NOTES — treat these as ground truth, they override anything you think you see in the image:\n' + sceneNotes
@@ -2927,7 +2971,7 @@
     }
 
     try {
-      const res = await _fetchWithRetry('https://api.openai.com/v1/chat/completions', {
+      const res = await _visionChatWithFallback('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
