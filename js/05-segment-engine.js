@@ -2924,8 +2924,19 @@
           if (_vr.ok) {
             var _vd = await _vr.json().catch(function () { return {}; });
             if (_vd && _vd.text) {
+              // Only accept Gemini's output if it's parseable JSON with an instruction.
+              // If it's malformed/truncated, fall through to gpt-4o instead of failing downstream.
               var _gemContent = _vd.text;
-              return { ok: true, status: 200, json: async function () { return { choices: [{ message: { content: _gemContent } }] }; } };
+              var _gemOk = false;
+              try {
+                var _gemClean = _gemContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+                var _gemParsed = JSON.parse(_gemClean);
+                _gemOk = !!(_gemParsed && _gemParsed.instruction);
+              } catch (_pe) { _gemOk = false; }
+              if (_gemOk) {
+                return { ok: true, status: 200, json: async function () { return { choices: [{ message: { content: _gemContent } }] }; } };
+              }
+              console.warn('[analyze-frame] Gemini returned unparseable/incomplete JSON — falling back to gpt-4o');
             }
           }
           console.warn('[analyze-frame] Vertex Gemini returned no usable text — falling back to gpt-4o');
@@ -2995,6 +3006,11 @@ STEP 1 — IDENTIFY WHAT IS VISIBLE
 Only describe something if you are CERTAIN it is there. If you are not 100% sure — omit it entirely. Do NOT guess, infer, or fill in from context. A wrong inclusion causes far more damage than an omission. When in doubt, leave it out.
 
 ⚠️ HANDS & HELD-OBJECT RULE (critical): Look very carefully at the hands before claiming anything is in them. If the person is performing a hands-on treatment or gesture — applying skincare with fingertips, massaging, touching a face or skin, doing a facial, resting hands, or gesturing — their hands are EMPTY (bare or gloved) and are touching skin or moving freely. Do NOT describe them as holding a pad, cotton round, applicator, sponge, tool, jar, or any product UNLESS a distinct, separate object is UNMISTAKABLY gripped and clearly separable from the fingers. Gloved fingertips resting on or moving across skin are NOT a held object. If you are not 100% certain a separate object is in the hand, state that the hands are empty / applying with fingers. Never invent a product in the hand.
+
+⚠️ GLOVE STATE — match THIS frame EXACTLY (the composite tends to add gloves on its own, so you must lock it): look at the targeted person's hands and decide if they are BARE or wearing GLOVES (note the color). Then enforce it BOTH ways:
+  • In the instruction, add an explicit lock — either "LOCK: hands are BARE — no gloves of any kind" OR "LOCK: hands wear [color] gloves".
+  • In the negative_prompt, add the OPPOSITE so the model cannot drift: if BARE → add "gloves, latex gloves, nitrile gloves, black gloves, surgical gloves"; if GLOVED → add "bare hands, ungloved hands, no gloves".
+Do NOT add gloves the frame does not show, and do NOT remove gloves the frame does show.
 
 Classify the shot type:
 - FULL PERSON: face and upper body clearly visible (head, shoulders, torso in frame)

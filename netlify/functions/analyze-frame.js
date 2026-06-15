@@ -113,7 +113,9 @@ exports.handler = async (event) => {
 
   const reqJson = JSON.stringify({
     contents: [{ role: 'user', parts: [{ text: promptText }, { inlineData: { mimeType: imageMime, data: imageB64 } }] }],
-    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 1200 },
+    // thinkingBudget:0 disables Gemini 2.5 Flash's default "thinking" — without this it
+    // spends output tokens reasoning and the JSON comes back truncated/malformed.
+    generationConfig: { responseMimeType: 'application/json', temperature: 0.3, maxOutputTokens: 2048, thinkingConfig: { thinkingBudget: 0 } },
     safetySettings: SAFETY_SETTINGS,
   });
   const host = `${VERTEX_LOCATION}-aiplatform.googleapis.com`;
