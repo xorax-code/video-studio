@@ -2994,6 +2994,8 @@ STEP 1 — IDENTIFY WHAT IS VISIBLE
 ⚠️ CONFIDENCE RULE — applies to everything in this step:
 Only describe something if you are CERTAIN it is there. If you are not 100% sure — omit it entirely. Do NOT guess, infer, or fill in from context. A wrong inclusion causes far more damage than an omission. When in doubt, leave it out.
 
+⚠️ HANDS & HELD-OBJECT RULE (critical): Look very carefully at the hands before claiming anything is in them. If the person is performing a hands-on treatment or gesture — applying skincare with fingertips, massaging, touching a face or skin, doing a facial, resting hands, or gesturing — their hands are EMPTY (bare or gloved) and are touching skin or moving freely. Do NOT describe them as holding a pad, cotton round, applicator, sponge, tool, jar, or any product UNLESS a distinct, separate object is UNMISTAKABLY gripped and clearly separable from the fingers. Gloved fingertips resting on or moving across skin are NOT a held object. If you are not 100% certain a separate object is in the hand, state that the hands are empty / applying with fingers. Never invent a product in the hand.
+
 Classify the shot type:
 - FULL PERSON: face and upper body clearly visible (head, shoulders, torso in frame)
 - HANDS/ARMS ONLY: no face in frame — only hands, forearms, arms (possibly holding/interacting with products)
@@ -3034,7 +3036,7 @@ Write a SHORT scene-specific instruction using explicit LOCK / REPLACE / LIGHT l
 Use this label structure so the model can anchor rules without drift:
   REPLACE: what changes (the target person — their position, size, pose)
   LOCK: what must stay identical (background, secondary person, specific objects)
-  ARM: exact arm/hand position and what they hold
+  ARM: exact arm/hand position and what they hold (if anything — empty or gloved hands touching skin are EMPTY; never invent a held object)
   LIGHT: color temperature + shadow direction (e.g. "warm/golden from top-left")
   PROP STATE: exact condition of each prop (e.g. "Vaseline jar open, lid removed, facing camera")
 
@@ -3043,7 +3045,7 @@ FOR FULL PERSON shots:
 - REPLACE: target person — state position (quadrant) and frame height % e.g. "centered, ~80% frame height"
 - Camera angle: e.g. "straight-on chest height" or "slight low angle"
 - LOCK: background — list all elements briefly: "beige wall, product shelf behind, spa bed left"
-- ARM: describe both arms/hands precisely — position, height, what they hold
+- ARM: describe both arms/hands precisely — position, height, and what they hold ONLY if a distinct object is clearly gripped (hands applying with fingertips or touching skin are empty — do not invent a product)
 - PROP STATE: list each prop's exact state: "open Vaseline jar facing camera on table center, honey jar sealed right"
 - LIGHT: color temperature and shadow direction: "warm ambient, soft shadows from above"
 - Face covering if present: "LOCK: avatar wears [black cloth mask] — do NOT show bare face"
