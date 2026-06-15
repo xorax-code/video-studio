@@ -228,6 +228,9 @@
   }
 
   var _FS_IMG_SYS = 'You are a prompt engineer for Gemini AI image editing. Rewrite the user\'s casual description into a precise photorealistic instruction. Rules: be specific about placement, lighting, and integration; state that the subject\'s face, skin, hair, clothing, and background must stay completely unchanged; if multiple reference photos are mentioned, reference them by number. Return ONLY: {"instruction":"<your detailed instruction>"}';
+  // Used when NO reference photos are provided (pure text-to-image): generate from
+  // scratch, so there is no subject to "keep unchanged."
+  var _FS_IMG_GEN_SYS = 'You are a prompt engineer for AI text-to-image generation. Rewrite the user\'s casual description into a precise, vivid, photorealistic image-generation prompt. Rules: be specific about subject, composition, lighting, setting, mood, and style; do NOT reference any photos; do NOT say to keep anything unchanged. Return ONLY: {"instruction":"<your detailed instruction>"}';
 
   // _FS_VID_SYS removed — video prompt enhancement handled by enhance-veo-prompt Netlify function (Gemini 2.5 Flash multimodal)
 
@@ -574,9 +577,8 @@
   // ── GENERATE IMAGE ─────────────────────────────────────────────────────────
   window.generateFsImage = async function() {
     var loaded = _fsImgSlots.filter(Boolean);
-    if (!loaded.length) {
-      if (typeof showToast === 'function') showToast('Upload at least one reference photo.', 'warning'); return;
-    }
+    // Reference photos are OPTIONAL. With none, this is straight text-to-image
+    // generation; with photos, it's reference-guided editing. Only the prompt is required.
     var promptEl = document.getElementById('fsImgPrompt');
     var casual   = promptEl ? promptEl.value.trim() : '';
     if (!casual) {
@@ -602,7 +604,8 @@
         : '';
       var instruction = casual;
       try {
-        var raw = await _fsGpt(_FS_IMG_SYS, photoContext + casual, jwt, 400);
+        var _imgSys = loaded.length ? _FS_IMG_SYS : _FS_IMG_GEN_SYS;
+        var raw = await _fsGpt(_imgSys, photoContext + casual, jwt, 400);
         raw = raw.replace(/```json\s*/gi,'').replace(/```\s*/gi,'').trim();
         instruction = JSON.parse(raw).instruction || casual;
       } catch(_) {}
