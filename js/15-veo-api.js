@@ -482,11 +482,13 @@
         if (_blocked && (typeof segIdx === 'number') && framingLevel < 2 && typeof window.generateNbComposite === 'function') {
           if (typeof showToast === 'function') showToast('Scene blocked — regenerating a wider, cleaner frame (attempt ' + (framingLevel + 2) + '/3)…', 'info', 6000);
           var _regenOk = await window.generateNbComposite(segIdx, 0, framingLevel + 1);
-          if (_regenOk) {
-            var _newImg = (window.segments && window.segments[segIdx] && window.segments[segIdx].nbPreviewDataUrl) || imageDataUrl;
+          var _newImg = _regenOk ? ((window.segments && window.segments[segIdx] && window.segments[segIdx].nbPreviewDataUrl) || null) : null;
+          // Only retry if we actually got a DIFFERENT frame — otherwise we'd burn another
+          // paid clip on the identical image that just got blocked.
+          if (_newImg && _newImg !== imageDataUrl) {
             return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newImg, refFrameDataUrl, 0, segIdx, framingLevel + 1);
           }
-          // If the regen itself failed, fall through to the soften fallback / error below.
+          // Regen failed or produced the same frame — fall through to the error below.
         }
 
         // FALLBACK (no segIdx — e.g. Flow Studio): soften the same frame and retry.

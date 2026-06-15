@@ -26,9 +26,13 @@ const VERTEX_LOCATION       = 'us-central1'; // text models (pose analysis) are 
 const VERTEX_IMAGE_LOCATION = 'global';      // Gemini 3.x image models are ONLY on the global endpoint
 const CREDIT_COST     = 2; // credits per composite frame, default Flash quality
 const CREDIT_COST_PRO = 5; // credits per composite frame, Max Quality (Pro) — ~2x the real cost
-// Vertex-only mode: while burning the Google Cloud credit, do NOT fall back to the
-// (empty) Gemini Developer API key. Flip to true to re-enable the Gemini safety net.
+// Pose analysis stays Vertex-only (optional step; no need for a second lane).
 const ALLOW_GEMINI_FALLBACK = false;
+// IMAGE overflow lane: the Gemini Developer API is a SEPARATE serving stack from
+// Vertex's global pool, with its own quota. When Vertex's global image endpoint is
+// capacity-throttled (429/5xx), overflow image gen to the Gemini API instead of failing.
+// Requires a PAID-tier GEMINI_API_KEY. Set false to go Vertex-only again.
+const ALLOW_GEMINI_IMAGE_FALLBACK = true;
 
 function httpsRequest(options, body) {
   return new Promise((resolve, reject) => {
@@ -117,13 +121,19 @@ async function callImageModel(requestObj, apiKey, wantPro, vtxToken) {
     }
   }
 
-  // 3) Fallback: Flash on the Gemini Developer API — disabled in Vertex-only mode
-  if (ALLOW_GEMINI_FALLBACK && apiKey) {
+  // 3) Overflow lane: Flash on the Gemini Developer API (separate serving stack /
+  //    separate quota pool from Vertex's global endpoint). Fires when Vertex didn't
+  //    return an image — primarily capacity throttling (429) or transient 5xx.
+  if (ALLOW_GEMINI_IMAGE_FALLBACK && apiKey) {
+    console.warn('generate-nb-composite: overflowing to Gemini Developer API (Vertex status ' + (lastVertex && lastVertex.status) + ')');
     const r2 = await httpsRequest({
-      hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent?key=${apiKey}`, method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+      hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey, 'Content-Length': Buffer.byteLength(reqJson) },
     }, reqJson);
-    return { status: r2.status, data: r2.data, usedPro: false };
+    if (r2.status === 200 && _hasImage(r2.data)) return { status: 200, data: r2.data, usedPro: false };
+    console.warn('generate-nb-composite: Gemini overflow also failed —', r2.status, (r2.data && r2.data.error && r2.data.error.message) || '');
+    // Prefer surfacing the Gemini result if Vertex gave us nothing useful.
+    if (!lastVertex) return { status: r2.status, data: r2.data, usedPro: false };
   }
 
   // Vertex-only: surface the Vertex outcome (or a clear error) instead of the empty key.

@@ -114,11 +114,11 @@
   async function _nbGenerateAsync(bodyObj, jwt, label) {
     // Longer, exponential backoff for the image model's tight quota; jitter de-syncs
     // concurrent retries so they don't all re-hit the limit at the same instant.
-    var RL_WAITS = [0, 8000, 20000, 40000]; // up to 4 attempts (~68s of backoff)
+    var RL_WAITS = [0, 10000, 22000, 40000, 60000]; // up to 5 attempts (~132s of backoff)
     var out;
     for (var a = 0; a < RL_WAITS.length; a++) {
       if (RL_WAITS[a]) {
-        var _w = RL_WAITS[a] + Math.floor(Math.random() * 2500);
+        var _w = RL_WAITS[a] + Math.floor(Math.random() * 4000);
         if (typeof showToast === 'function') showToast((label ? label + ': ' : '') + 'rate limited — retrying in ' + Math.round(_w / 1000) + 's…', 'warning', _w);
         await new Promise(function (r) { setTimeout(r, _w); });
       }
@@ -134,7 +134,6 @@
   function _nbPostComposite(bodyObj, jwt, label) {
     return _nbGenerateAsync(bodyObj, jwt, label);
   }
-  window._nbPostComposite = _nbPostComposite;
   window._nbPostComposite = _nbPostComposite;
 
   // ── Generate NB composite for a single segment ────────────────────────────
@@ -189,14 +188,17 @@
     var avatarParts = _nbSplitDataUrl(avatarCompressed);
 
     var frameB64 = null, frameMime = 'image/jpeg';
-    // Final framing escalation (level >= 2): DROP the source frame and switch to
-    // generate-mode. Matching a tight close-up source keeps the face large no matter
-    // how we word it; generate-mode produces a fresh WIDE avatar scene (the mode proven
-    // to clear Veo's filter). The scene no longer copies the source's exact framing,
-    // but it passes — a wide generated shot beats a blocked tight replica.
-    var hasFrame = !!seg.frameDataUrl && framingLevel < 2;
+    // ANCHOR FRAME (background consistency): producer script-only scenes have no
+    // per-scene source frame. The batch generates the FIRST scene as the video's
+    // anchor (window._producerAnchorFrame); every later scene then uses that anchor as
+    // its base frame so the SET stays identical — same room, camera, props — and only
+    // the avatar's action changes. Replicator scenes keep their own source frame.
+    // Final framing escalation (level >= 2): DROP the frame and switch to generate-mode
+    // (a fresh WIDE scene that reliably clears Veo's filter).
+    var _frameSrc = seg.frameDataUrl || (window._producerAnchorFrame || null);
+    var hasFrame = !!_frameSrc && framingLevel < 2;
     if (hasFrame) {
-      var frameCompressed = await _nbCompressImage(seg.frameDataUrl, _nbPx, _nbJq);
+      var frameCompressed = await _nbCompressImage(_frameSrc, _nbPx, _nbJq);
       var frameParts = _nbSplitDataUrl(frameCompressed);
       frameB64 = frameParts.b64;
       frameMime = frameParts.mime;
@@ -439,7 +441,7 @@
       if (stylizeLevel < 2) {
         console.warn('[NB Composite] Scene ' + (segIdx + 1) + ' failed (' + msg + ') — auto-retrying softer (level ' + (stylizeLevel + 1) + ')');
         if (typeof showToast === 'function') showToast('Scene ' + (segIdx + 1) + ' didn’t render — retrying with a softer version…', 'info', 4500);
-        await new Promise(function (r) { setTimeout(r, 1200); }); // brief backoff for transient errors
+        await new Promise(function (r) { setTimeout(r, 3000 + Math.floor(Math.random() * 2000)); }); // backoff for transient/burst errors (jittered so concurrent scenes don't re-hit together)
         return await generateNbComposite(segIdx, stylizeLevel + 1, framingLevel);
       }
       console.error('[NB Composite] Scene ' + (segIdx + 1) + ' failed after retries:', msg);
@@ -719,7 +721,25 @@
     var _nbTier = (typeof window !== 'undefined' && window._stripeTier) ? window._stripeTier : 'free';
     var _nbTopTier = (_nbTier === 'scale' || _nbTier === 'agency');
     var _CONCURRENCY = _nbTopTier ? 2 : 1;
+
+    // ── Anchor frame → background consistency ─────────────────────────────────
+    // For producer script-only runs (no per-scene source frames), generate the FIRST
+    // scene ALONE to establish the locked set, capture it as the anchor, then let every
+    // other scene match it. Replicator runs (each scene has its own frame) skip this.
+    window._producerAnchorFrame = null;
     var _next = 0;
+    var _anchorMode = n > 1 && toGen.every(function (s) { return !s.frameDataUrl; });
+    if (_anchorMode) {
+      var _aSegIdx = segments.indexOf(toGen[0]);
+      _nbSetFrameStatus(0, 'generating');
+      var _aOk = await generateNbComposite(_aSegIdx); // anchor: no _producerAnchorFrame yet → fresh set
+      if (_aOk) { succeeded++; window._producerAnchorFrame = (segments[_aSegIdx] && segments[_aSegIdx].nbPreviewDataUrl) || null; }
+      else      { failed++; }
+      _nbSetFrameStatus(0, _aOk ? 'done' : 'error', succeeded + failed, n);
+      if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> ' + (succeeded + failed) + '/' + n + '…';
+      _next = 1; // workers start after the anchor
+    }
+
     async function _nbWorker() {
       while (true) {
         var i = _next++;

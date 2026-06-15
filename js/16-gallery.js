@@ -143,7 +143,7 @@
             + (clip.extraIdx === -1
               ? '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + clip.segIdx + ')" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',-1)" title="Zoom / reframe, then download HD">🔍</button>'
-                + '<button class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
+                + '<button id="gal-hd-btn-' + clip.segIdx + '" class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
               : '<button class="gal-btn gal-btn-dl" onclick="(function(){var e=segments[' + clip.segIdx + '].veoExtras[' + clip.extraIdx + '];var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (clip.segIdx+1) + '-clip-' + (clip.extraIdx+2) + '.mp4\';a.click();})()" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Zoom / reframe, then download HD">🔍</button>'
             )
