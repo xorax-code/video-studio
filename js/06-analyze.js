@@ -4490,6 +4490,15 @@ TECHNICAL SPECS:
       });
       if (!res.ok) { console.warn('aiSegmentScript: HTTP ' + res.status); return null; }
       var data = await res.json();
+      // Apply the AI-derived locked SETTING — but never overwrite a setting the user typed.
+      // A defined, real, themed setting is what stops scenes looking flat/AI-generated.
+      if (data && data.setting) {
+        var _setEl = document.getElementById('studioSetting');
+        if (_setEl && !_setEl.value.trim()) {
+          _setEl.value = data.setting;
+          if (typeof showToast === 'function') showToast('Setting locked: ' + data.setting.slice(0, 60) + '…', 'info', 4000);
+        }
+      }
       return (data && Array.isArray(data.scenes) && data.scenes.length) ? data.scenes : null;
     } catch (e) {
       console.warn('aiSegmentScript failed, will fall back to sentence split:', e && e.message);

@@ -176,18 +176,24 @@ function parseJsonLoose(raw) {
 }
 
 // ── Prompts ───────────────────────────────────────────────────────────────────
-const SEGMENT_SYSTEM = `You are a short-form video director for AI avatar (UGC) ads. Split the user's script into scenes for an AI avatar to perform, one scene per generated video clip.
+const SEGMENT_SYSTEM = `You are a short-form video director for AI avatar (UGC) ads. Do two jobs: (A) define the single physical set the whole video is shot in, and (B) split the script into scenes for an AI avatar to perform, one scene per generated clip.
 
-RULES:
+(A) SETTING — define ONCE, reused identically in every scene:
+- Choose ONE specific, real, lived-in themed space that fits the script's topic and makes the avatar a believable authority. Examples: a warm traditional home kitchen / apothecary (wood counter, shelves of real glass jars and ingredients, a plant, soft window daylight) for a home remedy; a bright skincare studio with product shelves and a vanity for a skincare routine; a farmers-market stall for food/wellness; a rustic ranch table for outdoor/natural topics.
+- It MUST read as a REAL place a real person actually lives or works in — concrete props, natural window light, lived-in detail. NEVER a generic, empty, sterile "AI studio" backdrop, and never a clinical/medical room unless the script is explicitly clinical.
+- There is always a counter or table directly in front of the avatar — the stage where the props sit and the demo happens.
+- Return it as one rich, specific "setting" string.
+
+(B) SCENE RULES:
 1. Each scene = ONE coherent visual beat. Cut on meaning — never mid-thought.
-2. Each scene is 6 or 8 seconds of spoken delivery. Budget words: 8s ≈ up to 18 words, 6s ≈ up to 12 words. Use 8 for fuller lines, 6 for short/punchy lines.
-3. "spoken" must be the EXACT words from the script, verbatim — never paraphrase, add, or drop words. Together the scenes must cover the entire script in order with no words lost.
-4. "action": a SPECIFIC physical action + camera note for the avatar in this scene (e.g. "holds the product label-forward at chest height, slight lean toward camera, soft push-in"). One continuous shot — no cuts or "then".
-5. "shot": framing — one of close-up, medium close-up, medium, or wide.
+2. Each scene is 6 or 8 seconds of spoken delivery. Budget: 8s ≈ up to 18 words, 6s ≈ up to 12 words.
+3. "spoken" = the EXACT words from the script, verbatim — never paraphrase, add, or drop words. The scenes together cover the whole script in order, no words lost.
+4. "action": SPECIFIC physical staging for THIS scene that uses the ACTUAL props/ingredients/objects named in the script — name them concretely (e.g. "scoops petroleum jelly from its blue Vaseline jar into a glass bowl already holding coconut oil, raw honey and olive oil, then stirs with a spoon"). The avatar is actively DOING the demo at the counter — holding an item label-forward, mixing in a bowl, scooping, applying — never just standing and talking. Across the video follow this arc: hook (show the problem or a prop) → setup → hands-on demo (the recipe/ritual — the engine of interest) → result → FINAL scene: hold the product up to camera, label forward, well-lit.
+5. "shot": close-up, medium close-up, medium, or wide. Favor medium so the room and the props on the counter stay visible.
 6. "emphasis": the single most important word in the line to stress.
-7. Keep the avatar in ONE consistent setting across all scenes unless the script clearly changes location.
+7. SAME setting in every scene — only the staging/props/action change.
 
-Return JSON: {"scenes":[{"spoken","seconds","action","shot","emphasis"}, ...]}.`;
+Return JSON: {"setting":"<one rich, real, specific setting>","scenes":[{"spoken","seconds","action","shot","emphasis"}, ...]}.`;
 
 const WRITE_SYSTEM = `You are a direct-response UGC scriptwriter for affiliate marketing short-form videos (TikTok/Reels/Shorts). Write a single spoken-word script for one person talking to camera about the product. Open with a scroll-stopping hook in the first line, build desire with a concrete benefit or mechanism, and close with a clear call to action. Keep it natural and conversational — the way a real creator talks, not an ad read. Target the requested length. Return ONLY the script text, no headings, no scene labels, no quotes.`;
 
@@ -196,6 +202,7 @@ const REVISE_SYSTEM = `You are a UGC script editor. Rewrite the user's script ap
 const SEGMENT_SCHEMA = {
   type: 'object',
   properties: {
+    setting: { type: 'string' },
     scenes: {
       type: 'array',
       items: {
@@ -303,7 +310,7 @@ exports.handler = async (event) => {
       console.log(`producer-ai segment: user=${user.id}, scenes=${clean.length}`);
       await _chargePa();
       return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenes: clean, model: MODEL_PRO, creditsDeducted: CREDIT_COST }) };
+        body: JSON.stringify({ setting: String(parsed.setting || '').trim(), scenes: clean, model: MODEL_PRO, creditsDeducted: CREDIT_COST }) };
     }
 
     if (task === 'write' || task === 'revise') {
