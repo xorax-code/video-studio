@@ -377,7 +377,9 @@ const runComposite = async (event) => {
   // The locked hand reference applies only when compositing onto a real frame.
   const hasHandRef = !!(frameImg && handRefImg);
 
-  if (!avatarImg) {
+  // Creative/Studio mode allows pure text-to-image (no avatar or reference needed).
+  // Only the avatar/replicator composite paths require a subject image.
+  if (!avatarImg && !creative) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 

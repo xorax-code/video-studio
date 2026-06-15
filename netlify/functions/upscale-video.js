@@ -131,14 +131,35 @@ async function spendCredits(userId, amount) {
   const n = (typeof r.data === 'number') ? r.data : parseInt(r.data, 10);
   return Number.isFinite(n) ? n : null;
 }
+// Refund credits (used when an op can't be registered after retries).
+async function addCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/add_credits`);
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  return r.status === 200;
+}
+// Register a paid job so poll-upscale can verify ownership + refund on failure. This
+// row is what makes refunds possible, so we RETRY the write and return whether it
+// succeeded, letting the caller refund if every attempt fails.
 async function registerVeoOp(opName, userId, cost, kind) {
-  try {
-    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
-    const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const b = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'upscale', status: 'pending' });
-    await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
-      headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(b) } }, b);
-  } catch (e) { console.error('registerVeoOp failed for ' + opName + ':', e && e.message); }
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'upscale', status: 'pending' });
+  const WAITS = [0, 400, 1200]; // up to 3 attempts
+  for (let a = 0; a < WAITS.length; a++) {
+    if (WAITS[a]) await new Promise(r => setTimeout(r, WAITS[a]));
+    try {
+      const res = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+        headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(b) } }, b);
+      if (res && res.status >= 200 && res.status < 300) return true;
+      console.error(`registerVeoOp attempt ${a + 1} for ${opName}: HTTP ${res && res.status}`);
+    } catch (e) {
+      console.error(`registerVeoOp attempt ${a + 1} failed for ${opName}:`, e && e.message);
+    }
+  }
+  return false;
 }
 
 // ── Main handler ──────────────────────────────────────────────────────────────
@@ -325,9 +346,16 @@ exports.handler = async (event) => {
 
   // Job submitted successfully — deduct credits (best-effort; logged if it fails)
   const _spent   = await spendCredits(user.id, CREDIT_COST);
-  const _charged = (_spent !== -1 && _spent !== null);
+  let _charged = (_spent !== -1 && _spent !== null);
   if (!_charged) console.error(`upscale-video: credit deduction failed for user ${user.id} (job ${jobName} already submitted)`);
-  await registerVeoOp(jobName, user.id, _charged ? CREDIT_COST : 0, 'upscale');
+  const _registered = await registerVeoOp(jobName, user.id, _charged ? CREDIT_COST : 0, 'upscale');
+  if (!_registered && _charged) {
+    // Couldn't record the op after retries → poll-upscale can't auto-refund if the job
+    // fails. Refund now so no un-refundable charge stands. (The job keeps running.)
+    const _ref = await addCredits(user.id, CREDIT_COST);
+    if (!_ref) console.error(`upscale-video: CRITICAL — refund failed for user ${user.id} after op-registration failure; balance may be wrong`);
+    else { _charged = false; console.error(`upscale-video: op ${jobName} unregistered after retries — refunded ${CREDIT_COST}.`); }
+  }
   const _newBalance = _charged ? _spent : currentBalance;
 
   return {

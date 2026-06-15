@@ -733,8 +733,11 @@
       var _aSegIdx = segments.indexOf(toGen[0]);
       _nbSetFrameStatus(0, 'generating');
       var _aOk = await generateNbComposite(_aSegIdx); // anchor: no _producerAnchorFrame yet → fresh set
+      // The anchor locks the SET that every other scene matches — if it fails, the rest
+      // would each generate a different room. Retry once before falling back to per-scene sets.
+      if (!_aOk) { _aOk = await generateNbComposite(_aSegIdx); }
       if (_aOk) { succeeded++; window._producerAnchorFrame = (segments[_aSegIdx] && segments[_aSegIdx].nbPreviewDataUrl) || null; }
-      else      { failed++; }
+      else      { failed++; if (typeof showToast === 'function') showToast('Couldn’t lock the shared set — scenes may vary in background. You can regenerate any scene after.', 'warning', 6000); }
       _nbSetFrameStatus(0, _aOk ? 'done' : 'error', succeeded + failed, n);
       if (btn) btn.innerHTML = '<i class="ti ti-loader-2" style="animation:spin 1s linear infinite;"></i> ' + (succeeded + failed) + '/' + n + '…';
       _next = 1; // workers start after the anchor

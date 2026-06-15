@@ -274,15 +274,27 @@ async function addCredits(userId, amount) {
 }
 
 // Register a paid operation so the poller can verify ownership (close the IDOR)
-// and refund the cost if the job is filtered/fails. Best-effort (never blocks gen).
+// and refund the cost if the job is filtered/fails. This row is what makes refunds
+// possible, so a failed write would mean an un-refundable charge — we RETRY it a few
+// times with backoff and return whether it ultimately succeeded so the caller can
+// fail-closed (refund) if every attempt fails.
 async function registerVeoOp(opName, userId, cost, kind) {
-  try {
-    const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
-    const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const body = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'clip', status: 'pending' });
-    await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
-      headers: { 'Authorization': `Bearer ${svc}`, 'apikey': svc, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(body) } }, body);
-  } catch (e) { console.error('registerVeoOp failed for ' + opName + ':', e && e.message); }
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/veo_operations`);
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const body = JSON.stringify({ op_name: opName, user_id: userId, cost: cost, kind: kind || 'clip', status: 'pending' });
+  const WAITS = [0, 400, 1200]; // up to 3 attempts
+  for (let a = 0; a < WAITS.length; a++) {
+    if (WAITS[a]) await new Promise(r => setTimeout(r, WAITS[a]));
+    try {
+      const res = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+        headers: { 'Authorization': `Bearer ${svc}`, 'apikey': svc, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal', 'Content-Length': Buffer.byteLength(body) } }, body);
+      if (res && res.status >= 200 && res.status < 300) return true;
+      console.error(`registerVeoOp attempt ${a + 1} for ${opName}: HTTP ${res && res.status}`);
+    } catch (e) {
+      console.error(`registerVeoOp attempt ${a + 1} failed for ${opName}:`, e && e.message);
+    }
+  }
+  return false;
 }
 
 // ── Start Vertex AI Veo generation ────────────────────────────────────────────
@@ -458,8 +470,17 @@ exports.handler = async (event) => {
   console.log(`generate-veo-clip: user ${userId} started op ${vtxResult.data.name}, ${cost} credits deducted (balance: ${newBalance})`);
 
   // Register the op so poll-veo-clip can verify ownership (close IDOR) and refund
-  // the cost if Google's safety filter blocks the clip.
-  await registerVeoOp(vtxResult.data.name, userId, cost, 'clip');
+  // the cost if Google's safety filter blocks the clip. Retried internally.
+  const _registered = await registerVeoOp(vtxResult.data.name, userId, cost, 'clip');
+  if (!_registered) {
+    // Couldn't record the op after retries → it can't be tracked or auto-refunded if
+    // it's later filtered. Fail closed: refund now and abort rather than leave an
+    // un-refundable charge. (The Vertex job is orphaned and expires on its own.)
+    const refunded4 = await addCredits(userId, cost);
+    if (!refunded4) console.error(`generate-veo-clip: CRITICAL — credit refund failed for user ${userId} after op-registration failure; balance may be wrong`);
+    console.error(`generate-veo-clip: op ${vtxResult.data.name} could not be registered after retries — refunded and aborted.`);
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'Could not start tracking this clip. Credits refunded — please try again.' }) };
+  }
 
   return {
     statusCode: 200,

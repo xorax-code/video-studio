@@ -57,7 +57,6 @@
     // Spinners
     var spnImg = document.getElementById('fsImgSpinner');
     var spnVid = document.getElementById('fsVidSpinner');
-    if (spnImg && spnImg.style.display !== 'none') { /* keep visible if actively spinning */ }
     if (!isImg && spnImg) spnImg.style.display = 'none';
     if (isImg  && spnVid) spnVid.style.display = 'none';
 
@@ -592,6 +591,17 @@
 
     var varSel  = document.getElementById('fsImgVariations');
     var varCount = varSel ? Math.max(1, Math.min(3, parseInt(varSel.value) || 1)) : 1;
+
+    // Precheck balance for ALL variations up front. The backend charges per image only
+    // AFTER success, so each parallel variation passes the single-frame gate independently;
+    // without this, a low-balance user could receive more images than they can pay for.
+    var _imgModelEl0 = document.getElementById('fsImgModel');
+    var _costPerImg  = (_imgModelEl0 && _imgModelEl0.value === 'pro') ? 5 : 2;
+    if (typeof window.userCredits === 'number' && window.userCredits < _costPerImg * varCount) {
+      if (typeof showToast === 'function') showToast('Not enough credits for ' + varCount + ' image' + (varCount > 1 ? 's' : '') + ' (' + (_costPerImg * varCount) + ' needed). Lower the variation count or top up.', 'warning', 5000);
+      return;
+    }
+
     var btn     = document.getElementById('fsBtnGenImg');
     var spinner = document.getElementById('fsImgSpinner');
     if (btn)    { btn.disabled = true; btn.textContent = varCount === 1 ? '✨ Generating…' : '✨ Generating ' + varCount + '…'; }
@@ -650,7 +660,7 @@
         }
       });
 
-      if (!newItems.length) throw new Error(errors[0] || 'All 3 variations failed — try rephrasing your prompt.');
+      if (!newItems.length) throw new Error(errors[0] || ('All ' + varCount + ' variation' + (varCount > 1 ? 's' : '') + ' failed — try rephrasing your prompt.'));
 
       // Add to history newest-first, cap at max
       newItems.reverse().forEach(function(item) { _fsImgHistory.unshift(item); });

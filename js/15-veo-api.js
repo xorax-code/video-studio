@@ -68,7 +68,7 @@
         if (numEl2) { numEl2.style.background = 'rgba(251,146,60,0.15)'; numEl2.style.borderColor = 'rgba(251,146,60,0.4)'; numEl2.style.color = '#fb923c'; }
       }
     }
-    if (step3Label) step3Label.textContent = m === 'api' ? '⚡ Make Clips' : '⚡ Make Clips';
+    if (step3Label) step3Label.textContent = '⚡ Make Clips';
 
     // Show/hide NB Review button based on mode (only relevant in API mode)
     var reviewBtn = document.getElementById('reviewNbBtn');
@@ -476,31 +476,15 @@
         // start frame. Server already refunded the blocked clip, so each retry is safe.
         var _blocked = pollData.filtered || pollData.recitation || _isLikenessBlock(pollData.error);
 
-        // PREFERRED FIX (auto-escalate): when we know the segment, regenerate its composite
-        // WIDER + poster-stripped (the proven lever — a small face / no posters clears Veo)
-        // and retry. Far more effective than softening, which doesn't beat the face filter.
-        if (_blocked && (typeof segIdx === 'number') && framingLevel < 2 && typeof window.generateNbComposite === 'function') {
-          if (typeof showToast === 'function') showToast('Scene blocked — regenerating a wider, cleaner frame (attempt ' + (framingLevel + 2) + '/3)…', 'info', 6000);
-          var _regenOk = await window.generateNbComposite(segIdx, 0, framingLevel + 1);
-          var _newImg = _regenOk ? ((window.segments && window.segments[segIdx] && window.segments[segIdx].nbPreviewDataUrl) || null) : null;
-          // Only retry if we actually got a DIFFERENT frame — otherwise we'd burn another
-          // paid clip on the identical image that just got blocked.
-          if (_newImg && _newImg !== imageDataUrl) {
-            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newImg, refFrameDataUrl, 0, segIdx, framingLevel + 1);
-          }
-          // Regen failed or produced the same frame — fall through to the error below.
-        }
-
-        // FALLBACK (no segIdx — e.g. Flow Studio): soften the same frame and retry.
-        if (_blocked && (typeof segIdx !== 'number') && softenLevel < 3 && imageDataUrl) {
-          if (typeof showToast === 'function') showToast('Scene was filtered — retrying with a softer frame (attempt ' + (softenLevel + 2) + '/4)…', 'info', 4500);
-          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel + 1, segIdx, framingLevel);
-        }
+        // No auto-retry. The widen + soften fallbacks were removed by request: a blocked
+        // clip now fails fast (the server already refunded it) instead of churning through
+        // wider/softer re-renders. If a scene keeps getting blocked, regenerate it manually
+        // with a wider / less close-up frame or switch to a less model-like avatar.
         // Surface the raw Vertex response shape (when the server attaches it) so an
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
         // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
-        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a wider / less close-up frame)') : pollData.error;
+        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a wider / less close-up frame, or a less model-like avatar)') : pollData.error;
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
