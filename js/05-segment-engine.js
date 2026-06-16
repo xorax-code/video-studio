@@ -2904,6 +2904,10 @@
   // analyzer builds, and returns an OpenAI-shaped response { ok, status, json() ->
   // {choices:[{message:{content}}]} } so all downstream parsing is unchanged.
   async function _visionChatWithFallback(openaiUrl, opts) {
+    // Analyzer model toggle. Reverted to gpt-4o (the original analyzer) to remove the
+    // Gemini switch as a variable. Flip to true to use the Gemini analyze-frame lane again.
+    var _USE_GEMINI_ANALYZER = false;
+    if (!_USE_GEMINI_ANALYZER) return _fetchWithRetry(openaiUrl, opts);
     try {
       var _body = JSON.parse(opts.body || '{}');
       var _content = _body && _body.messages && _body.messages[0] && _body.messages[0].content;
