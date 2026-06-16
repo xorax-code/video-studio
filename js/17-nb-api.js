@@ -65,6 +65,27 @@
     if (!startRes.ok) {
       var sd = {};
       try { sd = await startRes.json(); } catch(_) {}
+      // The background-function START failed (e.g. background functions aren't enabled on this
+      // Netlify deploy/plan, or the platform returned a 5xx). Fall back to the SYNCHRONOUS
+      // composite endpoint — it runs the exact same logic (runComposite) and returns the image
+      // inline, and surfaces the REAL error in its body if something else is actually wrong.
+      if (startRes.status >= 500) {
+        try {
+          var _syncRes = await fetch('/.netlify/functions/generate-nb-composite', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+            body:    JSON.stringify(bodyObj),
+          });
+          var _syncData = {};
+          try { _syncData = await _syncRes.json(); } catch(_) {}
+          if (_syncRes.ok && _syncData.imageB64) {
+            return { res: { ok: true, status: 200 }, data: { imageB64: _syncData.imageB64, mime: _syncData.mime, quality: _syncData.quality, creditsDeducted: _syncData.creditsDeducted } };
+          }
+          if (_syncData.error || _syncData.message) {
+            return { res: { ok: false, status: _syncRes.status }, data: { error: _syncData.error || _syncData.message } };
+          }
+        } catch (_e) { /* fall through to the original background error below */ }
+      }
       return { res: { ok: false, status: startRes.status }, data: { error: sd.error || sd.message || ('Could not start generation (HTTP ' + startRes.status + ')') } };
     }
 
