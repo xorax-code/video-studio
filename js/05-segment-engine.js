@@ -2971,10 +2971,19 @@
       : '';
     let _twoPersNote = '';
     if (seg.targetX != null) {
-      const _tSide   = seg.targetX < 50 ? 'LEFT' : 'RIGHT';
+      const _ty = (seg.targetY != null ? seg.targetY : 50);
+      const _tH = seg.targetX < 45 ? 'LEFT' : seg.targetX > 55 ? 'RIGHT' : 'CENTER';
+      const _tV = _ty < 40 ? 'TOP' : _ty > 60 ? 'BOTTOM' : 'MIDDLE';
+      // Build the clearest locator. When the two people are stacked VERTICALLY (similar X,
+      // e.g. one standing over someone lying down), TOP/BOTTOM is what distinguishes them;
+      // when side by side, LEFT/RIGHT does. Using only LEFT/RIGHT grabbed the wrong person
+      // in vertically-stacked scenes.
+      const _locParts = [];
+      if (_tV !== 'MIDDLE') _locParts.push(_tV);
+      if (_tH !== 'CENTER') _locParts.push(_tH);
+      const _loc = _locParts.length ? _locParts.join('-') : 'CENTER';
       const _tGender = seg.targetGender === 'woman' ? 'WOMAN' : seg.targetGender === 'man' ? 'MAN' : 'PERSON';
-      const _oSide   = _tSide === 'LEFT' ? 'RIGHT' : 'LEFT';
-      _twoPersNote = '\n\n⚠️ TWO-PERSON SCENE — READ CAREFULLY:\nThis frame contains MULTIPLE people. The user has pinned the TARGET at ' + seg.targetX + '% from the left edge of the frame — this is the ' + _tSide + ' side of the screen (from the viewer’s perspective looking at the screen).\nYou MUST:\n1. Replace ONLY the ' + _tGender + ' on the ' + _tSide + ' side of the frame. Do NOT second-guess this — trust the coordinate, not your own left/right perception of the image.\n2. The person on the ' + _oSide + ' side must remain 100% UNCHANGED — same face, body, skin, clothing, hair, pose, and position as in Photo 2.\n3. In your written instruction, explicitly state: "Replace ONLY the ' + _tGender.toLowerCase() + ' on the ' + _tSide.toLowerCase() + '. The person on the ' + _oSide.toLowerCase() + ' must stay 100% unchanged."\n4. Your negative_prompt MUST include: missing person, removed person, only one person, disappeared person, merged people';
+      _twoPersNote = '\n\n⚠️ TWO-PERSON SCENE — READ CAREFULLY:\nThis frame contains MULTIPLE people. The user pinned the TARGET person at approximately ' + seg.targetX + '% from the LEFT edge and ' + _ty + '% from the TOP edge — i.e. the ' + _tGender + ' in the ' + _loc + ' area of the frame (the person whose body/face sits at that exact point).\nYou MUST:\n1. Replace ONLY the person at that pinned location (' + _loc + ', ~' + seg.targetX + '% from left / ~' + _ty + '% from top). If the two people are stacked vertically (one above the other, e.g. one standing and one lying down), use TOP vs BOTTOM to tell them apart; if they are side by side, use LEFT vs RIGHT. Trust the pin coordinate over your own guess.\n2. EVERY other person in the frame must remain 100% UNCHANGED — same face, body, skin, clothing, hair, pose, and position as in Photo 2. Do not swap, alter, move, or restyle them.\n3. In your written instruction, explicitly name which person (by position, e.g. "the ' + _tGender.toLowerCase() + ' at the ' + _loc.toLowerCase() + '") is replaced, and that the OTHER person stays 100% unchanged.\n4. Your negative_prompt MUST include: missing person, removed person, only one person, disappeared person, merged people, wrong person replaced, swapped the other person, both people changed';
     } else if (seg.targetPerson === 'left') {
       _twoPersNote = '\n\nIMPORTANT: If there are multiple people in this frame, TARGET ONLY the person closest to the LEFT EDGE of the image (from the viewer looking at the screen). Do NOT move, alter, or replace any other person.';
     } else if (seg.targetPerson === 'right') {
