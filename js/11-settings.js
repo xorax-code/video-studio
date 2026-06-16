@@ -113,7 +113,9 @@
     initApp().then(() => {
       if (isFirstLogin) {
         switchTab('dashboard');
-        setTimeout(() => openWelcomeTour(), 600);
+        // Stale "run in Claude desktop / Google Flow" tour disabled — it described a manual
+        // workflow the app no longer uses. The newer in-app welcome overlay (3-mode picker)
+        // handles first-run.
       }
     }).catch(e => console.error('initApp failed (onAuthSuccess):', e));
   }
@@ -314,8 +316,11 @@
       return;
     }
     if (!_sb) {
-      // Supabase not yet configured -- show the auth wall so user can still access
-      console.warn('Supabase not configured. Running without cloud auth.');
+      // Supabase not configured here — send the user to the ONE canonical auth page
+      // (login.html) rather than the in-app fallback form, so there's a single auth path
+      // with consistent terms/consent capture. Keep the in-app wall only for local file:// dev.
+      console.warn('Supabase not configured in app — redirecting to login.html.');
+      if (window.location.protocol !== 'file:') { window.location.href = '/login.html'; return; }
       const wall = document.getElementById('authWall');
       if (wall) wall.classList.add('visible');
       return;
@@ -397,6 +402,9 @@
           }
         }, 400);
       }
+
+      // Show/hide the topnav trial countdown pill (free tier during trial).
+      if (typeof window.updateTrialPill === 'function') setTimeout(window.updateTrialPill, 500);
 
       return;
     }

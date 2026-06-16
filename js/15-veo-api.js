@@ -516,6 +516,7 @@
 
   // ── VEO API progress modal ────────────────────────────────────────────────
   function _openVeoAPIModal(total) {
+    var _eta = Math.max(1, Math.ceil(Math.ceil(total / Math.min(10, total || 1)) * 1.3)); // ~1.3 min/clip, up to 10 concurrent
     var existing = document.getElementById('veoAPIModal');
     if (existing) existing.remove();
     var modal = document.createElement('div');
@@ -526,7 +527,7 @@
         + '<div style="width:34px;height:34px;border-radius:8px;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.3);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;">⚡</div>'
         + '<div>'
           + '<div style="font-size:13px;font-weight:700;color:var(--text-1);">Generating Clips via API</div>'
-          + '<div style="font-size:11px;color:var(--text-3);">' + total + ' scene' + (total !== 1 ? 's' : '') + ' · credits deducted per clip</div>'
+          + '<div style="font-size:11px;color:var(--text-3);">' + total + ' clip' + (total !== 1 ? 's' : '') + ' · about ' + _eta + ' min · credits deducted as each finishes</div>'
         + '</div>'
       + '</div>'
       + '<div id="veoAPISceneList" style="display:flex;flex-direction:column;gap:5px;max-height:300px;overflow-y:auto;margin-bottom:14px;"></div>'
@@ -694,6 +695,21 @@
     var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
     var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
     var total    = workList.length;
+
+    // Pre-spend cost gate — show the estimated total and confirm BEFORE committing, so a
+    // user can't accidentally burn a big batch or hit a surprise out-of-credits mid-batch.
+    var _clipCost = modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15;
+    var _estCost  = total * _clipCost;
+    var _bal      = (typeof window.userCredits === 'number') ? window.userCredits : null;
+    if (_bal != null && _estCost > _bal) {
+      showToast('This batch needs ~' + _estCost + ' credits (' + total + ' clip' + (total > 1 ? 's' : '') + ') but you have ' + _bal + '. Top up or reject some scenes.', 'error', 8000);
+      if (typeof window.openTopupModal === 'function') window.openTopupModal();
+      return;
+    }
+    if (_bal != null) {
+      var _okToSpend = window.confirm('Generate ' + total + ' clip' + (total > 1 ? 's' : '') + ' — about ' + _estCost + ' credits (' + _clipCost + ' each). You have ' + _bal + '. Continue?');
+      if (!_okToSpend) return;
+    }
 
     // Concurrency limit — Vertex AI allows 10 concurrent video gen operations
     var MAX_CONCURRENT = 10;

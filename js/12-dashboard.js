@@ -598,6 +598,26 @@
   // Expose globally so other JS files can call it
   window.getTrialStatus = getTrialStatus;
 
+  // Topnav trial pill — visible only on the free tier during an active trial, so users
+  // always see their countdown + an upgrade path (previously only inside the Billing tab).
+  function updateTrialPill() {
+    try {
+      var pill = document.getElementById('trialPill');
+      if (!pill) return;
+      var tier = window._stripeTier || 'free';
+      var trial = getTrialStatus();
+      if (tier === 'free' && trial && !trial.expired) {
+        var d = trial.daysLeft;
+        var t = document.getElementById('trialPillText');
+        if (t) t.textContent = 'Trial: ' + d + ' day' + (d === 1 ? '' : 's') + ' left · Upgrade';
+        pill.style.display = 'flex';
+      } else {
+        pill.style.display = 'none';
+      }
+    } catch (_) {}
+  }
+  window.updateTrialPill = updateTrialPill;
+
   // ── Feature access gate ──────────────────────────────────────────────────────
   // Returns true if the user can use paid features (active trial OR paid tier).
   // Returns false and shows the upgrade wall if trial has expired on free tier.
@@ -768,12 +788,12 @@
 
   const PLAN_INFO = {
     free:    { label: 'Free Trial', price: '$0',     desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
-    starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo (~10 videos) · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
-    creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo (~25 videos) · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
-    scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo (~65 videos) · Lowest cost per credit · Priority AI processing · Early access to new features' },
+    starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
+    creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
+    scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access to new features' },
     // legacy aliases so any existing accounts still tagged pro/agency render correctly
-    pro:     { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo (~25 videos) · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
-    agency:  { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo (~65 videos) · Lowest cost per credit · Priority AI processing · Early access to new features' },
+    pro:     { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
+    agency:  { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access to new features' },
   };
 
   const PLAN_ORDER = ['free', 'starter', 'creator', 'scale'];
@@ -986,7 +1006,7 @@
       <div style="height:5px;background:var(--surface-3);border-radius:3px;overflow:hidden;margin-bottom:6px;">
         <div style="height:100%;width:${pct}%;background:${barColor};border-radius:3px;transition:width 0.5s;"></div>
       </div>
-      <div style="font-size:10px;color:var(--text-3);margin-bottom:14px;">${pct}% of monthly credits remaining · 1 video ≈ 200 credits</div>
+      <div style="font-size:10px;color:var(--text-3);margin-bottom:14px;">${pct}% of monthly credits remaining</div>
 
       <!-- Generate mode toggle -->
       <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--glass-2);border:1px solid var(--glass-border);border-radius:8px;margin-bottom:14px;">
@@ -1073,7 +1093,7 @@
              <div style="font-size:10.5px;color:var(--text-3);">This plan's payment link isn't live yet — contact us and we'll get you upgraded.</div>
            </div>
          </div>
-         <a href="mailto:support@affiliateos.app?subject=Upgrade%20my%20plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
+         <a href="mailto:support@affiliates.app?subject=Upgrade%20my%20plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
 
     const modal = document.createElement('div');
     modal.id = 'upgradeModal';
@@ -1219,7 +1239,7 @@
             <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Manage everything yourself in Stripe's secure billing portal. If you cancel, you keep full access until the end of your current billing period — no email needed.</div>
           </div>
           <button onclick="window.openStripePortal(this)" style="width:100%;padding:11px;border-radius:9px;background:var(--grad-accent);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Open billing portal</button>
-          <div style="font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">Having trouble? Email <a href="mailto:support@aiscaling.io" style="color:var(--accent-2);">support@aiscaling.io</a></div>
+          <div style="font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">Having trouble? Email <a href="mailto:support@affiliates.app" style="color:var(--accent-2);">support@affiliates.app</a></div>
         </div>
 
         <button onclick="document.getElementById('billingPortalModal').remove()" style="width:100%;padding:10px;border-radius:9px;background:none;border:1px solid var(--border-2);color:var(--text-3);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
@@ -1266,8 +1286,8 @@
     if (!chip || !val) return;
     const n = typeof balance === 'number' ? balance : (window.userCredits || 0);
     val.textContent = n.toLocaleString();
-    chip.style.borderColor = n <= 30 ? 'rgba(248,113,113,0.6)' : 'rgba(139,92,246,0.35)';
-    chip.style.color       = n <= 30 ? '#f87171' : 'var(--accent-2)';
+    chip.style.borderColor = n <= 50 ? 'rgba(248,113,113,0.6)' : 'rgba(139,92,246,0.35)';
+    chip.style.color       = n <= 50 ? '#f87171' : 'var(--accent-2)';
   }
   window.updateCreditChip = updateCreditChip;
 
@@ -1302,9 +1322,9 @@
     if (existing) existing.remove();
 
     const PACKS = [
-      { id: 'p1000', credits: 1000, price: '$20', label: '1,000 Credits', desc: '~10 videos' },
-      { id: 'p2500', credits: 2500, price: '$45', label: '2,500 Credits', desc: '~25 videos · save 10%' },
-      { id: 'p5000', credits: 5000, price: '$80', label: '5,000 Credits', desc: '~50 videos · best value' },
+      { id: 'p1000', credits: 1000, price: '$20', label: '1,000 Credits', desc: '' },
+      { id: 'p2500', credits: 2500, price: '$45', label: '2,500 Credits', desc: 'Save 10%' },
+      { id: 'p5000', credits: 5000, price: '$80', label: '5,000 Credits', desc: 'Best value' },
     ];
 
     const modal = document.createElement('div');

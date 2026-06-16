@@ -808,7 +808,7 @@
     // Header
     var header = document.createElement('div');
     header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
-    header.innerHTML = '<div style="font-size:15px;font-weight:800;color:var(--text-1);">✅ Review NB Composites</div>'
+    header.innerHTML = '<div style="font-size:15px;font-weight:800;color:var(--text-1);">✅ Review Start Frames</div>'
       + '<div style="display:flex;gap:8px;">'
       + '<button onclick="approveAllNbComposites(true)" style="padding:5px 12px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.5);border-radius:6px;color:#34d399;cursor:pointer;">✓ Approve All</button>'
       + '<button onclick="approveAllNbComposites(false)" style="padding:5px 12px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);cursor:pointer;">✕ Reject All</button>'
@@ -838,7 +838,7 @@
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
-        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + (seg.nbOverride || '').replace(/"/g, '&quot;') + '" placeholder="✎ Edit this scene — e.g. her hands are empty, no tool" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
+        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + (seg.nbOverride || '').replace(/"/g, '&quot;') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
       card.onclick = function() { toggleNbApproval(idx); };
       grid.appendChild(card);
     });

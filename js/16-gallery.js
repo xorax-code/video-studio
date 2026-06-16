@@ -114,8 +114,8 @@
 
     if (!clips.length) {
       grid.innerHTML = '<div style="padding:28px 0;text-align:center;color:var(--text-3);font-size:11px;width:100%;">'
-        + '🎬 Generated clips will appear here after running the API.<br>'
-        + '<span style="opacity:0.5;">Use Generate Prompts → Run in the Replicator above</span></div>';
+        + '🎬 Your generated clips will show up here.<br>'
+        + '<span style="opacity:0.5;">Make clips in the Video Replicator or Producer — they\'ll appear here automatically.</span></div>';
       return;
     }
 

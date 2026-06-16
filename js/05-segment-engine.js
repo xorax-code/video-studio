@@ -2330,7 +2330,7 @@
             <button onclick="openLightbox(segments[${i}].frameDataUrl)" title="View full frame" style="font-size:9px;padding:2px 7px;border-radius:3px;background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--text-3);cursor:pointer;">🔍</button>
             ${seg.targetX != null
               ? `<button onclick="clearTargetPin(${i})" title="Clear target pin" style="font-size:9px;padding:2px 6px;border-radius:3px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.25);color:var(--danger);cursor:pointer;">✕ Pin</button>`
-              : `<span style="font-size:8px;color:var(--text-3);opacity:0.45;padding:2px 3px;white-space:nowrap;line-height:1.2;">click to<br>target</span>`}
+              : `<span style="font-size:9px;font-weight:700;color:#60a5fa;background:rgba(96,165,250,0.12);border:1px solid rgba(96,165,250,0.3);border-radius:4px;padding:2px 6px;white-space:nowrap;line-height:1.2;">👆 Tap the person</span>`}
           </div>
           ${seg.targetX != null ? `
           <div style="display:flex;gap:3px;margin-top:3px;align-items:center;">
