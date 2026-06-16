@@ -493,8 +493,23 @@ Your task depends on what Photo 1 actually contains:
 Hard rules: never add a second person or any human figure that was not already in Photo 1. Keep Photo 1's background, setting, and lighting. FRAMING (CRITICAL) — ALWAYS render a MEDIUM shot, regardless of Photo 1's framing. Even if Photo 1 is a tight close-up or shows two people close to the camera, PULL THE CAMERA BACK so every person is shown from at least the chest up with clear headroom and space around them, and NO single face is larger than about one-quarter (25%) of the frame height. A large face filling the frame trips Veo's person filter and the clip fails, so err on the side of too wide. Never crop tighter than this. Render it as a real LIFESTYLE scene with visible body, hands, props, and environment around the subject (not just a head) — like a candid medium photo. TWO PEOPLE: replace ONLY the person the instruction targets by position (top/bottom/left/right) — NEVER default to the front, foreground, or lying-down person unless that IS the targeted one. Keep the OTHER person exactly as in Photo 1 (same face, identity, pose), just framed slightly back and smaller so you don't end up with two co-equal faces side-by-side filling the frame (the composition Veo blocks). EXCEPTION: if Photo 1 is a hand/arm-only product shot with no face, keep its exact crop unchanged.${hasProduct ? ' Replace the product held in the hand with the exact product from Photo 3 (same hand, grip, and scale).' : ''} Always remove any burned-in text, captions, or subtitles.`
     : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
 
+  // Deterministic two-person TARGET directive, built from the pin coordinates (structured
+  // data, NOT parsed from free text). Placed FIRST / highest-priority so the model cannot
+  // default to the foreground or lying-down person. Only fires when a pin was set.
+  let targetDirective = '';
+  if (hasFrame && typeof body.targetX === 'number') {
+    const _tx  = body.targetX;
+    const _tyv = (typeof body.targetY === 'number') ? body.targetY : 50;
+    const _vert = _tyv < 40 ? 'TOP' : _tyv > 60 ? 'BOTTOM' : 'MIDDLE';
+    const _horz = _tx  < 45 ? 'LEFT' : _tx  > 55 ? 'RIGHT' : 'CENTER';
+    const _lp = [];
+    if (_vert !== 'MIDDLE') _lp.push(_vert);
+    if (_horz !== 'CENTER') _lp.push(_horz);
+    const _loc = _lp.length ? _lp.join('-') : 'CENTER';
+    targetDirective = `🎯 TARGET PERSON — HIGHEST PRIORITY, overrides every instruction below: Photo 1 contains more than one person. Apply the Photo 2 avatar's face and identity to ONLY the person located in the ${_loc} area of the frame (approximately ${_tx}% from the left edge and ${_tyv}% from the top edge — the person whose head/body sits at that point). If the people are stacked vertically (e.g. one standing and one lying down), pick by TOP vs BOTTOM — do NOT pick the closest, largest, foreground, or lying-down person unless that is the one at this exact location. EVERY other person stays 100% UNCHANGED: same face, identity, hair, clothing, and pose as Photo 1. Never put the avatar's face on more than one person.\n\n`;
+  }
   const userPrompt = hasFrame
-    ? `${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${lockBlock}${instruction}`
+    ? `${targetDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${lockBlock}${instruction}`
     : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids

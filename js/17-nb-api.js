@@ -413,6 +413,11 @@
       instruction,
       avatarDesc:     _avatarDesc,
       negativePrompt: _nbNegativePrompt,
+      // Pin coordinates (two-person target) passed as STRUCTURED data so the backend can
+      // build a deterministic "replace ONLY the person here" directive — instead of relying
+      // on the vision model to write the target into free text (which was unreliable/stale).
+      targetX:        (seg && typeof seg.targetX === 'number') ? seg.targetX : null,
+      targetY:        (seg && typeof seg.targetY === 'number') ? seg.targetY : null,
       avatarB64:      avatarParts.b64,
       avatarMime:     avatarParts.mime,
       frameB64,
