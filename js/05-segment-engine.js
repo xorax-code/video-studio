@@ -1717,6 +1717,13 @@
       const notesEl = document.getElementById('notes-seg-' + i);
       if (notesEl) { notesEl.value = newNotes; autoGrow(notesEl); notesEl.style.borderColor = 'rgba(96,165,250,0.7)'; setTimeout(() => { if (notesEl) notesEl.style.borderColor = ''; }, 1500); }
     }
+    // Re-pinning must REFRESH this scene's NB prompt — otherwise the OLD targeting text
+    // baked into seg.nbPrompt (by buildNBPromptFromImage) keeps naming the previous person
+    // and fights the new pin. Only regenerate when a prompt already exists for the scene.
+    if ((segments[i].nbPrompt || '').trim() && segments[i].frameDataUrl && typeof buildNBPromptFromImage === 'function') {
+      if (typeof showToast === 'function') showToast('Pin moved — refreshing Scene ' + (i + 1) + ' targeting…', 'info', 2500);
+      buildNBPromptFromImage(i);
+    }
     debounceSave();
     renderSegments();
   }

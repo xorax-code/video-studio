@@ -497,19 +497,23 @@ Hard rules: never add a second person or any human figure that was not already i
   // data, NOT parsed from free text). Placed FIRST / highest-priority so the model cannot
   // default to the foreground or lying-down person. Only fires when a pin was set.
   let targetDirective = '';
-  if (hasFrame && typeof body.targetX === 'number') {
-    const _tx  = body.targetX;
-    const _tyv = (typeof body.targetY === 'number') ? body.targetY : 50;
+  if (hasFrame && body.targetX != null && isFinite(Number(body.targetX))) {
+    const _tx  = Number(body.targetX);
+    const _tyv = (body.targetY != null && isFinite(Number(body.targetY))) ? Number(body.targetY) : 50;
     const _vert = _tyv < 40 ? 'TOP' : _tyv > 60 ? 'BOTTOM' : 'MIDDLE';
     const _horz = _tx  < 45 ? 'LEFT' : _tx  > 55 ? 'RIGHT' : 'CENTER';
     const _lp = [];
     if (_vert !== 'MIDDLE') _lp.push(_vert);
     if (_horz !== 'CENTER') _lp.push(_horz);
     const _loc = _lp.length ? _lp.join('-') : 'CENTER';
-    targetDirective = `🎯 TARGET PERSON — HIGHEST PRIORITY, overrides every instruction below: Photo 1 contains more than one person. Apply the Photo 2 avatar's face and identity to ONLY the person located in the ${_loc} area of the frame (approximately ${_tx}% from the left edge and ${_tyv}% from the top edge — the person whose head/body sits at that point). If the people are stacked vertically (e.g. one standing and one lying down), pick by TOP vs BOTTOM — do NOT pick the closest, largest, foreground, or lying-down person unless that is the one at this exact location. EVERY other person stays 100% UNCHANGED: same face, identity, hair, clothing, and pose as Photo 1. Never put the avatar's face on more than one person.\n\n`;
+    targetDirective = `🎯 TARGET PERSON — HIGHEST PRIORITY, overrides EVERYTHING below: Photo 1 contains more than one person. Apply the Photo 2 avatar's face and identity to ONLY the person located in the ${_loc} area of the frame (approximately ${_tx}% from the left edge and ${_tyv}% from the top edge — the person whose head/body sits at that point). If the people are stacked vertically (e.g. one standing and one lying down), pick by TOP vs BOTTOM — do NOT pick the closest, largest, foreground, or lying-down person unless that is the one at this exact location. EVERY other person stays 100% UNCHANGED: same face, identity, hair, clothing, and pose as Photo 1. Never put the avatar's face on more than one person. CRITICAL: IGNORE any text further down — including "lock arms", "lock prop", arm/pose/scene descriptions, or any sentence that names a person by side or position — if it refers to a DIFFERENT person than the one at this location. Such text may describe the wrong (foreground) subject; ONLY the person at THIS pinned location is replaced.\n\n`;
   }
+  // When a pin/target is set, DROP the lock-block: it is built from a single-person frame
+  // analysis that describes the most prominent (foreground) person, and it was re-anchoring
+  // the model to the wrong subject right after the target directive. The directive is now
+  // the single source of truth for WHO gets replaced.
   const userPrompt = hasFrame
-    ? `${targetDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${lockBlock}${instruction}`
+    ? `${targetDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${targetDirective ? '' : lockBlock}${instruction}`
     : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
