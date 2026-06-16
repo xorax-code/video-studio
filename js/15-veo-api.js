@@ -296,11 +296,15 @@
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');
     // Explicit positive instruction — always enforce single continuous shot
     parts.push('Single continuous smooth shot from start to finish, no transitions, no cuts, no fades, no scene changes');
+    // Wardrobe lock — Veo otherwise morphs clothing mid-clip (e.g. "puts clothes on") or
+    // bleeds a garment from the source video. Force the outfit to stay identical and on.
+    parts.push('The person wears the exact same outfit for the entire clip — their clothing stays identical and stays on; they do NOT put on, take off, change, or adjust any clothing, robe, or kimono at any point');
     // If any left/right positioning is mentioned, add composition lock
     var _hasPosition = /\b(left|right)\b/i.test(obj.action || '');
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
-    var _negExtra = _ANTI_TRANSITION_NEG + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '');
+    var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }

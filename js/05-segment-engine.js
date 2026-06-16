@@ -1223,10 +1223,10 @@
     var parentVeo = {};
     try { parentVeo = JSON.parse(parentSeg.veoPrompt || '{}'); } catch(_) {}
 
-    // Continuation clips share the parent's start frame — use the action from the parent's
-    // Veo 3 JSON (built from actual video analysis) so the physical action stays consistent.
-    // Never re-derive from speech text — deriveSceneAction keyword-matches props from metaphors.
-    extra.action = parentVeo.action || parentSeg.action || 'person speaks naturally to camera — confident posture, real eye contact, natural hand gestures';
+    // Continuation clips are the SAME scene continuing — the avatar keeps TALKING and delivers
+    // the next line. She must NOT repeat the parent's hands-on action (that made every clip loop
+    // the same motion). Use a neutral speaking action so she just continues in place, same outfit.
+    extra.action = 'person continues speaking naturally to camera in the same position and same outfit — relaxed posture, subtle natural hand gestures, no new actions, no props, no wardrobe change';
 
     var obj = {
       speech:          text,
