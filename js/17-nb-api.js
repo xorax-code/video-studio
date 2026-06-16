@@ -406,6 +406,14 @@
       instruction += ' BACKGROUND LOCK (critical, overrides everything else): The environment/background behind the person MUST be exactly: ' + _lockedBg + '. Replace and IGNORE any other room, shop, store, indoor setting, or location described above. Keep the person, their outfit, and their action the same, but place them in THIS exact background on every single frame.';
     }
 
+    // USER OVERRIDE — a per-scene manual correction typed into the Review modal's edit box.
+    // Appended LAST + highest-priority so the user can fix leftovers (e.g. "her hands are
+    // empty, no tool") without re-pinning or re-analyzing — it just applies on the next Redo.
+    var _nbOverride = (seg.nbOverride || '').trim();
+    if (_nbOverride) {
+      instruction += '\n\n🔒 USER OVERRIDE — HIGHEST PRIORITY, obey this exactly even if it contradicts anything above: ' + _nbOverride + (/[.!?]$/.test(_nbOverride) ? '' : '.');
+    }
+
     // ── Generate via the async background worker (no 26s timeout) ────────────
     // Starts the background job and polls for the image; slow Vertex global gens
     // (20-30s) no longer trip Netlify's function limit.
@@ -829,7 +837,8 @@
             + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
-        + '</div>';
+        + '</div>'
+        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + (seg.nbOverride || '').replace(/"/g, '&quot;') + '" placeholder="✎ Edit this scene — e.g. her hands are empty, no tool" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
       card.onclick = function() { toggleNbApproval(idx); };
       grid.appendChild(card);
     });
@@ -867,6 +876,15 @@
     saveSegments();
   }
   window.toggleNbApproval = toggleNbApproval;
+
+  // Per-scene manual override from the Review modal's edit box. Saved on the segment and
+  // injected into the composite as a highest-priority instruction on the next ↺ Redo.
+  window.setNbOverride = function(segIdx, val) {
+    var seg = segments[segIdx];
+    if (!seg) return;
+    seg.nbOverride = val || '';
+    if (typeof saveSegments === 'function') saveSegments();
+  };
 
   function approveAllNbComposites(approve) {
     segments.forEach(function(seg, idx) {
