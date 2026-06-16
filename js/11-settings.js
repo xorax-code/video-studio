@@ -389,7 +389,7 @@
       // Handle post-checkout redirect -- skip trial wall since user just paid
       if (new URLSearchParams(window.location.search).get('upgraded') === '1') {
         history.replaceState({}, '', '/app');
-        setTimeout(() => showToast('Your plan is now active -- welcome to Affiliate OS!', 'success', 5000), 800);
+        setTimeout(() => showToast('Your plan is now active -- welcome to AffiliateOS!', 'success', 5000), 800);
         return; // don't check trial expiry; webhook may not have landed yet
       }
 

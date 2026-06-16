@@ -1093,7 +1093,7 @@
              <div style="font-size:10.5px;color:var(--text-3);">This plan's payment link isn't live yet — contact us and we'll get you upgraded.</div>
            </div>
          </div>
-         <a href="mailto:support@affiliates.app?subject=Upgrade%20my%20plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
+         <a href="mailto:support@affiliateos.app?subject=Upgrade%20my%20plan" style="display:block;text-align:center;padding:10px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:12px;font-weight:600;text-decoration:none;">📧 Contact us to upgrade</a>`;
 
     const modal = document.createElement('div');
     modal.id = 'upgradeModal';
@@ -1239,7 +1239,7 @@
             <div style="font-size:11px;color:var(--text-3);line-height:1.6;">Manage everything yourself in Stripe's secure billing portal. If you cancel, you keep full access until the end of your current billing period — no email needed.</div>
           </div>
           <button onclick="window.openStripePortal(this)" style="width:100%;padding:11px;border-radius:9px;background:var(--grad-accent);border:none;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;">Open billing portal</button>
-          <div style="font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">Having trouble? Email <a href="mailto:support@affiliates.app" style="color:var(--accent-2);">support@affiliates.app</a></div>
+          <div style="font-size:10px;color:var(--text-3);text-align:center;line-height:1.5;">Having trouble? Email <a href="mailto:support@affiliateos.app" style="color:var(--accent-2);">support@affiliateos.app</a></div>
         </div>
 
         <button onclick="document.getElementById('billingPortalModal').remove()" style="width:100%;padding:10px;border-radius:9px;background:none;border:1px solid var(--border-2);color:var(--text-3);font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;">Close</button>
