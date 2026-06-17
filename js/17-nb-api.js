@@ -49,85 +49,41 @@
       ? window.crypto.randomUUID()
       : ('job-' + Date.now() + '-' + Math.random().toString(36).slice(2));
 
-    // 1) Kick off the background worker.
-    var startRes;
+    // SYNCHRONOUS-PRIMARY. We call generate-nb-composite directly and get the image
+    // back inline. The background worker was returning RAW 500s with empty bodies
+    // (no top-level try/catch in that handler), which surfaced as blank error pop-ups.
+    // The sync handler is fully wrapped and ALWAYS returns a readable {error:...} body,
+    // so either it works or it tells us exactly what's wrong. On Pro the 26s function
+    // window covers a Flash composite. (jobId kept for log correlation only.)
+    var tell;
+    if (typeof showToast === 'function') {
+      tell = setTimeout(function () {
+        showToast((label ? label + ': ' : '') + 'rendering…', 'info', 8000);
+      }, 4000);
+    }
+    var res, data = {};
     try {
-      startRes = await fetch('/.netlify/functions/generate-nb-composite-background', {
+      res = await fetch('/.netlify/functions/generate-nb-composite', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
         body:    JSON.stringify(Object.assign({ jobId: jobId }, bodyObj)),
       });
     } catch (e) {
-      return { res: { ok: false, status: 0 }, data: { error: 'Could not start generation: ' + (e && e.message || e) } };
+      if (tell) clearTimeout(tell);
+      return { res: { ok: false, status: 0 }, data: { error: 'Could not reach generation service: ' + (e && e.message || e) } };
     }
-    // A non-2xx on the START call is a real failure (bad auth, server error) — surface
-    // it instead of polling a job that never got enqueued.
-    if (!startRes.ok) {
-      var sd = {};
-      try { sd = await startRes.json(); } catch(_) {}
-      // The background-function START failed (e.g. background functions aren't enabled on this
-      // Netlify deploy/plan, or the platform returned a 5xx). Fall back to the SYNCHRONOUS
-      // composite endpoint — it runs the exact same logic (runComposite) and returns the image
-      // inline, and surfaces the REAL error in its body if something else is actually wrong.
-      if (startRes.status >= 500) {
-        try {
-          var _syncRes = await fetch('/.netlify/functions/generate-nb-composite', {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-            body:    JSON.stringify(bodyObj),
-          });
-          var _syncData = {};
-          try { _syncData = await _syncRes.json(); } catch(_) {}
-          if (_syncRes.ok && _syncData.imageB64) {
-            return { res: { ok: true, status: 200 }, data: { imageB64: _syncData.imageB64, mime: _syncData.mime, quality: _syncData.quality, creditsDeducted: _syncData.creditsDeducted } };
-          }
-          if (_syncData.error || _syncData.message) {
-            return { res: { ok: false, status: _syncRes.status }, data: { error: _syncData.error || _syncData.message } };
-          }
-        } catch (_e) { /* fall through to the original background error below */ }
-      }
-      return { res: { ok: false, status: startRes.status }, data: { error: sd.error || sd.message || ('Could not start generation (HTTP ' + startRes.status + ')') } };
-    }
+    if (tell) clearTimeout(tell);
 
-    // 2) Poll for the result.
-    var POLL_MS = 3000, MAX_MS = 180000, waited = 0, toldWaiting = false, sawRow = false, noRow = 0;
-    while (waited < MAX_MS) {
-      await new Promise(function (r) { setTimeout(r, POLL_MS); });
-      waited += POLL_MS;
-      var pr = null, pd = {};
-      try {
-        pr = await fetch('/.netlify/functions/poll-nb-composite', {
-          method:  'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-          body:    JSON.stringify({ jobId: jobId }),
-        });
-      } catch(_) { continue; } // transient network blip → keep polling
-      // Hard auth / ownership / not-found are terminal — don't spin for 3 minutes.
-      if (pr.status === 401 || pr.status === 403 || pr.status === 404) {
-        var ed = {};
-        try { ed = await pr.json(); } catch(_) {}
-        return { res: { ok: false, status: pr.status }, data: { error: ed.error || ('Poll failed (HTTP ' + pr.status + ')') } };
-      }
-      if (!pr.ok) continue; // transient 5xx → keep polling
-      try { pd = await pr.json(); } catch(_) { pd = {}; }
-      if (pd.status === 'done') {
-        return { res: { ok: true, status: 200 }, data: { imageB64: pd.imageB64, mime: pd.mime, quality: pd.quality, creditsDeducted: pd.credits } };
-      }
-      if (pd.status === 'error') {
-        return { res: { ok: false, status: pd.code || 502 }, data: { error: pd.error || 'Generation failed' } };
-      }
-      // Still pending. The worker writes a 'pending' row almost immediately, so if no
-      // row EVER appears, background functions probably aren't running on this site.
-      if (pd.exists === false) { noRow++; } else { sawRow = true; noRow = 0; }
-      if (!sawRow && noRow >= 8) { // ~24s with no row at all
-        return { res: { ok: false, status: 503 }, data: { error: 'Generation never started — background functions may be disabled for this site (check the Netlify plan).' } };
-      }
-      if (!toldWaiting && waited >= 12000 && typeof showToast === 'function') {
-        toldWaiting = true;
-        showToast((label ? label + ': ' : '') + 'still rendering…', 'info', 4000);
-      }
+    try { data = await res.json(); } catch(_) { data = {}; }
+
+    if (res.ok && data.imageB64) {
+      return { res: { ok: true, status: 200 }, data: { imageB64: data.imageB64, mime: data.mime, quality: data.quality, creditsDeducted: data.creditsDeducted } };
     }
-    return { res: { ok: false, status: 504 }, data: { error: 'Generation timed out (no result after polling).' } };
+    // Any non-2xx, or a 2xx with no image: surface the server's real message.
+    return {
+      res:  { ok: false, status: res.status },
+      data: { error: data.error || data.message || ('Generation failed (HTTP ' + res.status + ')') },
+    };
   }
 
   // Public entry: runs a job and auto-retries the WHOLE job on a rate limit (429).

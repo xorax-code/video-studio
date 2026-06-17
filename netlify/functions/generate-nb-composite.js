@@ -56,6 +56,11 @@ function httpsRequest(options, body) {
 // ── OAuth2: service account → access token (for Vertex AI / Pro image) ────────
 async function getAccessToken(saJson) {
   const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  // Netlify env vars commonly store the private key with escaped "\n" sequences
+  // instead of real newlines; crypto.createSign().sign() throws on those. Normalize.
+  if (sa && typeof sa.private_key === 'string' && sa.private_key.indexOf('\\n') !== -1) {
+    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+  }
   const now = Math.floor(Date.now() / 1000);
   const claim = { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now };
   const header   = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
