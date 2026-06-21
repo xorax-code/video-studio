@@ -4487,10 +4487,15 @@ TECHNICAL SPECS:
       var durEl = document.querySelector('.sb-dur-pill.active');
       var tSecs = durEl ? (parseInt(durEl.dataset.val, 10) || 45) : 45;
       var charDesc = (typeof avatarInventory === 'string' && avatarInventory) ? avatarInventory.slice(0, 600) : '';
+      // Storyboard controls (added by the UI layer) steer the Director. Safe if absent.
+      var _angleEl  = document.getElementById('sbAngle');
+      var _structEl = document.querySelector('#sbStructure .on') || document.getElementById('sbStructure');
+      var _angle    = _angleEl ? (_angleEl.value || '').trim() : '';
+      var _structure = _structEl ? (((_structEl.dataset && _structEl.dataset.val) || _structEl.textContent || '').trim()) : '';
       var res = await fetch('/.netlify/functions/producer-ai', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body:    JSON.stringify({ task: 'segment', script: script, product: prod, targetSeconds: tSecs, character: charDesc }),
+        body:    JSON.stringify({ task: 'segment', script: script, product: prod, targetSeconds: tSecs, character: charDesc, angle: _angle, structure: _structure }),
       });
       if (!res.ok) { console.warn('aiSegmentScript: HTTP ' + res.status); return null; }
       var data = await res.json();
@@ -4519,7 +4524,6 @@ TECHNICAL SPECS:
       elapsed  += dur;
       var end   = Math.round(elapsed * 10) / 10;
       var action = String(sc.action || '').trim();
-      if (sc.shot) action += (action ? '  ' : '') + 'Shot: ' + String(sc.shot).trim() + '.';
       return {
         startTime:    start,
         endTime:      end,
@@ -4530,7 +4534,13 @@ TECHNICAL SPECS:
         veoPrompt:    '',
         frameDesc:    '',
         _scriptOnly:  true,
+        // ── Director (AI shot plan) fields — drive start-frame variety + captions ──
         _shot:        String(sc.shot || '').trim(),
+        framing:      String(sc.framing || '').trim(),
+        beat:         String(sc.beat || '').trim(),
+        onScreenText: String(sc.onScreenText || '').trim(),
+        // Auto-mark product-reveal scenes so the uploaded product image composites in.
+        showProduct:  sc.isProductMoment === true,
         _emphasis:    String(sc.emphasis || '').trim(),
       };
     }).filter(function (s) { return s.script; });
@@ -4589,6 +4599,48 @@ TECHNICAL SPECS:
     }
   }
   window.reviseProducerScript = reviseProducerScript;
+
+  // ── Feedback loop: remember a winning video ───────────────────────────────
+  // Saves a compact pattern (hook + angle + beats + shots) to the user's per-account
+  // playbook (producer-ai task 'remember_win', no credit cost). The Director reads it
+  // back on future 'segment' calls and biases plans toward what has worked. This is the
+  // moat — the tool gets better the more winners the creator marks.
+  async function rememberProducerWin(win) {
+    try {
+      var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      var jwt = null;
+      if (_sbRef) { var sr = await _sbRef.auth.getSession(); jwt = (sr && sr.data && sr.data.session && sr.data.session.access_token) || null; }
+      if (!jwt) { showToast('Log in to save a winner.', 'warning'); return false; }
+      var res = await fetch('/.netlify/functions/producer-ai', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify({ task: 'remember_win', win: win || {} }),
+      });
+      var data = {}; try { data = await res.json(); } catch (_) {}
+      if (res.ok && data.saved) { showToast('⭐ Saved to your winning playbook — future scripts will lean on this.', 'success', 4000); return true; }
+      showToast((data && data.error) || 'Could not save winner.', 'error'); return false;
+    } catch (e) { showToast('Could not save winner: ' + (e && e.message), 'error'); return false; }
+  }
+  window.rememberProducerWin = rememberProducerWin;
+
+  // Build a win from the current storyboard/segments and remember it. The storyboard UI
+  // wires a "⭐ Mark winner" button (or the export step) to this.
+  function markCurrentVideoWinner() {
+    if (typeof segments === 'undefined' || !Array.isArray(segments) || !segments.length) {
+      showToast('Nothing to mark yet — produce a video first.', 'warning'); return;
+    }
+    var hookSeg = segments.find(function (s) { return s && s.beat === 'hook'; }) || segments[0];
+    var _angleEl = document.getElementById('sbAngle');
+    var win = {
+      hook:    (hookSeg && hookSeg.script || '').trim(),
+      angle:   _angleEl ? (_angleEl.value || '').trim() : '',
+      product: (document.getElementById('sbProduct') && document.getElementById('sbProduct').value || '').trim(),
+      beats:   segments.map(function (s) { return s && s.beat; }).filter(Boolean).join(' → '),
+      shots:   segments.map(function (s) { return s && s._shot; }).filter(Boolean).join(', '),
+    };
+    rememberProducerWin(win);
+  }
+  window.markCurrentVideoWinner = markCurrentVideoWinner;
 
   // Script voice toggle — "My experience" (first person) vs "Client's story" (third person)
   function setSbPerspective(btn) {
@@ -4688,4 +4740,198 @@ TECHNICAL SPECS:
     } else {
       showToast('Open the Video Studio → Agent Brief tab to access all prompts.', 'info');
     }
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // SCRIPT TEMPLATES + first-run nudge — so a new user never faces a blank page.
+  // Proven UGC ad frameworks; clicking one fills the producer script box with the
+  // product name swapped in. Self-injects a "📋 Templates" button next to "Write
+  // My Script" — no app.html changes required.
+  // ════════════════════════════════════════════════════════════════════════════
+  window.SCRIPT_TEMPLATES = [
+    { id: 'skeptic', emoji: '🤨', name: 'Skeptic → believer',
+      desc: 'You doubted it, then it worked. Builds trust fast.',
+      body: `I'll be honest — I did NOT think [PRODUCT] would actually do anything.
+I'd tried everything else and nothing stuck, so I figured this was just more hype.
+But after two weeks I genuinely can't go back — the difference is real.
+Here's exactly what changed for me and why it works.
+If you've been on the fence like I was, this is your sign. [CTA]` },
+    { id: 'beforeafter', emoji: '🔁', name: 'Before / after',
+      desc: 'Paint the painful before, then the relief after.',
+      body: `A month ago I was completely stuck — tired of the same problem every single day.
+Then I started using [PRODUCT], and the shift happened faster than I expected.
+Now? It's not even something I think about anymore.
+Same me, totally different result — and it took almost no effort.
+Do yourself a favor and try it. [CTA]` },
+    { id: 'testimonial', emoji: '💬', name: 'Testimonial / story',
+      desc: 'A real-feeling personal story. Warm and authentic.',
+      body: `My friend kept telling me about [PRODUCT] and I kept brushing it off.
+Finally I caved — and I owe her an apology, because she was right.
+It fixed the one thing I'd basically given up on.
+I'm not exaggerating when I say it changed my routine.
+If you've been hearing about it too, stop waiting. [CTA]` },
+    { id: 'listicle', emoji: '3️⃣', name: '3 reasons',
+      desc: 'Listicle format. Easy to follow, high retention.',
+      body: `Three reasons I won't shut up about [PRODUCT].
+One: it actually works — fast, and you feel it.
+Two: it's stupidly simple, no complicated routine to mess up.
+Three: it's cheaper than everything I wasted money on before.
+That's it. Three reasons. Go see for yourself. [CTA]` },
+    { id: 'problem', emoji: '🛠️', name: 'Problem → solution',
+      desc: 'Name the problem, agitate, then present the fix.',
+      body: `If you struggle with this too, you already know how frustrating it gets.
+You try everything, nothing lasts, and you start thinking it's just you.
+It's not — you just hadn't found [PRODUCT] yet.
+It targets the actual cause instead of covering it up, and that's the whole difference.
+Stop fighting it the hard way. [CTA]` },
+  ];
+
+  window.fillScriptTemplate = function fillScriptTemplate(id) {
+    var tpl = (window.SCRIPT_TEMPLATES || []).find(function (t) { return t.id === id; });
+    if (!tpl) return;
+    var prodEl = document.getElementById('sbProduct');
+    var product = (prodEl && prodEl.value || '').trim() || 'this';
+    var text = tpl.body.replace(/\[PRODUCT\]/g, product).replace(/\[CTA\]/g, 'Comment "yes" and follow so you don\'t miss the next one.');
+    var ta = document.getElementById('originalScript');
+    if (ta) {
+      ta.value = text;
+      try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {}
+      try { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch (_) {}
+    }
+    var modal = document.getElementById('tmplGalleryModal');
+    if (modal) modal.remove();
+    if (typeof showToast === 'function') showToast('Template loaded — tweak it, then "Break Script into Scenes".', 'success', 4500);
+  };
+
+  window.openTemplateGallery = function openTemplateGallery() {
+    var existing = document.getElementById('tmplGalleryModal');
+    if (existing) { existing.remove(); return; }
+    var cards = (window.SCRIPT_TEMPLATES || []).map(function (t) {
+      return '<button onclick="fillScriptTemplate(\'' + t.id + '\')" style="text-align:left;background:var(--surface-2,#16161f);border:1px solid var(--border-2,#2c2c3a);border-radius:12px;padding:14px;cursor:pointer;font-family:inherit;transition:border-color .15s,transform .15s;display:flex;flex-direction:column;gap:6px;" onmouseenter="this.style.borderColor=\'rgba(52,211,153,0.55)\';this.style.transform=\'translateY(-2px)\'" onmouseleave="this.style.borderColor=\'var(--border-2,#2c2c3a)\';this.style.transform=\'none\'">'
+        + '<div style="font-size:20px;">' + t.emoji + '</div>'
+        + '<div style="font-size:13px;font-weight:800;color:var(--text-1,#f4f4f8);">' + t.name + '</div>'
+        + '<div style="font-size:11px;color:var(--text-3,#71727f);line-height:1.5;">' + t.desc + '</div>'
+        + '<div style="margin-top:auto;font-size:10px;font-weight:700;color:#34d399;padding-top:6px;">Use this →</div>'
+        + '</button>';
+    }).join('');
+    var modal = document.createElement('div');
+    modal.id = 'tmplGalleryModal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:99995;background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:20px;';
+    modal.onclick = function (e) { if (e.target === modal) modal.remove(); };
+    modal.innerHTML = '<div style="width:100%;max-width:760px;max-height:86vh;overflow-y:auto;background:linear-gradient(180deg,#14141c,#0e0e15);border:1px solid #2c2c3a;border-radius:18px;padding:20px 22px;box-shadow:0 24px 60px rgba(0,0,0,0.7);">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+      + '<div style="font-size:17px;font-weight:900;color:#f4f4f8;letter-spacing:-0.02em;">📋 Script templates</div>'
+      + '<button onclick="document.getElementById(\'tmplGalleryModal\').remove()" style="background:none;border:1px solid #2c2c3a;border-radius:8px;color:#aeb0bd;cursor:pointer;font-size:13px;padding:5px 11px;font-family:inherit;">✕ Close</button>'
+      + '</div>'
+      + '<div style="font-size:12px;color:#71727f;margin-bottom:16px;line-height:1.5;">Pick a proven framework to start from — it drops into your script box with your product filled in. Then edit and hit "Break Script into Scenes." Set your <b style="color:#aeb0bd;">Product</b> first so it gets swapped in.</div>'
+      + '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;">' + cards + '</div>'
+      + '</div>';
+    document.body.appendChild(modal);
+  };
+
+  function _initTemplatesUI() {
+    try {
+      var anchor = document.getElementById('producerGenScriptBtn');
+      if (!anchor || document.getElementById('tmplGalleryBtn')) return;
+      var b = document.createElement('button');
+      b.id = 'tmplGalleryBtn';
+      b.className = 'producer-only';
+      b.type = 'button';
+      b.textContent = '📋 Templates';
+      b.style.cssText = 'width:100%;padding:6px 0;font-size:11px;font-weight:600;background:transparent;border:1px solid rgba(56,189,248,0.35);border-radius:6px;color:#38bdf8;cursor:pointer;font-family:inherit;margin-bottom:6px;transition:background .15s;';
+      b.onmouseenter = function () { b.style.background = 'rgba(56,189,248,0.08)'; };
+      b.onmouseleave = function () { b.style.background = 'transparent'; };
+      b.onclick = function () { window.openTemplateGallery(); };
+      anchor.parentNode.insertBefore(b, anchor);
+    } catch (_) {}
+  }
+
+  function _maybeFirstRunNudge() {
+    try {
+      if (localStorage.getItem('aos_tmpl_nudge')) return;
+      setTimeout(function () {
+        if (localStorage.getItem('aos_tmpl_nudge')) return;
+        if (typeof showToast === 'function') showToast('👋 New here? Tap 📋 Templates for a proven ad script — or paste your own and hit "Break Script into Scenes".', 'info', 9000);
+        try { localStorage.setItem('aos_tmpl_nudge', '1'); } catch (_) {}
+      }, 2600);
+    } catch (_) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { _initTemplatesUI(); _maybeFirstRunNudge(); });
+  } else {
+    _initTemplatesUI(); _maybeFirstRunNudge();
+  }
+
+  // ════════════════════════════════════════════════════════════════════════════
+  // MAGIC FIRST RUN — "Try a demo (no upload)". Loads a bundled sample face
+  // (demo-avatar.jpg at the site root) + a sample script + product so a brand-new
+  // user reaches a real generation in seconds without uploading anything.
+  // demo-avatar.jpg must be placed in the project root (push-to-dev copies it).
+  // ════════════════════════════════════════════════════════════════════════════
+  async function _loadDemoAvatar() {
+    try {
+      var res = await fetch('demo-avatar.jpg', { cache: 'force-cache' });
+      if (!res.ok) return false;
+      var blob = await res.blob();
+      var dataUrl = await new Promise(function (resolve, reject) {
+        var r = new FileReader();
+        r.onload = function () { resolve(r.result); };
+        r.onerror = reject;
+        r.readAsDataURL(blob);
+      });
+      window.avatarImageDataUrl = dataUrl; // module setter (03-avatar.js)
+      var img = document.getElementById('avatarImgEl');
+      var ph  = document.getElementById('avatarImgPlaceholder');
+      var clr = document.getElementById('clearAvatarImgBtn');
+      if (img) { img.src = dataUrl; img.style.display = 'block'; }
+      if (ph)  ph.style.display = 'none';
+      if (clr) clr.style.display = 'block';
+      try { if (typeof DB !== 'undefined' && DB.set) DB.set('sm_avatar_img', dataUrl); } catch (_) {}
+      try { if (typeof extractAvatarInventory === 'function') extractAvatarInventory(dataUrl); } catch (_) {}
+      try { if (typeof window.prepareAvatarReference === 'function') window._avatarPrepPromise = window.prepareAvatarReference(dataUrl); } catch (_) {}
+      return true;
+    } catch (_) { return false; }
+  }
+
+  window.startDemoProject = async function startDemoProject() {
+    try {
+      if (typeof switchStudioMode === 'function') { try { switchStudioMode('producer'); } catch (_) {} }
+      var prod = document.getElementById('sbProduct');
+      if (prod) { prod.value = 'Bold Buns Creatine'; }
+      var SAMPLE = "Put one scoop of this in your morning coffee and just watch what happens to your body. The fitness industry kept this quiet from women for years — they scared us off creatine saying it'd make us “bulky.” That was a flat-out lie. Grab Bold Buns creatine — it's made for women and it's completely unflavored. Add one scoop to your coffee, water, or smoothie. Five grams a day, no taste, no chalky clumps, just clean energy. Comment “yes” if this helped, and follow so you don't miss the next one.";
+      var ta = document.getElementById('originalScript');
+      if (ta) { ta.value = SAMPLE; try { ta.dispatchEvent(new Event('input', { bubbles: true })); } catch (_) {} }
+      var ok = await _loadDemoAvatar();
+      if (typeof showToast === 'function') {
+        showToast(
+          ok ? '✨ Demo loaded — now hit “① Break Script into Scenes”, then Generate.'
+             : 'Demo script + product loaded. Add your avatar photo to generate (sample face not found).',
+          ok ? 'success' : 'info', 8000);
+      }
+    } catch (e) {
+      if (typeof showToast === 'function') showToast('Could not start the demo: ' + (e && e.message), 'error');
+    }
+  };
+
+  function _initDemoUI() {
+    try {
+      var anchor = document.getElementById('producerGenScriptBtn');
+      if (!anchor || document.getElementById('aosDemoBtn')) return;
+      var b = document.createElement('button');
+      b.id = 'aosDemoBtn';
+      b.className = 'producer-only';
+      b.type = 'button';
+      b.textContent = '✨ Try a demo (no upload)';
+      b.style.cssText = 'width:100%;padding:7px 0;font-size:11px;font-weight:700;background:linear-gradient(135deg,rgba(52,211,153,0.16),rgba(16,185,129,0.08));border:1px solid rgba(52,211,153,0.45);border-radius:6px;color:#34d399;cursor:pointer;font-family:inherit;margin-bottom:6px;';
+      b.onclick = function () { window.startDemoProject(); };
+      var tmpl = document.getElementById('tmplGalleryBtn');
+      anchor.parentNode.insertBefore(b, tmpl || anchor);
+    } catch (_) {}
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _initDemoUI);
+  } else {
+    _initDemoUI();
   }

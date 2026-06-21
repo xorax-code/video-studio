@@ -378,6 +378,45 @@
     ];
     instruction += _framingEscalation[Math.max(0, Math.min(_framingEscalation.length - 1, framingLevel))];
 
+    // ── SHOT VARIATION (script-only "anchor" scenes) ───────────────────────────
+    // Producer/script-only scenes all composite onto scene 1's anchor frame, which
+    // otherwise makes every start frame an identical clone of scene 1's pose. For
+    // these scenes, KEEP the person/outfit/room/lighting from the anchor but force a
+    // DIFFERENT camera framing, angle, and pose per scene (+ inject the scene's own
+    // action) so each slide is a distinct shot. Replicator scenes (their own real
+    // frame) are untouched — they must match their source pose. Framing escalation
+    // (a Veo block) takes over, so suppress variation while pulling back.
+    var _isAnchorClone = hasFrame && !seg.frameDataUrl && !!window._producerAnchorFrame && framingLevel < 1;
+    if (_isAnchorClone) {
+      // Prefer the AI DIRECTOR's per-scene shot plan (seg.framing / seg._shot). Only fall
+      // back to a fixed rotation when no plan exists, so scenes still vary either way.
+      var _shotPlan = (seg.framing || '').trim();
+      if (!_shotPlan && seg._shot) {
+        var _shotMap = {
+          'close':           'a closer framing on the hands/product (face still small — NOT a tight face crop)',
+          'medium':          'a medium waist-up shot, straight-on, subject centered with headroom',
+          'wide':            'a wider shot showing more of the room, the subject smaller in frame',
+          'product-insert':  'the product held up toward the camera (product close and prominent, the face small in frame)',
+          'product insert':  'the product held up toward the camera (product close and prominent, the face small in frame)'
+        };
+        _shotPlan = _shotMap[String(seg._shot).toLowerCase()] || '';
+      }
+      if (!_shotPlan) {
+        var _shots = [
+          'a medium waist-up shot, straight-on, subject centered with headroom',
+          'a slight-angle medium shot, the subject just off-center',
+          'a wider shot showing more of the room, the subject smaller in frame with the product clearly visible',
+          'a medium shot with the product held up toward the camera (product close and prominent, the face still small in frame)',
+          'a slightly low-angle medium shot, the subject turned toward the counter mid-action'
+        ];
+        _shotPlan = _shots[((segIdx % _shots.length) + _shots.length) % _shots.length];
+      }
+      // Skip continuation-lock boilerplate ("same position / no new actions") — it
+      // directly contradicts the shot variation we're forcing here.
+      var _varAction = (_segAction && !/same position|no new actions|continues speaking/i.test(_segAction)) ? _segAction : '';
+      instruction += '\n\n🎬 SHOT VARIATION (high priority — overrides any generic "always medium shot" framing above): Render THIS scene as ' + _shotPlan + '. Keep the SAME person, outfit, room, props, and lighting as Photo 2, but use a DIFFERENT camera framing, angle, and body pose than Photo 2 — do NOT reproduce Photo 2\'s composition or pose.' + (_varAction ? ' The avatar\'s action in this shot: ' + _varAction + '.' : '') + ' Keep any face no larger than ~25% of the frame height (no tight face close-ups).';
+    }
+
     // Locked background wins over any scene setting mentioned above.
     if (_lockedBg) {
       instruction += ' BACKGROUND LOCK (critical, overrides everything else): The environment/background behind the person MUST be exactly: ' + _lockedBg + '. Replace and IGNORE any other room, shop, store, indoor setting, or location described above. Keep the person, their outfit, and their action the same, but place them in THIS exact background on every single frame.';
@@ -702,6 +741,12 @@
     var succeeded = 0, failed = 0;
     var n = toGen.length;
     _nbOpenProgress(n);
+    // Cost clarity: tell the user the spend up front. Frames are charged only when each
+    // one succeeds (a failed/filtered frame costs nothing).
+    var _frameCost = (window._nbMaxQuality ? 5 : 2);
+    if (typeof showToast === 'function') {
+      showToast('Making ' + n + ' start frame' + (n > 1 ? 's' : '') + ' · ~' + (n * _frameCost) + ' credits (' + _frameCost + ' each, charged only on success).', 'info', 5000);
+    }
 
     // Concurrency is TIER-AWARE. The image model's quota is tight, so firing many
     // frames at once trips 429s (the batch that failed scenes 3/4/6/7). Default to

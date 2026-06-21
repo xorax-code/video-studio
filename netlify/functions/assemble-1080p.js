@@ -256,35 +256,46 @@ exports.handler = async (event) => {
 
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const apiPath   = `/v1/projects/${projectId}/locations/${LOCATION}/jobs`;
-  const jobBody   = JSON.stringify({
-    outputUri: outputUri,
-    config: {
-      inputs:   inputs,
-      editList: editList,
-      elementaryStreams: [
-        {
-          key: 'video-stream0',
-          videoStream: {
-            h264: {
-              widthPixels:  1080,
-              heightPixels: 1920,
-              bitrateBps:   8000000,
-              frameRate:    30,
-              profile:      'high',
-              preset:       'veryfast',
-            },
+  const _tcConfig = {
+    inputs:   inputs,
+    editList: editList,
+    elementaryStreams: [
+      {
+        key: 'video-stream0',
+        videoStream: {
+          h264: {
+            widthPixels:  1080,
+            heightPixels: 1920,
+            bitrateBps:   8000000,
+            frameRate:    30,
+            profile:      'high',
+            preset:       'veryfast',
           },
         },
-        {
-          key: 'audio-stream0',
-          audioStream: { codec: 'aac', bitrateBps: 128000, channelCount: 2, sampleRateHertz: 48000 },
-        },
-      ],
-      muxStreams: [
-        { key: 'sd', container: 'mp4', elementaryStreams: ['video-stream0', 'audio-stream0'] },
-      ],
-    },
-  });
+      },
+      {
+        key: 'audio-stream0',
+        audioStream: { codec: 'aac', bitrateBps: 128000, channelCount: 2, sampleRateHertz: 48000 },
+      },
+    ],
+    muxStreams: [
+      { key: 'sd', container: 'mp4', elementaryStreams: ['video-stream0', 'audio-stream0'] },
+    ],
+  };
+
+  // Free-tier watermark: bake a "Made with AffiliateOS" PNG overlay into the export.
+  // Activates ONLY when the frontend asks (body.watermark) AND a watermark image is
+  // configured in GCS via WATERMARK_GCS_URI — otherwise this is a no-op and the
+  // existing export is unchanged. Upload a transparent PNG (e.g. 360×90) to your
+  // bucket and set WATERMARK_GCS_URI=gs://<bucket>/assets/watermark.png to enable.
+  if (body.watermark === true && process.env.WATERMARK_GCS_URI) {
+    _tcConfig.overlays = [{
+      image: { uri: process.env.WATERMARK_GCS_URI, resolution: { x: 0, y: 0 }, alpha: 0.85 },
+      animations: [{ animationStatic: { xy: { x: 0.62, y: 0.93 }, startTimeOffset: '0s' } }],
+    }];
+  }
+
+  const jobBody = JSON.stringify({ outputUri: outputUri, config: _tcConfig });
 
   console.log(`assemble-1080p: user=${user.id}, clips=${clipsIn.length}, output=${outputUri}`);
 

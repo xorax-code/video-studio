@@ -1286,10 +1286,41 @@
     if (!chip || !val) return;
     const n = typeof balance === 'number' ? balance : (window.userCredits || 0);
     val.textContent = n.toLocaleString();
-    chip.style.borderColor = n <= 50 ? 'rgba(248,113,113,0.6)' : 'rgba(139,92,246,0.35)';
-    chip.style.color       = n <= 50 ? '#f87171' : 'var(--accent-2)';
+    const LOW = 50; // ~ under one Fast video — nudge before they hit zero mid-render
+    chip.style.borderColor = n <= LOW ? 'rgba(248,113,113,0.6)' : 'rgba(139,92,246,0.35)';
+    chip.style.color       = n <= LOW ? '#f87171' : 'var(--accent-2)';
+    chip.title = 'Credits — used per generation (Lite clip 15 · Fast 30 · Quality 80 · start frame 2–5). You’ll always see the exact cost before a batch runs. Click to top up.';
+    // Low-balance nudge — fires once when crossing into the low zone (re-arms after a top-up).
+    if (n > LOW) { window._lowCreditNudged = false; }
+    else if (!window._lowCreditNudged && typeof showToast === 'function') {
+      window._lowCreditNudged = true;
+      showToast('Running low — ' + n.toLocaleString() + ' credit' + (n === 1 ? '' : 's') + ' left. Top up so a render doesn’t stop partway.', 'warning', 7000);
+    }
   }
   window.updateCreditChip = updateCreditChip;
+
+  // ── Starter credits: grant once to new free users so they can finish one video ──
+  // Idempotent server-side (app_metadata.starter_granted), so calling this on every
+  // boot is safe — only the first call ever actually grants. Called after auth boot.
+  window.maybeGrantStarterCredits = async function maybeGrantStarterCredits() {
+    try {
+      if (!_sb) return;
+      const sr = await _sb.auth.getSession();
+      const jwt = sr?.data?.session?.access_token;
+      if (!jwt) return;
+      const res = await fetch('/.netlify/functions/grant-starter', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+      });
+      let data = {}; try { data = await res.json(); } catch (_) {}
+      if (res.ok && data.granted) {
+        window.userCredits = data.balance;
+        if (typeof updateCreditChip === 'function') updateCreditChip(data.balance);
+        if (typeof showToast === 'function') showToast('🎁 ' + data.added + ' free starter credits added — enough to make your first video. Enjoy!', 'success', 8000);
+        if (typeof refreshCreditBalance === 'function') setTimeout(refreshCreditBalance, 1500);
+      }
+    } catch (_) {}
+  };
 
   // ── Purchase credits: routes through create-topup-session ─────────────────
   async function purchaseCredits(packId) {

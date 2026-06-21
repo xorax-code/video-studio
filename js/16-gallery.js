@@ -767,9 +767,12 @@
     setProg(4, 'Starting 1080p stitch (this can take a few minutes)…');
 
     try {
+      // Free tier gets a "Made with AffiliateOS" watermark (server adds it only when
+      // a watermark image is configured via WATERMARK_GCS_URI). Paid tiers: no mark.
+      var _isFree = (typeof window !== 'undefined' && (window._stripeTier || 'free') === 'free');
       var createRes = await fetch('/.netlify/functions/assemble-1080p', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ clips: payload }),
+        body: JSON.stringify({ clips: payload, watermark: _isFree }),
       });
       var createData = await createRes.json();
       if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start the stitch job.');

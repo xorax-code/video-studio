@@ -487,8 +487,12 @@
         // Surface the raw Vertex response shape (when the server attaches it) so an
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
-        // Content-filtered clips get a 🚫 prefix so the toast is clearly actionable
-        var _errMsg = _blocked ? ('🚫 ' + pollData.error + ' (credits refunded — try a wider / less close-up frame, or a less model-like avatar)') : pollData.error;
+        // Keep the raw model error in the console for debugging, but show the user a
+        // clean, human, actionable message instead of Vertex's technical text.
+        if (_blocked) console.warn('[VeoAPI] clip blocked — raw model error:', pollData.error);
+        var _errMsg = _blocked
+          ? "🚫 The video model's people filter blocked this clip — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
+          : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.');
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {

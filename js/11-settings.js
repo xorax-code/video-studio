@@ -393,6 +393,11 @@
         return; // don't check trial expiry; webhook may not have landed yet
       }
 
+      // Grant one-time starter credits to new free users (idempotent server-side).
+      if (window._stripeTier === 'free' && typeof window.maybeGrantStarterCredits === 'function') {
+        setTimeout(window.maybeGrantStarterCredits, 900);
+      }
+
       // After app boots, check if trial expired and no paid plan -- show paywall
       if (window._stripeTier === 'free') {
         setTimeout(() => {

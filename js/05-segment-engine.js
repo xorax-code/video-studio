@@ -490,7 +490,7 @@
     // captureFrame reuses the seek if videoEl.currentTime already equals t (tolerance 0.04s).
     const _tcv = document.createElement('canvas');
     _tcv.width = 40; _tcv.height = 23;
-    const _tcvCtx = _tcv.getContext('2d');
+    const _tcvCtx = _tcv.getContext('2d', { willReadFrequently: true });
     if (!_tcvCtx) {
       // FIX H-5: reset running flag before returning or button is stuck forever
       _autoSegRunning = false;

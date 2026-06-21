@@ -845,7 +845,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
 
   function getBrandKit() {
     return {
-      productName: document.getElementById('bkProductName')?.value.trim() || '',
+      productName: document.getElementById('bkProductName')?.value.trim() || document.getElementById('sbProduct')?.value.trim() || '',
       productUrl:  document.getElementById('bkProductUrl')?.value.trim()  || '',
       tone:        document.getElementById('bkTone')?.value               || 'conversational',
       talkingPoints: document.getElementById('bkTalkingPoints')?.value.trim() || '',
