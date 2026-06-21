@@ -2317,8 +2317,9 @@
         ` : `
         <div>
           ${seg.frameDataUrl ? `
-          <!-- Click-to-target thumbnail: click directly on the person to pin them -->
-          <div style="position:relative;display:block;">
+          <!-- Click-to-target thumbnail: click directly on the person to pin them.
+               inline-block so the wrapper hugs the image — keeps the pin %/click in sync. -->
+          <div style="position:relative;display:inline-block;line-height:0;max-width:100%;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
               style="cursor:${seg.isCTA ? 'default' : 'crosshair'};"
               ${seg.isCTA ? '' : `onclick="setTargetPin(${i}, event)"`}
