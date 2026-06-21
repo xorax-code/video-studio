@@ -288,13 +288,13 @@
         _hfParts.push('TRANSFER BLOCK: No text, logos, labels, or graphical overlays from Photo 2 in the output.');
         _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
         if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
-        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '. Single polished, premium image — smooth idealized skin, gentle soft lighting. ONE person only.');
+        _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '. Single premium image — realistic natural skin texture (subtle pores, not plastic or over-smoothed), gentle soft natural lighting. ONE person only.');
         // RENDER-STYLE OVERRIDE — the decisive lever against Veo's person-likeness filter
         // (15236754). Veo blocks LITERAL photographs of real-looking people; a lightly
         // stylized render reads as "digital character", not "real person to deepfake".
         // Aim for the sweet spot: premium + flattering, clearly NOT a literal photo, but
         // NOT a hard cartoon. (Applies even when a scene's saved style said "realistic".)
-        _hfParts.push('RENDER STYLE: render as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — just lightly softened and idealized rather than a sharp, hyper-detailed documentary photograph of a specific real individual.');
+        _hfParts.push('RENDER STYLE: render as a natural, REAL-LOOKING photograph — authentic and photographic, with realistic skin texture (keep subtle pores and fine detail; NOT plastic, waxy, glossy, or over-smoothed) and soft natural flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — natural rather than airbrushed, with no glossy AI sheen.');
         // ZOOM-OUT OVERRIDE — a face filling the frame also trips 15236754.
         _hfParts.push('IMPORTANT FRAMING OVERRIDE: ALWAYS render a MEDIUM SHOT, even if the source is a tight close-up or shows two people — pull the camera back so every person is chest-up with clear headroom and visible surroundings, and NO single face is larger than ~25% of the frame height. Err on the side of too wide. Do NOT crop in tight on the face — a large face trips the person filter.');
         instruction = _hfParts.join(' ');
@@ -315,7 +315,7 @@
       if (_nbCore) {
         _gParts.push(_nbCore);
       } else {
-        _gParts.push('Generate a polished, REAL-LOOKING photo of this person facing the camera with a natural engaged expression — natural and photographic, smooth even gently-idealized skin, soft flattering light; a genuine photo look (NOT a 3D render, illustration, anime, or cartoon), just lightly softened rather than a sharp hyper-detailed documentary photo of a specific real individual.');
+        _gParts.push('Generate a natural, REAL-LOOKING photo of this person facing the camera with a natural engaged expression — authentic and photographic, realistic skin texture (subtle pores and fine detail; NOT plastic, waxy, or over-smoothed), soft natural flattering light; a genuine photo look (NOT a 3D render, illustration, anime, or cartoon); natural rather than airbrushed, no glossy AI sheen.');
       }
 
       // Scene / setting / background
@@ -339,7 +339,7 @@
       _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '.');
       // RENDER-STYLE OVERRIDE — decisive lever vs Veo's person filter (15236754).
       // See note in the hand-frame branch. Lightly stylized → reads as digital character.
-      _gParts.push('RENDER STYLE: render as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — just lightly softened and idealized rather than a sharp, hyper-detailed documentary photograph of a specific real individual.');
+      _gParts.push('RENDER STYLE: render as a natural, REAL-LOOKING photograph — authentic and photographic, with realistic skin texture (keep subtle pores and fine detail; NOT plastic, waxy, glossy, or over-smoothed) and soft natural flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — natural rather than airbrushed, with no glossy AI sheen.');
       // ZOOM-OUT OVERRIDE — a face filling the frame trips Veo 15236754.
       _gParts.push('IMPORTANT FRAMING OVERRIDE: ALWAYS render a MEDIUM SHOT, even if the source is a tight close-up or shows two people — pull the camera back so every person is chest-up with clear headroom and visible surroundings, and NO single face is larger than ~25% of the frame height. Err on the side of too wide. Do NOT crop in tight on the face — a large face trips the person filter.');
       _gParts.push('Style: premium real-looking lifestyle photo. Single image. ONE person only. No text overlays, no watermarks.');
@@ -362,7 +362,7 @@
     // person filter (a 212px soft photo of a face still blocks). A clearly-rendered/
     // digital look is what passes, so each retry pushes further from "literal photo".
     var _styleLevels = [
-      ' RENDER STYLE: polished, REAL-LOOKING photo — natural and photographic, smooth even gently-idealized skin, soft flattering light. A genuine photo look (NOT a 3D render, illustration, anime, or cartoon), just lightly softened/idealized rather than a sharp hyper-detailed documentary photo of a specific real individual.',
+      ' RENDER STYLE: natural, REAL-LOOKING photograph — authentic and photographic, realistic skin texture (subtle pores and fine detail; NOT plastic, waxy, or over-smoothed), soft natural flattering light. A genuine photo look (NOT a 3D render, illustration, anime, or cartoon); natural rather than airbrushed, with no glossy AI sheen.',
       ' RENDER STYLE (more stylized): clearly a polished digital-character render — smooth simplified skin, soft painterly/editorial finish, noticeably not a real photograph; still flattering and recognizably the same person, premium look, not a hard cartoon.',
       ' RENDER STYLE (max stylized): strongly stylized digital render / editorial illustration of the person — simplified smooth features, soft finish, clearly NOT a photograph of a real individual; keep it human, premium, and recognizable, leaning illustrative to guarantee it clears the person filter.'
     ];
@@ -622,9 +622,9 @@
     // "recreate this real person") so the image model's own likeness guard
     // doesn't refuse, while still reducing the photoreal look Veo blocks on.
     var instruction =
-      'Re-render the person in this reference photo as a clean, polished, REAL-LOOKING photo — natural and photographic, smooth and gently idealized, NOT a 3D render, illustration, anime, or cartoon. Keep natural human proportions. '
-      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, outfit and jewelry so it is clearly the same person. '
-      + 'Render with smooth, even, flattering, idealized skin (no harsh pores, blemishes, or documentary detail), soft even studio lighting; lightly softened rather than a sharp hyper-detailed photo of a specific real individual. '
+      'Re-render the person in this reference photo as a clean, natural, REAL-LOOKING photograph — authentic and photographic, NOT a 3D render, illustration, anime, smoothed cartoon, or airbrushed beauty-filter look. Keep natural human proportions. '
+      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, facial hair, outfit and jewelry so it is clearly the same person. '
+      + 'PRESERVE realistic, natural skin TEXTURE — keep subtle pores, fine lines and real detail so the skin looks like genuine human skin, NOT plastic, waxy, glossy, or over-smoothed. Use soft, natural, flattering light (like gentle window or outdoor light), clean but not flat studio lighting. '
       + (avDesc ? 'Notes: ' + avDesc + '. ' : '')
       + 'Vertical 9:16, head and shoulders, facing camera, plain soft neutral background.';
 

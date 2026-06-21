@@ -1322,6 +1322,56 @@
     } catch (_) {}
   };
 
+  // ── Admin-only "+10k credits" top-up (owner testing) ──────────────────────
+  // The real gate is server-side (admin-grant-credits checks the email allowlist);
+  // this just shows a button to the owner and calls it.
+  window.adminGrantCredits = async function adminGrantCredits(amount) {
+    try {
+      amount = amount || 10000;
+      if (!_sb) { showToast('Sign in first.', 'warning'); return; }
+      const sr = await _sb.auth.getSession();
+      const jwt = sr?.data?.session?.access_token;
+      if (!jwt) { showToast('Sign in first.', 'warning'); return; }
+      const res = await fetch('/.netlify/functions/admin-grant-credits', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
+        body:    JSON.stringify({ amount }),
+      });
+      let data = {}; try { data = await res.json(); } catch (_) {}
+      if (res.ok && typeof data.balance === 'number') {
+        window.userCredits = data.balance;
+        if (typeof updateCreditChip === 'function') updateCreditChip(data.balance);
+        if (typeof showToast === 'function') showToast('✅ +' + (data.added || amount).toLocaleString() + ' credits. Balance: ' + data.balance.toLocaleString() + '.', 'success', 5000);
+        if (typeof refreshCreditBalance === 'function') setTimeout(refreshCreditBalance, 1200);
+      } else {
+        if (typeof showToast === 'function') showToast((data && data.error) || 'Grant failed (admin only).', 'error', 5000);
+      }
+    } catch (e) { if (typeof showToast === 'function') showToast('Grant error: ' + (e && e.message), 'error'); }
+  };
+
+  // Mirror of the server allowlist for button VISIBILITY only (server enforces access).
+  var _ADMIN_EMAILS = ['2004tjg00@gmail.com'];
+  function _initAdminCreditBtn() {
+    try {
+      var email = (window._supabaseEmail || '').toLowerCase();
+      if (!email || _ADMIN_EMAILS.indexOf(email) === -1) return;
+      var chip = document.getElementById('creditChip');
+      if (!chip || !chip.parentNode || document.getElementById('adminTopupBtn')) return;
+      var b = document.createElement('button');
+      b.id = 'adminTopupBtn';
+      b.type = 'button';
+      b.title = 'Admin: add 10,000 test credits';
+      b.textContent = '+10k';
+      b.style.cssText = 'margin-left:6px;padding:3px 8px;font-size:10px;font-weight:800;font-family:inherit;cursor:pointer;border-radius:7px;border:1px solid rgba(167,139,250,0.5);background:rgba(167,139,250,0.14);color:#c4b5fd;';
+      b.onclick = function () { window.adminGrantCredits(10000); };
+      chip.parentNode.insertBefore(b, chip.nextSibling);
+    } catch (_) {}
+  }
+  window._initAdminCreditBtn = _initAdminCreditBtn;
+  // Retry a few times since _supabaseEmail is set during async boot; the dup-guard
+  // makes repeat calls harmless.
+  [1500, 3500, 6500].forEach(function (t) { setTimeout(_initAdminCreditBtn, t); });
+
   // ── Purchase credits: routes through create-topup-session ─────────────────
   async function purchaseCredits(packId) {
     if (!_sb) { showToast('Please sign in first.', 'warning'); return; }
