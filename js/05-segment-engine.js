@@ -2393,12 +2393,12 @@
           ${seg.frameDataUrl ? `
           <!-- Click-to-target thumbnail: click directly on the person to pin them.
                inline-block so the wrapper hugs the image — keeps the pin %/click in sync. -->
-          <div style="position:relative;display:inline-block;line-height:0;max-width:100%;">
+          <div style="position:relative;display:block;line-height:0;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
               style="cursor:${seg.isCTA ? 'default' : 'pointer'};"
               ${seg.isCTA ? '' : `onclick="openPersonPicker(${i})"`}
               title="${seg.isCTA ? 'Product photo' : 'Click to pick which person your avatar replaces'}">
-            ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
+            ${seg.targetX != null ? `<div style="position:absolute;top:6px;right:6px;z-index:3;pointer-events:none;font-size:9px;font-weight:800;background:rgba(96,165,250,0.95);color:#04122e;padding:2px 7px;border-radius:6px;box-shadow:0 1px 6px rgba(0,0,0,0.6);">🎯 ${seg.targetX < 45 ? 'LEFT' : seg.targetX > 55 ? 'RIGHT' : 'CENTER'}</div>` : ''}
           </div>
           ${seg.isCTA ? '' : `<div style="display:flex;gap:3px;margin-top:4px;align-items:center;">
             <button onclick="downloadFrame(${i})" class="seg-dl-btn" style="flex:1;margin-top:0;">⬇ Frame</button>
