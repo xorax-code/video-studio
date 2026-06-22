@@ -1694,6 +1694,80 @@
     });
   }
 
+  // --- Apply a target pin (shared by the legacy thumbnail click + the person picker) ---
+  function _applyTargetPin(i, xPct, yPct) {
+    xPct = Math.max(0, Math.min(100, Math.round(xPct)));
+    yPct = Math.max(0, Math.min(100, Math.round(yPct)));
+    segments[i].targetX = xPct;
+    segments[i].targetY = yPct;
+    const newSide = xPct < 50 ? 'left' : 'right';
+    const otherSide = newSide === 'left' ? 'right' : 'left';
+    segments[i].targetPerson = newSide;
+    const existingNotes = (segments[i].sceneNotes || '').trim();
+    if (existingNotes && /avatar replaces this person/i.test(existingNotes)) {
+      const gender = segments[i].targetGender || 'person';
+      const otherGender = gender === 'woman' ? 'man' : gender === 'man' ? 'woman' : 'person';
+      const newNotes = 'two people: ' + gender + ' on ' + newSide.toUpperCase() + ' (avatar replaces this person) - ' + otherGender + ' on ' + otherSide.toUpperCase() + ' (keep unchanged)';
+      segments[i].sceneNotes = newNotes;
+      const notesEl = document.getElementById('notes-seg-' + i);
+      if (notesEl) { notesEl.value = newNotes; autoGrow(notesEl); notesEl.style.borderColor = 'rgba(96,165,250,0.7)'; setTimeout(() => { if (notesEl) notesEl.style.borderColor = ''; }, 1500); }
+    }
+    if ((segments[i].nbPrompt || '').trim() && segments[i].frameDataUrl && typeof buildNBPromptFromImage === 'function') {
+      if (typeof showToast === 'function') showToast('Target set - refreshing Scene ' + (i + 1) + ' targeting...', 'info', 2500);
+      buildNBPromptFromImage(i);
+    }
+    debounceSave();
+    renderSegments();
+  }
+
+  // --- Person picker: focused, large modal to choose which person to swap ---
+  // Click the frame -> big crisp image -> tap the person -> marker snaps -> Confirm.
+  // Image renders at natural aspect (box == image) so the click maps exactly, and it's
+  // large so it's precise. No hover gymnastics, no dot drift.
+  function openPersonPicker(i) {
+    const seg = segments[i];
+    if (!seg || !seg.frameDataUrl) return;
+    const old = document.getElementById('personPickerModal');
+    if (old) old.remove();
+    window._ppPending = (seg.targetX != null) ? { x: seg.targetX, y: (seg.targetY != null ? seg.targetY : 50) } : null;
+    const have = window._ppPending;
+    const dotCss = 'position:absolute;transform:translate(-50%,-50%);pointer-events:none;width:26px;height:26px;border-radius:50%;background:rgba(96,165,250,0.92);border:3px solid #fff;box-shadow:0 0 0 3px rgba(96,165,250,0.5),0 2px 12px rgba(0,0,0,0.8);';
+    const m = document.createElement('div');
+    m.id = 'personPickerModal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:99996;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;gap:12px;';
+    m.onclick = function (e) { if (e.target === m) m.remove(); };
+    m.innerHTML =
+      '<div style="font-size:15px;font-weight:800;color:#fff;text-align:center;">Tap the person your avatar should replace</div>'
+      + '<div style="font-size:12px;color:rgba(255,255,255,0.6);margin-top:-4px;">Click right on them, then Confirm. (Big = precise.)</div>'
+      + '<div id="ppWrap" style="position:relative;display:inline-block;line-height:0;">'
+      +   '<img id="ppImg" src="' + seg.frameDataUrl + '" style="display:block;width:auto;height:auto;max-width:92vw;max-height:72vh;border-radius:10px;border:1px solid rgba(255,255,255,0.15);cursor:crosshair;">'
+      +   '<div id="ppDot" style="' + dotCss + (have ? ('left:' + have.x + '%;top:' + have.y + '%;') : 'display:none;') + '"></div>'
+      + '</div>'
+      + '<div style="display:flex;gap:10px;align-items:center;margin-top:4px;">'
+      +   '<button id="ppCancel" style="padding:9px 16px;font-size:13px;font-weight:700;font-family:inherit;border-radius:9px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.06);color:#ddd;cursor:pointer;">Cancel</button>'
+      +   '<button id="ppConfirm" style="padding:9px 18px;font-size:13px;font-weight:800;font-family:inherit;border-radius:9px;border:1px solid rgba(96,165,250,0.6);background:linear-gradient(135deg,#60a5fa,#3b82f6);color:#04122e;cursor:pointer;' + (have ? '' : 'opacity:0.45;pointer-events:none;') + '">Confirm target</button>'
+      + '</div>';
+    document.body.appendChild(m);
+    const img = m.querySelector('#ppImg');
+    const dot = m.querySelector('#ppDot');
+    const confirmBtn = m.querySelector('#ppConfirm');
+    img.onclick = function (e) {
+      const rect = img.getBoundingClientRect();
+      const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+      const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+      window._ppPending = { x: x, y: y };
+      dot.style.left = x + '%'; dot.style.top = y + '%'; dot.style.display = 'block';
+      confirmBtn.style.opacity = '1'; confirmBtn.style.pointerEvents = 'auto';
+    };
+    m.querySelector('#ppCancel').onclick = function () { m.remove(); };
+    confirmBtn.onclick = function () {
+      if (!window._ppPending) return;
+      _applyTargetPin(i, window._ppPending.x, window._ppPending.y);
+      m.remove();
+    };
+  }
+  window.openPersonPicker = openPersonPicker;
+
   // --- Click-to-target pin: click on thumbnail to mark which person to swap ---
   function setTargetPin(i, e) {
     const img = e.currentTarget;
@@ -2321,9 +2395,9 @@
                inline-block so the wrapper hugs the image — keeps the pin %/click in sync. -->
           <div style="position:relative;display:inline-block;line-height:0;max-width:100%;">
             <img src="${seg.frameDataUrl}" class="seg-frame-img"
-              style="cursor:${seg.isCTA ? 'default' : 'crosshair'};"
-              ${seg.isCTA ? '' : `onclick="setTargetPin(${i}, event)"`}
-              title="${seg.isCTA ? 'Product photo' : 'Click on a person to mark them as the NB swap target'}">
+              style="cursor:${seg.isCTA ? 'default' : 'pointer'};"
+              ${seg.isCTA ? '' : `onclick="openPersonPicker(${i})"`}
+              title="${seg.isCTA ? 'Product photo' : 'Click to pick which person your avatar replaces'}">
             ${seg.targetX != null ? `<div style="position:absolute;left:${seg.targetX}%;top:${seg.targetY != null ? seg.targetY : 50}%;transform:translate(-50%,-50%);pointer-events:none;z-index:3;width:15px;height:15px;border-radius:50%;background:rgba(96,165,250,0.92);border:2.5px solid #fff;box-shadow:0 0 0 2px rgba(96,165,250,0.5),0 1px 8px rgba(0,0,0,0.7);"></div>` : ''}
           </div>
           ${seg.isCTA ? '' : `<div style="display:flex;gap:3px;margin-top:4px;align-items:center;">
