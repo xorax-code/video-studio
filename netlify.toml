@@ -17,6 +17,20 @@
   to = "/login.html"
   status = 200
 
+# ── COOP only (COEP removed — it blocks googleapis.com video loading for Veo gallery) ──
+# NOTE: Removing COEP means SharedArrayBuffer is unavailable for FFmpeg.wasm export.
+# The gallery video playback and download work correctly without COEP.
+# If FFmpeg export is re-enabled, use a service worker or a video proxy instead of COEP.
+[[headers]]
+  for = "/app"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+
+[[headers]]
+  for = "/app.html"
+  [headers.values]
+    Cross-Origin-Opener-Policy = "same-origin"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
@@ -44,3 +58,31 @@
 [functions.validate-promo]
   node_version = "18"
   timeout = 10
+
+[functions.generate-veo-clip]
+  node_version = "18"
+  timeout = 26
+
+[functions.poll-veo-clip]
+  node_version = "18"
+  timeout = 26
+
+[functions.create-topup-session]
+  node_version = "18"
+  timeout = 26
+
+[functions.generate-nb-composite]
+  node_version = "18"
+  timeout = 26
+
+[functions.producer-ai]
+  node_version = "18"
+  timeout = 26
+
+# Async image composite. The "-background" worker auto-gets the 15-min budget —
+# do NOT add a timeout here (it would cap it). poll is a trivial DB read.
+[functions.generate-nb-composite-background]
+  node_version = "18"
+
+[functions.poll-nb-composite]
+  node_version = "18"

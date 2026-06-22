@@ -2,19 +2,83 @@
  * Netlify Function: openai-transcribe
  * Proxies audio/video transcription requests to OpenAI /v1/audio/transcriptions.
  *
- * Uses Node.js built-in `https` module and manually-built multipart/form-data
+ * Uses Node.js built-in https module and manually-built multipart/form-data
  * to avoid Blob/FormData compatibility issues in the Node.js Lambda runtime.
  *
  * Payload limit: ~4 MB raw file (base64 adds ~33% overhead, Lambda cap is 6 MB).
+ *
+ * Required env vars:
+ *   OPENAI_API_KEY    -- OpenAI secret key
+ *   SUPABASE_URL      -- https://xxx.supabase.co
+ *   SUPABASE_ANON_KEY -- anon key for JWT validation
  */
 
 const https = require('https');
 
+const CORS = {
+  'Access-Control-Allow-Origin':  '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Api-Key',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const CREDIT_COST = 2; // credits per transcription (tune as needed)
+
+// Read/deduct credits via Supabase admin API (fail-open if unavailable → never blocks legit use)
+async function _readBalance(userId) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || !process.env.SUPABASE_URL) return null;
+  try {
+    const r = await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d?.app_metadata?.credits_balance ?? 0;
+  } catch(_) { return null; }
+}
+async function _deduct(userId, balance, cost) {
+  const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svc || balance == null) return;
+  try {
+    await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: balance - cost } }) });
+  } catch(_) {}
+}
+
+// FIX: Added JWT auth -- previously this was an open proxy; any caller could
+// make unlimited Whisper transcription calls billed to the account.
+function getAuthUser(jwt) {
+  return new Promise((resolve) => {
+    const url = new URL((process.env.SUPABASE_URL || '') + '/auth/v1/user');
+    const req = https.request({
+      hostname: url.hostname,
+      path:     url.pathname,
+      method:   'GET',
+      headers: {
+        'Authorization': 'Bearer ' + jwt,
+        'apikey':        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || '',
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          resolve(res.statusCode === 200 && data.id ? data : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
+
 exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 200, headers: CORS, body: '' };
+  }
+
   if (event.httpMethod !== 'POST') {
     return {
       statusCode: 405,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Method not allowed' } }),
     };
   }
@@ -23,9 +87,41 @@ exports.handler = async (event) => {
   if (!apiKey) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'OpenAI API key not configured on server.' } }),
     };
+  }
+
+  // Auth: require valid Supabase JWT
+  if (!process.env.SUPABASE_URL) {
+    return {
+      statusCode: 500,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: { message: 'Server configuration error.' } }),
+    };
+  }
+  const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+  const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!jwt) {
+    return {
+      statusCode: 401,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: { message: 'Authentication required.' } }),
+    };
+  }
+  const authUser = await getAuthUser(jwt);
+  if (!authUser) {
+    return {
+      statusCode: 401,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: { message: 'Invalid or expired session.' } }),
+    };
+  }
+
+  // Credit gate — block users with no credits (fail-open if balance can't be read)
+  const _bal = await _readBalance(authUser.id);
+  if (_bal != null && _bal < CREDIT_COST) {
+    return { statusCode: 402, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: { message: 'Out of credits.' }, balance: _bal, cost: CREDIT_COST }) };
   }
 
   let parsed;
@@ -34,7 +130,7 @@ exports.handler = async (event) => {
   } catch {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Invalid JSON body.' } }),
     };
   }
@@ -44,7 +140,7 @@ exports.handler = async (event) => {
   if (!audioBase64) {
     return {
       statusCode: 400,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Missing audioBase64 field.' } }),
     };
   }
@@ -52,18 +148,18 @@ exports.handler = async (event) => {
   try {
     const audioBuffer = Buffer.from(audioBase64, 'base64');
 
-    // Map file extension → MIME type (Whisper accepts audio + video containers)
+    // Map file extension -> MIME type (Whisper accepts audio + video containers)
     // Sanitize filename: strip special chars to prevent Content-Disposition header injection
-    const rawName = fileName || 'audio.mp4';
+    const rawName  = fileName || 'audio.mp4';
     const sanitized = rawName.replace(/[^\w.\-]/g, '_').slice(0, 100) || 'audio.mp4';
     const mimeMap = {
-      mp4: 'video/mp4', mov: 'video/quicktime', webm: 'audio/webm',
-      mp3: 'audio/mpeg', wav: 'audio/wav', m4a: 'audio/m4a',
-      ogg: 'audio/ogg', flac: 'audio/flac', mpeg: 'audio/mpeg',
+      mp4:  'video/mp4',  mov:  'video/quicktime', webm: 'audio/webm',
+      mp3:  'audio/mpeg', wav:  'audio/wav',        m4a:  'audio/m4a',
+      ogg:  'audio/ogg',  flac: 'audio/flac',       mpeg: 'audio/mpeg',
     };
     // Extract extension; if missing or unrecognised, default to mp4.
     // Whisper determines format from the filename extension in the multipart
-    // Content-Disposition — a missing or unknown extension causes the
+    // Content-Disposition -- a missing or unknown extension causes the
     // "UNRECOGNIZED FILE FORMAT" error even when the bytes are valid MP4.
     const rawExt = sanitized.includes('.') ? sanitized.split('.').pop().toLowerCase() : '';
     const ext = (rawExt && mimeMap[rawExt]) ? rawExt : 'mp4';
@@ -73,57 +169,57 @@ exports.handler = async (event) => {
       : (sanitized.replace(/\.[^.]*$/, '') || 'audio') + '.' + ext;
     const mimeType = mimeMap[ext];
 
-    // Build multipart/form-data manually — avoids Blob/FormData Node.js quirks
+    // Build multipart/form-data manually -- avoids Blob/FormData Node.js quirks
     const boundary = '----OpenAIBoundary' + Date.now().toString(36) + Math.random().toString(36).slice(2);
     const CRLF = '\r\n';
 
     const parts = [];
 
-    // --- file field ---
+    // file field
     parts.push(Buffer.from(
-      `--${boundary}${CRLF}` +
-      `Content-Disposition: form-data; name="file"; filename="${safeFileName}"${CRLF}` +
-      `Content-Type: ${mimeType}${CRLF}${CRLF}`,
+      '--' + boundary + CRLF +
+      'Content-Disposition: form-data; name="file"; filename="' + safeFileName + '"' + CRLF +
+      'Content-Type: ' + mimeType + CRLF + CRLF,
       'utf8'
     ));
     parts.push(audioBuffer);
     parts.push(Buffer.from(CRLF, 'utf8'));
 
-    // --- model field ---
+    // model field
     parts.push(Buffer.from(
-      `--${boundary}${CRLF}` +
-      `Content-Disposition: form-data; name="model"${CRLF}${CRLF}` +
-      `${model || 'whisper-1'}${CRLF}`,
+      '--' + boundary + CRLF +
+      'Content-Disposition: form-data; name="model"' + CRLF + CRLF +
+      (model || 'whisper-1') + CRLF,
       'utf8'
     ));
 
-    // --- response_format field ---
+    // response_format field
     if (response_format) {
       parts.push(Buffer.from(
-        `--${boundary}${CRLF}` +
-        `Content-Disposition: form-data; name="response_format"${CRLF}${CRLF}` +
-        `${response_format}${CRLF}`,
+        '--' + boundary + CRLF +
+        'Content-Disposition: form-data; name="response_format"' + CRLF + CRLF +
+        response_format + CRLF,
         'utf8'
       ));
     }
 
-    // --- timestamp_granularities field (array syntax required by OpenAI) ---
+    // timestamp_granularities field (array syntax required by OpenAI)
     if (timestamp_granularities) {
       const granularities = Array.isArray(timestamp_granularities)
         ? timestamp_granularities
         : [timestamp_granularities];
       for (const g of granularities) {
         parts.push(Buffer.from(
-          `--${boundary}${CRLF}` +
-          `Content-Disposition: form-data; name="timestamp_granularities[]"${CRLF}${CRLF}` +
-          `${g}${CRLF}`,
+          '--' + boundary + CRLF +
+          'Content-Disposition: form-data; name="timestamp_granularities[]"' + CRLF + CRLF +
+          g + CRLF,
           'utf8'
         ));
       }
     }
 
-    // --- closing boundary ---
-    parts.push(Buffer.from(`--${boundary}--${CRLF}`, 'utf8'));
+    // closing boundary
+    parts.push(Buffer.from('--' + boundary + '--' + CRLF, 'utf8'));
 
     const body = Buffer.concat(parts);
 
@@ -132,11 +228,11 @@ exports.handler = async (event) => {
       const req = https.request(
         {
           hostname: 'api.openai.com',
-          path: '/v1/audio/transcriptions',
-          method: 'POST',
+          path:     '/v1/audio/transcriptions',
+          method:   'POST',
           headers: {
-            'Authorization': `Bearer ${apiKey}`,
-            'Content-Type': `multipart/form-data; boundary=${boundary}`,
+            'Authorization': 'Bearer ' + apiKey,
+            'Content-Type':  'multipart/form-data; boundary=' + boundary,
             'Content-Length': body.length,
           },
         },
@@ -153,28 +249,29 @@ exports.handler = async (event) => {
       req.end();
     });
 
-    // Parse and forward OpenAI's response
+    // Parse and forward OpenAI response
     let data;
     try {
       data = JSON.parse(result.body);
     } catch {
-      // OpenAI returned non-JSON (shouldn't happen, but handle gracefully)
       return {
         statusCode: 502,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...CORS, 'Content-Type': 'application/json' },
         body: JSON.stringify({ error: { message: 'Unexpected response from OpenAI: ' + result.body.slice(0, 200) } }),
       };
     }
 
+    if (result.status >= 200 && result.status < 300) await _deduct(authUser.id, _bal, CREDIT_COST);
+
     return {
       statusCode: result.status,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     };
   } catch (err) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: { message: 'Proxy error: ' + err.message } }),
     };
   }

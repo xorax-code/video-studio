@@ -3,10 +3,12 @@
  * Creates a Stripe Customer Portal session so users can manage/cancel subscriptions.
  *
  * Required env vars:
- *   STRIPE_SECRET_KEY — sk_live_... or sk_test_...
+ *   STRIPE_SECRET_KEY  -- sk_live_... or sk_test_...
+ *   SUPABASE_URL       -- https://xxx.supabase.co
+ *   SUPABASE_ANON_KEY  -- anon key for JWT validation
  *
  * NOTE: You must enable the Customer Portal in your Stripe dashboard first:
- *   Stripe Dashboard → Settings → Billing → Customer portal → Activate
+ *   Stripe Dashboard -> Settings -> Billing -> Customer portal -> Activate
  */
 
 const https = require('https');
@@ -14,9 +16,41 @@ const qs    = require('querystring');
 
 const APP_URL = 'https://aiscaling.netlify.app';
 
-exports.handler = async (event) => {
-  const headers = { 'Content-Type': 'application/json' };
+function getAuthUser(jwt) {
+  return new Promise((resolve) => {
+    const url = new URL((process.env.SUPABASE_URL || '') + '/auth/v1/user');
+    const req = https.request({
+      hostname: url.hostname,
+      path:     url.pathname,
+      method:   'GET',
+      headers: {
+        'Authorization': 'Bearer ' + jwt,
+        'apikey':        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || '',
+      },
+    }, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          const data = JSON.parse(Buffer.concat(chunks).toString());
+          resolve(res.statusCode === 200 && data.id ? data : null);
+        } catch { resolve(null); }
+      });
+    });
+    req.on('error', () => resolve(null));
+    req.end();
+  });
+}
 
+exports.handler = async (event) => {
+  const CORS = {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+  const headers = { 'Content-Type': 'application/json', ...CORS };
+
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, headers, body: JSON.stringify({ error: 'Method not allowed' }) };
   }
@@ -24,6 +58,20 @@ exports.handler = async (event) => {
   const secretKey = process.env.STRIPE_SECRET_KEY;
   if (!secretKey) {
     return { statusCode: 500, headers, body: JSON.stringify({ error: 'Stripe not configured on server.' }) };
+  }
+
+  // Auth: require a valid Supabase JWT before touching any Stripe portal session
+  if (!process.env.SUPABASE_URL) {
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' }) };
+  }
+  const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+  const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!jwt) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Authentication required.' }) };
+  }
+  const authUser = await getAuthUser(jwt);
+  if (!authUser) {
+    return { statusCode: 401, headers, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
   }
 
   let body;
@@ -34,14 +82,43 @@ exports.handler = async (event) => {
   if (!customerId) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Missing customerId.' }) };
   }
-  // Validate Stripe customer ID format to prevent arbitrary string injection
   if (!/^cus_[A-Za-z0-9]+$/.test(customerId)) {
     return { statusCode: 400, headers, body: JSON.stringify({ error: 'Invalid customerId format.' }) };
+  }
+  // FIX H-7: verify the supplied customerId belongs to the authenticated user.
+  // FAIL-CLOSED: the portal can cancel subscriptions and change payment methods, so
+  // if we cannot positively confirm ownership we refuse rather than open it.
+  const svcKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!svcKey) {
+    console.error('create-portal-session: SUPABASE_SERVICE_ROLE_KEY missing — cannot verify ownership.');
+    return { statusCode: 500, headers, body: JSON.stringify({ error: 'Server configuration error.' }) };
+  }
+  let expectedId = null;
+  try {
+    const adminUrl = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${authUser.id}`);
+    const adminData = await new Promise((resolve) => {
+      const req = https.request({
+        hostname: adminUrl.hostname, path: adminUrl.pathname, method: 'GET',
+        headers: { 'Authorization': `Bearer ${svcKey}`, 'apikey': svcKey },
+      }, (res) => {
+        const chunks = [];
+        res.on('data', c => chunks.push(c));
+        res.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString())); } catch { resolve(null); } });
+      });
+      req.on('error', () => resolve(null));
+      req.end();
+    });
+    expectedId = adminData && adminData.app_metadata && adminData.app_metadata.stripe_customer_id;
+  } catch (_) { expectedId = null; }
+  // Require a positive match: no stored customer, lookup failure, or mismatch all → 403.
+  if (!expectedId || expectedId !== customerId) {
+    console.warn(`Portal session: ownership not confirmed for user ${authUser.id} (requested ${customerId}, owns ${expectedId || 'none'})`);
+    return { statusCode: 403, headers, body: JSON.stringify({ error: 'Could not verify this subscription belongs to your account.' }) };
   }
 
   const formBody = qs.stringify({
     customer:   customerId,
-    return_url: `${APP_URL}/app`,
+    return_url: APP_URL + '/app',
   });
 
   return new Promise((resolve) => {
@@ -50,7 +127,7 @@ exports.handler = async (event) => {
       path:     '/v1/billing_portal/sessions',
       method:   'POST',
       headers: {
-        'Authorization':  `Bearer ${secretKey}`,
+        'Authorization':  'Bearer ' + secretKey,
         'Content-Type':   'application/x-www-form-urlencoded',
         'Content-Length': Buffer.byteLength(formBody),
       },

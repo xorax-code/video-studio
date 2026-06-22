@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Affiliate OS — Sign In</title>
+  <title>AffiliateOS — Sign In</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -242,7 +242,7 @@
 
   <a class="logo" href="/landing.html">
     <div class="logo-icon">🎬</div>
-    <span class="logo-name">Affiliate OS</span>
+    <span class="logo-name">AffiliateOS</span>
   </a>
 
   <div class="card">
@@ -297,6 +297,10 @@
                autocomplete="new-password" onkeydown="if(event.key==='Enter') doSignup()">
       </div>
 
+      <div style="font-size:11px;line-height:1.5;color:var(--text-3, #9aa0a6);margin:2px 0 12px;">
+        By creating an account you agree to our <a href="/terms.html" target="_blank">Terms of Service</a> and <a href="/privacy.html" target="_blank">Privacy Policy</a>, and you confirm that you have the rights and consent to any person's likeness you upload, and will add required disclosures (e.g. <strong>#ad</strong>) when posting AI-generated videos.
+      </div>
+
       <button class="btn-primary" id="btn-signup" onclick="doSignup()">Create Account</button>
 
       <div class="toggle-row">
@@ -337,9 +341,17 @@
   const { createClient } = supabase;
   const _sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-  // If already logged in, go straight to app
+  // Password-recovery flow: the reset email link creates a TEMPORARY session and fires
+  // PASSWORD_RECOVERY. We must NOT bounce to the app — show a set-new-password form first.
+  const _isRecovery = /type=recovery/.test(location.hash) || /type=recovery/.test(location.search);
+  _sb.auth.onAuthStateChange((event) => {
+    if (event === 'PASSWORD_RECOVERY') showSetNewPassword();
+  });
+  if (_isRecovery) { setTimeout(showSetNewPassword, 300); }
+
+  // If already logged in (and NOT mid-recovery), go straight to app
   _sb.auth.getSession().then(({ data }) => {
-    if (data.session) window.location.href = '/app.html';
+    if (data.session && !_isRecovery) window.location.href = '/app.html';
   });
 
   function showView(name) {
@@ -405,6 +417,43 @@
     setLoading('btn-reset', false);
     if (error) { showMsg('msg-reset', error.message); return; }
     showMsg('msg-reset', '✓ Reset link sent — check your inbox.', 'success');
+  }
+
+  // Set-new-password form, shown after the user clicks the reset email link (the missing
+  // return leg). Self-contained overlay so it doesn't depend on the login/signup/reset views.
+  function showSetNewPassword() {
+    if (document.getElementById('newpw-overlay')) return;
+    const _i = 'width:100%;box-sizing:border-box;margin:0 0 10px;padding:11px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#fff;font-size:14px;font-family:inherit;';
+    const ov = document.createElement('div');
+    ov.id = 'newpw-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:rgba(8,10,16,0.94);padding:20px;';
+    ov.innerHTML = '<div style="width:100%;max-width:380px;background:#11151f;border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:26px;">'
+      + '<h2 style="margin:0 0 6px;font-size:19px;color:#fff;font-family:inherit;">Set a new password</h2>'
+      + '<p style="margin:0 0 16px;font-size:13px;color:#9aa3b2;font-family:inherit;">Enter and confirm your new password.</p>'
+      + '<input id="newpw-1" type="password" autocomplete="new-password" placeholder="New password (min 8 characters)" style="' + _i + '"/>'
+      + '<input id="newpw-2" type="password" autocomplete="new-password" placeholder="Confirm new password" style="' + _i + '"/>'
+      + '<div id="newpw-msg" class="msg error" style="font-size:12px;margin:0 0 10px;"></div>'
+      + '<button id="newpw-btn" style="width:100%;padding:12px;border:none;border-radius:9px;background:linear-gradient(135deg,#7c6af7,#9333ea);color:#fff;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;">Update password</button>'
+      + '</div>';
+    document.body.appendChild(ov);
+    document.getElementById('newpw-btn').onclick = doSetNewPassword;
+    document.getElementById('newpw-2').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSetNewPassword(); });
+  }
+
+  async function doSetNewPassword() {
+    const p1 = document.getElementById('newpw-1').value;
+    const p2 = document.getElementById('newpw-2').value;
+    const msg = document.getElementById('newpw-msg');
+    const set = (t, ok) => { msg.textContent = t; msg.className = 'msg ' + (ok ? 'success' : 'error') + ' show'; };
+    if (!p1 || p1.length < 8) { set('Password must be at least 8 characters.'); return; }
+    if (p1 !== p2) { set('Passwords do not match.'); return; }
+    const btn = document.getElementById('newpw-btn');
+    btn.disabled = true; btn.textContent = 'Updating…';
+    const { error } = await _sb.auth.updateUser({ password: p1 });
+    btn.disabled = false; btn.textContent = 'Update password';
+    if (error) { set(error.message); return; }
+    set('✓ Password updated — taking you to the app…', true);
+    setTimeout(() => { window.location.href = '/app.html'; }, 1200);
   }
 
   function checkPwStrength(pw) {

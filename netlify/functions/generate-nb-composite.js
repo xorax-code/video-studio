@@ -1,0 +1,651 @@
+/**
+ * Netlify Function: generate-nb-composite
+ *
+ * ── PIPELINE ─────────────────────────────────────────────────────────────────
+ *
+ * Stage 1 — Pose Analysis  (gemini-2.0-flash via Gemini Developer API, text-only)
+ *   Analyzes the scene frame: arm positions, prop details, lighting, background.
+ *
+ * Stage 2 — Appearance Transfer  (gemini-3.1-flash-image via Gemini Developer API)
+ *   Nano Banana 2 — Google's model with native character consistency.
+ *   Photo 1 = scene frame  (base image — background, arms, prop all locked)
+ *   Photo 2 = avatar       (face, hair, clothing to apply to the person in Photo 1)
+ *
+ * Requires env var: GEMINI_API_KEY  (from aistudio.google.com/apikey)
+ */
+
+const https  = require('https');
+const crypto = require('crypto');
+
+const MODEL                 = 'gemini-3.1-flash-image';     // default (Flash) — now runs on Vertex AI (Gemini Dev API = fallback)
+const PRO_MODEL             = 'gemini-3-pro-image-preview'; // "Max Quality" (Nano Banana Pro) — Vertex AI
+const ANALYSIS_MODEL        = 'gemini-2.0-flash';          // pose analysis on the Gemini Dev API (fallback only)
+const VERTEX_ANALYSIS_MODEL = 'gemini-2.0-flash-001';      // pose analysis on Vertex AI (primary)
+const GEMINI_HOST           = 'generativelanguage.googleapis.com';
+const VERTEX_LOCATION       = 'us-central1'; // text models (pose analysis) are served regionally
+const VERTEX_IMAGE_LOCATION = 'global';      // Gemini 3.x image models are ONLY on the global endpoint
+const CREDIT_COST     = 2; // credits per composite frame, default Flash quality
+const CREDIT_COST_PRO = 5; // credits per composite frame, Max Quality (Pro) — ~2x the real cost
+// Pose analysis stays Vertex-only (optional step; no need for a second lane).
+const ALLOW_GEMINI_FALLBACK = false;
+// IMAGE overflow lane: the Gemini Developer API is a SEPARATE serving stack from
+// Vertex's global pool, with its own quota. When Vertex's global image endpoint is
+// capacity-throttled (429/5xx), overflow image gen to the Gemini API instead of failing.
+// Requires a PAID-tier GEMINI_API_KEY. Set false to go Vertex-only again.
+const ALLOW_GEMINI_IMAGE_FALLBACK = true;
+
+function httpsRequest(options, body) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => {
+        try {
+          resolve({ status: res.statusCode, data: JSON.parse(Buffer.concat(chunks).toString()) });
+        } catch(e) {
+          resolve({ status: res.statusCode, data: null, raw: Buffer.concat(chunks).toString() });
+        }
+      });
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+// ── OAuth2: service account → access token (for Vertex AI / Pro image) ────────
+async function getAccessToken(saJson) {
+  const sa  = typeof saJson === 'string' ? JSON.parse(saJson) : saJson;
+  // Netlify env vars commonly store the private key with escaped "\n" sequences
+  // instead of real newlines; crypto.createSign().sign() throws on those. Normalize.
+  if (sa && typeof sa.private_key === 'string' && sa.private_key.indexOf('\\n') !== -1) {
+    sa.private_key = sa.private_key.replace(/\\n/g, '\n');
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const claim = { iss: sa.client_email, scope: 'https://www.googleapis.com/auth/cloud-platform', aud: 'https://oauth2.googleapis.com/token', exp: now + 3600, iat: now };
+  const header   = Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString('base64url');
+  const payload  = Buffer.from(JSON.stringify(claim)).toString('base64url');
+  const unsigned = `${header}.${payload}`;
+  const signer = crypto.createSign('RSA-SHA256');
+  signer.update(unsigned);
+  const sig = signer.sign(sa.private_key, 'base64url');
+  const body = `grant_type=urn%3Aietf%3Aparams%3Aoauth%3Agrant-type%3Ajwt-bearer&assertion=${unsigned}.${sig}`;
+  const res = await httpsRequest({
+    hostname: 'oauth2.googleapis.com', path: '/token', method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) },
+  }, body);
+  if (res.data && res.data.access_token) return res.data.access_token;
+  throw new Error('Token exchange failed');
+}
+
+function _hasImage(data) {
+  return ((data && data.candidates) || []).some(c => ((c && c.content && c.content.parts) || []).some(p => p && p.inlineData && p.inlineData.data));
+}
+
+// Generic Vertex AI generateContent call (Bearer token). Returns { status, data }.
+async function vertexGenerateContent(modelId, reqJson, token, location) {
+  const loc  = location || VERTEX_LOCATION;
+  // The global endpoint uses the bare host (no region prefix); regions are prefixed.
+  const host = (loc === 'global') ? 'aiplatform.googleapis.com' : `${loc}-aiplatform.googleapis.com`;
+  const path = `/v1/projects/${process.env.GOOGLE_CLOUD_PROJECT_ID}/locations/${loc}/publishers/google/models/${modelId}:generateContent`;
+  return httpsRequest({
+    hostname: host, path, method: 'POST',
+    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqJson) },
+  }, reqJson);
+}
+
+// Send the image request to the chosen model.
+//  - wantPro  → Nano Banana Pro on Vertex first.
+//  - default  → Flash (gemini-3.1-flash-image) on Vertex first (higher limits, one billing
+//               lane with Veo). The Gemini Developer API is only a fallback now.
+// `vtxToken` is a pre-fetched Vertex access token (or null). Returns { status, data, usedPro }.
+async function callImageModel(requestObj, apiKey, wantPro, vtxToken) {
+  const reqJson = JSON.stringify(requestObj);
+
+  // 1) Vertex Pro (only when Max Quality requested)
+  if (wantPro && vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const r = await vertexGenerateContent(PRO_MODEL, reqJson, vtxToken, VERTEX_IMAGE_LOCATION);
+      if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: true };
+      console.warn('generate-nb-composite: Vertex Pro unavailable, trying Vertex Flash —', r.status, (r.data && r.data.error && r.data.error.message) || '');
+    } catch (e) {
+      console.warn('generate-nb-composite: Vertex Pro error, trying Vertex Flash —', e.message);
+    }
+  }
+
+  // 2) Vertex Flash (the default path for every standard frame)
+  let lastVertex = null;
+  if (vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const r = await vertexGenerateContent(MODEL, reqJson, vtxToken, VERTEX_IMAGE_LOCATION);
+      if (r.status === 200 && _hasImage(r.data)) return { status: 200, data: r.data, usedPro: false };
+      lastVertex = r;
+      console.warn('generate-nb-composite: Vertex Flash unavailable —', r.status, (r.data && r.data.error && r.data.error.message) || '');
+    } catch (e) {
+      console.warn('generate-nb-composite: Vertex Flash error —', e.message);
+    }
+  }
+
+  // 3) Overflow lane: Flash on the Gemini Developer API (separate serving stack /
+  //    separate quota pool from Vertex's global endpoint). Fires when Vertex didn't
+  //    return an image — primarily capacity throttling (429) or transient 5xx.
+  if (ALLOW_GEMINI_IMAGE_FALLBACK && apiKey) {
+    console.warn('generate-nb-composite: overflowing to Gemini Developer API (Vertex status ' + (lastVertex && lastVertex.status) + ')');
+    const r2 = await httpsRequest({
+      hostname: GEMINI_HOST, path: `/v1beta/models/${MODEL}:generateContent`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey, 'Content-Length': Buffer.byteLength(reqJson) },
+    }, reqJson);
+    if (r2.status === 200 && _hasImage(r2.data)) return { status: 200, data: r2.data, usedPro: false };
+    console.warn('generate-nb-composite: Gemini overflow also failed —', r2.status, (r2.data && r2.data.error && r2.data.error.message) || '');
+    // Prefer surfacing the Gemini result if Vertex gave us nothing useful.
+    if (!lastVertex) return { status: r2.status, data: r2.data, usedPro: false };
+  }
+
+  // Vertex-only: surface the Vertex outcome (or a clear error) instead of the empty key.
+  if (lastVertex) return { status: lastVertex.status || 502, data: lastVertex.data, usedPro: false };
+  return { status: 502, data: { error: { message: 'Vertex image generation unavailable (Gemini fallback disabled).' } }, usedPro: false };
+}
+
+// ── Supabase auth check ───────────────────────────────────────────────────────
+async function getAuthUser(jwt) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/user`);
+  const result = await httpsRequest({
+    hostname: url.hostname,
+    path:     url.pathname,
+    method:   'GET',
+    headers: {
+      'Authorization': `Bearer ${jwt}`,
+      'apikey':        process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON,
+    },
+  });
+  if (result.status !== 200 || !result.data?.id) return null;
+  return result.data;
+}
+
+// ── Supabase admin (credits) ──────────────────────────────────────────────────
+async function getAdminUser(userId) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'GET',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k } });
+  return r.status === 200 ? r.data : null;
+}
+async function updateUserMeta(userId, meta) {
+  const url = new URL(`${process.env.SUPABASE_URL}/auth/v1/admin/users/${userId}`);
+  const k   = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b   = JSON.stringify({ app_metadata: meta });
+  const r   = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'PUT',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  return r.status === 200;
+}
+
+// ── Stage 1: Pose analysis ────────────────────────────────────────────────────
+async function analyzeFramePose(frameImg, apiKey, vtxToken) {
+  const prompt = `You are analyzing a video frame for photo compositing. A person is visible.
+
+Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON only):
+{
+  "camera_angle": "shot description — e.g. 'straight-on chest height, medium shot'",
+  "visible_person": "which parts of the person are actually in frame — choose the closest single phrase: 'hands only', 'arms only', 'arms and torso, no face', 'face and upper body', or 'full body'",
+  "face_in_frame": "boolean true or false — is a human FACE or HEAD actually visible in this frame? Answer false when only a hand, arm, forearm, or torso is shown (a hand holding a product with no face = false).",
+  "full_body_in_frame": "boolean true or false — is a full standing/seated body visible (not just hands/arms)?",
+  "background": "precise description of everything visible behind the person — room type, wall color, shelves, objects, window, flags, decor",
+  "arm_instruction": "single sentence describing both arms and hands — e.g. 'right hand holds large open mouth model extended toward camera, left hand supports from below'",
+  "prop": "if a prop/object is held: exact name, shape, size, color, which hand, orientation. If none: 'none'",
+  "prop_state": "visible state of the prop — e.g. 'mouth model open, facing camera, showing teeth'. If no prop: 'none'",
+  "lighting": "lighting description — e.g. 'warm ambient light from above, soft shadows'"
+}`;
+
+  const reqBody = JSON.stringify({
+    contents: [{
+      role: 'user',
+      parts: [
+        { inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } },
+        { text: prompt },
+      ],
+    }],
+    generationConfig: {
+      temperature: 0.1,
+      maxOutputTokens: 600,
+      responseMimeType: 'application/json',
+      responseSchema: {
+        type: 'object',
+        properties: {
+          camera_angle:       { type: 'string' },
+          visible_person:     { type: 'string' },
+          face_in_frame:      { type: 'boolean' },
+          full_body_in_frame: { type: 'boolean' },
+          background:         { type: 'string' },
+          arm_instruction:    { type: 'string' },
+          prop:               { type: 'string' },
+          prop_state:         { type: 'string' },
+          lighting:           { type: 'string' },
+        },
+        required: ['visible_person', 'face_in_frame', 'full_body_in_frame', 'background', 'arm_instruction', 'prop', 'lighting'],
+      },
+    },
+  });
+
+  // Pull the structured JSON out of a generateContent response (shared by both paths)
+  function _parsePose(res, src) {
+    if (!res || res.status !== 200 || !res.data) { console.warn('analyzeFramePose: ' + src + ' non-200:', res && res.status); return null; }
+    const raw = (res.data.candidates && res.data.candidates[0] && res.data.candidates[0].content
+      && res.data.candidates[0].content.parts && res.data.candidates[0].content.parts[0]
+      && res.data.candidates[0].content.parts[0].text) || '';
+    if (!raw) return null;
+    try {
+      const cleaned = raw.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
+      const parsed = JSON.parse(cleaned);
+      console.log('analyzeFramePose: OK (' + src + ') — prop:', parsed.prop, '| arm:', parsed.arm_instruction);
+      return parsed;
+    } catch(e) { console.warn('analyzeFramePose: parse error (' + src + '):', e.message); return null; }
+  }
+
+  // 1) Vertex AI first (gemini-2.0-flash-001) — same billing lane as the images
+  if (vtxToken && process.env.GOOGLE_CLOUD_PROJECT_ID) {
+    try {
+      const rv = await vertexGenerateContent(VERTEX_ANALYSIS_MODEL, reqBody, vtxToken);
+      const pv = _parsePose(rv, 'vertex');
+      if (pv) return pv;
+      console.warn('analyzeFramePose: vertex returned no usable result, falling back to Gemini Dev API');
+    } catch(e) { console.warn('analyzeFramePose: vertex error, falling back to Gemini Dev API:', e.message); }
+  }
+
+  // 2) Fallback: Gemini Developer API — disabled in Vertex-only mode (pose analysis
+  //    is optional, so returning null just skips the lock block, no hard failure).
+  if (!ALLOW_GEMINI_FALLBACK || !apiKey) return null;
+  try {
+    const res = await httpsRequest({
+      hostname: GEMINI_HOST,
+      path: `/v1beta/models/${ANALYSIS_MODEL}:generateContent?key=${apiKey}`, method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(reqBody) },
+    }, reqBody);
+    return _parsePose(res, 'gemini-api');
+  } catch(e) {
+    console.warn('analyzeFramePose: error:', e.message);
+    return null;
+  }
+}
+
+// ── Build LOCK instruction block from pose analysis ───────────────────────────
+function buildLockBlock(pa, skipProp) {
+  const lines = [];
+  if (pa.background)                             lines.push(`lock background: ${pa.background}.`);
+  if (pa.arm_instruction)                        lines.push(`lock arms: ${pa.arm_instruction} — do not move these arms.`);
+  if (skipProp) {
+    // Product is being replaced — keep the hand/grip but NOT the original object.
+    lines.push(`hand & grip: keep the exact hand position, grip, finger placement, and arm pose — but the held object itself will be swapped (see PRODUCT REPLACE).`);
+  } else {
+    if (pa.prop && pa.prop !== 'none')             lines.push(`lock prop: ${pa.prop} — keep exactly as held, same grip and orientation.`);
+    if (pa.prop_state && pa.prop_state !== 'none') lines.push(`prop state: ${pa.prop_state}.`);
+  }
+  if (pa.lighting)                               lines.push(`lock light: ${pa.lighting}.`);
+  lines.push('');
+  return lines.join('\n');
+}
+
+const runComposite = async (event) => {
+  const CORS = {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+
+  try {
+
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 200, headers: CORS, body: '' };
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: 'Method not allowed' }) };
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY || '';
+  const _vertexConfigured = !!(process.env.GOOGLE_SERVICE_ACCOUNT_JSON && process.env.GOOGLE_CLOUD_PROJECT_ID);
+  if (!apiKey && !_vertexConfigured) {
+    return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'No image backend configured (set GEMINI_API_KEY or a Vertex service account).' }) };
+  }
+
+  const authHeader = event.headers['authorization'] || event.headers['Authorization'] || '';
+  const jwt = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+  if (!jwt) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Missing authorization token.' }) };
+
+  let user;
+  try { user = await getAuthUser(jwt); } catch(e) {
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Auth check failed: ' + e.message }) };
+  }
+  if (!user) return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: 'Invalid or expired session.' }) };
+
+  let body;
+  try { body = JSON.parse(event.body || '{}'); }
+  catch { return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Invalid JSON body.' }) }; }
+
+  // Max Quality (Nano Banana Pro on Vertex) — costs more credits than the default Flash frame
+  const wantPro     = (body.quality === 'pro' || body.maxQuality === true);
+  const composeCost = wantPro ? CREDIT_COST_PRO : CREDIT_COST;
+  // Async path: the background worker charges AFTER it has persisted the image to
+  // nb_jobs, so a crash/timeout can't charge-without-delivering. In that mode we
+  // still credit-GATE here (block if balance too low) but skip the live deduction.
+  const deferCharge = (body.deferCharge === true);
+
+  // Pre-fetch a Vertex access token once — shared by the image model and the pose
+  // analysis. Null if Vertex isn't configured or the token exchange fails; both
+  // calls then fall back to the Gemini Developer API.
+  let vtxToken = null;
+  if (_vertexConfigured) {
+    try { vtxToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON); }
+    catch(e) { console.warn('generate-nb-composite: Vertex token exchange failed, using Gemini Dev API —', e.message); }
+  }
+
+  // ── Credit gate (check upfront; deduct the ACTUAL cost after a frame is produced) ──
+  let _composeBalance = 0;
+  {
+    const adminUser = await getAdminUser(user.id);
+    if (!adminUser) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
+    _composeBalance = adminUser.app_metadata?.credits_balance ?? 0;
+    if (_composeBalance < composeCost) {
+      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `You're out of credits for image generation (${composeCost} per ${wantPro ? 'max-quality ' : ''}frame). Balance: ${_composeBalance}.`, balance: _composeBalance, cost: composeCost }) };
+    }
+  }
+  async function _chargeCompose(cost) {
+    if (deferCharge) return; // background worker deducts after the image is persisted
+    const c = (typeof cost === 'number') ? cost : composeCost;
+    const n = await spendCredits(user.id, c); // atomic
+    if (n === null || n === -1) console.error(`generate-nb-composite: credit deduction failed for user ${user.id}`);
+  }
+
+  const {
+    instruction    = '',
+    avatarDesc     = '',
+    negativePrompt = '',
+    avatarB64,
+    avatarMime     = 'image/jpeg',
+    frameB64       = null,
+    frameMime      = 'image/jpeg',
+    productB64     = null,
+    productMime    = 'image/jpeg',
+    handRefB64     = null,
+    handRefMime    = 'image/jpeg',
+    creative       = false,
+  } = body;
+
+  let avatarImg = null, frameImg = null, productImg = null, handRefImg = null;
+  if (Array.isArray(body.images) && body.images.length > 0) {
+    const imgs = body.images.filter(img => img && img.b64);
+    if (imgs[0]) avatarImg  = imgs[0];
+    if (imgs[1]) frameImg   = imgs[1];
+    if (imgs[2]) productImg = imgs[2];
+  } else if (avatarB64) {
+    avatarImg = { b64: avatarB64, mime: avatarMime };
+    if (frameB64)   frameImg   = { b64: frameB64, mime: frameMime };
+    if (productB64) productImg = { b64: productB64, mime: productMime };
+    if (handRefB64) handRefImg = { b64: handRefB64, mime: handRefMime };
+  }
+  // The locked hand reference applies only when compositing onto a real frame.
+  const hasHandRef = !!(frameImg && handRefImg);
+
+  // Creative/Studio mode allows pure text-to-image (no avatar or reference needed).
+  // Only the avatar/replicator composite paths require a subject image.
+  if (!avatarImg && !creative) {
+    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
+  }
+
+  const hasFrame   = !!frameImg;
+  // Two product modes:
+  //   swap — compositing on a real frame: REPLACE the held product (Replicator).
+  //   gen  — no frame: the generated avatar HOLDS this exact product (Producer).
+  const hasProductSwap = !!(frameImg && productImg);
+  const hasProductGen  = !!(!frameImg && productImg);
+  const hasProduct     = hasProductSwap; // back-compat alias for the swap path below
+
+  // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
+  if (creative) {
+    const creativeParts = [];
+    for (const img of [avatarImg, frameImg].filter(Boolean)) {
+      creativeParts.push({ inlineData: { mimeType: img.mime, data: img.b64 } });
+    }
+    creativeParts.push({ text: instruction || 'Generate a high-quality image based on the reference photos.' });
+
+    const creativeReq = {
+      systemInstruction: { parts: [{ text: 'You are a professional photo editor and image generator. Follow the user\'s instruction exactly and creatively. Use any provided reference photos as visual guides.' }] },
+      contents: [{ role: 'user', parts: creativeParts }],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.7 },
+    };
+
+    // Routes Vertex-first (Flash, or Pro when Max Quality), Gemini Dev API fallback.
+    let creativeResult;
+    try {
+      creativeResult = await callImageModel(creativeReq, apiKey, wantPro, vtxToken);
+    } catch(e) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) };
+    }
+
+    if (creativeResult.status === 429) return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit — please wait and retry.' }) };
+    if (!creativeResult.data || creativeResult.status !== 200 || creativeResult.data.error) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: (creativeResult.data && creativeResult.data.error && creativeResult.data.error.message) || ('Image model error ' + creativeResult.status) }) };
+    }
+    for (const candidate of creativeResult.data.candidates || []) {
+      for (const part of candidate?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          const _cc = creativeResult.usedPro ? CREDIT_COST_PRO : CREDIT_COST;
+          await _chargeCompose(_cc);
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: _cc, quality: creativeResult.usedPro ? 'pro' : 'flash' }) };
+        }
+      }
+    }
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no image.' }) };
+  }
+
+  // ── Stage 1: Pose analysis ────────────────────────────────────────────────
+  let poseAnalysis = null;
+  if (hasFrame) {
+    poseAnalysis = await analyzeFramePose(frameImg, apiKey, vtxToken);
+  }
+
+  // ── Stage 2: Appearance transfer via Nano Banana 2 ───────────────────────
+  // Photo 1 = scene frame (base — background, arms, prop locked)
+  // Photo 2 = avatar      (appearance source: face, hair, clothing)
+
+  const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct) : '';
+
+  // What's actually visible in the source frame — drives how much of the person to replace.
+  // Prefer the explicit boolean from analysis; fall back to a phrase regex; default to
+  // face-visible (full replace) when analysis is entirely missing, to preserve old behavior.
+  const _vp = ((poseAnalysis && poseAnalysis.visible_person) || '').toLowerCase();
+  const _faceBool = poseAnalysis ? poseAnalysis.face_in_frame : undefined;
+  const _faceBoolIsFalse = (_faceBool === false || _faceBool === 'false' || _faceBool === 'no');
+  const faceOutOfFrameRegex = /hands?\s*only|arms?\s*only|no\s*face|without.*face|faceless|below\s*(the\s*)?(neck|chin|shoulders)|forearm|wrist|hands?\s*(and|&)\s*arms?\s*only/.test(_vp);
+  const faceOutOfFrame = hasFrame && (_faceBoolIsFalse || faceOutOfFrameRegex);
+  const faceVisible = hasFrame && !faceOutOfFrame;
+
+  // Person handling — the MAIN image model decides from Photo 1's actual content, so this
+  // works even if the secondary analysis fails. Analysis (when available) is appended as a hint.
+  const _analysisHint = !hasFrame ? ''
+    : faceOutOfFrame ? ' [Analysis of Photo 1: HAND/ARM-ONLY, no person — apply Case B.]'
+    : (faceVisible && poseAnalysis) ? ' [Analysis of Photo 1: a person is visible — apply Case A.]'
+    : '';
+  const faceReplaceDirective = !hasFrame ? '' :
+`PERSON HANDLING (critical — first LOOK at Photo 1, then apply the ONE matching case):
+
+CASE A — Photo 1 shows a person's FACE or BODY: If the instruction below names WHICH person to replace by position (e.g. "the person at the TOP", "the woman on the LEFT"), you MUST replace ONLY that exact person and leave every other person 100% unchanged — do NOT default to the closest, largest, lying-down, or foreground person. Completely replace the TARGETED person's identity AND their clothing with the Photo 2 avatar — exact face, skin tone, hair, hands, body type, and OUTFIT. The person in the output must look like Photo 2 and must be wearing the avatar's OWN clothing (for example her tank top), NOT the original person's shirt, hanbok, kimono, robe, or any traditional/scene costume — fully REMOVE the original garment and dress her in the avatar's own outfit. Match the avatar's gender and skin: if the avatar is a woman, give her smooth, feminine, hairless arms and hands — remove any arm hair, coarse hair, stubble, or masculine features from the original person. Integrate them so they look naturally part of this scene, not pasted: match Photo 1's lighting direction and color temperature, shadow softness, perspective, and depth of field; add natural contact shadows and blended edges; no cut-out halo or sticker look. Render the person as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light, keeping natural human proportions and the avatar's clearly-recognizable identity. A genuine photo look (NOT a 3D render, illustration, anime, or cartoon), just lightly softened rather than a sharp, hyper-detailed documentary photograph of a specific real individual. Preserve Photo 1's framing, camera angle, and the person's position — do NOT recompose, zoom, or move them; only pull back if a face would exceed about 40% of the frame height (to clear Veo's person filter).
+
+CASE B — Photo 1 shows ONLY a hand or arm holding the product (NO face, NO body, no person): Keep it as ONLY that hand/arm, but REPLACE its appearance to match the Photo 2 avatar — skin tone, gender, and clothing color. If the avatar is a woman, it MUST be a smooth, hairless, feminine hand and forearm: REMOVE all arm hair, coarse hair, knuckle hair, stubble, and masculine features from the original Photo 1 arm — do NOT keep the original person's hairy or male-looking arm. Photo 2 is ONLY a skin/appearance reference here — it is NOT a person to insert. Do NOT add, draw, or place a face, head, hair, or any standing/seated person ANYWHERE in the image, including the background. Keep the EXACT same crop and framing as Photo 1 — output only the same hand/arm holding the product.
+
+In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1. BACKGROUND ART (critical): do NOT reproduce any detailed wall poster, anatomical or medical chart, skin/body diagram, infographic, or framed artwork from Photo 1 — even if Photo 1 clearly shows one. Replace it with a PLAIN blank framed print, an empty wall, or a simple plant. Reproducing a real poster or chart causes a copyright/recitation block and the clip fails.${_analysisHint}\n\n`;
+
+  // Hand-lock directive — when a locked hand reference is provided, the hand/wrist
+  // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
+  // consistency, while the hand POSE/grip still comes from Photo 1.
+  const handRefDirective = hasHandRef
+    ? `HAND LOCK (critical): A separate photo labeled "HAND REFERENCE" shows the correct hand, wrist, and arm. The hand/forearm in the output MUST match that HAND REFERENCE EXACTLY — same skin tone, same smoothness, the SAME wrist jewelry as the reference (if the reference wrist is BARE, keep it bare — do NOT invent or add any bracelet, bangle, cuff, watch, or ring), and the SAME arm covering as the reference: if the reference arm is BARE (tank top / sleeveless), keep it bare and do NOT add any sleeve or cuff; only show a sleeve if the reference actually has one. The arm must look like the reference's gender — if it is a woman's smooth, hairless arm, then REMOVE all arm hair, coarse hair, knuckle hair, stubble, and masculine features from the original Photo 1 arm. Keep the hand POSE, grip, finger positions, and arm angle from Photo 1, but the hand and arm appearance come ENTIRELY from the HAND REFERENCE. Never output a bare/different hand, the original person's hairy or male-looking arm, or an invented sleeve.\n\n`
+    : '';
+
+  // Product replacement directive — only when a product reference (Photo 3) is provided
+  const productReplaceDirective = hasProduct
+    ? `PRODUCT REPLACE (critical): Photo 3 is the PRODUCT reference. The object held in the hand in Photo 1 must be COMPLETELY replaced with the product from Photo 3. Keep the same hand, grip, finger positions, scale, and arm pose from Photo 1 — but the held product's shape, color, packaging, label, and text must match Photo 3 exactly. Do NOT keep, blend, or retain the original product that was in Photo 1.\n\n`
+    : '';
+
+  // Generate-mode product directive — the generated avatar holds this exact product
+  const productGenDirective = hasProductGen
+    ? `EXACT PRODUCT (critical): The final reference image labeled "PRODUCT" shows the exact product for this scene. Whenever the avatar holds, shows, or displays a product in this image, it MUST be that exact product — match its shape, color, packaging, label, and text precisely. Do NOT invent, substitute, or restyle a different product. If the scene's action does not involve holding a product, do not add one.\n\n`
+    : '';
+
+  const systemInstruction = hasFrame
+    ? `You are a professional photo compositor. You receive Photo 1 (a base scene/frame) and Photo 2 (an appearance reference for ONE person)${hasProduct ? ' and Photo 3 (a product reference)' : ''}.
+
+Your task depends on what Photo 1 actually contains:
+- If Photo 1 contains a visible person (face and/or body): replace ONLY that person's identity with Photo 2's appearance, and integrate them so they look naturally part of the scene — match the lighting, color, shadows, perspective and depth of field; do not let them look pasted or cut-out. Render the person as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light, keeping natural human proportions and the avatar's clearly-recognizable identity. A genuine photo look (NOT a 3D render, illustration, anime, or cartoon), just lightly softened rather than a sharp, hyper-detailed documentary photograph of a specific real individual. Preserve Photo 1's framing, camera angle, and the person's position — do NOT recompose, zoom, or move them; only pull back if a face would exceed about 40% of the frame height (to clear Veo's person filter).
+- If Photo 1 shows only a hand/arm holding a product (no face or body): keep it as just that hand/arm, matching only the skin tone and clothing to Photo 2. Do NOT add a face, head, hair, or any person — including in the background.
+
+Hard rules: never add a second person or any human figure that was not already in Photo 1. Keep Photo 1's background, setting, and lighting. FRAMING (CRITICAL) — PRESERVE Photo 1's exact framing, camera angle, and the positions of BOTH people so the output matches the source video — do NOT recompose, zoom, re-center, or move anyone. The ONE exception: if a face would fill more than about 40% of the frame height, pull the camera back just enough to bring it under that (a very large photoreal face can trip Veo's person filter), keeping the same composition otherwise. Render it as a real photographic scene with the people in their original positions. TWO PEOPLE: replace ONLY the person the instruction targets by position (top/bottom/left/right) — NEVER default to the front, foreground, or lying-down person unless that IS the targeted one. Keep the OTHER person exactly as in Photo 1 (same face, identity, pose), just framed slightly back and smaller so you don't end up with two co-equal faces side-by-side filling the frame (the composition Veo blocks). EXCEPTION: if Photo 1 is a hand/arm-only product shot with no face, keep its exact crop unchanged.${hasProduct ? ' Replace the product held in the hand with the exact product from Photo 3 (same hand, grip, and scale).' : ''} Always remove any burned-in text, captions, or subtitles.`
+    : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
+
+  // Deterministic two-person TARGET directive, built from the pin coordinates (structured
+  // data, NOT parsed from free text). Placed FIRST / highest-priority so the model cannot
+  // default to the foreground or lying-down person. Only fires when a pin was set.
+  let targetDirective = '';
+  if (hasFrame && body.targetX != null && isFinite(Number(body.targetX))) {
+    const _tx  = Number(body.targetX);
+    const _tyv = (body.targetY != null && isFinite(Number(body.targetY))) ? Number(body.targetY) : 50;
+    const _vert = _tyv < 40 ? 'TOP' : _tyv > 60 ? 'BOTTOM' : 'MIDDLE';
+    const _horz = _tx  < 45 ? 'LEFT' : _tx  > 55 ? 'RIGHT' : 'CENTER';
+    const _lp = [];
+    if (_vert !== 'MIDDLE') _lp.push(_vert);
+    if (_horz !== 'CENTER') _lp.push(_horz);
+    const _loc = _lp.length ? _lp.join('-') : 'CENTER';
+    targetDirective = `🎯 TARGET PERSON — HIGHEST PRIORITY, overrides EVERYTHING below: Photo 1 contains more than one person. Apply the Photo 2 avatar's face and identity to ONLY the person located in the ${_loc} area of the frame (approximately ${_tx}% from the left edge and ${_tyv}% from the top edge — the person whose head/body sits at that point). If the people are stacked vertically (e.g. one standing and one lying down), pick by TOP vs BOTTOM — do NOT pick the closest, largest, foreground, or lying-down person unless that is the one at this exact location. EVERY other person stays 100% UNCHANGED: same face, identity, hair, clothing, and pose as Photo 1. Never put the avatar's face on more than one person. CRITICAL: IGNORE any text further down — including "lock arms", "lock prop", arm/pose/scene descriptions, or any sentence that names a person by side or position — if it refers to a DIFFERENT person than the one at this location. Such text may describe the wrong (foreground) subject; ONLY the person at THIS pinned location is replaced.\n\n`;
+  }
+  // When a pin/target is set, DROP the lock-block: it is built from a single-person frame
+  // analysis that describes the most prominent (foreground) person, and it was re-anchoring
+  // the model to the wrong subject right after the target directive. The directive is now
+  // the single source of truth for WHO gets replaced.
+  const userPrompt = hasFrame
+    ? `${targetDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${targetDirective ? '' : lockBlock}${instruction}`
+    : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
+
+  // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
+  const negLine = `\n\nAVOID: ${negativePrompt ? negativePrompt + ', ' : ''}preserving any face, skin tone, hair, or hand appearance from Photo 1 — those must be completely replaced with Photo 2. Avoid composite seam, edge halo, floating limbs, face placed inside any held object or prop. Avoid adding a second person, a duplicate of the subject, or any extra human figure standing or seated in the background that was not already in Photo 1. Avoid male/masculine arm hair, hairy forearms, knuckle hair, or a man's hand/arm when the avatar is a woman; avoid keeping the original person's shirt or clothing on the avatar; avoid putting a hanbok, kimono, robe, traditional Korean dress, or the original person's costume on the avatar — she wears only her own outfit from Photo 2. Remove any burned-in text, captions, or subtitles from the output. Replace any recognizable wall posters, anatomical charts, medical diagrams, brand logos, artwork, or other copyrighted material in the background with plain, generic, non-branded decor (a plain wall, a simple blank frame, or a plant) — do NOT reproduce any specific copyrighted poster, chart, or diagram (this avoids Veo's recitation / copyright block).${faceOutOfFrame ? ' This frame is a hand/arm shot with NO person — avoid adding any face, head, hair, full body, or background person; avoid zooming out, re-framing, or changing the crop. Show only the same hand/arm holding the product.' : ''}`;
+  // Push for a crisp, photorealistic result ONLY in Max Quality mode. This "shot on a real
+  // camera / not AI" push is exactly what trips Veo's real-person safety filter on face
+  // shots, so for the default (non-pro) path we leave it off — that's the state that
+  // reliably passes Veo for talking-head frames.
+  const qualityLine = wantPro
+    ? '\n\nQUALITY: ultra-sharp focus and fine natural detail; realistic skin with visible pores, texture, and subtle imperfections (never plastic, waxy, airbrushed, or over-smoothed); crisp, legible product label text; true-to-life color and lighting; shot on a professional camera, high resolution. Avoid blur, softness, low detail, banding, or an obviously AI-generated look.'
+    : '';
+  const fullPrompt = userPrompt + negLine + qualityLine;
+
+  const parts = [];
+  if (hasFrame) {
+    parts.push({ text: 'Photo 1 — BASE SCENE / FRAME (match its background, setting, lighting, and any hand/arm/prop shown). If it shows a PERSON, you MAY pull the camera back to a wider medium shot so the face is smaller — do not crop tighter. Look at this photo to decide: does it contain a person, or only a hand/arm?:' });
+    parts.push({ inlineData: { mimeType: frameImg.mime, data: frameImg.b64 } });
+  }
+  parts.push({ text: 'Photo 2 — APPEARANCE REFERENCE for the person (use it to set the identity/face/skin/hair IF a person is visible in Photo 1, or ONLY the skin/hand tone if Photo 1 shows only a hand/arm). Do NOT add this person as an extra or background figure:' });
+  parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
+  if (hasProductSwap) {
+    parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
+    parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
+  } else if (hasProductGen) {
+    parts.push({ text: 'PRODUCT — the exact product for this scene (if the avatar holds or displays a product, it must be this one — match its shape, color, packaging, label, and text):' });
+    parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });
+  }
+  if (hasHandRef) {
+    parts.push({ text: 'HAND REFERENCE — the correct hand, wrist, and arm for this person (match the output to this exactly: skin tone, the SAME wrist jewelry shown here — and a BARE wrist with no bracelet/watch/ring if this reference shows none, never invent one — and the SAME arm covering — bare arm if this reference is bare/sleeveless, sleeve only if it has one). Keep the hand POSE/grip from Photo 1, but the hand and arm appearance come from here:' });
+    parts.push({ inlineData: { mimeType: handRefImg.mime, data: handRefImg.b64 } });
+  }
+  parts.push({ text: fullPrompt });
+
+  const requestObj = {
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{ role: 'user', parts }],
+    generationConfig: {
+      responseModalities: ['IMAGE', 'TEXT'],
+      temperature: 0.1,
+    },
+  };
+
+  const mode = hasFrame ? (poseAnalysis ? 'appearance-transfer+analysis' : 'appearance-transfer') : 'generate-only';
+  console.log(`generate-nb-composite: user=${user.id}, mode=${mode}, wantPro=${wantPro}, promptLen=${fullPrompt.length}`);
+
+  let result;
+  try {
+    result = await callImageModel(requestObj, apiKey, wantPro, vtxToken);
+  } catch(e) {
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) };
+  }
+
+  console.log('generate-nb-composite: image model status:', result.status, '| usedPro:', result.usedPro);
+
+  if (result.status === 429) {
+    return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Gemini API rate limit. Please wait and retry.' }) };
+  }
+  if (!result.data) {
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'No response from Gemini API. Status: ' + result.status }) };
+  }
+  if (result.status !== 200 || result.data.error) {
+    const errMsg = result.data?.error?.message || `Gemini API error (HTTP ${result.status})`;
+    console.error('generate-nb-composite: error:', errMsg);
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: errMsg }) };
+  }
+
+  const candidates = result.data.candidates || [];
+  for (const candidate of candidates) {
+    const responseParts = candidate?.content?.parts || [];
+    for (const part of responseParts) {
+      if (part.inlineData?.data) {
+        const mime = part.inlineData.mimeType || 'image/png';
+        const _cost = result.usedPro ? CREDIT_COST_PRO : CREDIT_COST;
+        console.log('generate-nb-composite: image generated, mime:', mime, '| usedPro:', result.usedPro, '| cost:', _cost);
+        await _chargeCompose(_cost);
+        return {
+          statusCode: 200,
+          headers: { ...CORS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageB64: part.inlineData.data, mime, creditsDeducted: _cost, quality: result.usedPro ? 'pro' : 'flash' }),
+        };
+      }
+    }
+  }
+
+  console.error('generate-nb-composite: no image in response:', JSON.stringify(result.data).slice(0, 500));
+  return {
+    statusCode: 502,
+    headers: CORS,
+    body: JSON.stringify({ error: 'Model returned no image. Check Gemini API logs.' }),
+  };
+
+  } catch(topErr) {
+    console.error('generate-nb-composite: unhandled exception:', topErr.message, topErr.stack);
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({ error: 'Internal error: ' + topErr.message }),
+    };
+  }
+};
+
+// Sync handler (kept for the Studio/creative path) + exports reused by the
+// background worker. runComposite(event) returns the same { statusCode, headers,
+// body } shape; the background function reads body for the image and stores it.
+// Credit charge used by the background worker AFTER the image is persisted to
+// nb_jobs (so a failure can never charge-without-delivering).
+// Atomic spend via the spend_credits() SQL function — no read-modify-write race
+// (matters when a batch fires several frames near-simultaneously). Returns the new
+// balance, -1 if insufficient/missing, or null on error.
+async function spendCredits(userId, amount) {
+  const url = new URL(`${process.env.SUPABASE_URL}/rest/v1/rpc/spend_credits`);
+  const k = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const b = JSON.stringify({ p_user: userId, p_amount: amount });
+  const r = await httpsRequest({ hostname: url.hostname, path: url.pathname, method: 'POST',
+    headers: { 'Authorization': `Bearer ${k}`, 'apikey': k, 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(b) } }, b);
+  if (r.status !== 200) return null;
+  const n = (typeof r.data === 'number') ? r.data : parseInt(r.data, 10);
+  return Number.isFinite(n) ? n : null;
+}
+async function chargeUserCredits(userId, cost) {
+  const n = await spendCredits(userId, cost);
+  if (n === -1)   { console.warn('chargeUserCredits: insufficient balance at charge time for ' + userId + ' (image already delivered)'); return false; }
+  if (n === null) { console.error('chargeUserCredits: spend_credits error for ' + userId); return false; }
+  return true;
+}
+
+exports.handler          = runComposite;
+exports.runComposite     = runComposite;
+exports.getAuthUser      = getAuthUser;
+exports.chargeUserCredits = chargeUserCredits;
