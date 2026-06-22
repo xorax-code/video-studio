@@ -1162,7 +1162,7 @@
           h += '<button id="regenExtraBtn-' + i + '-' + j + '" onclick="if(typeof getGenerateMode===\'function\'&&getGenerateMode()===\'api\'){regenExtraClip(' + i + ',' + j + ');}else{showToast(\'Switch to Auto mode to regenerate via API.\',\'info\',4000);}" title="Regenerate continuation clip" style="padding:2px 7px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.10);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">&#x21BA; Regen</button>';
           h += '<button onclick="(function(){var e=segments[' + i + ']&&segments[' + i + '].veoExtras&&segments[' + i + '].veoExtras[' + j + '];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">&#x2715;</button>';
           h += '</div></div>';
-          h += '<video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="' + (extra.apiVideoRaw || extra.apiVideoUrl) + '"></video>';
+          h += '<video controls playsinline preload="none" poster="' + ((seg && (seg.nbPreviewDataUrl || seg.frameDataUrl)) || '') + '" style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="' + (extra.apiVideoRaw || extra.apiVideoUrl) + '"></video>';
           h += '<select id="dl-sel-extra-' + i + '-' + j + '" onchange="handleExtraDlSel(this,' + i + ',' + j + ')" style="width:100%;margin-top:5px;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">';
           h += '<option value="">&#x2B07; Download</option>';
           h += '<option value="720p">720p (original)</option>';
@@ -2308,6 +2308,8 @@
     const container = document.getElementById('segmentsContainer');
     const countEl = document.getElementById('segmentCount');
     if (!container) return;
+    // Preserve scroll so re-renders (e.g. per-clip during generation) don't jump the list to the start.
+    const _psl = container.scrollLeft, _pst = container.scrollTop;
     renderSegmentTimeline();
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
     if (segments.length === 0) {
@@ -2546,7 +2548,7 @@
               <button onclick="clearSegmentApiVideo(${i})" title="Remove video" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
             </div>
           </div>
-          <video controls playsinline style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
+          <video controls playsinline preload="none" poster="${seg.nbPreviewDataUrl || seg.frameDataUrl || ''}" style="width:100%;border-radius:8px;max-height:200px;background:#000;display:block;" src="${seg.apiVideoRaw || seg.apiVideoUrl}"></video>
           <div style="display:flex;gap:5px;margin-top:6px;">
             <select id="dl-sel-seg-${i}" onchange="handleDlSel(this,${i})" style="flex:1;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.10);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">
               <option value="">⬇ Download</option>
@@ -2595,7 +2597,7 @@
                     <button onclick="(function(){var e=segments[${i}]&&segments[${i}].veoExtras&&segments[${i}].veoExtras[${j}];if(!e)return;e.apiVideoUrl=null;e.apiVideoMime=null;e.apiVideoRaw=null;debounceSave();renderSegments();})()" style="padding:2px 7px;font-size:9px;background:rgba(248,113,113,0.07);border:1px solid rgba(248,113,113,0.2);border-radius:5px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
                   </div>
                 </div>
-                <video controls playsinline style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="${extra.apiVideoRaw || extra.apiVideoUrl}"></video>
+                <video controls playsinline preload="none" poster="${seg.nbPreviewDataUrl || seg.frameDataUrl || ''}" style="width:100%;border-radius:7px;max-height:180px;background:#000;display:block;" src="${extra.apiVideoRaw || extra.apiVideoUrl}"></video>
                 <select id="dl-sel-extra-${i}-${j}" onchange="handleExtraDlSel(this,${i},${j})" style="width:100%;margin-top:5px;padding:5px 4px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.10);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:#818cf8;cursor:pointer;font-family:inherit;">
                   <option value="">⬇ Download</option>
                   <option value="720p">720p (original)</option>
@@ -2621,9 +2623,10 @@
       </div>` : ''}
 `).join('');
 
-    // Auto-grow all textareas after render
+    // Auto-grow all textareas after render, and restore scroll so the list doesn't jump.
     requestAnimationFrame(() => {
       container.querySelectorAll('textarea').forEach(ta => autoGrow(ta));
+      container.scrollLeft = _psl; container.scrollTop = _pst;
     });
     // Update step progress strip whenever segments change
     setTimeout(() => updateStepProgress?.(), 80);
