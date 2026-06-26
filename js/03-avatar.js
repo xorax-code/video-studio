@@ -181,16 +181,12 @@
         extractAvatarInventory(avatarImageDataUrl);
         // Update quick mode state now that avatarImageDataUrl is set (was a racy setTimeout)
         _qmUpdateUploadState?.();
-        // Auto-prep: re-render the upload as a stylized digital avatar so Veo's
-        // realistic-person-likeness filter accepts the start frames. Async; the
-        // original preview shows immediately, then swaps to the prepared version.
-        // Falls back to the original on any failure (see applyPreparedAvatar).
-        if (typeof window.prepareAvatarReference === 'function') {
-          // Keep the promise so composite generation can await prep — guarantees the
-          // de-photorealized avatar (not the raw photo) is what reaches the frames.
-          try { window._avatarPrepPromise = window.prepareAvatarReference(avatarImageDataUrl); }
-          catch(_) { window._avatarPrepPromise = null; }
-        }
+        // Avatar prep DISABLED (by request): we keep the avatar exactly as uploaded —
+        // no de-photorealization pass, no ~2-credit charge. The raw photo is the
+        // identity base for every composite; Flash-rendered composites + the Veo-block
+        // auto-recovery (js/15-veo-api.js) handle the person-likeness filter instead.
+        // To re-enable, restore the prepareAvatarReference call here.
+        window._avatarPrepPromise = null;
       } catch (err) {
         showToast('Failed to load avatar image — please try again.', 'error');
       }

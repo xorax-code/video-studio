@@ -1245,6 +1245,23 @@
     if (promptEl) promptEl.value = extra.veoPrompt;
   }
 
+  // Keep the cached Veo 3 JSON's speech in sync with the live script. Without this,
+  // editing or DELETING a segment's script left the OLD speech baked into seg.veoPrompt,
+  // so generation still spoke the deleted line. Patches only the speech field so the
+  // rest of the prompt (action/shot/camera/etc.) is preserved.
+  function updateSegScript(i, val) {
+    var seg = segments[i];
+    if (!seg) return;
+    seg.script = val;
+    if (seg.veoPrompt && typeof window.veoSyncSpeech === 'function') {
+      seg.veoPrompt = window.veoSyncSpeech(seg.veoPrompt, val);
+      var pe = document.getElementById('veo-prompt-' + i);
+      if (pe) pe.value = seg.veoPrompt;
+    }
+    if (typeof debounceSave === 'function') debounceSave();
+  }
+  window.updateSegScript = updateSegScript;
+
 
   // Pull the NEXT segment's script into the current segment as a continuation clip
   function addVeoExtraFromNextSeg(segIdx) {
@@ -2425,7 +2442,7 @@
             <button id="rewrite-seg-btn-${i}" onclick="rewriteSegmentScript(${i})" title="AI rewrite this scene to fit within 8s" style="background:none;border:1px solid rgba(96,165,250,0.3);border-radius:3px;color:#60a5fa;font-size:9px;padding:1px 6px;cursor:pointer;white-space:nowrap;">↺ Rewrite</button>
           </div>
           <textarea id="script-seg-${i}"
-            oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
+            oninput="updateSegScript(${i},this.value);autoGrow(this)"
             class="seg-ta-base seg-ta-script"
             placeholder="Script for this scene…"
           >${escHtml(seg.script || '')}</textarea>
@@ -2754,11 +2771,12 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                   <span style="font-size:9px;font-weight:700;color:#c4b5fd;">Clip ${j+2}</span>
                   ${ex.apiVideoUrl?`<div style="display:flex;gap:4px;">
+                    <button onclick="fsClip('clipvx-${idx}-${j}')" title="Fullscreen" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⛶</button>
                     <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},${j})" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕</button>
                   </div>`:''}
                 </div>
                 ${ex.speech?`<div style="font-size:10px;color:var(--text-2);line-height:1.55;margin-bottom:7px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${esc(ex.speech)}</div>`:''}
-                ${ex.apiVideoUrl?`<video controls playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
+                ${ex.apiVideoUrl?`<video id="clipvx-${idx}-${j}" controls playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}" ondblclick="fsClip('clipvx-${idx}-${j}')"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
               </div>`).join('')}
             </div>
           </div>`:''}

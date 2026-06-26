@@ -361,9 +361,19 @@
     return /15236754|usage guidelines|violat|responsible ai|safety (?:filter|guidelines)|input image/i.test(String(msg));
   }
 
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel) {
-    softenLevel  = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
-    framingLevel = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
+  // Transient backend hiccups from Vertex/Veo (NOT content blocks) — e.g. "Internal
+  // error. Please try again later", "service unavailable", "deadline exceeded". These
+  // clear on a retry. Kept separate from _isLikenessBlock so we retry the SAME frame
+  // (the frame is fine; Google's backend just stumbled), not regenerate a wider one.
+  function _isTransientError(msg) {
+    if (!msg) return false;
+    return /internal error|try again later|please try again|temporarily|unavailable|deadline exceeded|backend error|service error|\b50[023]\b/i.test(String(msg));
+  }
+
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry) {
+    softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
+    framingLevel   = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
+    transientRetry = transientRetry | 0; // 0 = first attempt; bumped once on a transient backend error
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -470,29 +480,60 @@
       }
       // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
-        // Auto-soften retry: the safety filter blocked this clip (server already
-        // refunded it), so re-render the start frame softer and try again — up to 3
-        // total attempts. Fires on the structured `filtered` flag OR when the error
-        // text is a likeness/usage-guidelines block (code 15236754), which Vertex
-        // returns through the generic error path without setting `filtered`.
         // A block = likeness filter (15236754), the structured `filtered` flag, OR a
-        // recitation/copyright block. All three are fixed the same way: a wider, cleaner
-        // start frame. Server already refunded the blocked clip, so each retry is safe.
+        // recitation/copyright block. All three are fixed the same way: a MORE STYLIZED,
+        // WIDER, cleaner start frame. The server already refunded the blocked clip, so a
+        // retry is safe to re-charge.
         var _blocked = pollData.filtered || pollData.recitation || _isLikenessBlock(pollData.error);
-
-        // No auto-retry. The widen + soften fallbacks were removed by request: a blocked
-        // clip now fails fast (the server already refunded it) instead of churning through
-        // wider/softer re-renders. If a scene keeps getting blocked, regenerate it manually
-        // with a wider / less close-up frame or switch to a less model-like avatar.
         // Surface the raw Vertex response shape (when the server attaches it) so an
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
+        if (_blocked) console.warn('[VeoAPI] clip blocked — raw model error:', pollData.error);
+
+        // AUTO-RECOVER: a blocked PRIMARY clip (has a real segIdx) regenerates its start
+        // frame more de-photorealized AND wider, then retries — this is what actually
+        // clears Veo's person-likeness / recitation filter (a plain downscale does not).
+        // Escalate up to framingLevel 2 (level 2 drops the source frame → a fresh wide
+        // generate-mode composite). Extras (segIdx undefined) and exhausted escalations
+        // fall through to a clean, refunded failure.
+        if (_blocked && typeof segIdx === 'number' && framingLevel < 2
+            && typeof window.generateNbComposite === 'function') {
+          var _next = framingLevel + 1;
+          console.warn('[VeoAPI] auto-recovering blocked clip — regenerating Scene ' + (segIdx + 1) +
+                       ' start frame (stylize+wider, level ' + _next + ')');
+          if (typeof showToast === 'function') {
+            showToast('Scene ' + (segIdx + 1) + ' was blocked — rebuilding a softer, wider frame and retrying…', 'info', 5000);
+          }
+          var _regenOk = false;
+          try { _regenOk = await window.generateNbComposite(segIdx, _next, _next); } catch (_e) { _regenOk = false; }
+          if (_regenOk) {
+            var _seg2 = (window.segments || [])[segIdx];
+            var _newStart = (_seg2 && (_seg2.nbPreviewDataUrl || _seg2.frameDataUrl)) || imageDataUrl;
+            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newStart, refFrameDataUrl, softenLevel + 1, segIdx, _next);
+          }
+          console.warn('[VeoAPI] auto-recover frame regen failed — surfacing clean failure');
+        }
+
+        // AUTO-RETRY (transient): a NON-block backend hiccup from Vertex/Veo ("Internal
+        // error. Please try again later", "unavailable", "deadline exceeded", etc.). The
+        // start frame is fine, so retry the SAME generation once (the server already
+        // refunded the failed op) before surfacing anything — most self-heal on attempt 2.
+        var _transient = !_blocked && _isTransientError(pollData.error);
+        if (_transient && transientRetry < 1) {
+          console.warn('[VeoAPI] transient backend error — auto-retrying once:', pollData.error);
+          if (typeof showToast === 'function') showToast('Video service hiccup — retrying this clip…', 'info', 4000);
+          await new Promise(function (r) { setTimeout(r, 2500); });
+          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1);
+        }
+
         // Keep the raw model error in the console for debugging, but show the user a
         // clean, human, actionable message instead of Vertex's technical text.
-        if (_blocked) console.warn('[VeoAPI] clip blocked — raw model error:', pollData.error);
+        if (!_blocked) console.warn('[VeoAPI] clip failed — raw model error:', pollData.error);
         var _errMsg = _blocked
-          ? "🚫 The video model's people filter blocked this clip — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
-          : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.');
+          ? "🚫 The video model's people filter blocked this clip even after rebuilding softer, wider frames — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
+          : (_transient
+              ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
+              : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.'));
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
@@ -679,14 +720,21 @@
   // slots free up — no manual batching needed regardless of segment count.
   async function generateAllScenesViaAPI() {
     // Build flat work list — primary clips first, then continuation extras (veoExtras)
+    // Safety net: force the Veo JSON's speech to match the LIVE script before generating,
+    // so a script that was edited/deleted after the prompt was built never replays the
+    // old line. (The edit handler also syncs this, but this catches prompts that went
+    // stale before that fix or via other paths.)
+    function _syncSpeech(promptStr, liveText) {
+      return (typeof window.veoSyncSpeech === 'function') ? window.veoSyncSpeech(promptStr, liveText) : promptStr;
+    }
     var workList = [];
     segments.forEach(function(seg) {
       if (!seg.veoPrompt || !seg.veoPrompt.trim() || seg.nbApproved === false) return;
       var segIdx = segments.indexOf(seg);
-      workList.push({ seg: seg, segIdx: segIdx, veoPrompt: seg.veoPrompt, isExtra: false, extraIdx: -1, extra: null });
+      workList.push({ seg: seg, segIdx: segIdx, veoPrompt: _syncSpeech(seg.veoPrompt, seg.script), isExtra: false, extraIdx: -1, extra: null });
       (seg.veoExtras || []).forEach(function(extra, j) {
         if (!(extra.veoPrompt || '').trim()) return;
-        workList.push({ seg: seg, segIdx: segIdx, veoPrompt: extra.veoPrompt, isExtra: true, extraIdx: j, extra: extra });
+        workList.push({ seg: seg, segIdx: segIdx, veoPrompt: _syncSpeech(extra.veoPrompt, extra.speech), isExtra: true, extraIdx: j, extra: extra });
       });
     });
 
