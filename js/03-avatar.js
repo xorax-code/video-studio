@@ -297,12 +297,8 @@
         const el = document.getElementById('avatarInventory');
         if (el) {
           el.value = saved;
-          // Auto-expand the section so the user can see the saved inventory
-          if (el.style.display === 'none') {
-            el.style.display = '';
-            const arr = document.querySelector('.inv-arrow');
-            if (arr) arr.style.transform = 'rotate(0deg)';
-          }
+          // Keep the section COLLAPSED by default (the value is loaded behind it).
+          // The user can expand Appearance Inventory manually if they want to review it.
         }
       }
     }).catch(e => console.warn('loadAvatarInventory error:', e));
