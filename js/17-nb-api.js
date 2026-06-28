@@ -3,6 +3,18 @@
   // Flow: extract NB instruction → call /.netlify/functions/generate-nb-composite
   //       → store result in seg.nbPreviewDataUrl → show approval modal
 
+  // Quote-safe escaping for values interpolated into HTML attribute strings.
+  // Prevents labels/descriptions containing " ' < > & from breaking out of attributes.
+  function escAttr(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── Compress image to max pixels before sending ───────────────────────────
   function _nbCompressImage(dataUrl, maxPx, quality) {
     maxPx = maxPx || 1280;
@@ -34,6 +46,13 @@
     var mime = meta.split(';')[0] || 'image/jpeg';
     var b64  = dataUrl.slice(comma + 1);
     return { b64, mime };
+  }
+
+  // Build an image data: URL from server-returned base64, validating the mime.
+  // Server-supplied mime is untrusted; only allow image/* and fall back to PNG.
+  function _nbImageDataUrl(mime, b64) {
+    var safeMime = (typeof mime === 'string' && /^image\//.test(mime)) ? mime : 'image/png';
+    return 'data:' + safeMime + ';base64,' + b64;
   }
 
   // ── Async composite: start a background job, then poll for the result ─────
@@ -487,7 +506,7 @@
     }
 
     // Store composite in segment
-    segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+    segments[segIdx].nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
     segments[segIdx].nbApproved = null; // reset approval — needs re-review
     saveSegments();
     if (typeof renderSegments === 'function') renderSegments();
@@ -555,7 +574,7 @@
         setBtn(_origLabel || '🤚 Lock her hand', false);
         return;
       }
-      var dataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var dataUrl = _nbImageDataUrl(data.mime, data.imageB64);
       window._handRefDataUrl = dataUrl;
       try { if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', dataUrl); } catch(_) {}
 
@@ -656,7 +675,7 @@
         if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + why + '). Wait a minute and re-upload. Very photoreal faces may get blocked by Veo until it succeeds.', 'warning', 9000);
         return; // graceful — original avatar stays in place
       }
-      var styledUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var styledUrl = _nbImageDataUrl(data.mime, data.imageB64);
       console.log('[AvatarPrep] success — swapping in stylized avatar');
       if (typeof window.applyPreparedAvatar === 'function') {
         window.applyPreparedAvatar(styledUrl, originalDataUrl);
@@ -868,7 +887,7 @@
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
-        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + (seg.nbOverride || '').replace(/"/g, '&quot;') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
+        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + escAttr(seg.nbOverride || '') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
       card.onclick = function() { toggleNbApproval(idx); };
       grid.appendChild(card);
     });
@@ -1055,7 +1074,7 @@
 
         + '<div style="margin-bottom:18px;">'
           + '<label style="font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Your Avatar Description <span style="color:var(--text-4);font-weight:400;text-transform:none;">(optional)</span></label>'
-          + '<input id="nbMasterAvatarInput" type="text" placeholder="e.g. young woman with long dark hair wearing a white t-shirt..." value="' + avatarDesc.replace(/"/g, '&quot;') + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:9px 10px;font-family:inherit;">'
+          + '<input id="nbMasterAvatarInput" type="text" placeholder="e.g. young woman with long dark hair wearing a white t-shirt..." value="' + escAttr(avatarDesc) + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:9px 10px;font-family:inherit;">'
         + '</div>'
 
         + '<button id="nbMasterGenBtn" onclick="_nbRunMasterGeneration()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s;" onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x26A1; Generate Master Reference</button>'
@@ -1116,7 +1135,7 @@
         return;
       }
 
-      var masterDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var masterDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
 
       // Close setup modal and show approval modal
       var setupModal = document.getElementById('nbMasterSetupModal');
@@ -1166,8 +1185,9 @@
         // Action buttons
         + '<div style="display:flex;flex-direction:column;gap:8px;">'
 
-          // Approve
-          + '<button onclick="_nbApproveMaster(\'' + masterDataUrl.replace(/'/g, "\\'") + '\', \'' + setting.replace(/'/g, "\\'") + '\', \'' + avatarDesc.replace(/'/g, "\\'") + '\')" '
+          // Approve — handler attached via addEventListener below (no inline
+          // string-injection of the multi-KB masterDataUrl into the DOM)
+          + '<button id="nbMasterApproveBtn" '
             + 'style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#00e5bc,#00c4a3);border:none;color:#001a14;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter 0.15s;" '
             + 'onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x2705; Approve &amp; Lock Scene for All Clips</button>'
 
@@ -1180,6 +1200,15 @@
       + '</div>';
 
     document.body.appendChild(overlay);
+
+    // Attach approve handler via closure — passes masterDataUrl/setting/avatarDesc
+    // by reference instead of string-injecting them into an inline onclick.
+    var approveBtn = overlay.querySelector('#nbMasterApproveBtn');
+    if (approveBtn) {
+      approveBtn.addEventListener('click', function() {
+        _nbApproveMaster(masterDataUrl, setting, avatarDesc);
+      });
+    }
   }
   window._nbShowMasterApproval = _nbShowMasterApproval;
 

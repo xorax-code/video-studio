@@ -119,9 +119,9 @@
       });
 
       grid.innerHTML = filtered.map(a => {
-        const pClass = 'platform-' + a.platform.toLowerCase();
+        const pClass = 'platform-' + (a.platform || 'Other').toLowerCase();
         const emoji = platformEmojis[a.platform] || '🌐';
-        const sClass = 'status-' + a.status.toLowerCase();
+        const sClass = 'status-' + (a.status || 'Active').toLowerCase();
         const color = _safeCssColor(a.brandColor) || _safeCssColor(platformColors[a.platform]) || '#7c6af7';
         const tags = a.tags ? a.tags.split(',').map((t,i) => t.trim()).filter(Boolean).map((t,i) => `<span class="tag tag-c${i%6}">${escHtml(t)}</span>`).join('') : '';
         const linkBtn = a.url ? `<a href="${escHtml(a.url)}" target="_blank" rel="noopener" class="action-btn action-link" title="Open profile"><i class="ti ti-external-link"></i></a>` : '';
@@ -188,7 +188,7 @@
     set('headerCount',   accounts.length + ' account' + (accounts.length !== 1 ? 's' : ''));
   }
 
-  function openModal(id = null) {
+  async function openModal(id = null) {
     editingId = id;
     const overlay = document.getElementById('modalOverlay');
     if (!overlay) return;
@@ -203,13 +203,18 @@
       const _furlEl2 = document.getElementById('fUrl');      if (_furlEl2) _furlEl2.value = a.url || '';
       const _ftEl2 = document.getElementById('fTags');       if (_ftEl2) _ftEl2.value = a.tags || '';
       const _fnEl2 = document.getElementById('fNotes');      if (_fnEl2) _fnEl2.value = a.notes || '';
+      const _feEl2 = document.getElementById('fEmail');      if (_feEl2) _feEl2.value = a.email || '';
+      // Decrypt the at-rest password back into the form so an edit re-saves it
+      // intact (otherwise the blank field would overwrite/erase it on save).
+      const _fpwEl2 = document.getElementById('fPassword');
+      if (_fpwEl2) _fpwEl2.value = (typeof _decField === 'function') ? await _decField(a.password || '') : (a.password || '');
       currentAccountAvatar = a.avatar || null;
       setAccountAvatarPreview(currentAccountAvatar);
       const defaultColor = platformColors[a.platform] || '#7c6af7';
       const _fcEl2 = document.getElementById('fBrandColor'); if (_fcEl2) _fcEl2.value = a.brandColor || defaultColor;
       updateBrandColorPreview();
     } else {
-      ['fPlatform','fStatus','fUsername','fUrl','fTags','fNotes'].forEach(fieldId => {
+      ['fPlatform','fStatus','fUsername','fUrl','fTags','fNotes','fEmail','fPassword'].forEach(fieldId => {
         const el = document.getElementById(fieldId);
         if (!el) return;
         if (el.tagName === 'SELECT') el.selectedIndex = 0;
@@ -227,7 +232,7 @@
   function closeModal() { const _mo = document.getElementById('modalOverlay'); if (_mo) _mo.style.display = 'none'; editingId = null; }
   function closeModalOnBg(e) { if (e.target === document.getElementById('modalOverlay')) closeModal(); }
 
-  function saveAccount() {
+  async function saveAccount() {
     const _fuEl = document.getElementById('fUsername');
     if (!_fuEl) return;
     const username = _fuEl.value.trim();
@@ -241,12 +246,17 @@
     const platform = _fpEl ? _fpEl.value : 'TikTok';
     const pickedColor = _fcEl ? _fcEl.value : '#7c6af7';
     const defaultColor = platformColors[platform] || '#7c6af7';
+    const _rawPassword = (document.getElementById('fPassword') ? document.getElementById('fPassword').value.trim() : '');
+    // Encrypt the password field at-rest before persisting (AES-GCM via
+    // _encField). Empty stays empty; on any crypto failure _encField returns
+    // the plaintext so save is never blocked.
+    const _encPassword = (typeof _encField === 'function') ? await _encField(_rawPassword) : _rawPassword;
     const data = {
       platform,
       status:   _fsEl  ? _fsEl.value              : 'Active',
       username,
       email:    (document.getElementById('fEmail') ? document.getElementById('fEmail').value.trim() : ''),
-      password: (document.getElementById('fPassword') ? document.getElementById('fPassword').value.trim() : ''),
+      password: _encPassword,
       url:      _furlEl ? _furlEl.value.trim()     : '',
       tags:     _ftEl  ? _ftEl.value.trim()        : '',
       notes:    _fnEl  ? _fnEl.value.trim()        : '',
@@ -957,19 +967,22 @@
 
   // Keyboard
   let _admSeq = 0, _admTimer = null;
-  document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { if (typeof closeModal === 'function') closeModal(); if (typeof closeCompModal === 'function') closeCompModal(); if (typeof closeScriptModal === 'function') closeScriptModal(); if (typeof closeAdminOverlay === 'function') closeAdminOverlay(); if (typeof closeUserSettings === 'function') closeUserSettings(); if (typeof closeCmdPalette === 'function') closeCmdPalette(); }
-    // Ctrl+K — open command palette
-    if (e.ctrlKey && e.key === 'k') { e.preventDefault(); openCmdPalette(); return; }
-    // Admin shortcut: Ctrl+Shift+1 then Ctrl+Shift+2 within 1.5s
-    if (e.ctrlKey && e.shiftKey && (e.key === '1' || e.key === '!')) {
-      _admSeq = 1; clearTimeout(_admTimer); _admTimer = setTimeout(()=>{ _admSeq=0; }, 1500);
-    } else if (e.ctrlKey && e.shiftKey && (e.key === '2' || e.key === '@') && _admSeq === 1) {
-      _admSeq = 0; clearTimeout(_admTimer); openAdminOverlay();
-    } else if (!e.ctrlKey || !e.shiftKey) {
-      _admSeq = 0;
-    }
-  });
+  if (!window._authKeysBound) {
+    window._authKeysBound = true;
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') { if (typeof closeModal === 'function') closeModal(); if (typeof closeCompModal === 'function') closeCompModal(); if (typeof closeScriptModal === 'function') closeScriptModal(); if (typeof closeAdminOverlay === 'function') closeAdminOverlay(); if (typeof closeUserSettings === 'function') closeUserSettings(); if (typeof closeCmdPalette === 'function') closeCmdPalette(); }
+      // Ctrl+K — open command palette
+      if (e.ctrlKey && e.key === 'k') { e.preventDefault(); openCmdPalette(); return; }
+      // Admin shortcut: Ctrl+Shift+1 then Ctrl+Shift+2 within 1.5s
+      if (e.ctrlKey && e.shiftKey && (e.key === '1' || e.key === '!')) {
+        _admSeq = 1; clearTimeout(_admTimer); _admTimer = setTimeout(()=>{ _admSeq=0; }, 1500);
+      } else if (e.ctrlKey && e.shiftKey && (e.key === '2' || e.key === '@') && _admSeq === 1) {
+        _admSeq = 0; clearTimeout(_admTimer); openAdminOverlay();
+      } else if (!e.ctrlKey || !e.shiftKey) {
+        _admSeq = 0;
+      }
+    });
+  }
 
   // ===== SEED BEST COMPETITORS (merges by ID — safe to run anytime) =====
   function seedCompetitors() {

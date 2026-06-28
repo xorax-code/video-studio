@@ -1237,6 +1237,11 @@
       audio:           parentVeo.audio           || 'clear natural voice, slight ambient room tone, no background music',
       negative_prompt: parentVeo.negative_prompt || 'multiple people, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts',
     };
+    // Two-person scenes: carry the parent's "speaker" through so Veo lip-syncs the
+    // SAME person in the continuation clip (without it Veo may sync the wrong person).
+    // Only add when the parent actually declared a speaker — never invent one for
+    // single-person scenes.
+    if (parentVeo.speaker) obj.speaker = parentVeo.speaker;
     extra.veoPrompt = JSON.stringify(obj, null, 2);
     debounceSave();
 
@@ -2698,9 +2703,9 @@
         ${seg.done?'<span style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:2px 7px;">✅ Done</span>':''}
         ${hasVideo?'<span style="font-size:9px;font-weight:700;color:#34d399;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:2px 7px;">⚡ Clip Ready</span>':''}
         <span style="flex:1;"></span>
-        <button onclick="window.openSegModal(${prev})" title="Previous (←)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">◀</button>
+        ${total > 1 ? `<button onclick="window.openSegModal(${prev})" title="Previous (←)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">◀</button>` : ''}
         <span style="font-size:10px;color:var(--text-3);min-width:40px;text-align:center;">${idx+1} / ${total}</span>
-        <button onclick="window.openSegModal(${next})" title="Next (→)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">▶</button>
+        ${total > 1 ? `<button onclick="window.openSegModal(${next})" title="Next (→)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">▶</button>` : ''}
         <button onclick="window.closeSegModal()" style="padding:3px 11px;font-size:12px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.25);border-radius:6px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
       </div>
 
@@ -2749,12 +2754,13 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
               <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#34d399;">⚡ Clip 1 · Primary</div>
               <div style="display:flex;gap:5px;">
+                <button onclick="fsClip('clipv-primary-${idx}')" title="Fullscreen" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⛶</button>
                 <button onclick="typeof regenSingleScene==='function'&&regenSingleScene(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺ Regen</button>
                 <button onclick="typeof downloadSegmentVideo==='function'&&downloadSegmentVideo(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ DL</button>
                 <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},-1)" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕ Assemble</button>
               </div>
             </div>
-            <video controls playsinline style="width:100%;border-radius:10px;background:#000;display:block;max-height:300px;object-fit:contain;" src="${seg.apiVideoRaw||seg.apiVideoUrl}"></video>
+            <video id="clipv-primary-${idx}" controls controlsList="nofullscreen" playsinline ondblclick="fsClip('clipv-primary-${idx}')" style="width:100%;border-radius:10px;background:#000;display:block;max-height:300px;object-fit:contain;" src="${seg.apiVideoRaw||seg.apiVideoUrl}"></video>
           </div>`:`
           <div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;padding:18px;text-align:center;">
             <div style="font-size:9px;color:var(--text-3);margin-bottom:10px;">No clip generated yet</div>
@@ -2776,7 +2782,7 @@
                   </div>`:''}
                 </div>
                 ${ex.speech?`<div style="font-size:10px;color:var(--text-2);line-height:1.55;margin-bottom:7px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${esc(ex.speech)}</div>`:''}
-                ${ex.apiVideoUrl?`<video id="clipvx-${idx}-${j}" controls playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}" ondblclick="fsClip('clipvx-${idx}-${j}')"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
+                ${ex.apiVideoUrl?`<video id="clipvx-${idx}-${j}" controls controlsList="nofullscreen" playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}" ondblclick="fsClip('clipvx-${idx}-${j}')"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
               </div>`).join('')}
             </div>
           </div>`:''}
@@ -2801,6 +2807,7 @@
     // Keyboard nav
     const onKey = e => {
       if (e.key === 'Escape') { window.closeSegModal(); }
+      else if (total <= 1) { /* single scene — nothing to navigate to */ }
       else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { window.openSegModal(next); }
       else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { window.openSegModal(prev); }
     };
@@ -3920,11 +3927,12 @@ If 0 or 3+ people visible: {"person_count":0}`
                   if (notesEl) { notesEl.value = seg.sceneNotes; autoGrow(notesEl); notesEl.style.borderColor = 'rgba(96,165,250,0.7)'; setTimeout(() => { if (notesEl) notesEl.style.borderColor = ''; }, 1500); }
                 }
 
-                // Refresh the target dot on the frame thumbnail
-                const currentIdx3 = segments.indexOf(seg);
-                if (typeof renderSegmentCard === 'function' && currentIdx3 >= 0) {
-                  try { renderSegmentCard(currentIdx3); } catch(_) {}
-                }
+                // Refresh the target dot on the frame thumbnail.
+                // (Removed a dead call to renderSegmentCard() — that function does not
+                // exist, so the per-card refresh never ran. The full renderSegments()
+                // that runs once after this concurrent loop completes (below) already
+                // repaints every card's target dot, so no per-iteration render is needed
+                // here — doing one would trigger N redundant full re-renders mid-loop.)
               }
             }
           } catch(_) { /* person detection is best-effort — never block the main flow */ }

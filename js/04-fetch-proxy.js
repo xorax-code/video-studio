@@ -510,15 +510,39 @@ RULES:
     }
 
     window.fetch = function(url, opts) {
-      if (typeof url === 'string') {
-        var isChat       = url.includes('api.openai.com/v1/chat/completions')   || url.includes('/.netlify/functions/openai-chat');
-        var isTranscribe = url.includes('api.openai.com/v1/audio/transcriptions') || url.includes('/.netlify/functions/openai-transcribe');
+      // Normalize url to a string for matching decisions (a Request/URL object
+      // would otherwise bypass the proxy). The ORIGINAL url is still passed to
+      // the real fetch for the pass-through case.
+      var u = (typeof url === 'string') ? url : (url && url.url ? url.url : String(url));
+      {
+        var isChat       = u.includes('api.openai.com/v1/chat/completions')   || u.includes('/.netlify/functions/openai-chat');
+        var isTranscribe = u.includes('api.openai.com/v1/audio/transcriptions') || u.includes('/.netlify/functions/openai-transcribe');
 
         if (isChat || isTranscribe) {
           var target = isChat ? '/.netlify/functions/openai-chat' : '/.netlify/functions/openai-transcribe';
+          // If a Request object was passed (no string + no opts), its
+          // method/body/headers live on the object, not in `opts`. Read them
+          // off so the proxied call isn't silently sent with an empty body.
+          // String callers (url is a string) skip this entirely — their path
+          // stays byte-for-byte identical.
+          var _reqBodyPromise = Promise.resolve(opts);
+          if (typeof url !== 'string' && url && typeof url.text === 'function') {
+            _reqBodyPromise = url.clone().text().then(function(body) {
+              var ro = Object.assign({}, opts);
+              if (ro.method === undefined) ro.method = url.method;
+              if (ro.body === undefined && body) ro.body = body;
+              if (ro.headers === undefined && url.headers) {
+                var rh = {};
+                try { url.headers.forEach(function(v, k) { rh[k] = v; }); } catch(e) {}
+                ro.headers = rh;
+              }
+              return ro;
+            }).catch(function() { return Object.assign({}, opts); });
+          }
           // Return a Promise — async so we can await the JWT
-          return _getJwt().then(function(token) {
-            var safeOpts = Object.assign({}, opts);
+          return Promise.all([_getJwt(), _reqBodyPromise]).then(function(arr) {
+            var token = arr[0];
+            var safeOpts = Object.assign({}, arr[1]);
             var h = Object.assign({}, safeOpts.headers || {});
             // Replace any client-side OpenAI key with the Supabase JWT
             delete h['X-Api-Key']; delete h['x-api-key'];

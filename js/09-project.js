@@ -106,6 +106,7 @@
     const totals = {};
     videoLog.forEach(e => {
       if (!e.date) return;
+      if (!e.accountId) return;
       const [ey, em] = e.date.split('-').map(Number);
       if (ey === calYear && em === calMonth+1) {
         totals[e.accountId] = (totals[e.accountId] || 0) + 1;

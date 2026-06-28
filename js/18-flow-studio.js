@@ -820,7 +820,7 @@
     // Add pending placeholder cards immediately so user sees activity
     var pendingIds = [];
     for (var i = 0; i < varCount; i++) {
-      var pid = Date.now() + i;
+      var pid = Date.now() + '-' + i + '-' + Math.floor(Math.random() * 1e6);
       pendingIds.push(pid);
       _fsVidHistory.unshift({ pending: true, id: pid });
     }
@@ -941,7 +941,9 @@
     // Restore videos — recreate blob URLs from stored ArrayBuffers
     _fsGetAll('vidHistory').then(function(items) {
       if (!items.length) return;
-      items.sort(function(a, b) { return b.id - a.id; });
+      // Video ids are strings (e.g. "1719-0-123456"); sort newest-first lexically.
+      // The leading Date.now() timestamp is fixed-width, so string order matches time order.
+      items.sort(function(a, b) { return String(b.id).localeCompare(String(a.id)); });
       var restored = items.map(function(item) {
         var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
         var blobUrl = URL.createObjectURL(blob);

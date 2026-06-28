@@ -234,7 +234,14 @@
   }
 
   // ── Refresh credit balance after a generation ─────────────────────────────
-  async function refreshCreditBalance() {
+  // Debounced: a completion wave can fire up to ~10 of these (one per clip) in a tight
+  // burst, each doing a Supabase token refresh → a refresh storm. We collapse calls within
+  // a short window to a single token refresh, while guaranteeing a TRAILING refresh so the
+  // balance still settles to the correct value after the last clip finishes.
+  var _REFRESH_DEBOUNCE_MS = 1500;
+  var _lastCreditRefresh = 0;
+  var _trailingRefreshTimer = null;
+  async function _doRefreshCreditBalance() {
     try {
       if (typeof _sb !== 'undefined' && _sb) {
         var res = await _sb.auth.refreshSession();
@@ -245,6 +252,23 @@
         }
       }
     } catch(e) { console.warn('[VeoAPI] refreshCreditBalance failed:', e.message); }
+  }
+  async function refreshCreditBalance() {
+    var now = Date.now();
+    if (now - _lastCreditRefresh < _REFRESH_DEBOUNCE_MS) {
+      // Too soon after the last refresh — suppress this call, but schedule a single
+      // trailing refresh so the final balance is still fetched once the burst settles.
+      if (!_trailingRefreshTimer) {
+        _trailingRefreshTimer = setTimeout(function () {
+          _trailingRefreshTimer = null;
+          _lastCreditRefresh = Date.now();
+          _doRefreshCreditBalance();
+        }, _REFRESH_DEBOUNCE_MS);
+      }
+      return;
+    }
+    _lastCreditRefresh = now;
+    return _doRefreshCreditBalance();
   }
   window.refreshCreditBalance = refreshCreditBalance;
 
@@ -372,10 +396,17 @@
     return /internal error|try again later|please try again|temporarily|unavailable|deadline exceeded|backend error|service error|\b50[023]\b/i.test(String(msg));
   }
 
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry) {
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry, outerDeadline) {
     softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
     framingLevel   = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
     transientRetry = transientRetry | 0; // 0 = first attempt; bumped once on a transient backend error
+    // Single OUTER wall-clock budget shared across all recovery/retry recursions. Set once
+    // on the first (top-level) call and threaded down so a blocked-then-recovered clip can't
+    // silently run for ~30-45 min by resetting the poll deadline on every recursion — the
+    // whole attempt (incl. recoveries) stays bounded to the ~15 min the UI promises.
+    if (typeof outerDeadline !== 'number' || !isFinite(outerDeadline)) {
+      outerDeadline = Date.now() + _GEMINI_TIMEOUT;
+    }
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -461,8 +492,12 @@
     }
 
     // ── Step 2: Poll for completion ───────────────────────────────────────
-    var deadline = Date.now() + _GEMINI_TIMEOUT;
-    while (Date.now() < deadline) {
+    // Poll against the shared OUTER budget (not a freshly-reset per-call deadline) so the
+    // total time across the initial attempt + any auto-recoveries/retries stays bounded.
+    // Track CONSECUTIVE poll failures so a poll endpoint that always returns malformed JSON
+    // or persistently non-OK fails fast (~36s) instead of spinning the whole 15-min window.
+    var _consecPollFails = 0;
+    while (Date.now() < outerDeadline) {
       await new Promise(function(r) { setTimeout(r, _GEMINI_POLL_MS); });
 
       var pollRes = await fetch('/.netlify/functions/poll-veo-clip', {
@@ -472,14 +507,23 @@
       });
 
       var pollData;
-      try { pollData = await pollRes.json(); } catch(e) { continue; }
+      try {
+        pollData = await pollRes.json();
+      } catch(e) {
+        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        continue;
+      }
 
       if (!pollRes.ok) {
         // Transient server error on the poll endpoint — log and retry rather than aborting
         // (the generation operation is still running server-side)
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
+        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
+      // A 200 with parseable JSON — the poll service is healthy. Reset the consecutive
+      // failure counter so only *back-to-back* failures count toward the fast-fail threshold.
+      _consecPollFails = 0;
       // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
         // A block = likeness filter (15236754), the structured `filtered` flag, OR a
@@ -511,7 +555,11 @@
           if (_regenOk) {
             var _seg2 = (window.segments || [])[segIdx];
             var _newStart = (_seg2 && (_seg2.nbPreviewDataUrl || _seg2.frameDataUrl)) || imageDataUrl;
-            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newStart, refFrameDataUrl, softenLevel + 1, segIdx, _next);
+            // A recovery starts a genuinely NEW paid generation, so give it its OWN fresh
+            // polling window — otherwise a late-window block would start (and re-charge) a
+            // clip the poll loop immediately abandons (charged-but-lost). Total time stays
+            // bounded because recovery recursion is capped (framingLevel < 2).
+            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newStart, refFrameDataUrl, softenLevel + 1, segIdx, _next, 0, (Date.now() + _GEMINI_TIMEOUT));
           }
           console.warn('[VeoAPI] auto-recover frame regen failed — surfacing clean failure');
         }
@@ -525,7 +573,9 @@
           console.warn('[VeoAPI] transient backend error — auto-retrying once:', pollData.error);
           if (typeof showToast === 'function') showToast('Video service hiccup — retrying this clip…', 'info', 4000);
           await new Promise(function (r) { setTimeout(r, 2500); });
-          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1);
+          // Fresh polling window for the retried clip (bounded by transientRetry < 1) so an
+          // end-of-window transient retry isn't started-then-abandoned.
+          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1, (Date.now() + _GEMINI_TIMEOUT));
         }
 
         // Keep the raw model error in the console for debugging, but show the user a

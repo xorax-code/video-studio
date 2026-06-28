@@ -584,19 +584,81 @@
   // Free trial duration — change this one number to adjust trial length for all users
   const TRIAL_DAYS = 3;
 
-  function getTrialStatus() {
+  // Resolve the authoritative trial-start timestamp (ms since epoch) or null.
+  // Prefers the Supabase server-side account creation time when it has been cached
+  // (window._supabaseUserCreatedAt, populated async below) so that wiping local site
+  // data can't mint a brand-new trial; falls back to the legacy localStorage value.
+  // Stays synchronous — never blocks and never locks out a logged-out user.
+  function _resolveTrialStart() {
+    // 1) Authoritative server timestamp, if it has already been cached this session.
+    const _serverIso = window._supabaseUserCreatedAt;
+    if (_serverIso) {
+      const _sv = Date.parse(_serverIso);
+      if (!isNaN(_sv)) return _sv;
+    }
+    // 2) Legacy / offline fallback: the locally-recorded first-login time.
     const raw = localStorage.getItem('aff_os_first_login');
-    if (!raw) return { active: true, daysLeft: TRIAL_DAYS, expired: false };
+    if (raw == null) return null;
     const _ts = Number(raw);
-    if (isNaN(_ts)) return { active: true, daysLeft: TRIAL_DAYS, expired: false };
-    const msElapsed = Date.now() - _ts;
+    return isNaN(_ts) ? null : _ts;
+  }
+
+  function getTrialStatus() {
+    const _start = _resolveTrialStart();
+    // No timestamp available at all (e.g. logged-out / first paint) — grant a working
+    // trial exactly as before so nobody is locked out.
+    if (_start == null) return { active: true, daysLeft: TRIAL_DAYS, expired: false };
+    const msElapsed = Date.now() - _start;
     const daysElapsed = msElapsed / (1000 * 60 * 60 * 24);
     const daysLeft = Math.max(0, Math.ceil(TRIAL_DAYS - daysElapsed));
     return { active: daysLeft > 0, daysLeft, expired: daysLeft === 0 };
   }
 
+  // Asynchronously fetch the Supabase account creation time and cache it so that
+  // getTrialStatus() (which must stay synchronous) can use the authoritative
+  // server timestamp. Also backfills the legacy localStorage key from the server
+  // value so clearing site data no longer resets the trial clock. Best-effort and
+  // non-breaking: any failure leaves the existing localStorage behaviour intact.
+  function _cacheServerTrialStart() {
+    try {
+      var sb = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+      if (!sb || !sb.auth || typeof sb.auth.getSession !== 'function') return;
+      sb.auth.getSession().then(function (res) {
+        var created = res && res.data && res.data.session && res.data.session.user
+          ? res.data.session.user.created_at : null;
+        if (!created) return;
+        var ms = Date.parse(created);
+        if (isNaN(ms)) return;
+        window._supabaseUserCreatedAt = created;
+        // Backfill / correct the local marker so it survives as the trial anchor and
+        // can't be reset by clearing site data while the account already exists.
+        var rawLocal = localStorage.getItem('aff_os_first_login');
+        var localMs = rawLocal == null ? NaN : Number(rawLocal);
+        if (isNaN(localMs) || ms < localMs) {
+          localStorage.setItem('aff_os_first_login', String(ms));
+        }
+        if (typeof window.updateTrialPill === 'function') window.updateTrialPill();
+      }).catch(function () {});
+    } catch (_) {}
+  }
+  // Kick off the cache populate; it refreshes the pill once the value lands.
+  try { _cacheServerTrialStart(); } catch (_) {}
+
   // Expose globally so other JS files can call it
   window.getTrialStatus = getTrialStatus;
+
+  // Authoritatively anchor the trial clock to the server account-creation time.
+  // Called from the auth-boot paths with the Supabase user's `created_at`. Overwrites
+  // the local cache every boot so clearing site data (or tampering with the local
+  // value) can't reset the trial — the server timestamp always wins.
+  window.anchorTrialStartFromServer = function (createdAtIso) {
+    if (!createdAtIso) return;
+    const ms = Date.parse(createdAtIso);
+    if (isNaN(ms)) return;
+    window._supabaseUserCreatedAt = createdAtIso;
+    try { localStorage.setItem('aff_os_first_login', String(ms)); } catch (_) {}
+    if (typeof window.updateTrialPill === 'function') window.updateTrialPill();
+  };
 
   // Topnav trial pill — visible only on the free tier during an active trial, so users
   // always see their countdown + an upgrade path (previously only inside the Billing tab).
@@ -787,7 +849,7 @@
   };
 
   const PLAN_INFO = {
-    free:    { label: 'Free Trial', price: '$0',     desc: '1-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
+    free:    { label: 'Free Trial', price: '$0',     desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
     starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
     creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
     scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access to new features' },

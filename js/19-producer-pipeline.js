@@ -162,6 +162,20 @@
 
       // ── Prereq checks ───────────────────────────────────────────────────────
       var allSegs = window.segments || [];
+      // Snapshot the live segments array. If the user switches projects or clears
+      // the video mid-run, window.segments is reassigned to a NEW array; we detect
+      // that and bail cleanly instead of writing clips onto the orphaned old array.
+      var _segsAtStart = window.segments;
+      var _projChangedToastShown = false;
+      function _ppProjectChanged() {
+        if (window.segments === _segsAtStart) return false;
+        if (!_projChangedToastShown) {
+          _projChangedToastShown = true;
+          if (typeof showToast === 'function')
+            showToast('Project changed — producer run stopped.', 'warning', 6000);
+        }
+        return true;
+      }
       var toRun   = allSegs.filter(function (s) {
         return s._scriptOnly && ((s.nbPrompt || '').trim() || s.frameDataUrl) && (s.veoPrompt || '').trim();
       });
@@ -256,6 +270,10 @@
                 theSeg.veoPrompt, theDur, modelKey, startImg, theSeg.frameDataUrl || null, 0, theSegIdx, 0
               );
 
+              // Project may have changed during this long await — don't write the
+              // finished clip onto an orphaned array or save over the new project.
+              if (_ppProjectChanged()) { aborted = true; return; }
+
               theSeg.apiVideoUrl  = result.videoUrl;
               theSeg.apiVideoMime = result.mimeType || 'video/mp4';
 
@@ -302,6 +320,9 @@
                 var result   = await window.generateVeoClipViaAPI(
                   theExtra.veoPrompt, theDur, modelKey, startImg, theSeg.frameDataUrl || null
                 );
+                // Project may have changed during this long await — bail before
+                // writing onto the orphaned array or saving over the new project.
+                if (_ppProjectChanged()) { aborted = true; return; }
                 theExtra.apiVideoUrl  = result.videoUrl;
                 theExtra.apiVideoMime = result.mimeType || 'video/mp4';
                 var blobUrl = typeof window._fetchVideoAsBlob === 'function'
@@ -335,6 +356,10 @@
 
       // ── Wait for all in-flight Veo jobs ─────────────────────────────────────
       await Promise.all(veoPromises);
+
+      // Project changed at some point during the run — skip final save/render so
+      // we don't touch the new project's data. (try/finally still resets state.)
+      if (_ppProjectChanged()) return;
 
       // ── Final summary ────────────────────────────────────────────────────────
       var successMsg, toastType;

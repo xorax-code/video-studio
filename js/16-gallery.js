@@ -4,6 +4,19 @@
 
 (function() {
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Quote-safe escaping for values interpolated into HTML attribute strings.
+  // Prevents URLs/labels containing " ' < > & from breaking out of attributes.
+  function escAttr(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── State ──────────────────────────────────────────────────────────────────
   window._assemblerClips = window._assemblerClips || [];  // [{ segIdx, start, end, blobUrl, mime, label, dur }]
   var _galleryCollapsed  = false;
@@ -130,12 +143,12 @@
       card.dataset.segIdx = clip.segIdx;
       card.innerHTML =
         '<div class="gal-thumb">'
-          + '<video src="' + clip.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+          + '<video src="' + escAttr(clip.url) + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
           + '<div class="gal-dur">' + clip.dur + 's</div>'
           + (inAssembler ? '<div class="gal-badge-added">✓ Added</div>' : '')
         + '</div>'
         + '<div class="gal-meta">'
-          + '<span class="gal-label">' + clip.label + '</span>'
+          + '<span class="gal-label">' + escAttr(clip.label) + '</span>'
           + '<div class="gal-btns">'
             + '<button class="gal-btn gal-btn-add" onclick="galleryAddToAssembler(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Add to assembler">'
               + (inAssembler ? '✓ Added' : '+ Assemble')
@@ -144,7 +157,7 @@
               ? '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + clip.segIdx + ')" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',-1)" title="Zoom / reframe, then download HD">🔍</button>'
                 + '<button id="gal-hd-btn-' + clip.segIdx + '" class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
-              : '<button class="gal-btn gal-btn-dl" onclick="(function(){var e=segments[' + clip.segIdx + '].veoExtras[' + clip.extraIdx + '];var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (clip.segIdx+1) + '-clip-' + (clip.extraIdx+2) + '.mp4\';a.click();})()" title="Download clip">⬇</button>'
+              : '<button id="gal-extra-dl-' + clip.segIdx + '-' + clip.extraIdx + '" class="gal-btn gal-btn-dl" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Zoom / reframe, then download HD">🔍</button>'
             )
           + '</div>'
@@ -153,6 +166,24 @@
       var vid = card.querySelector('.gal-video');
       card.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
       card.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = 0; } });
+
+      if (clip.extraIdx !== -1) {
+        var extraDlBtn = card.querySelector('#gal-extra-dl-' + clip.segIdx + '-' + clip.extraIdx);
+        if (extraDlBtn) {
+          (function(segIdx, extraIdx) {
+            extraDlBtn.addEventListener('click', function() {
+              var segs = window.segments || [];
+              var seg = segs[segIdx];
+              var e = seg && seg.veoExtras && seg.veoExtras[extraIdx];
+              if (!e) return;
+              var a = document.createElement('a');
+              a.href = e.apiVideoRaw || e.apiVideoUrl;
+              a.download = 'scene-' + (segIdx + 1) + '-clip-' + (extraIdx + 2) + '.mp4';
+              a.click();
+            });
+          })(clip.segIdx, clip.extraIdx);
+        }
+      }
 
       grid.appendChild(card);
     });
@@ -543,9 +574,9 @@
       block.draggable = true;
 
       block.innerHTML =
-        '<video class="asm-cliph-thumb" src="' + clip.blobUrl + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
+        '<video class="asm-cliph-thumb" src="' + escAttr(clip.blobUrl) + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
         + '<div class="asm-cliph-grad"></div>'
-        + '<div class="asm-cliph-label">' + clip.label + '</div>'
+        + '<div class="asm-cliph-label">' + escAttr(clip.label) + '</div>'
         + '<div class="asm-cliph-dur">' + used.toFixed(1) + 's</div>'
         + (i === window._asmSel
             ? '<div class="asm-cliph-hl" title="Trim start"></div><div class="asm-cliph-hr" title="Trim end"></div>'
@@ -1066,11 +1097,11 @@
         card.className = 'gal-card';
         card.innerHTML =
           '<div class="gal-thumb">'
-            + '<video src="' + v.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+            + '<video src="' + escAttr(v.url) + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
             + (v.duration ? '<div class="gal-dur">' + v.duration + 's</div>' : '')
           + '</div>'
           + '<div class="gal-meta">'
-            + '<span class="gal-label">' + (v.label ? String(v.label).replace(/[<>]/g, '') : _clFmtDate(v.created_at)) + '</span>'
+            + '<span class="gal-label">' + (v.label ? escAttr(v.label) : escAttr(_clFmtDate(v.created_at))) + '</span>'
             + '<div class="gal-btns">'
               + '<button class="gal-btn gal-btn-dl" title="Download this video">⬇ Download</button>'
             + '</div>'

@@ -139,13 +139,6 @@
       if (!h) return;
       const p = document.getElementById(id);
       if (!p) return;
-      // Don't restore vsPanelDownloader if its body is currently hidden (collapsed state)
-      if (id === 'vsPanelDownloader') {
-        const body = p.querySelector('[id^="vsPanelDownloader"] > div:not(.vs-panel-header):not(.vs-panel-resize-handle)');
-        const allDivs = p.querySelectorAll(':scope > div');
-        const bodyDiv = Array.from(allDivs).find(d => !d.classList.contains('vs-panel-header') && !d.classList.contains('vs-panel-resize-handle'));
-        if (bodyDiv && bodyDiv.style.display === 'none') return; // skip — panel is collapsed
-      }
       // Validate: only apply sane pixel values
       const parsed = parseFloat(h);
       if (!isFinite(parsed) || parsed < 80) return;
@@ -344,8 +337,14 @@
     const objUrl = URL.createObjectURL(file);
     videoEl.src = objUrl;
     videoEl.addEventListener('loadedmetadata', () => {
-      // Seek to 20% of the duration (tends to show the product clearly, past any intro motion)
-      videoEl.currentTime = Math.min(videoEl.duration * 0.2, videoEl.duration - 0.1, 3);
+      // Seek to 20% of the duration (tends to show the product clearly, past any intro motion).
+      // Guard against zero/invalid duration (NaN/Infinity) which would yield a NaN/negative
+      // seek target and silently skip capture — fall back to the current (first) frame.
+      if (!isFinite(videoEl.duration) || videoEl.duration <= 0) {
+        videoEl.currentTime = 0;
+      } else {
+        videoEl.currentTime = Math.min(videoEl.duration * 0.2, videoEl.duration - 0.1, 3);
+      }
     });
     videoEl.addEventListener('seeked', () => {
       try {
@@ -530,7 +529,9 @@
           }
           const c = document.createElement('canvas');
           c.width = w; c.height = h;
-          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const _ctx = c.getContext('2d');
+          if (!_ctx) { reject(new Error('canvas context unavailable')); return; }
+          _ctx.drawImage(img, 0, 0, w, h);
           const compressed = c.toDataURL('image/jpeg', 0.78);
           console.log('[AvatarInventory] compressed to', Math.round(compressed.length / 1024), 'KB');
           resolve(compressed);

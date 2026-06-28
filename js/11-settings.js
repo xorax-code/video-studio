@@ -61,6 +61,10 @@
     } catch(e) { showAuthError('Network error — please check your connection and try again.'); return; }
     if (error) { showAuthError(error.message); return; }
     if (!data.user) { showAuthError('Login succeeded but no user returned. Please try again.'); return; }
+    // Anchor the trial clock to the server account-creation time before booting.
+    if (typeof window.anchorTrialStartFromServer === 'function') {
+      window.anchorTrialStartFromServer(data.user.created_at);
+    }
     onAuthSuccess(data.user.email, data.user.id);
   }
 
@@ -97,8 +101,11 @@
       updateUserChip(_pendingSignupName);
       _pendingSignupName = '';
     }
-    // Track first-login date for trial countdown (covers login paths not through checkAuthAndBoot)
-    if (!localStorage.getItem('aff_os_first_login')) {
+    // Trial countdown is normally anchored to the server account-creation time
+    // (anchorTrialStartFromServer, called in doLogin/checkAuthAndBoot). Only fall back
+    // to "now" when no server timestamp is available at all (e.g. offline/local bypass),
+    // so a logged-in user can never reset their trial by clearing site data.
+    if (!window._supabaseUserCreatedAt && !localStorage.getItem('aff_os_first_login')) {
       localStorage.setItem('aff_os_first_login', String(Date.now()));
     }
     // Hide auth wall
@@ -342,6 +349,11 @@
       window._stripeBaseTier   = window._stripeTier; // keep original for promo removal
       window._supabaseEmail    = session.user.email || '';
       window._supabaseUid      = session.user.id   || '';
+      // Anchor the trial clock to the SERVER account-creation time (authoritative,
+      // refreshed every boot) so wiping local site data can't mint a new trial.
+      if (typeof window.anchorTrialStartFromServer === 'function') {
+        window.anchorTrialStartFromServer(session.user.created_at);
+      }
       // Credit balance from app_metadata — default 50 for free/new users, plan amount for paid
       const _savedCredits = session.user.app_metadata?.credits_balance;
       const _defaultCredits = { free: 50, starter: 1000, creator: 2500, scale: 6500, pro: 2500, agency: 6500 }[window._stripeTier] || 50;
@@ -350,8 +362,10 @@
       // Prefer display name from settings, fall back to email
       const _s = getUserSettings() || {};
       updateUserChip(_s.displayName || session.user.email);
-      // Track first-login date for trial countdown (3-day free trial)
-      if (!localStorage.getItem('aff_os_first_login')) {
+      // Trial countdown is anchored to the server account-creation time above; only
+      // fall back to "now" when no server timestamp exists at all, so clearing site
+      // data can't reset a logged-in user's trial.
+      if (!window._supabaseUserCreatedAt && !localStorage.getItem('aff_os_first_login')) {
         localStorage.setItem('aff_os_first_login', String(Date.now()));
       }
       // Listen for sign-out events (e.g. token expiry)

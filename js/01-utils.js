@@ -65,12 +65,28 @@
       o.appendChild(nv); o.appendChild(x);
       document.body.appendChild(o);
     }
-    var req = v.requestFullscreen || v.webkitRequestFullscreen || v.webkitEnterFullscreen || v.msRequestFullscreen;
+    function fsActive() {
+      return document.fullscreenElement || document.webkitFullscreenElement ||
+             document.msFullscreenElement || v.webkitDisplayingFullscreen;
+    }
+    // iOS shows its own native player and doesn't set document.fullscreenElement —
+    // trust it and don't second-guess with the lightbox.
+    if (!v.requestFullscreen && !v.webkitRequestFullscreen && !v.msRequestFullscreen && v.webkitEnterFullscreen) {
+      try { v.webkitEnterFullscreen(); } catch (e) { lightbox(); }
+      return;
+    }
+    var req = v.requestFullscreen || v.webkitRequestFullscreen || v.msRequestFullscreen;
     if (req) {
+      var done = false;
       try {
         var p = req.call(v);
-        if (p && typeof p.catch === 'function') p.catch(lightbox);
-      } catch (e) { lightbox(); }
+        if (p && typeof p.catch === 'function') p.catch(function () { if (!done) { done = true; lightbox(); } });
+      } catch (e) { lightbox(); return; }
+      // Native fullscreen can RESOLVE yet silently no-op for a clip inside a
+      // transformed/fixed container (e.g. the segment modal) — the video just
+      // collapses. If we're not actually fullscreen a beat later, fall back to
+      // the guaranteed body-level lightbox.
+      setTimeout(function () { if (!done && !fsActive()) { done = true; lightbox(); } }, 300);
     } else {
       lightbox();
     }
@@ -509,6 +525,7 @@
     const title  = document.getElementById('vsCalDayDetailTitle');
     const items  = document.getElementById('vsCalDayItems');
     if (!detail || !title || !items) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
 
     const [y, m, d] = dateKey.split('-').map(Number);
     const label = _vsCalMonthNames[m-1] + ' ' + d + ', ' + y;

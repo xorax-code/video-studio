@@ -340,8 +340,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     }
 
     // ── Step 1: tokenise into individual sentences ─────────────────────────
-    // Handle  .  !  ?  …  and common abbreviations (Mr. Dr. vs sentence ends)
-    const sentenceRe = /(?<=[^A-Z][.!?…]{1,3})\s+(?=[A-Z"'])|(?<=[.!?…]{1,3})\s*$/gm;
+    // Split after sentence-ending punctuation ( .  !  ?  … ) followed by whitespace.
     const rawSentences = raw
       .replace(/\r\n|\r/g, '\n')             // normalise line endings
       .replace(/\n+/g, ' ')                  // flatten all newlines to spaces
@@ -1104,10 +1103,13 @@ No markdown. Return only the JSON object.`
   function onNbPreviewChange(i, input) {
     const file = input.files[0];
     if (!file) return;
+    // Reset so re-selecting the same file later still fires the change event
+    input.value = '';
+    const segRef = segments[i]; // capture before any await so we can detect if segments changed
     const reader = new FileReader();
     reader.onload = async ev => {
       try {
-        if (i >= segments.length) return;
+        if (i >= segments.length || segments[i] !== segRef) return;
         segments[i].nbPreviewDataUrl = ev.target.result;
         debounceSave();
         const zone = document.getElementById('nbpreview-zone-' + i);
@@ -1117,6 +1119,7 @@ No markdown. Return only the JSON object.`
         if (veoTa) { veoTa.value = '⏳ Building Veo 3 prompt from image…'; }
         let ok = false;
         try { ok = await buildVeo3FromNBImage(i); } catch (_) {}
+        if (segments[i] !== segRef) return; // segments swapped during the vision call — abandon writes
         if (!ok && veoTa) {
           // Fall back to text-based prompt if vision call fails
           const setting = document.getElementById('studioSetting')?.value.trim() || '';
@@ -1129,7 +1132,7 @@ No markdown. Return only the JSON object.`
       } catch (err) {
         console.error('onNbPreviewChange error:', err);
         const veoTa = document.getElementById('veo-seg-' + i);
-        if (veoTa && veoTa.value.startsWith('⏳')) {
+        if (veoTa && veoTa.value.startsWith('⏳') && segments[i] === segRef) {
           // Fall back to text-based prompt so the textarea is never left blank
           const setting = document.getElementById('studioSetting')?.value.trim() || '';
           const productSel = document.getElementById('studioProduct');
@@ -1176,11 +1179,12 @@ No markdown. Return only the JSON object.`
     for (let j = 0; j < assignCount; j++) {
       const { i } = frameSegs[j];
       const file = sorted[j];
+      const segRef = segments[i]; // capture before any await so we can detect if segments changed
       await new Promise(resolve => {
         const reader = new FileReader();
         reader.onload = async ev => {
           try {
-            if (i >= segments.length) { resolve(); return; }
+            if (i >= segments.length || segments[i] !== segRef) { resolve(); return; }
             segments[i].nbPreviewDataUrl = ev.target.result;
             debounceSave();
             const zone = document.getElementById('nbpreview-zone-' + i);
@@ -1190,6 +1194,7 @@ No markdown. Return only the JSON object.`
             if (veoTa) veoTa.value = '⏳ Building Veo 3 prompt…';
             let ok = false;
             try { ok = await buildVeo3FromNBImage(i); } catch(_) {}
+            if (segments[i] !== segRef) { resolve(); return; } // segments swapped during the vision call — abandon writes
             if (!ok && veoTa) {
               const setting = document.getElementById('studioSetting')?.value.trim() || '';
               const productSel = document.getElementById('studioProduct');
@@ -3678,6 +3683,7 @@ TECHNICAL SPECS:
 
   function loadAvatarFromAccount() {
     const sel = document.getElementById('avatarAccountPicker');
+    if (!sel) return;
     const id = sel.value;
     if (!id) return;
     const acct = accounts.find(a => a.id === id);

@@ -160,7 +160,18 @@
     if (_qmGenerating) return;
     _qmGenerating = true;
     exitQuickMode();
-    setTimeout(() => { _qmGenerating = false; runAllScenes(true); }, 150);
+    // Keep the debounce guard held through the ENTIRE run (not just the 150ms
+    // delay) so a fast double-trigger can't launch two concurrent full
+    // generations. runAllScenes() may return undefined (it has bare-return
+    // gates) — wrap in Promise.resolve so .finally() is always safe, and clear
+    // the guard in .finally() so the button can never get stuck disabled, even
+    // if the run throws synchronously inside the timeout.
+    setTimeout(() => {
+      let p;
+      try { p = runAllScenes(true); }
+      catch (e) { _qmGenerating = false; throw e; }
+      Promise.resolve(p).finally(() => { _qmGenerating = false; });
+    }, 150);
   }
 
   async function switchStudioMode(mode) {
