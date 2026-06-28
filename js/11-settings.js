@@ -418,3 +418,147 @@
   }
 
   checkAuthAndBoot();
+
+  // ===== LEFT COLUMN PANEL REORDER (drag a panel header to reorder, persisted) =====
+  (function () {
+    var LS_KEY = 'affiliateos_leftcol_order_v1';
+    var _src = null;
+
+    function col() { return document.getElementById('vsLeftCol'); }
+    function panelsOf(c) {
+      c = c || col(); if (!c) return [];
+      return Array.prototype.filter.call(c.children, function (n) {
+        return n.nodeType === 1 && n.classList && n.classList.contains('vs-panel');
+      });
+    }
+    // Stable key per panel: its id, else a slug of its header label.
+    function keyOf(p) {
+      if (p.dataset.lcKey) return p.dataset.lcKey;
+      var k = p.id || '';
+      if (!k) {
+        var h = p.querySelector('.vs-panel-header, .vs-panel-hdr');
+        var t = h ? (h.textContent || '').replace(/\s+/g, ' ').trim().toLowerCase().slice(0, 28) : '';
+        k = 'lbl:' + (t || 'panel');
+      }
+      p.dataset.lcKey = k;
+      return p.dataset.lcKey;
+    }
+    function currentOrder() { return panelsOf().map(keyOf); }
+
+    function saveOrder(order) {
+      try { localStorage.setItem(LS_KEY, JSON.stringify(order || currentOrder())); } catch (e) {}
+    }
+    function loadOrder() {
+      try { var v = JSON.parse(localStorage.getItem(LS_KEY) || 'null'); return (v && v.length) ? v : null; } catch (e) { return null; }
+    }
+
+    // Reorder ONLY the .vs-panel nodes, swapping them among the slots panels
+    // already occupy — every non-panel child (CTA buttons, captions) stays put.
+    function applyOrder(orderKeys) {
+      var c = col(); if (!c) return;
+      var kids = Array.prototype.filter.call(c.children, function (n) { return n.nodeType === 1; });
+      var ps = kids.filter(function (n) { return n.classList && n.classList.contains('vs-panel'); });
+      if (ps.length < 2) return;
+      var byKey = {}; ps.forEach(function (p) { byKey[keyOf(p)] = p; });
+      var desired = [];
+      (orderKeys || []).forEach(function (k) { if (byKey[k]) { desired.push(byKey[k]); delete byKey[k]; } });
+      ps.forEach(function (p) { var k = keyOf(p); if (byKey[k]) { desired.push(p); delete byKey[k]; } });
+      var di = 0;
+      var newKids = kids.map(function (n) {
+        return (n.classList && n.classList.contains('vs-panel')) ? desired[di++] : n;
+      });
+      newKids.forEach(function (n) { c.appendChild(n); });
+    }
+
+    function clearOverClasses() {
+      panelsOf().forEach(function (p) { p.classList.remove('lc-over-before', 'lc-over-after'); });
+    }
+
+    function onDragStart(panel) {
+      return function (e) {
+        // Don't start a reorder from an interactive control inside the header.
+        if (e.target.closest && e.target.closest('button, input, select, textarea, a, .vs-panel-resize-handle')) { e.preventDefault(); return; }
+        _src = panel;
+        panel.classList.add('lc-dragging');
+        try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', keyOf(panel)); } catch (_) {}
+      };
+    }
+    function onDragEnd(panel) {
+      return function () { _src = null; panel.classList.remove('lc-dragging'); clearOverClasses(); };
+    }
+    function onDragOver(panel) {
+      return function (e) {
+        if (!_src || _src === panel) return;
+        e.preventDefault();
+        try { e.dataTransfer.dropEffect = 'move'; } catch (_) {}
+        var r = panel.getBoundingClientRect();
+        var after = (e.clientY - r.top) > r.height / 2;
+        panel.classList.toggle('lc-over-after', after);
+        panel.classList.toggle('lc-over-before', !after);
+      };
+    }
+    function onDrop(panel) {
+      return function (e) {
+        if (!_src || _src === panel) return;
+        e.preventDefault();
+        var r = panel.getBoundingClientRect();
+        var after = (e.clientY - r.top) > r.height / 2;
+        var order = currentOrder();
+        var sk = keyOf(_src), tk = keyOf(panel);
+        var from = order.indexOf(sk);
+        if (from > -1) order.splice(from, 1);
+        var to = order.indexOf(tk);
+        if (to < 0) to = order.length;
+        if (after) to += 1;
+        order.splice(to, 0, sk);
+        applyOrder(order);
+        saveOrder(order);
+        clearOverClasses();
+      };
+    }
+
+    function wire() {
+      var c = col(); if (!c) return;
+      var ps = panelsOf(c);
+      if (!ps.length) return;
+      ps.forEach(function (p) {
+        if (p.dataset.lcWired) return;
+        p.dataset.lcWired = '1';
+        keyOf(p);
+        var h = p.querySelector('.vs-panel-header, .vs-panel-hdr');
+        if (h) {
+          h.setAttribute('draggable', 'true');
+          h.classList.add('lc-draghead');
+          h.addEventListener('dragstart', onDragStart(p));
+          h.addEventListener('dragend', onDragEnd(p));
+        }
+        p.addEventListener('dragover', onDragOver(p));
+        p.addEventListener('dragleave', function () { p.classList.remove('lc-over-before', 'lc-over-after'); });
+        p.addEventListener('drop', onDrop(p));
+      });
+      var saved = loadOrder();
+      if (saved) applyOrder(saved);
+    }
+
+    function injectCss() {
+      if (document.getElementById('lc-reorder-css')) return;
+      var s = document.createElement('style'); s.id = 'lc-reorder-css';
+      s.textContent =
+        '#vsLeftCol .vs-panel-header.lc-draghead{cursor:grab;position:relative;}' +
+        '#vsLeftCol .vs-panel-header.lc-draghead:active{cursor:grabbing;}' +
+        '#vsLeftCol .vs-panel-header.lc-draghead:hover::after{content:"\\283F";position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:13px;color:var(--text-4);pointer-events:none;opacity:0.65;}' +
+        '#vsLeftCol .vs-panel.lc-dragging{opacity:0.45;}' +
+        '#vsLeftCol .vs-panel.lc-over-before{box-shadow:inset 0 3px 0 -1px var(--accent,#34d399);}' +
+        '#vsLeftCol .vs-panel.lc-over-after{box-shadow:inset 0 -3px 0 -1px var(--accent,#34d399);}';
+      document.head.appendChild(s);
+    }
+
+    function init() { injectCss(); wire(); }
+    window.reorderLeftColInit = init;
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();

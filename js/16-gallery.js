@@ -286,6 +286,27 @@
   // Expose the upscaler so other modules (Studio, etc.) can offer 1080p too.
   window._doUpscale = _doUpscale;
 
+  // ── Download a (possibly cross-origin) URL WITHOUT navigating the page ──────
+  // Setting a.href to a cross-origin signed URL makes the browser ignore the
+  // `download` attribute and NAVIGATE to it instead — which trips the
+  // "Leave site? Changes may not be saved" beforeunload prompt. Fetching the
+  // URL as a same-origin blob downloads it in place with no navigation.
+  async function _downloadNoNav(url, filename) {
+    try {
+      var resp = await fetch(url);
+      var blob = await resp.blob();
+      var obj  = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = obj; a.download = filename; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(obj); }, 60000);
+      return true;
+    } catch (e) {
+      // CORS-blocked fallback: open in a new tab (still doesn't navigate the app away).
+      window.open(url, '_blank');
+      return false;
+    }
+  }
+  window._downloadNoNav = _downloadNoNav;
+
   // ── 1080p for gallery clips (button, by segIdx) ───────────────────────────
   window.galleryUpscale = async function(segIdx) {
     var seg = (window.segments || [])[segIdx];
@@ -789,7 +810,7 @@
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Stitch job failed.');
         if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
-          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = _exportFilename('1080p'); a.click();
+          await _downloadNoNav(pollData.downloadUrl, _exportFilename('1080p'));
           if (typeof showToast === 'function') showToast('1080p video ready — download started!', 'success', 5000);
           done();
           return;

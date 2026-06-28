@@ -304,7 +304,9 @@
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '');
+    // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
+    var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
@@ -932,6 +934,10 @@
   async function regenSingleScene(segIdx) {
     var seg = (window.segments || [])[segIdx];
     if (!seg) { showToast('Segment not found.', 'error'); return; }
+    // Re-entrancy guard — kept OFF the seg object so it is never persisted by
+    // saveSegments (a persisted busy flag would lock the scene after reload).
+    window.__regenBusy = window.__regenBusy || {};
+    if (window.__regenBusy['s' + segIdx]) { showToast('Scene ' + (segIdx + 1) + ' is already regenerating…', 'info', 3000); return; }
     if (!seg.veoPrompt || !seg.veoPrompt.trim()) {
       showToast('Generate the Veo 3 prompt for this scene first.', 'warning'); return;
     }
@@ -946,6 +952,8 @@
     // Show loading state on the regen button
     var btn = document.getElementById('regenSceneBtn-' + segIdx);
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    window.__regenBusy['s' + segIdx] = true;
+    showToast('Regenerating Scene ' + (segIdx + 1) + '… (~30–90s)', 'info', 4000);
 
     try {
       var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
@@ -961,10 +969,17 @@
       if (typeof renderGallery   === 'function') renderGallery();
       if (typeof renderAssembler === 'function') renderAssembler();
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      // The scene modal (segFloatModal) is built once when opened and is NOT
+      // refreshed by renderSegments — that only redraws the cards behind it. If
+      // it's open, rebuild it so the freshly generated clip actually shows;
+      // otherwise the user sees the old video and thinks regen did nothing.
+      if (document.getElementById('segFloatModal') && typeof window.openSegModal === 'function') window.openSegModal(segIdx);
       showToast('Scene ' + (segIdx + 1) + ' regenerated!', 'success', 4000);
     } catch(e) {
       showToast('Regen failed (Scene ' + (segIdx + 1) + '): ' + e.message, 'error', 8000);
       if (btn) { btn.disabled = false; btn.textContent = '↺ Regen'; }
+    } finally {
+      window.__regenBusy['s' + segIdx] = false;
     }
   }
   window.regenSingleScene = regenSingleScene;
@@ -1027,6 +1042,9 @@
       if (typeof saveSegments   === 'function') saveSegments();
       if (typeof renderSegments === 'function') renderSegments();
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      // Rebuild the scene modal if open so the new continuation clip shows
+      // (renderSegments only redraws the cards behind it, not the modal).
+      if (document.getElementById('segFloatModal') && typeof window.openSegModal === 'function') window.openSegModal(segIdx);
       showToast('Clip ' + (extraIdx + 2) + ' generated!', 'success', 4000);
     } catch(e) {
       showToast('Regen failed (Clip ' + (extraIdx + 2) + '): ' + e.message, 'error', 8000);

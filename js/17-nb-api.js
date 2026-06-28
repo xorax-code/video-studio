@@ -426,6 +426,13 @@
     // USER OVERRIDE — a per-scene manual correction typed into the Review modal's edit box.
     // Appended LAST + highest-priority so the user can fix leftovers (e.g. "her hands are
     // empty, no tool") without re-pinning or re-analyzing — it just applies on the next Redo.
+    // Skin fidelity — stop the editor inventing tattoos the avatar doesn't have.
+    // (window.antiTattooNeg returns '' when the avatar IS described as tattooed.)
+    var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
+    if (_tatNeg) {
+      instruction += '\n\nSKIN: Reproduce the avatar\'s skin exactly as in the reference photo. Do NOT add any tattoos, body ink, or skin markings that are not already present on the uploaded avatar.';
+    }
+
     var _nbOverride = (seg.nbOverride || '').trim();
     if (_nbOverride) {
       instruction += '\n\n🔒 USER OVERRIDE — HIGHEST PRIORITY, obey this exactly even if it contradicts anything above: ' + _nbOverride + (/[.!?]$/.test(_nbOverride) ? '' : '.');
@@ -437,7 +444,7 @@
     var _ar = await _nbGenerateAsync({
       instruction,
       avatarDesc:     _avatarDesc,
-      negativePrompt: _nbNegativePrompt,
+      negativePrompt: _nbNegativePrompt + (_tatNeg ? (_nbNegativePrompt ? ', ' : '') + _tatNeg : ''),
       // Pin coordinates (two-person target) passed as STRUCTURED data so the backend can
       // build a deterministic "replace ONLY the person here" directive — instead of relying
       // on the vision model to write the target into free text (which was unreliable/stale).

@@ -1,3 +1,41 @@
+  // ===== Speaking / non-speaking scene detection =====
+  // The avatar should only lip-sync dialogue on scenes where it's actually
+  // talking to camera. Product / hands / b-roll shots are NON-speaking — the
+  // line becomes voiceover instead, so Veo doesn't render a mouth moving over
+  // a product close-up. Detection is automatic:
+  //   1. explicit sceneType from the storyboard ('product'|'hands'|'broll')
+  //   2. otherwise inferred from the action / shot / frame text
+  // Default is SPEAKING — we only flip to non-speaking on a clear signal, so
+  // normal "talks to camera" scenes are never affected.
+  window.detectNonSpeakingScene = function (o) {
+    if (!o) return false;
+    var st = String(o.sceneType || '').toLowerCase();
+    if (st === 'product' || st === 'hands' || st === 'broll') return true;
+    if (st === 'character') return false;
+    var txt = [o.action, o._shot, o.shot, o.frameDesc]
+      .map(function (x) { return String(x || ''); }).join(' ').toLowerCase();
+    if (!txt.trim()) return false;
+    // Strong speaking cues override everything (keeps default behavior safe).
+    if (/\b(talk|talking|speak|speaking|says|saying|delivers?|deliver(?:ing)? (?:the )?line|to camera|piece to camera|monologue|voice[- ]?over the avatar|addresses the camera|lip[- ]?sync)\b/.test(txt)) return false;
+    // Clear non-speaking cues: product-only / hands-only / b-roll / no face.
+    return /\b(b-?roll|product (?:close-?up|shot|reveal|insert|demo)|insert shot|flat ?lay|pack ?shot|unboxing|hands? (?:only|close-?up|holding|applying|pouring|squeezing|spraying)|close-?up of (?:the )?product|no (?:one|person|people|face|avatar)|empty (?:room|scene|set)|on the table|texture shot|macro shot)\b/.test(txt);
+  };
+  window.sceneSpeaks = function (o) { return !window.detectNonSpeakingScene(o); };
+
+  // ===== Anti-tattoo negative terms =====
+  // Veo / the frame generator sometimes invent tattoos the uploaded avatar
+  // doesn't have. Returns a negative-prompt fragment to suppress them — UNLESS
+  // the avatar is actually described as tattooed, in which case it returns ''
+  // so we never strip tattoos that are supposed to be there.
+  window.antiTattooNeg = function () {
+    try {
+      var el = document.getElementById('avatarDesc');
+      var d  = String((el && el.value) || (window._avatarDesc) || '').toLowerCase();
+      if (/\b(tattoo|tattoos|tattooed|inked|body art)\b/.test(d)) return '';
+    } catch (e) {}
+    return 'tattoo, tattoos, body art, ink, inked skin, skin markings, arm tattoo, sleeve tattoo, neck tattoo, chest tattoo, hand tattoo, finger tattoo';
+  };
+
   // ===== Clip fullscreen helper =====
   // The native <video> fullscreen button can silently no-op for clips that sit
   // inside a transformed/clipped container (e.g. continuation clips inside

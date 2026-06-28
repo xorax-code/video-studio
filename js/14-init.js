@@ -359,7 +359,7 @@
     { text: "Link in bio to grab yours", type: "soft" },
     { text: "Comment 'INFO' and I'll send you the link", type: "engagement" },
     { text: "Swipe up to get the deal before it expires", type: "urgency" },
-    { text: "Try it free for 7 days — link in bio", type: "trial" }
+    { text: "Try it free for 1 day — link in bio", type: "trial" }
   ];
 
   async function loadCTALibrary() {

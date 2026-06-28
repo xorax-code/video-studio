@@ -787,7 +787,7 @@
   };
 
   const PLAN_INFO = {
-    free:    { label: 'Free Trial', price: '$0',     desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
+    free:    { label: 'Free Trial', price: '$0',     desc: '1-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
     starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
     creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
     scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access to new features' },

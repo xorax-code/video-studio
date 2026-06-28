@@ -3660,10 +3660,21 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       : ((setting || 'clean neutral background or lifestyle environment')
         + (_sceneLayout ? ' Object positions: ' + _sceneLayout : ''));
     const actionWithSpeech = analyzedAction;
+    // Auto-detect whether the avatar actually speaks in this scene. Product /
+    // hands / b-roll shots are non-speaking — the script becomes voiceover so
+    // Veo doesn't lip-sync a line over a shot with no talking head. Inferred
+    // from sceneType (if set) or the analyzed action text; defaults to speaking.
+    const _speaks = (typeof window.sceneSpeaks === 'function')
+      ? window.sceneSpeaks({ sceneType: seg && seg.sceneType, action: analyzedAction, _shot: seg && seg._shot, frameDesc: seg && seg.frameDesc })
+      : true;
     const voiceStyle = getVoiceStyle();
-    const audioDesc = voiceStyle
-      ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
-      : 'natural ambient sound, clear voice, no background music';
+    const audioDesc = _speaks
+      ? (voiceStyle
+          ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
+          : 'natural ambient sound, clear voice, no background music')
+      : (voiceStyle
+          ? `natural ambient sound, ${voiceStyle} voiceover continuing over the shot, no background music`
+          : 'natural ambient sound, voiceover continuing over the shot, no background music');
     // If the script or action describes a two-person scene, remove "multiple people"
     // from the negative_prompt — it will cause Veo 3 to flip or drop one person
     const twoPersonScene = detectsTwoPeople(scriptSlice) || detectsTwoPeople(analyzedAction);
@@ -3683,13 +3694,16 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const _duration     = _maxSec > 6 ? 8 : 6;
     const obj = {
       action: actionWithSpeech,
-      speech: scriptSlice || '',
+      speech: _speaks ? (scriptSlice || '') : '',
       audio: audioDesc,
       duration: _duration + ' seconds',
-      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words',
+      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words'
+        + (_speaks ? '' : ', talking, speaking, mouth moving, lip movement, lip sync'),
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
     };
+    // Non-speaking scene: keep the words as voiceover so narration isn't lost.
+    if (!_speaks && scriptSlice && scriptSlice.trim()) obj.voiceover = scriptSlice;
     return JSON.stringify(obj, null, 2);
   }
 

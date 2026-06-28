@@ -524,15 +524,24 @@
       'wide':       'wide shot',
       'pov':        'POV shot',
     };
+    // Speaking only on 'character' scenes. On product/hands/b-roll the line
+    // becomes voiceover so the avatar doesn't lip-sync over a product shot.
+    var _speaks = (typeof window.sceneSpeaks === 'function') ? window.sceneSpeaks(beat) : true;
     var obj = {
-      speech:          beat.script,
-      action:          beat.action || 'person delivers line naturally to camera with confident eye contact',
+      speech:          _speaks ? beat.script : '',
+      action:          beat.action || (_speaks
+                          ? 'person delivers line naturally to camera with confident eye contact'
+                          : 'no one speaks on camera — product/insert shot, no mouth movement, no talking'),
       shot:            (shotMap[beat.shot] || beat.shot) + ', vertical 9:16',
       camera:          cameraMap[beat.camera] || beat.camera,
       duration:        beat.duration + ' seconds',
-      audio:           'clear natural voice, slight ambient room tone, no background music',
-      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, text overlays, subtitles, watermarks, AI artifacts, distorted hands',
+      audio:           _speaks
+                          ? 'clear natural voice, slight ambient room tone, no background music'
+                          : 'voiceover continues over the shot, slight ambient room tone, no background music',
+      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, text overlays, subtitles, watermarks, AI artifacts, distorted hands'
+                          + (_speaks ? '' : ', talking, speaking, mouth moving, lip movement, lip sync'),
     };
+    if (!_speaks && beat.script && String(beat.script).trim()) obj.voiceover = beat.script;
     if (productName && beat.type !== 'HOOK' && beat.type !== 'PROBLEM') {
       obj.product = productName;
     }

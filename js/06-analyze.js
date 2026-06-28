@@ -1059,8 +1059,25 @@ No markdown. Return only the JSON object.`
           _parsed.action = sanitizeDirections(_parsed.action);
         }
       }
-      if (!_parsed.speech || _parsed.speech === 'null' || !String(_parsed.speech).trim()) {
-        _parsed.speech = seg.script || '';
+      // Only force the script back into speech when the avatar actually speaks
+      // in this scene. If it's a product / hands / b-roll shot (or the vision
+      // model deliberately left speech empty), keep the words as voiceover so
+      // Veo doesn't lip-sync a line over a non-talking shot.
+      {
+        var _spk = (typeof window.sceneSpeaks === 'function')
+          ? window.sceneSpeaks({ sceneType: _parsed.sceneType || seg.sceneType, action: _parsed.action || seg.action, _shot: seg._shot, frameDesc: seg.frameDesc })
+          : true;
+        var _speechEmpty = (!_parsed.speech || _parsed.speech === 'null' || !String(_parsed.speech).trim());
+        if (_speechEmpty) {
+          if (_spk) {
+            _parsed.speech = seg.script || '';
+          } else {
+            _parsed.speech = '';
+            if (seg.script && String(seg.script).trim()) _parsed.voiceover = seg.script;
+            _parsed.negative_prompt = (_parsed.negative_prompt ? _parsed.negative_prompt + ', ' : '')
+              + 'talking, speaking, mouth moving, lip movement, lip sync';
+          }
+        }
       }
       // Always enforce duration — must be exactly 6s or 8s (Veo 3 only supports these two)
       {
