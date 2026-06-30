@@ -363,11 +363,12 @@
     try {
 
     const dur = videoEl.duration;
-    const sampleInterval = 0.1;     // sample every 0.1s — catches sub-second scene changes
-    const hardCutThreshold = 25;    // absolute diff for obvious scene cuts
-    const spikeMultiplier = 2.8;    // sudden change = diff > rolling_avg × this
-    const minSpikeAbs = 10;         // ignore spikes below this (noise floor)
-    const minSegmentLen = 0.4;      // allow segments as short as 0.4s
+    const sampleInterval = 0.1;     // sample every 0.1s
+    const hardCutThreshold = 32;    // absolute diff for an obvious hard scene cut (was 25)
+    const spikeMultiplier = 3.8;    // sudden change = diff > rolling_avg × this (was 2.8 — too twitchy for selfie UGC)
+    const minSpikeAbs = 22;         // noise floor: ignore spikes below this (was 10 — ordinary hand/face motion cleared it)
+    const minSegmentLen = 1.5;      // minimum seconds between cuts (was 0.4 — produced sub-second micro-cuts)
+    const minSamplesForSpike = 12;  // require ~1.2s of baseline history before trusting a spike (kills the post-cut cascade)
     const thumbW = 80, thumbH = 45;
 
     const canvas = document.getElementById('frameCanvas');
@@ -384,7 +385,7 @@
     const cutTimes = [0];
     let prevData = null;
     const recentDiffs = []; // rolling window of composite diff scores
-    const rollingWindow = 15; // ~1.5s of history at 0.1s sample rate
+    const rollingWindow = 20; // ~2.0s of history at 0.1s sample rate
     const totalFrames = Math.ceil(dur / sampleInterval);
 
     for (let k = 0; k <= totalFrames; k++) {
@@ -419,15 +420,22 @@
         if (recentDiffs.length > rollingWindow) recentDiffs.shift();
         const rollingAvg = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
 
-        // 5. Cut if hard cut OR sudden spike above the rolling baseline
-        const isHardCut = score > hardCutThreshold;
-        const isSuddenChange = score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
+        // 5. Cut if hard cut OR sudden spike above the rolling baseline.
+        //    Spike detection only trusts the rolling average once it holds enough
+        //    samples — otherwise the post-cut reset leaves a tiny, unrepresentative
+        //    baseline that ordinary motion blows past, cascading into a cut every
+        //    ~1s. Hard cuts are absolute so they don't need the baseline.
+        const haveBaseline   = recentDiffs.length >= minSamplesForSpike;
+        const isHardCut      = score > hardCutThreshold;
+        const isSuddenChange = haveBaseline && score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
 
         if (isHardCut || isSuddenChange) {
           const lastCut = cutTimes[cutTimes.length - 1];
           if (t - lastCut >= minSegmentLen) {
             cutTimes.push(t);
-            // Reset rolling avg after a cut so next segment starts fresh
+            // Clear history after a cut so the next segment builds its own baseline.
+            // Combined with the minSamplesForSpike gate above, this gives a natural
+            // ~1.2s refractory period before another spike-based cut can fire.
             recentDiffs.length = 0;
           }
         }

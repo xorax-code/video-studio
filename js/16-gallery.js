@@ -443,7 +443,7 @@
     var total = _asmTotalUsed();
     if (ph && wrap) {
       var pct = total > 0 ? (t / total) : 0;
-      ph.style.left = (pct * wrap.offsetWidth) + 'px';
+      ph.style.width = (pct * 100) + '%';
     }
     var lbl = document.getElementById('asmTimeLabel');
     if (lbl) lbl.textContent = _fmtTime(t) + ' / ' + _fmtTime(total);
@@ -527,7 +527,6 @@
     else                    clip.end   = Math.min(clip.dur, Math.max(clip.start + 0.2, local));
     var used = _asmUsed(clip);
     if (d.block) {
-      d.block.style.flexGrow = Math.max(0.2, used);
       var dl = d.block.querySelector('.asm-cliph-dur'); if (dl) dl.textContent = used.toFixed(1) + 's';
     }
     var totalEl = document.getElementById('assemblerTotal');
@@ -569,7 +568,6 @@
       var used  = _asmUsed(clip);
       var block = document.createElement('div');
       block.className = 'asm-cliph' + (i === window._asmSel ? ' on' : '');
-      block.style.flexGrow = Math.max(0.2, used);
       block.dataset.idx = i;
       block.draggable = true;
 
@@ -623,6 +621,10 @@
         renderAssembler(); renderGallery(); _asmSave();
       });
     });
+
+    // Contextual edit tools (Split / Delete) — only when a clip is selected
+    var editTools = document.getElementById('asmEditTools');
+    if (editTools) editTools.classList.toggle('on', window._asmSel >= 0 && clips.length > 0);
 
     // Click the ruler to scrub the whole sequence
     var ruler = document.getElementById('asmRuler');
@@ -697,6 +699,16 @@
     renderGallery();
     renderAssembler();
     _asmSave();
+  };
+
+  // Progressive disclosure for the export "Options ▾" panel
+  window.asmToggleOptions = function() {
+    var panel = document.getElementById('asmOptionsPanel');
+    var toggle = document.getElementById('asmOptionsToggle');
+    if (!panel) return;
+    var open = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = open ? 'flex' : 'none';
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
 
   window.toggleAssembler = function() {
@@ -812,11 +824,11 @@
     var pBar  = document.getElementById('assemblerExportBar');
     var pLbl  = document.getElementById('assemblerExportLabel');
     function setProg(pct, label) { if (prog) prog.style.display = 'flex'; if (pBar) pBar.style.width = pct + '%'; if (pLbl) pLbl.textContent = label; }
-    function done(label) { if (btn) { btn.disabled = false; btn.innerHTML = label || '<i class="ti ti-sparkles" style="font-size:13px;margin-right:5px;vertical-align:-1px;"></i>1080p MP4'; } if (btn720) btn720.disabled = false; if (prog) prog.style.display = 'none'; }
+    function done(label) { if (btn) { btn.disabled = false; btn.innerHTML = label || '<i class="ti ti-download" style="font-size:13px;margin-right:6px;vertical-align:-1px;"></i>Export reel'; } if (btn720) btn720.disabled = false; if (prog) prog.style.display = 'none'; }
 
-    if (btn)   { btn.disabled = true; btn.textContent = 'Stitching…'; }
+    if (btn)   { btn.disabled = true; btn.innerHTML = 'Building your reel…'; }
     if (btn720) btn720.disabled = true;
-    setProg(4, 'Starting 1080p stitch (this can take a few minutes)…');
+    setProg(4, 'Building your reel… ~5s');
 
     try {
       // Free tier gets a "Made with AffiliateOS" watermark (server adds it only when
@@ -846,7 +858,7 @@
           done();
           return;
         }
-        setProg(Math.min(95, 8 + Math.round((attempt / maxAttempts) * 90)), 'Rendering 1080p video… (' + (attempt * 5) + 's)');
+        setProg(Math.min(95, 8 + Math.round((attempt / maxAttempts) * 90)), 'Building your reel… (' + (attempt * 5) + 's)');
       }
       throw new Error('Stitch timed out. Try fewer clips or retry.');
     } catch(e) {
@@ -868,8 +880,8 @@
       if (progBar)   progBar.style.width    = pct + '%';
       if (progLabel) progLabel.textContent  = label;
     }
-    function resetBtn(label) {
-      if (btn) { btn.disabled = false; btn.textContent = label || '⬇ Download'; }
+    function resetBtn() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-bolt" style="font-size:12px;margin-right:5px;vertical-align:-1px;"></i>Quick preview (720p)'; }
       if (prog) prog.style.display = 'none';
     }
 
@@ -910,12 +922,12 @@
       setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 
       setProgress(100, 'Done!');
-      setTimeout(function() { resetBtn('⬇ Download'); }, 2000);
+      setTimeout(function() { resetBtn(); }, 2000);
       if (typeof showToast === 'function') showToast(clips.length + ' clips saved to ZIP!', 'success', 4000);
 
     } catch(e) {
       console.error('[ZIP export]', e);
-      resetBtn('⬇ Download');
+      resetBtn();
       if (typeof showToast === 'function') showToast('Download failed: ' + (e.message || e), 'error', 5000);
     }
   };
@@ -932,11 +944,11 @@
       if (progLabel) progLabel.textContent = label;
     }
     function resetBtn() {
-      if (btn) { btn.disabled = false; btn.textContent = '⬇ Export MP4'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-bolt" style="font-size:12px;margin-right:5px;vertical-align:-1px;"></i>Quick preview (720p)'; }
       if (prog) prog.style.display = 'none';
     }
 
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading FFmpeg…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Building preview…'; }
     setProgress(5, 'Loading FFmpeg…');
 
     // Load FFmpeg.wasm from CDN.
