@@ -931,6 +931,7 @@
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
           + '<div style="display:flex;align-items:center;gap:5px;">'
             + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
+            + '<button id="nb-harmonize-btn-' + idx + '" onclick="event.stopPropagation();harmonizeNbFrame(' + idx + ')" title="Relight & blend into the scene (fixes the pasted look) — changes only lighting/color, never the product or composition" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">✨ Blend in</button>'
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
@@ -959,6 +960,59 @@
     document.body.appendChild(modal);
   }
   window.openNbApprovalModal = openNbApprovalModal;
+
+  // ── Harmonize / "Blend in": lighting-only pass to remove the pasted look ─────
+  // Sends the finished composite back to the model to unify light/color/shadows,
+  // re-locking any product so labels stay identical. Content-preserving by design.
+  async function harmonizeNbFrame(segIdx) {
+    var seg = segments[segIdx];
+    if (!seg || !seg.nbPreviewDataUrl) { showToast('Generate this frame first.', 'warning'); return; }
+    var btn = document.getElementById('nb-harmonize-btn-' + segIdx);
+    var _orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = '✨ Blending…'; btn.disabled = true; btn.style.opacity = '0.7'; }
+    try {
+      var jwt = null;
+      try {
+        var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+        if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
+      } catch(_) {}
+      if (!jwt) { showToast('Please log in to harmonize.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
+
+      var _nbPx = window._nbMaxQuality ? 1280 : 768;
+      var _nbJq = window._nbMaxQuality ? 0.9  : 0.8;
+
+      var _srcComp  = await _nbCompressImage(seg.nbPreviewDataUrl, _nbPx, _nbJq);
+      var _srcParts = _nbSplitDataUrl(_srcComp);
+      var body = { harmonize: true, harmonizeB64: _srcParts.b64, harmonizeMime: _srcParts.mime };
+
+      // Re-lock the product (if this scene uses one) so its label stays pixel-identical.
+      try {
+        var _pUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl) || window._producerProductImageUrl || null;
+        if (_pUrl && seg.showProduct) {
+          var _pC = await _nbCompressImage(_pUrl, _nbPx, _nbJq);
+          var _pP = _nbSplitDataUrl(_pC);
+          body.productB64 = _pP.b64; body.productMime = _pP.mime;
+        }
+      } catch(_) {}
+
+      var _ar = await _nbGenerateAsync(body, jwt, 'Blend scene ' + (segIdx + 1));
+      var res = _ar.res, data = _ar.data;
+      if (!res || !res.ok || !data || data.error || !data.imageB64) {
+        throw new Error((data && data.error) || 'no image returned');
+      }
+      seg.nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
+      seg.nbApproved = null;
+      saveSegments();
+      var img = document.getElementById('nb-approval-img-' + segIdx);
+      if (img) img.src = seg.nbPreviewDataUrl;
+      showToast('Scene ' + (segIdx + 1) + ' blended into the scene ✓', 'success');
+    } catch (e) {
+      showToast('Blend failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
+    } finally {
+      if (btn) { btn.innerHTML = _orig || '✨ Blend in'; btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  }
+  window.harmonizeNbFrame = harmonizeNbFrame;
 
   function toggleNbApproval(segIdx) {
     var seg = segments[segIdx];

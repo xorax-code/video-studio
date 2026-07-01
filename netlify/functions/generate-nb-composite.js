@@ -393,7 +393,8 @@ const runComposite = async (event) => {
 
   // Creative/Studio mode allows pure text-to-image (no avatar or reference needed).
   // Only the avatar/replicator composite paths require a subject image.
-  if (!avatarImg && !creative) {
+  // (creative text-to-image and harmonize-a-finished-frame do not.)
+  if (!avatarImg && !creative && body.harmonize !== true) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 
@@ -404,6 +405,49 @@ const runComposite = async (event) => {
   const hasProductSwap = !!(frameImg && productImg);
   const hasProductGen  = !!(!frameImg && productImg);
   const hasProduct     = hasProductSwap; // back-compat alias for the swap path below
+
+  // ── Harmonize mode — lighting/color-only pass to de-"paste" a composite ─────
+  // Takes a finished composite and unifies its lighting, white balance, exposure,
+  // grade, and grounding shadows so the person looks natively photographed in the
+  // scene — WITHOUT redrawing any object, product, label, hand, or the composition.
+  if (body.harmonize === true) {
+    const srcB64  = body.harmonizeB64 || body.imageB64 || null;
+    const srcMime = body.harmonizeMime || 'image/png';
+    if (!srcB64) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Harmonize needs an input image.' }) };
+    }
+    const hSystem = 'You are a professional photographic retoucher performing LIGHTING HARMONIZATION only. You are given one finished image in which a person was composited into a scene and looks pasted (mismatched light and color, no grounding shadows). Your ONLY job is to make it read as a single, naturally-captured photograph by unifying light and color. You must NOT change, move, resize, add, remove, redraw, or restyle any object, product, package, label, text, logo, hand, finger, face, body, pose, or the composition/framing. Preserve identical geometry and every pixel of any product label/text. Relight and regrade only.';
+    const hParts = [];
+    hParts.push({ text: 'INPUT PHOTO — harmonize this exact image:' });
+    hParts.push({ inlineData: { mimeType: srcMime, data: srcB64 } });
+    if (productB64) {
+      hParts.push({ text: 'PRODUCT REFERENCE — any product/label visible in the input must stay pixel-identical to this; do not alter it:' });
+      hParts.push({ inlineData: { mimeType: productMime, data: productB64 } });
+    }
+    hParts.push({ text: 'Make the person look naturally photographed in this exact scene. Change ONLY: the light direction and softness on the person to match the scene\'s key light; white balance and color temperature; exposure and brightness; contrast and color grade; and add realistic contact/cast shadows where the body, arms, and any held object meet surfaces. Wrap the scene\'s ambient light, subtle depth-of-field, and grain onto the person so everything shares one film look, and remove any cut-out edge halo. DO NOT change, move, resize, redraw, or regenerate ANY object, product, package, label, text, logo, hands, fingers, faces, bodies, poses, or the framing. Do not add or remove anything. Do not crop or re-frame. Keep identical geometry — relight and regrade the SAME image only. Output the harmonized image at the same resolution and composition.' });
+
+    const hReq = {
+      systemInstruction: { parts: [{ text: hSystem }] },
+      contents: [{ role: 'user', parts: hParts }],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.05 },
+    };
+    let hResult;
+    try { hResult = await callImageModel(hReq, apiKey, false, vtxToken); }
+    catch(e) { return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) }; }
+    if (hResult.status === 429) return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit — please wait and retry.' }) };
+    if (!hResult.data || hResult.status !== 200 || hResult.data.error) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: (hResult.data && hResult.data.error && hResult.data.error.message) || ('Image model error ' + hResult.status) }) };
+    }
+    for (const candidate of hResult.data.candidates || []) {
+      for (const part of candidate?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          await _chargeCompose(CREDIT_COST);
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: CREDIT_COST, quality: 'flash' }) };
+        }
+      }
+    }
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no image.' }) };
+  }
 
   // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
   if (creative) {
