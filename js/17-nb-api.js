@@ -276,7 +276,35 @@
     } catch(_) {}
     if (_lockedBg) { _nbBgRef = _lockedBg; _nbSetting = _lockedBg; }
 
-    if (hasFrame) {
+    // ── Green-screen overlay mode ──────────────────────────────────────────────
+    // For "composite scenes" (a talking person in FRONT of a screen-recording / app
+    // UI that we can't separate), we do NOT bake the avatar into the locked reference
+    // background. Instead we render the avatar ALONE on a flat chroma-green screen,
+    // matched to the reference person's position / scale / pose, so it can be keyed
+    // out and composited OVER the untouched original clip (real moving UI shows through
+    // around her). Gated on a global toggle or a per-segment flag.
+    var _greenOverlay = false;
+    try { _greenOverlay = !!(window._greenScreenOverlay || (seg && seg.overlayGreen)); } catch(_) {}
+
+    if (hasFrame && _greenOverlay) {
+      // Use Photo 2 (reference frame) ONLY as a pose/scale/framing reference — its
+      // background is discarded and replaced with solid chroma green for keying.
+      var _gsParts = [];
+      _gsParts.push('[FULL PERSON] REPLACE: the person from Photo 2 with the avatar from Photo 1. Match the avatar to the position, scale, body angle, arm height, and hand/finger pose of the person in Photo 2 EXACTLY, so the avatar occupies the same silhouette on screen.');
+      _gsParts.push('BACKGROUND REPLACE (critical): DISCARD the entire environment, app UI, charts, text, screen recording, props, and lighting from Photo 2. Output ONLY the avatar on a perfectly flat, solid chroma-green background (color #00b140 / RGB 0,177,64), edge to edge, evenly lit, no gradient, no shadows cast on the green, no logos, no text, nothing but the avatar and the green.');
+      if (_avatarDesc) _gsParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. Reproduce this person\'s face, skin tone, and hair exactly. Do NOT copy hair or features from the Photo 2 person.');
+      _gsParts.push('GENDER LOCK: Match Photo 1 person\'s gender, age, and ethnicity exactly. Do NOT change under any circumstances.');
+      if (_segAction) _gsParts.push('ARM/POSE: ' + _segAction + '. Keep the arm and hand at the same reach and height as Photo 2 so gestures line up with the underlying footage.');
+      if (hasProduct) _gsParts.push('The product from Photo 3 must be held in the hand at the same position as Photo 2.');
+      _gsParts.push('LIGHTING: light the avatar with soft, even, neutral studio key light (clean white balance) so she keys cleanly — do NOT relight her to any scene, and keep spill/reflected green off her skin, hair edges, and clothing.');
+      _gsParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot, subject chest-up with headroom, 50mm') + '. Keep the subject at the same on-screen position and size as Photo 2.');
+      _gsParts.push('RENDER STYLE: natural, real-looking photographic person (realistic skin texture, subtle pores, NOT plastic/waxy/over-smoothed; NOT a 3D render, illustration, or cartoon). ONE person only. No text, no watermark, no UI.');
+      _gsParts.push('IMPORTANT: the background must remain a single uniform chroma-green fill with hard, clean edges around the subject for reliable keying.');
+      instruction = _gsParts.join(' ');
+      // Green-screen output must not carry any transferred UI/text.
+      _nbNegativePrompt = (_nbNegativePrompt ? _nbNegativePrompt + ', ' : '') + 'text, logos, app UI, charts, numbers, screen recording, patterned background, green spill on subject, colored rim light';
+
+    } else if (hasFrame) {
       // ── Compositing mode ──────────────────────────────────────────────────────
       // The NB prompt JSON's `instruction` field (_nbCore) is a complete NB Pro
       // instruction in Flow format (REPLACE / LOCK / ARM / PROP STATE / HAIR LOCK /
@@ -457,12 +485,31 @@
       instruction += '\n\n🔒 USER OVERRIDE — HIGHEST PRIORITY, obey this exactly even if it contradicts anything above: ' + _nbOverride + (/[.!?]$/.test(_nbOverride) ? '' : '.');
     }
 
+    // ── Custom background swap (Replicator) ──────────────────────────────────
+    // If the user uploaded a background image (and isn't using the avatar's own bg
+    // or the green-screen overlay), send it as the NEW environment. The backend keeps
+    // the person's pose/position/framing from the reference frame and swaps in this bg.
+    var bgB64 = null, bgMime = 'image/jpeg', swapBg = false;
+    try {
+      var _bgUrl    = (typeof bgImageDataUrl !== 'undefined' && bgImageDataUrl) ? bgImageDataUrl : null;
+      var _bgFromAv = (typeof bgFromAvatar !== 'undefined') ? bgFromAvatar : false;
+      var _gsOn     = !!(window._greenScreenOverlay || (seg && seg.overlayGreen));
+      if (_bgUrl && !_bgFromAv && !_gsOn && hasFrame) {
+        var _bgComp  = await _nbCompressImage(_bgUrl, _nbPx, _nbJq);
+        var _bgParts = _nbSplitDataUrl(_bgComp);
+        bgB64 = _bgParts.b64; bgMime = _bgParts.mime; swapBg = true;
+      }
+    } catch(_) {}
+
     // ── Generate via the async background worker (no 26s timeout) ────────────
     // Starts the background job and polls for the image; slow Vertex global gens
     // (20-30s) no longer trip Netlify's function limit.
     var _ar = await _nbGenerateAsync({
       instruction,
       avatarDesc:     _avatarDesc,
+      bgB64,
+      bgMime,
+      swapBg,
       negativePrompt: _nbNegativePrompt + (_tatNeg ? (_nbNegativePrompt ? ', ' : '') + _tatNeg : ''),
       // Pin coordinates (two-person target) passed as STRUCTURED data so the backend can
       // build a deterministic "replace ONLY the person here" directive — instead of relying

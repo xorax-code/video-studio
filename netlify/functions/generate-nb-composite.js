@@ -268,9 +268,11 @@ Return ONLY a valid JSON object with these exact fields (no markdown, raw JSON o
 }
 
 // ── Build LOCK instruction block from pose analysis ───────────────────────────
-function buildLockBlock(pa, skipProp) {
+function buildLockBlock(pa, skipProp, skipBg) {
   const lines = [];
-  if (pa.background)                             lines.push(`lock background: ${pa.background}.`);
+  // When the background is being swapped for a user-uploaded environment, do NOT
+  // lock Photo 1's background — that would fight the swap directive.
+  if (pa.background && !skipBg)                   lines.push(`lock background: ${pa.background}.`);
   if (pa.arm_instruction)                        lines.push(`lock arms: ${pa.arm_instruction} — do not move these arms.`);
   if (skipProp) {
     // Product is being replaced — keep the hand/grip but NOT the original object.
@@ -364,10 +366,13 @@ const runComposite = async (event) => {
     productMime    = 'image/jpeg',
     handRefB64     = null,
     handRefMime    = 'image/jpeg',
+    bgB64          = null,
+    bgMime         = 'image/jpeg',
+    swapBg         = false,
     creative       = false,
   } = body;
 
-  let avatarImg = null, frameImg = null, productImg = null, handRefImg = null;
+  let avatarImg = null, frameImg = null, productImg = null, handRefImg = null, bgImg = null;
   if (Array.isArray(body.images) && body.images.length > 0) {
     const imgs = body.images.filter(img => img && img.b64);
     if (imgs[0]) avatarImg  = imgs[0];
@@ -379,8 +384,12 @@ const runComposite = async (event) => {
     if (productB64) productImg = { b64: productB64, mime: productMime };
     if (handRefB64) handRefImg = { b64: handRefB64, mime: handRefMime };
   }
+  // Custom background swap: a user-uploaded environment image replaces Photo 1's
+  // background while the person's pose/position/framing are kept from Photo 1.
+  if (swapBg && bgB64) bgImg = { b64: bgB64, mime: bgMime };
   // The locked hand reference applies only when compositing onto a real frame.
   const hasHandRef = !!(frameImg && handRefImg);
+  const hasBgSwap  = !!(frameImg && bgImg);
 
   // Creative/Studio mode allows pure text-to-image (no avatar or reference needed).
   // Only the avatar/replicator composite paths require a subject image.
@@ -444,7 +453,7 @@ const runComposite = async (event) => {
   // Photo 1 = scene frame (base — background, arms, prop locked)
   // Photo 2 = avatar      (appearance source: face, hair, clothing)
 
-  const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct) : '';
+  const lockBlock = (hasFrame && poseAnalysis) ? buildLockBlock(poseAnalysis, hasProduct, hasBgSwap) : '';
 
   // What's actually visible in the source frame — drives how much of the person to replace.
   // Prefer the explicit boolean from analysis; fall back to a phrase regex; default to
@@ -471,6 +480,12 @@ CASE B — Photo 1 shows ONLY a hand or arm holding the product (NO face, NO bod
 
 In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure that was not already in Photo 1. BACKGROUND ART (critical): do NOT reproduce any detailed wall poster, anatomical or medical chart, skin/body diagram, infographic, or framed artwork from Photo 1 — even if Photo 1 clearly shows one. Replace it with a PLAIN blank framed print, an empty wall, or a simple plant. Reproducing a real poster or chart causes a copyright/recitation block and the clip fails.${_analysisHint}\n\n`;
 
+  // Background-swap directive — replace Photo 1's environment with the uploaded
+  // BACKGROUND photo, keeping ONLY the person's pose, position, and framing.
+  const bgSwapDirective = hasBgSwap
+    ? `BACKGROUND SWAP (critical, high priority): A separate photo labeled "BACKGROUND" shows the NEW environment for this scene. COMPLETELY REPLACE the background and setting from Photo 1 with the environment from the BACKGROUND photo. From Photo 1 keep ONLY the person's pose, body position, arm/hand gesture, scale, and the camera framing — DISCARD Photo 1's room, walls, decor, screen, props, and lighting. Place the Photo 2 avatar (identity) into the BACKGROUND environment so they sit/stand naturally in that space, and RELIGHT the person to match the BACKGROUND photo's light direction, color temperature, and brightness, with natural contact shadows, so they look genuinely photographed there — not pasted. Do NOT copy any objects, walls, or lighting from Photo 1's background into the output.\n\n`
+    : '';
+
   // Hand-lock directive — when a locked hand reference is provided, the hand/wrist
   // appearance (skin tone, bracelet, sleeve cuff) must match it on EVERY frame for
   // consistency, while the hand POSE/grip still comes from Photo 1.
@@ -488,8 +503,8 @@ In BOTH cases: NEVER add a second person, a duplicate, or any extra human figure
     ? `EXACT PRODUCT (critical): The final reference image labeled "PRODUCT" shows the exact product for this scene. Whenever the avatar holds, shows, or displays a product in this image, it MUST be that exact product — match its shape, color, packaging, label, and text precisely. Do NOT invent, substitute, or restyle a different product. If the scene's action does not involve holding a product, do not add one.\n\n`
     : '';
 
-  const systemInstruction = hasFrame
-    ? `You are a professional photo compositor. You receive Photo 1 (a base scene/frame) and Photo 2 (an appearance reference for ONE person)${hasProduct ? ' and Photo 3 (a product reference)' : ''}.
+  let systemInstruction = hasFrame
+    ? `You are a professional photo compositor. You receive Photo 1 (a base scene/frame) and Photo 2 (an appearance reference for ONE person)${hasProduct ? ' and Photo 3 (a product reference)' : ''}${hasBgSwap ? ' and a BACKGROUND photo (a new environment)' : ''}.
 
 Your task depends on what Photo 1 actually contains:
 - If Photo 1 contains a visible person (face and/or body): replace ONLY that person's identity with Photo 2's appearance, and integrate them so they look naturally part of the scene — match the lighting, color, shadows, perspective and depth of field; do not let them look pasted or cut-out. Render the person as a polished, REAL-LOOKING photo — natural and photographic, with smooth, even, gently-idealized skin and soft flattering light, keeping natural human proportions and the avatar's clearly-recognizable identity. A genuine photo look (NOT a 3D render, illustration, anime, or cartoon), just lightly softened rather than a sharp, hyper-detailed documentary photograph of a specific real individual. Preserve Photo 1's framing, camera angle, and the person's position — do NOT recompose, zoom, or move them; only pull back if a face would exceed about 40% of the frame height (to clear Veo's person filter).
@@ -497,6 +512,11 @@ Your task depends on what Photo 1 actually contains:
 
 Hard rules: never add a second person or any human figure that was not already in Photo 1. Keep Photo 1's background, setting, and lighting. FRAMING (CRITICAL) — PRESERVE Photo 1's exact framing, camera angle, and the positions of BOTH people so the output matches the source video — do NOT recompose, zoom, re-center, or move anyone. The ONE exception: if a face would fill more than about 40% of the frame height, pull the camera back just enough to bring it under that (a very large photoreal face can trip Veo's person filter), keeping the same composition otherwise. Render it as a real photographic scene with the people in their original positions. TWO PEOPLE: replace ONLY the person the instruction targets by position (top/bottom/left/right) — NEVER default to the front, foreground, or lying-down person unless that IS the targeted one. Keep the OTHER person exactly as in Photo 1 (same face, identity, pose), just framed slightly back and smaller so you don't end up with two co-equal faces side-by-side filling the frame (the composition Veo blocks). EXCEPTION: if Photo 1 is a hand/arm-only product shot with no face, keep its exact crop unchanged.${hasProduct ? ' Replace the product held in the hand with the exact product from Photo 3 (same hand, grip, and scale).' : ''} Always remove any burned-in text, captions, or subtitles.`
     : `You are a professional photo editor and image generator. Follow the user's instruction exactly using the provided reference photo(s).${hasProductGen ? ' One reference photo is labeled "PRODUCT" — when the scene shows the avatar holding or displaying a product, it must be that exact product (same shape, color, packaging, label, and text). Do not invent a different product.' : ''}`;
+
+  // When swapping the background, override the "keep Photo 1's background" rule above.
+  if (hasBgSwap) {
+    systemInstruction += ' BACKGROUND OVERRIDE (critical): IGNORE Photo 1\'s background, setting, and lighting entirely — do NOT keep or reproduce them. Use the separate BACKGROUND photo as the scene\'s environment and lighting instead, and relight the person to match it. Keep ONLY the person\'s pose, body position, and camera framing from Photo 1.';
+  }
 
   // Deterministic two-person TARGET directive, built from the pin coordinates (structured
   // data, NOT parsed from free text). Placed FIRST / highest-priority so the model cannot
@@ -518,7 +538,7 @@ Hard rules: never add a second person or any human figure that was not already i
   // the model to the wrong subject right after the target directive. The directive is now
   // the single source of truth for WHO gets replaced.
   const userPrompt = hasFrame
-    ? `${targetDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${targetDirective ? '' : lockBlock}${instruction}`
+    ? `${targetDirective}${bgSwapDirective}${faceReplaceDirective}${handRefDirective}${productReplaceDirective}${targetDirective ? '' : lockBlock}${instruction}`
     : `${productGenDirective}${instruction || ('Portrait of ' + (avatarDesc || 'the person shown.'))}`;
 
   // Merge the NB JSON's negative_prompt (sent as negativePrompt) with our hardcoded avoids
@@ -539,6 +559,10 @@ Hard rules: never add a second person or any human figure that was not already i
   }
   parts.push({ text: 'Photo 2 — APPEARANCE REFERENCE for the person (use it to set the identity/face/skin/hair IF a person is visible in Photo 1, or ONLY the skin/hand tone if Photo 1 shows only a hand/arm). Do NOT add this person as an extra or background figure:' });
   parts.push({ inlineData: { mimeType: avatarImg.mime, data: avatarImg.b64 } });
+  if (hasBgSwap) {
+    parts.push({ text: 'BACKGROUND — the NEW environment/setting to place the person in. Use THIS photo\'s scene, background, and lighting; completely REPLACE Photo 1\'s background with this while keeping the person\'s pose and framing from Photo 1:' });
+    parts.push({ inlineData: { mimeType: bgImg.mime, data: bgImg.b64 } });
+  }
   if (hasProductSwap) {
     parts.push({ text: 'Photo 3 — REPLACEMENT PRODUCT (the object held in the hand in the output must be this exact product — match its shape, color, packaging, label, and text):' });
     parts.push({ inlineData: { mimeType: productImg.mime, data: productImg.b64 } });

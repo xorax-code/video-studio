@@ -305,15 +305,35 @@
     try { obj = typeof veoJsonStr === 'string' ? JSON.parse(veoJsonStr) : veoJsonStr; }
     catch(e) { return String(veoJsonStr || ''); }
     var parts = [];
+
+    // ── Green-screen overlay mode ──────────────────────────────────────────────
+    // The start frame is the avatar on flat chroma green (see 17-nb-api.js). Force
+    // the background to stay green + static so it keys cleanly, and push the subject
+    // to gesture energetically so the composited character isn't stagnant. When on,
+    // this overrides the obj.background field (which would otherwise re-describe a
+    // scene) and we skip the wardrobe/scene fields further down where noted.
+    var _gsVeo = false;
+    try { _gsVeo = !!(window._greenScreenOverlay || obj.overlayGreen); } catch(_) {}
+    if (_gsVeo) {
+      parts.push('Background: a single perfectly flat, solid chroma-green screen (#00b140), edge to edge, evenly lit and completely STATIC — the background never changes, moves, brightens, or gains any text, UI, charts, or objects at any point');
+      parts.push('Keep the green background clean with no shadows cast onto it and no green spill onto the subject\'s skin, hair, or clothing');
+    }
+
     // Scene context first — sets the visual environment before action/speech
     // These fields exist when the prompt was built from an NB composite start frame.
     // In API mode they were previously dropped; Flow agents read the full JSON so they
     // always had them. Adding them here makes API output match Flow quality.
     if (obj.starting_frame)   parts.push('Starting frame: ' + obj.starting_frame);
-    if (obj.background)       parts.push('Background: ' + obj.background);
+    if (obj.background && !_gsVeo) parts.push('Background: ' + obj.background);
     if (obj.foreground_props) parts.push('Foreground and props: ' + obj.foreground_props);
     // Anchor left/right in action before adding to prompt
     if (obj.action) parts.push(_anchorLeftRight(obj.action));
+    if (_gsVeo) {
+      // Composited character must be lively, not stiff — match the energy of the
+      // reference talker (pointing at on-screen numbers, leaning in, hand emphasis).
+      parts.push('The subject is animated and expressive throughout: active hand gestures and pointing, leaning slightly toward the camera on emphasis, natural head movement, shifting weight, engaged eyebrows and mouth — never a stiff, frozen, or static pose');
+      parts.push('Camera: handheld with subtle natural micro-movement');
+    }
     if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech.toLowerCase() + '"');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
@@ -330,7 +350,8 @@
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
     // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
     var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
+    var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
