@@ -485,31 +485,12 @@
       instruction += '\n\n🔒 USER OVERRIDE — HIGHEST PRIORITY, obey this exactly even if it contradicts anything above: ' + _nbOverride + (/[.!?]$/.test(_nbOverride) ? '' : '.');
     }
 
-    // ── Custom background swap (Replicator) ──────────────────────────────────
-    // If the user uploaded a background image (and isn't using the avatar's own bg
-    // or the green-screen overlay), send it as the NEW environment. The backend keeps
-    // the person's pose/position/framing from the reference frame and swaps in this bg.
-    var bgB64 = null, bgMime = 'image/jpeg', swapBg = false;
-    try {
-      var _bgUrl    = (typeof bgImageDataUrl !== 'undefined' && bgImageDataUrl) ? bgImageDataUrl : null;
-      var _bgFromAv = (typeof bgFromAvatar !== 'undefined') ? bgFromAvatar : false;
-      var _gsOn     = !!(window._greenScreenOverlay || (seg && seg.overlayGreen));
-      if (_bgUrl && !_bgFromAv && !_gsOn && hasFrame) {
-        var _bgComp  = await _nbCompressImage(_bgUrl, _nbPx, _nbJq);
-        var _bgParts = _nbSplitDataUrl(_bgComp);
-        bgB64 = _bgParts.b64; bgMime = _bgParts.mime; swapBg = true;
-      }
-    } catch(_) {}
-
     // ── Generate via the async background worker (no 26s timeout) ────────────
     // Starts the background job and polls for the image; slow Vertex global gens
     // (20-30s) no longer trip Netlify's function limit.
     var _ar = await _nbGenerateAsync({
       instruction,
       avatarDesc:     _avatarDesc,
-      bgB64,
-      bgMime,
-      swapBg,
       negativePrompt: _nbNegativePrompt + (_tatNeg ? (_nbNegativePrompt ? ', ' : '') + _tatNeg : ''),
       // Pin coordinates (two-person target) passed as STRUCTURED data so the backend can
       // build a deterministic "replace ONLY the person here" directive — instead of relying
@@ -931,8 +912,8 @@
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
           + '<div style="display:flex;align-items:center;gap:5px;">'
             + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
-            + '<button id="nb-harmonize-btn-' + idx + '" onclick="event.stopPropagation();harmonizeNbFrame(' + idx + ')" title="Seat him into the scene: add grounding shadows + relight (never redraws the product or composition)" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">✨ Blend in</button>'
-            + '<button id="nb-revert-btn-' + idx + '" onclick="event.stopPropagation();revertBlend(' + idx + ')" title="Undo blend — restore the original frame" style="display:' + ((seg.nbPreviewBase && seg._blendedFrom === seg.nbPreviewDataUrl) ? 'inline-block' : 'none') + ';padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);border-radius:4px;color:#94a3b8;cursor:pointer;">↩ Undo</button>'
+            + '<button id="nb-swapbg-btn-' + idx + '" onclick="event.stopPropagation();swapBackgroundNbFrame(' + idx + ')" title="Swap the background to your uploaded custom background — grounded & relit, keeps the person and product" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">🖼 Swap BG</button>'
+            + '<button id="nb-revert-btn-' + idx + '" onclick="event.stopPropagation();revertBlend(' + idx + ')" title="Undo — restore the original frame" style="display:' + (seg.nbEditOriginal ? 'inline-block' : 'none') + ';padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);border-radius:4px;color:#94a3b8;cursor:pointer;">↩ Undo</button>'
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
@@ -962,75 +943,49 @@
   }
   window.openNbApprovalModal = openNbApprovalModal;
 
-  // ── "Blend in": seat the composited person into the scene (shadow + light) ───
-  // Adds grounding shadows + relights the person to the scene, identity + product
-  // re-locked. Three safety nets: always blends from a saved BASE (no compounding),
-  // a change-magnitude gate that rejects gross redraws, and one-click Undo.
-
-  // Mean per-channel pixel difference (0-255) between two data URLs, downscaled.
-  // Returns -1 if it can't measure (then we don't block on it).
-  function _blendMeanDiff(urlA, urlB) {
-    return new Promise(function (resolve) {
-      var W = 96, H = 170, done = false, loaded = 0;
-      var ca = document.createElement('canvas'), cb = document.createElement('canvas');
-      ca.width = cb.width = W; ca.height = cb.height = H;
-      var xa = ca.getContext('2d', { willReadFrequently: true });
-      var xb = cb.getContext('2d', { willReadFrequently: true });
-      var ia = new Image(), ib = new Image();
-      function fail() { if (!done) { done = true; resolve(-1); } }
-      function go() {
-        try {
-          xa.drawImage(ia, 0, 0, W, H); xb.drawImage(ib, 0, 0, W, H);
-          var da = xa.getImageData(0, 0, W, H).data, db = xb.getImageData(0, 0, W, H).data;
-          var tot = 0, n = 0;
-          for (var p = 0; p < da.length; p += 4) {
-            tot += Math.abs(da[p] - db[p]) + Math.abs(da[p + 1] - db[p + 1]) + Math.abs(da[p + 2] - db[p + 2]); n += 3;
-          }
-          done = true; resolve(n ? tot / n : 0);
-        } catch (e) { fail(); }
-      }
-      ia.onload = function () { if (++loaded === 2) go(); };
-      ib.onload = function () { if (++loaded === 2) go(); };
-      ia.onerror = fail; ib.onerror = fail;
-      ia.src = urlA; ib.src = urlB;
-    });
-  }
+  // ── "Swap BG" + Undo: post-passes on an approved start frame ────────────────
+  // Swap BG replaces the background behind the (already-grounded) character-swap
+  // subject with the uploaded custom background and re-grounds/relights him. Undo
+  // restores the saved original. Both operate on the current frame; nbEditOriginal
+  // holds the pre-edit frame for a one-click revert.
 
   function _showBlendRevert(idx, show) {
     var b = document.getElementById('nb-revert-btn-' + idx);
     if (b) b.style.display = show ? 'inline-block' : 'none';
   }
 
-  async function harmonizeNbFrame(segIdx) {
+  async function swapBackgroundNbFrame(segIdx) {
     var seg = segments[segIdx];
     if (!seg || !seg.nbPreviewDataUrl) { showToast('Generate this frame first.', 'warning'); return; }
-    var btn = document.getElementById('nb-harmonize-btn-' + segIdx);
+    var _bgUrl    = (typeof bgImageDataUrl !== 'undefined' && bgImageDataUrl) ? bgImageDataUrl : null;
+    var _bgFromAv = (typeof bgFromAvatar !== 'undefined') ? bgFromAvatar : false;
+    if (!_bgUrl || _bgFromAv) { showToast('Upload a custom background first (Background panel), then Swap BG.', 'warning', 6000); return; }
+    var btn = document.getElementById('nb-swapbg-btn-' + segIdx);
     var _orig = btn ? btn.innerHTML : '';
-    if (btn) { btn.innerHTML = '✨ Blending…'; btn.disabled = true; btn.style.opacity = '0.7'; }
+    if (btn) { btn.innerHTML = '🖼 Swapping…'; btn.disabled = true; btn.style.opacity = '0.7'; }
     try {
       var jwt = null;
       try {
         var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
         if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
       } catch(_) {}
-      if (!jwt) { showToast('Please log in to blend.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
+      if (!jwt) { showToast('Please log in to swap the background.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
 
       var _nbPx = window._nbMaxQuality ? 1280 : 768;
       var _nbJq = window._nbMaxQuality ? 0.9  : 0.8;
 
-      // Base management — always blend from the ORIGINAL composite so repeated blends
-      // don't compound. If the current frame isn't our last blend output (e.g. after a
-      // Redo), adopt it as the fresh base.
-      if (seg._blendedFrom !== seg.nbPreviewDataUrl || !seg.nbPreviewBase) {
-        seg.nbPreviewBase = seg.nbPreviewDataUrl;
-      }
-      var baseUrl = seg.nbPreviewBase;
+      // Keep the very first frame so Undo can always restore it, even after
+      // chaining passes. Operate on the CURRENT frame.
+      if (!seg.nbEditOriginal) seg.nbEditOriginal = seg.nbPreviewDataUrl;
+      var inputUrl = seg.nbPreviewDataUrl;
 
-      var _srcComp  = await _nbCompressImage(baseUrl, _nbPx, _nbJq);
+      var _srcComp  = await _nbCompressImage(inputUrl, _nbPx, _nbJq);
       var _srcParts = _nbSplitDataUrl(_srcComp);
-      var body = { harmonize: true, harmonizeB64: _srcParts.b64, harmonizeMime: _srcParts.mime };
+      var _bgComp   = await _nbCompressImage(_bgUrl, _nbPx, _nbJq);
+      var _bgParts  = _nbSplitDataUrl(_bgComp);
+      var body = { bgReplace: true, harmonizeB64: _srcParts.b64, harmonizeMime: _srcParts.mime, bgB64: _bgParts.b64, bgMime: _bgParts.mime };
 
-      // Identity lock — pass the avatar so relighting can't drift his face.
+      // Identity lock — keep his face exact.
       try {
         if (typeof avatarImageDataUrl !== 'undefined' && avatarImageDataUrl) {
           var _aC = await _nbCompressImage(avatarImageDataUrl, _nbPx, _nbJq);
@@ -1049,50 +1004,38 @@
         }
       } catch(_) {}
 
-      var _ar = await _nbGenerateAsync(body, jwt, 'Blend scene ' + (segIdx + 1));
+      var _ar = await _nbGenerateAsync(body, jwt, 'Swap BG scene ' + (segIdx + 1));
       var res = _ar.res, data = _ar.data;
       if (!res || !res.ok || !data || data.error || !data.imageB64) {
         throw new Error((data && data.error) || 'no image returned');
       }
-      var outUrl = _nbImageDataUrl(data.mime, data.imageB64);
-
-      // Safety gate — a relight + shadow pass changes pixels moderately; a full
-      // re-render changes far more. If the change blows past the ceiling, the model
-      // likely redrew content (risking the product) — keep the base instead.
-      var ceil = (window._blendMaxMeanDiff != null) ? window._blendMaxMeanDiff : 60;
-      var diff = await _blendMeanDiff(baseUrl, outUrl);
-      if (diff > ceil) {
-        seg.nbPreviewDataUrl = baseUrl; seg._blendedFrom = null;
-        _showBlendRevert(segIdx, false);
-        showToast('Blend changed too much (Δ' + Math.round(diff) + ') — kept the original to protect the product. Try again.', 'warning', 8000);
-      } else {
-        seg.nbPreviewDataUrl = outUrl; seg._blendedFrom = outUrl; seg.nbApproved = null;
-        _showBlendRevert(segIdx, true);
-        showToast('Scene ' + (segIdx + 1) + ' blended in ✓' + (diff >= 0 ? ' (Δ' + Math.round(diff) + ')' : ''), 'success');
-      }
+      seg.nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
+      seg.nbApproved = null;
+      _showBlendRevert(segIdx, true);
       saveSegments();
       var img = document.getElementById('nb-approval-img-' + segIdx);
       if (img) img.src = seg.nbPreviewDataUrl;
+      showToast('Scene ' + (segIdx + 1) + ' background swapped ✓', 'success');
     } catch (e) {
-      showToast('Blend failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
+      showToast('Background swap failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
     } finally {
-      if (btn) { btn.innerHTML = _orig || '✨ Blend in'; btn.disabled = false; btn.style.opacity = '1'; }
+      if (btn) { btn.innerHTML = _orig || '🖼 Swap BG'; btn.disabled = false; btn.style.opacity = '1'; }
     }
   }
-  window.harmonizeNbFrame = harmonizeNbFrame;
+  window.swapBackgroundNbFrame = swapBackgroundNbFrame;
 
-  // Undo a blend — restore the saved pre-blend composite.
+  // Undo — restore the saved original frame (works after a background swap).
   function revertBlend(segIdx) {
     var seg = segments[segIdx];
-    if (!seg || !seg.nbPreviewBase) { showToast('Nothing to undo.', 'info'); return; }
-    seg.nbPreviewDataUrl = seg.nbPreviewBase;
-    seg._blendedFrom = null;
+    if (!seg || !seg.nbEditOriginal) { showToast('Nothing to undo.', 'info'); return; }
+    seg.nbPreviewDataUrl = seg.nbEditOriginal;
+    seg.nbEditOriginal = null;
     seg.nbApproved = null;
     saveSegments();
     var img = document.getElementById('nb-approval-img-' + segIdx);
     if (img) img.src = seg.nbPreviewDataUrl;
     _showBlendRevert(segIdx, false);
-    showToast('Reverted to the un-blended frame.', 'info');
+    showToast('Reverted to the original frame.', 'info');
   }
   window.revertBlend = revertBlend;
 
