@@ -416,20 +416,24 @@ const runComposite = async (event) => {
     if (!srcB64) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Harmonize needs an input image.' }) };
     }
-    const hSystem = 'You are a professional photographic retoucher performing LIGHTING HARMONIZATION only. You are given one finished image in which a person was composited into a scene and looks pasted (mismatched light and color, no grounding shadows). Your ONLY job is to make it read as a single, naturally-captured photograph by unifying light and color. You must NOT change, move, resize, add, remove, redraw, or restyle any object, product, package, label, text, logo, hand, finger, face, body, pose, or the composition/framing. Preserve identical geometry and every pixel of any product label/text. Relight and regrade only.';
+    const hSystem = 'You are a professional VFX compositor whose job is to SEAT a composited person naturally into a scene by adding SHADOW and LIGHT only. You receive one finished image where a person looks pasted and "floating" — usually because there is no grounding shadow and their light/color does not match the room. You make it read as one real photograph by (1) adding realistic contact and cast shadows that ground the person and any held object to the surfaces, and (2) matching the person\'s light, white balance, exposure, contrast, and grade to the scene. You work ONLY by adding light/shadow and blending edges — never by redrawing content. You must NOT move, resize, add, remove, redraw, or restyle any object, product, package, label, text, logo, hand, finger, face, body, clothing, pose, or the framing. Geometry and every product label/text stay pixel-identical. Keep the person\'s identity identical to the IDENTITY reference and any product identical to the PRODUCT reference.';
     const hParts = [];
-    hParts.push({ text: 'INPUT PHOTO — harmonize this exact image:' });
+    hParts.push({ text: 'INPUT PHOTO — the composite to seat into its scene (relight + ground, do not redraw):' });
     hParts.push({ inlineData: { mimeType: srcMime, data: srcB64 } });
+    if (avatarB64) {
+      hParts.push({ text: 'IDENTITY REFERENCE — the person\'s face and identity must remain exactly like this after relighting:' });
+      hParts.push({ inlineData: { mimeType: avatarMime, data: avatarB64 } });
+    }
     if (productB64) {
       hParts.push({ text: 'PRODUCT REFERENCE — any product/label visible in the input must stay pixel-identical to this; do not alter it:' });
       hParts.push({ inlineData: { mimeType: productMime, data: productB64 } });
     }
-    hParts.push({ text: 'Make the person look naturally photographed in this exact scene. Change ONLY: the light direction and softness on the person to match the scene\'s key light; white balance and color temperature; exposure and brightness; contrast and color grade; and add realistic contact/cast shadows where the body, arms, and any held object meet surfaces. Wrap the scene\'s ambient light, subtle depth-of-field, and grain onto the person so everything shares one film look, and remove any cut-out edge halo. DO NOT change, move, resize, redraw, or regenerate ANY object, product, package, label, text, logo, hands, fingers, faces, bodies, poses, or the framing. Do not add or remove anything. Do not crop or re-frame. Keep identical geometry — relight and regrade the SAME image only. Output the harmonized image at the same resolution and composition.' });
+    hParts.push({ text: 'Seat this person naturally into the scene so they no longer look pasted or floating. DO THIS:\n1) GROUNDING SHADOWS (most important): add a soft, realistic cast shadow on the surfaces beneath and behind the person consistent with the scene\'s key light, plus contact/occlusion shadows where the body, arms, hands, and any held object meet or overlap surfaces. This is what stops the "floating" look.\n2) RELIGHT & GRADE: match the person\'s light direction and softness, white balance / color temperature, exposure, contrast, and overall color grade to the scene; wrap the scene\'s ambient light, subtle depth-of-field, and grain onto the person; remove any hard cut-out edge or halo.\nKEEP EVERYTHING ELSE IDENTICAL: do NOT move, resize, redraw, or regenerate any object, product, package, label, text, logo, the bowl or its contents, hands, fingers, faces, bodies, clothing, poses, or the framing/composition. Do not add or remove objects. Do not crop or re-frame. Change ONLY light, shadow, color, and edge blending — the underlying geometry must stay pixel-for-pixel the same. Output the same image, now naturally lit and grounded.' });
 
     const hReq = {
       systemInstruction: { parts: [{ text: hSystem }] },
       contents: [{ role: 'user', parts: hParts }],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.05 },
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.08 },
     };
     let hResult;
     try { hResult = await callImageModel(hReq, apiKey, false, vtxToken); }

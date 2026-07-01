@@ -931,7 +931,8 @@
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
           + '<div style="display:flex;align-items:center;gap:5px;">'
             + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
-            + '<button id="nb-harmonize-btn-' + idx + '" onclick="event.stopPropagation();harmonizeNbFrame(' + idx + ')" title="Relight & blend into the scene (fixes the pasted look) — changes only lighting/color, never the product or composition" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">✨ Blend in</button>'
+            + '<button id="nb-harmonize-btn-' + idx + '" onclick="event.stopPropagation();harmonizeNbFrame(' + idx + ')" title="Seat him into the scene: add grounding shadows + relight (never redraws the product or composition)" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">✨ Blend in</button>'
+            + '<button id="nb-revert-btn-' + idx + '" onclick="event.stopPropagation();revertBlend(' + idx + ')" title="Undo blend — restore the original frame" style="display:' + ((seg.nbPreviewBase && seg._blendedFrom === seg.nbPreviewDataUrl) ? 'inline-block' : 'none') + ';padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);border-radius:4px;color:#94a3b8;cursor:pointer;">↩ Undo</button>'
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
@@ -961,9 +962,45 @@
   }
   window.openNbApprovalModal = openNbApprovalModal;
 
-  // ── Harmonize / "Blend in": lighting-only pass to remove the pasted look ─────
-  // Sends the finished composite back to the model to unify light/color/shadows,
-  // re-locking any product so labels stay identical. Content-preserving by design.
+  // ── "Blend in": seat the composited person into the scene (shadow + light) ───
+  // Adds grounding shadows + relights the person to the scene, identity + product
+  // re-locked. Three safety nets: always blends from a saved BASE (no compounding),
+  // a change-magnitude gate that rejects gross redraws, and one-click Undo.
+
+  // Mean per-channel pixel difference (0-255) between two data URLs, downscaled.
+  // Returns -1 if it can't measure (then we don't block on it).
+  function _blendMeanDiff(urlA, urlB) {
+    return new Promise(function (resolve) {
+      var W = 96, H = 170, done = false, loaded = 0;
+      var ca = document.createElement('canvas'), cb = document.createElement('canvas');
+      ca.width = cb.width = W; ca.height = cb.height = H;
+      var xa = ca.getContext('2d', { willReadFrequently: true });
+      var xb = cb.getContext('2d', { willReadFrequently: true });
+      var ia = new Image(), ib = new Image();
+      function fail() { if (!done) { done = true; resolve(-1); } }
+      function go() {
+        try {
+          xa.drawImage(ia, 0, 0, W, H); xb.drawImage(ib, 0, 0, W, H);
+          var da = xa.getImageData(0, 0, W, H).data, db = xb.getImageData(0, 0, W, H).data;
+          var tot = 0, n = 0;
+          for (var p = 0; p < da.length; p += 4) {
+            tot += Math.abs(da[p] - db[p]) + Math.abs(da[p + 1] - db[p + 1]) + Math.abs(da[p + 2] - db[p + 2]); n += 3;
+          }
+          done = true; resolve(n ? tot / n : 0);
+        } catch (e) { fail(); }
+      }
+      ia.onload = function () { if (++loaded === 2) go(); };
+      ib.onload = function () { if (++loaded === 2) go(); };
+      ia.onerror = fail; ib.onerror = fail;
+      ia.src = urlA; ib.src = urlB;
+    });
+  }
+
+  function _showBlendRevert(idx, show) {
+    var b = document.getElementById('nb-revert-btn-' + idx);
+    if (b) b.style.display = show ? 'inline-block' : 'none';
+  }
+
   async function harmonizeNbFrame(segIdx) {
     var seg = segments[segIdx];
     if (!seg || !seg.nbPreviewDataUrl) { showToast('Generate this frame first.', 'warning'); return; }
@@ -976,16 +1013,33 @@
         var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
         if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
       } catch(_) {}
-      if (!jwt) { showToast('Please log in to harmonize.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
+      if (!jwt) { showToast('Please log in to blend.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
 
       var _nbPx = window._nbMaxQuality ? 1280 : 768;
       var _nbJq = window._nbMaxQuality ? 0.9  : 0.8;
 
-      var _srcComp  = await _nbCompressImage(seg.nbPreviewDataUrl, _nbPx, _nbJq);
+      // Base management — always blend from the ORIGINAL composite so repeated blends
+      // don't compound. If the current frame isn't our last blend output (e.g. after a
+      // Redo), adopt it as the fresh base.
+      if (seg._blendedFrom !== seg.nbPreviewDataUrl || !seg.nbPreviewBase) {
+        seg.nbPreviewBase = seg.nbPreviewDataUrl;
+      }
+      var baseUrl = seg.nbPreviewBase;
+
+      var _srcComp  = await _nbCompressImage(baseUrl, _nbPx, _nbJq);
       var _srcParts = _nbSplitDataUrl(_srcComp);
       var body = { harmonize: true, harmonizeB64: _srcParts.b64, harmonizeMime: _srcParts.mime };
 
-      // Re-lock the product (if this scene uses one) so its label stays pixel-identical.
+      // Identity lock — pass the avatar so relighting can't drift his face.
+      try {
+        if (typeof avatarImageDataUrl !== 'undefined' && avatarImageDataUrl) {
+          var _aC = await _nbCompressImage(avatarImageDataUrl, _nbPx, _nbJq);
+          var _aP = _nbSplitDataUrl(_aC);
+          body.avatarB64 = _aP.b64; body.avatarMime = _aP.mime;
+        }
+      } catch(_) {}
+
+      // Product lock — keep the label pixel-identical.
       try {
         var _pUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl) || window._producerProductImageUrl || null;
         if (_pUrl && seg.showProduct) {
@@ -1000,12 +1054,25 @@
       if (!res || !res.ok || !data || data.error || !data.imageB64) {
         throw new Error((data && data.error) || 'no image returned');
       }
-      seg.nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
-      seg.nbApproved = null;
+      var outUrl = _nbImageDataUrl(data.mime, data.imageB64);
+
+      // Safety gate — a relight + shadow pass changes pixels moderately; a full
+      // re-render changes far more. If the change blows past the ceiling, the model
+      // likely redrew content (risking the product) — keep the base instead.
+      var ceil = (window._blendMaxMeanDiff != null) ? window._blendMaxMeanDiff : 60;
+      var diff = await _blendMeanDiff(baseUrl, outUrl);
+      if (diff > ceil) {
+        seg.nbPreviewDataUrl = baseUrl; seg._blendedFrom = null;
+        _showBlendRevert(segIdx, false);
+        showToast('Blend changed too much (Δ' + Math.round(diff) + ') — kept the original to protect the product. Try again.', 'warning', 8000);
+      } else {
+        seg.nbPreviewDataUrl = outUrl; seg._blendedFrom = outUrl; seg.nbApproved = null;
+        _showBlendRevert(segIdx, true);
+        showToast('Scene ' + (segIdx + 1) + ' blended in ✓' + (diff >= 0 ? ' (Δ' + Math.round(diff) + ')' : ''), 'success');
+      }
       saveSegments();
       var img = document.getElementById('nb-approval-img-' + segIdx);
       if (img) img.src = seg.nbPreviewDataUrl;
-      showToast('Scene ' + (segIdx + 1) + ' blended into the scene ✓', 'success');
     } catch (e) {
       showToast('Blend failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
     } finally {
@@ -1013,6 +1080,21 @@
     }
   }
   window.harmonizeNbFrame = harmonizeNbFrame;
+
+  // Undo a blend — restore the saved pre-blend composite.
+  function revertBlend(segIdx) {
+    var seg = segments[segIdx];
+    if (!seg || !seg.nbPreviewBase) { showToast('Nothing to undo.', 'info'); return; }
+    seg.nbPreviewDataUrl = seg.nbPreviewBase;
+    seg._blendedFrom = null;
+    seg.nbApproved = null;
+    saveSegments();
+    var img = document.getElementById('nb-approval-img-' + segIdx);
+    if (img) img.src = seg.nbPreviewDataUrl;
+    _showBlendRevert(segIdx, false);
+    showToast('Reverted to the un-blended frame.', 'info');
+  }
+  window.revertBlend = revertBlend;
 
   function toggleNbApproval(segIdx) {
     var seg = segments[segIdx];
