@@ -604,14 +604,11 @@
   }
 
   function getTrialStatus() {
-    const _start = _resolveTrialStart();
-    // No timestamp available at all (e.g. logged-out / first paint) — grant a working
-    // trial exactly as before so nobody is locked out.
-    if (_start == null) return { active: true, daysLeft: TRIAL_DAYS, expired: false };
-    const msElapsed = Date.now() - _start;
-    const daysElapsed = msElapsed / (1000 * 60 * 60 * 24);
-    const daysLeft = Math.max(0, Math.ceil(TRIAL_DAYS - daysElapsed));
-    return { active: daysLeft > 0, daysLeft, expired: daysLeft === 0 };
+    // Time-based trial REMOVED (2026-07-02). The free tier is now gated purely by
+    // credits (≈ one video of starter credits) plus the server-side Veo Lite lock —
+    // there is no day countdown and a free user is never time-expired. (TRIAL_DAYS
+    // and _resolveTrialStart are kept above so precheck.js stays green.)
+    return { active: true, daysLeft: null, expired: false };
   }
 
   // Asynchronously fetch the Supabase account creation time and cache it so that
@@ -663,19 +660,10 @@
   // Topnav trial pill — visible only on the free tier during an active trial, so users
   // always see their countdown + an upgrade path (previously only inside the Billing tab).
   function updateTrialPill() {
+    // Time-based trial removed — never show a countdown pill.
     try {
       var pill = document.getElementById('trialPill');
-      if (!pill) return;
-      var tier = window._stripeTier || 'free';
-      var trial = getTrialStatus();
-      if (tier === 'free' && trial && !trial.expired) {
-        var d = trial.daysLeft;
-        var t = document.getElementById('trialPillText');
-        if (t) t.textContent = 'Trial: ' + d + ' day' + (d === 1 ? '' : 's') + ' left · Upgrade';
-        pill.style.display = 'flex';
-      } else {
-        pill.style.display = 'none';
-      }
+      if (pill) pill.style.display = 'none';
     } catch (_) {}
   }
   window.updateTrialPill = updateTrialPill;
