@@ -778,9 +778,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     reader.onload = function(ev) {
       try {
         bgFromAvatar = false;
-        useAvatarBg = true;
         DB.remove('sm_bg_from_avatar').catch(e => console.warn('onBgImageChange remove error:', e));
-        DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('onBgImageChange mode error:', e));
         _applyBgToUI(ev.target.result);
         DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('onBgImageChange set error:', e));
         // Extract a plain-text description of this background for use in NB prompts.
@@ -823,11 +821,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       return;
     }
     bgFromAvatar = true;
-    useAvatarBg = true;
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('useAvatarAsBg bg error:', e));
     DB.set('sm_bg_from_avatar', '1').catch(e => console.warn('useAvatarAsBg flag error:', e));
-    DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('useAvatarAsBg mode error:', e));
     // Extract a plain-text description of the background in the avatar photo.
     // Also immediately patch prompts so photo_guide switches to bgFromAvatar mode
     // (description arrives async — extractBgDescription patches again when ready).
@@ -846,9 +842,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function setSceneBackground(dataUrl) {
     if (!dataUrl) { clearBgImage(); return; }
     bgFromAvatar = false;
-    useAvatarBg = true;
     DB.remove('sm_bg_from_avatar').catch(() => {});
-    DB.set('sm_use_avatar_bg', '1').catch(() => {});
     _applyBgToUI(dataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(() => {});
     extractBgDescription(dataUrl);
@@ -951,7 +945,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function loadBgImage() {
     Promise.all([DB.get('sm_bg_image'), DB.get('sm_bg_from_avatar'), DB.get('sm_use_avatar_bg'), DB.get('sm_bg_description')]).then(([saved, fromAvatar, avatarBg, savedDesc]) => {
       bgFromAvatar  = fromAvatar === '1';
-      useAvatarBg   = avatarBg === '1';
+      // Background-replace mode is retired: composites keep the ORIGINAL scene frame (aligned).
+      // A stale saved "on" flag must not force the misaligned "imagine a new background" mode.
+      useAvatarBg   = false;
+      if (avatarBg === '1') DB.remove('sm_use_avatar_bg').catch(() => {});
       if (savedDesc) bgDescription = savedDesc;
       if (saved) _applyBgToUI(saved);
       const badge = document.getElementById('bgAvatarBadge');
