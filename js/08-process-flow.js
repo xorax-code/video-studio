@@ -206,6 +206,12 @@
     // ── 4. Load new mode's projects + segments ────────────────────────────────
     await loadProjects();
 
+    // One-time self-heal: strip any stale "[[BGMODE]] replace the background entirely"
+    // instruction baked into saved prompts. Background-replace mode is retired (useAvatarBg
+    // is false), so patchNbPromptBackground() removes that block and rebuilds each prompt so
+    // the composite keeps the ORIGINAL scene frame (aligned) instead of imagining a new one.
+    try { if (typeof patchNbPromptBackground === 'function') patchNbPromptBackground(); } catch(_) {}
+
     // ── 5. Restore an in-progress run's status panel, if any ──────────────────
     await restoreActiveRun();
 
