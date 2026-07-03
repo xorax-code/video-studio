@@ -865,82 +865,225 @@
   // ── NB Approval Modal ─────────────────────────────────────────────────────
   // Shows all generated NB composites side-by-side with approve/reject toggles.
   // Approved composites become the start frame for Veo generation.
+  // Beat color map (matches mockup beat tokens)
+  var _RV_BEAT = {
+    hook:    {c:'#5b9df9', label:'Hook — the opener'},
+    problem: {c:'#f0803c', label:'Problem — the pain point'},
+    solution:{c:'#34D399', label:'Solution — the turn'},
+    proof:   {c:'#a78bfa', label:'Proof — social proof'},
+    cta:     {c:'#e0a83a', label:'CTA — the ask'}
+  };
+  function _rvBeatKey(seg){
+    var b = String((seg && seg.beat) || '').toLowerCase();
+    if (b.indexOf('hook')>=0) return 'hook';
+    if (b.indexOf('problem')>=0) return 'problem';
+    if (b.indexOf('solution')>=0) return 'solution';
+    if (b.indexOf('proof')>=0) return 'proof';
+    if (b.indexOf('cta')>=0 || b.indexOf('call')>=0) return 'cta';
+    return '';
+  }
+  var _rvIdx = 0;
+  var _rvList = [];
+  var _rvForceApi = false;
+
   function openNbApprovalModal(fromProcessEverything) {
-    var withComposites = segments.filter(function(s) { return s.nbPreviewDataUrl; });
-    if (!withComposites.length) {
+    var _allSegs = (typeof segments !== 'undefined' && segments && segments.length) ? segments : (window.segments || []);
+    _rvList = _allSegs.filter(function(s) { return s.nbPreviewDataUrl; });
+    if (!_rvList.length) {
       showToast('Generate NB composites first.', 'warning');
       return;
     }
-
+    _rvForceApi = !!fromProcessEverything;
     var existing = document.getElementById('nbApprovalModal');
     if (existing) existing.remove();
 
+    if (_rvIdx >= _rvList.length) _rvIdx = 0;
+
     var modal = document.createElement('div');
     modal.id = 'nbApprovalModal';
-    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px;';
-
-    var inner = document.createElement('div');
-    inner.style.cssText = 'background:var(--surface);border:1px solid var(--border-2);border-radius:12px;padding:20px;max-width:960px;width:100%;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;gap:16px;';
-
-    // Header
-    var header = document.createElement('div');
-    header.style.cssText = 'display:flex;align-items:center;justify-content:space-between;';
-    header.innerHTML = '<div style="font-size:15px;font-weight:800;color:var(--text-1);">✅ Review Start Frames</div>'
-      + '<div style="display:flex;gap:8px;">'
-      + '<button onclick="approveAllNbComposites(true)" style="padding:5px 12px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.5);border-radius:6px;color:#34d399;cursor:pointer;">✓ Approve All</button>'
-      + '<button onclick="approveAllNbComposites(false)" style="padding:5px 12px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.3);border-radius:6px;color:var(--danger);cursor:pointer;">✕ Reject All</button>'
-      + '<button onclick="document.getElementById(\'nbApprovalModal\').remove()" style="padding:5px 10px;font-size:12px;font-family:inherit;background:var(--surface-3);border:1px solid var(--border-2);border-radius:6px;color:var(--text-2);cursor:pointer;">Close</button>'
-      + '</div>';
-
-    var subtext = document.createElement('div');
-    subtext.style.cssText = 'font-size:11px;color:var(--text-3);margin-top:-8px;';
-    subtext.textContent = 'Approve the composites you want to use as start frames for Veo 3. Rejected scenes will use the raw video frame instead.';
-
-    // Grid of composites
-    var grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;';
-
-    withComposites.forEach(function(seg) {
-      var idx = segments.indexOf(seg);
-      var approved = seg.nbApproved !== false; // default true
-      var card = document.createElement('div');
-      card.id = 'nb-approval-card-' + idx;
-      card.style.cssText = 'border:2px solid ' + (approved ? 'rgba(52,211,153,0.7)' : 'rgba(248,113,113,0.5)')
-        + ';border-radius:8px;overflow:hidden;background:var(--surface-2);cursor:pointer;';
-      card.innerHTML = '<img id="nb-approval-img-' + idx + '" src="' + seg.nbPreviewDataUrl + '" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;">'
-        + '<div style="padding:6px 8px;display:flex;align-items:center;justify-content:space-between;gap:6px;">'
-          + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
-          + '<div style="display:flex;align-items:center;gap:5px;">'
-            + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
-            + '<button id="nb-swapbg-btn-' + idx + '" onclick="event.stopPropagation();swapBackgroundNbFrame(' + idx + ')" title="Swap the background to your uploaded custom background — grounded & relit, keeps the person and product" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">🖼 Swap BG</button>'
-            + '<button id="nb-revert-btn-' + idx + '" onclick="event.stopPropagation();revertBlend(' + idx + ')" title="Undo — restore the original frame" style="display:' + (seg.nbEditOriginal ? 'inline-block' : 'none') + ';padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);border-radius:4px;color:#94a3b8;cursor:pointer;">↩ Undo</button>'
-            + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
+    modal.className = 'rv-scrim';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(4,4,6,.72);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:24px;';
+    modal.innerHTML =
+      '<div class="rv-modal" role="dialog" aria-label="Review start frames" style="width:min(900px,96vw);height:min(600px,92vh);background:var(--surface,#101013);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:14px;box-shadow:0 12px 34px rgba(0,0,0,.5);display:flex;flex-direction:column;overflow:hidden;font-family:inherit;">'
+      + '<div class="rv-head" style="display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid var(--border,rgba(255,255,255,.08));flex-shrink:0;">'
+        + '<div style="font-size:14.5px;font-weight:600;letter-spacing:-.2px;display:flex;align-items:center;gap:9px;color:var(--text-1,#f5f5f6);"><i class="ti ti-eye-check" style="color:#34D399;"></i> Review Start Frames</div>'
+        + '<div style="display:flex;align-items:center;gap:14px;">'
+          + '<span style="font-size:12px;color:var(--text-3,rgba(255,255,255,.5));"><b id="rvApproved" style="color:#34D399;">0</b> of ' + _rvList.length + ' approved</span>'
+          + '<button onclick="document.getElementById(\'nbApprovalModal\').remove()" title="Close" style="width:32px;height:32px;border-radius:8px;background:transparent;border:1px solid transparent;color:var(--text-3,rgba(255,255,255,.5));display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;"><i class="ti ti-x"></i></button>'
+        + '</div>'
+      + '</div>'
+      + '<div class="rv-stage" style="flex:1;min-height:0;display:flex;gap:18px;padding:18px;">'
+        + '<div class="rv-frame" id="rvFrame" style="width:206px;flex-shrink:0;aspect-ratio:9/16;border-radius:12px;overflow:hidden;border:1px solid var(--border-2,rgba(255,255,255,.14));position:relative;background:#000;">'
+          + '<img id="rvImg" src="" alt="" style="width:100%;height:100%;object-fit:cover;">'
+          + '<span id="rvBeat" style="position:absolute;top:10px;left:10px;font-size:9px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;padding:2px 8px;border-radius:999px;background:rgba(0,0,0,.5);border:1px solid var(--border-2,rgba(255,255,255,.14));display:none;"></span>'
+          + '<span id="rvShot" style="position:absolute;bottom:10px;left:10px;font-size:9px;font-weight:600;padding:2px 7px;border-radius:5px;background:rgba(0,0,0,.6);color:var(--text-2,rgba(255,255,255,.68));border:1px solid var(--border-2,rgba(255,255,255,.14));letter-spacing:.03em;display:none;"></span>'
+        + '</div>'
+        + '<div class="rv-info" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:13px;">'
+          + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">Scene <span id="rvNum">1</span> · beat</div><div id="rvBeatName" style="font-size:13.5px;color:var(--text-1,#f5f5f6);line-height:1.5;">—</div></div>'
+          + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">Action</div><div id="rvAction" style="font-size:13.5px;color:var(--text-1,#f5f5f6);line-height:1.5;">—</div></div>'
+          + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">On-screen caption</div><div id="rvCap" style="font-family:\'Geist Mono\',monospace;font-size:12.5px;color:var(--text-2,rgba(255,255,255,.68));background:var(--bg,#08080a);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:8px;padding:9px 11px;line-height:1.4;">—</div></div>'
+          + '<div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;">'
+            + '<input id="rvOverride" type="text" placeholder="✎ Fix this scene (e.g. empty hands), then Redo" oninput="rvSetOverride(this.value)" style="width:100%;box-sizing:border-box;background:var(--bg,#08080a);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:8px;color:var(--text-1,#f5f5f6);font-size:11px;padding:8px 10px;font-family:inherit;outline:none;"/>'
+            + '<div style="display:flex;gap:8px;">'
+              + '<button id="rvApproveBtn" onclick="rvApprove()" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--border-2,rgba(255,255,255,.14));background:var(--surface-2,#16161a);color:var(--text-1,#f5f5f6);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;"><i class="ti ti-check"></i> Approve <span class="rv-kbd" style="font-family:\'Geist Mono\',monospace;font-size:10px;background:var(--surface-3,#1d1d22);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:4px;padding:0 5px;color:var(--text-3,rgba(255,255,255,.5));margin-left:6px;">A</span></button>'
+              + '<button id="rvRedoBtn" onclick="rvRedo()" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--border-2,rgba(255,255,255,.14));background:var(--surface-2,#16161a);color:var(--text-1,#f5f5f6);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;"><i class="ti ti-refresh"></i> Redo <span class="rv-kbd" style="font-family:\'Geist Mono\',monospace;font-size:10px;background:var(--surface-3,#1d1d22);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:4px;padding:0 5px;color:var(--text-3,rgba(255,255,255,.5));margin-left:6px;">R</span></button>'
+              + '<button id="rvSwapBtn" onclick="rvSwapBg()" style="flex:1;height:36px;border-radius:8px;border:1px solid var(--border-2,rgba(255,255,255,.14));background:var(--surface-2,#16161a);color:var(--text-1,#f5f5f6);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;"><i class="ti ti-photo"></i> Swap BG <span class="rv-kbd" style="font-family:\'Geist Mono\',monospace;font-size:10px;background:var(--surface-3,#1d1d22);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:4px;padding:0 5px;color:var(--text-3,rgba(255,255,255,.5));margin-left:6px;">B</span></button>'
+            + '</div>'
+            + '<button id="rvUndoBtn" onclick="rvUndo()" style="display:none;height:30px;border-radius:8px;border:1px solid var(--border-2,rgba(255,255,255,.14));background:transparent;color:var(--text-3,rgba(255,255,255,.5));font-family:inherit;font-size:12px;font-weight:600;cursor:pointer;align-items:center;justify-content:center;gap:6px;"><i class="ti ti-arrow-back-up"></i> Undo edit</button>'
           + '</div>'
         + '</div>'
-        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + escAttr(seg.nbOverride || '') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
-      card.onclick = function() { toggleNbApproval(idx); };
-      grid.appendChild(card);
-    });
+      + '</div>'
+      + '<div class="rv-strip" id="rvStrip" style="flex-shrink:0;display:flex;gap:8px;padding:11px 18px;border-top:1px solid var(--border,rgba(255,255,255,.08));overflow-x:auto;"></div>'
+      + '<div class="rv-foot" style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-top:1px solid var(--border,rgba(255,255,255,.08));flex-shrink:0;">'
+        + '<span style="font-size:11px;color:var(--text-4,rgba(255,255,255,.34));">← → navigate · A approve · R redo · B swap bg · Esc close</span>'
+        + '<button id="rvGenBtn" onclick="rvGenerate()" style="display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 15px;border-radius:8px;font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;border:1px solid rgba(16,185,129,.5);color:#04130d;background:linear-gradient(180deg,#3fd89b,#10b981);box-shadow:inset 0 1px 0 rgba(255,255,255,.25),0 1px 2px rgba(0,0,0,.4);"><i class="ti ti-sparkles"></i> Generate Video <span id="rvCost" style="font-size:11px;font-weight:600;padding:1px 7px;border-radius:999px;background:rgba(4,19,13,.22);margin-left:2px;"></span></button>'
+      + '</div>'
+      + '</div>';
 
-    // Footer
-    var footer = document.createElement('div');
-    footer.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;padding-top:8px;border-top:1px solid var(--border);';
-    // fromProcessEverything flag is captured in closure so the button always uses API
-    // mode when called from processEverything, regardless of the mode toggle state.
-    // When called standalone, the button checks the mode dynamically at click time.
-    var _forceApi = !!fromProcessEverything;
-
-    footer.innerHTML = '<button onclick="document.getElementById(\'nbApprovalModal\').remove()" style="padding:7px 16px;font-size:12px;font-family:inherit;background:var(--surface-3);border:1px solid var(--border-2);border-radius:7px;color:var(--text-2);cursor:pointer;">Done</button>'
-      + '<button onclick="(function(){document.getElementById(\'nbApprovalModal\').remove();var _api=' + (_forceApi ? 'true' : '(typeof getGenerateMode===\'function\'?getGenerateMode():\'api\')===\'api\'') + ';if(_api){if(typeof generateAllScenesViaAPI===\'function\')generateAllScenesViaAPI();}else{if(typeof showPreflightModal===\'function\')showPreflightModal(false);}})()" style="padding:7px 16px;font-size:12px;font-weight:700;font-family:inherit;background:rgba(52,211,153,0.15);border:1px solid rgba(52,211,153,0.5);border-radius:7px;color:#34d399;cursor:pointer;">⚡ Generate Approved →</button>';
-
-    inner.appendChild(header);
-    inner.appendChild(subtext);
-    inner.appendChild(grid);
-    inner.appendChild(footer);
-    modal.appendChild(inner);
-    modal.onclick = function(e) { if (e.target === modal) modal.remove(); };
+    modal.onclick = function(e) { if (e.target === modal) { modal.remove(); document.removeEventListener('keydown', _rvKeyHandler); } };
     document.body.appendChild(modal);
+    _rvRenderStrip();
+    _rvShow(_rvIdx);
+    document.addEventListener('keydown', _rvKeyHandler);
   }
+
+  function _rvKeyHandler(e){
+    if (!document.getElementById('nbApprovalModal')) { document.removeEventListener('keydown', _rvKeyHandler); return; }
+    var tag = (e.target && e.target.tagName) || '';
+    var typing = (tag === 'INPUT' || tag === 'TEXTAREA');
+    if (e.key === 'Escape') { document.getElementById('nbApprovalModal').remove(); document.removeEventListener('keydown', _rvKeyHandler); return; }
+    if (typing) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); _rvShow(Math.min(_rvIdx+1, _rvList.length-1)); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); _rvShow(Math.max(_rvIdx-1, 0)); }
+    else if (e.key === 'a' || e.key === 'A') { e.preventDefault(); rvApprove(); }
+    else if (e.key === 'r' || e.key === 'R') { e.preventDefault(); rvRedo(); }
+    else if (e.key === 'b' || e.key === 'B') { e.preventDefault(); rvSwapBg(); }
+  }
+
+  function _rvSegAt(i){ return _rvList[i]; }
+  function _rvGlobalIdx(i){ var _a=(typeof segments!=='undefined'&&segments&&segments.length)?segments:(window.segments||_rvList); var gi=_a.indexOf(_rvList[i]); return gi>=0?gi:i; }
+
+  function _rvRenderStrip(){
+    var strip = document.getElementById('rvStrip');
+    if (!strip) return;
+    strip.innerHTML = '';
+    _rvList.forEach(function(seg, i){
+      var approved = seg.nbApproved !== false;
+      var t = document.createElement('div');
+      t.onclick = function(){ _rvShow(i); };
+      t.style.cssText = 'width:50px;height:70px;border-radius:8px;overflow:hidden;border:2px solid ' + (i===_rvIdx ? '#10B981' : 'transparent') + ';position:relative;cursor:pointer;flex-shrink:0;background:#000;';
+      t.setAttribute('data-rvthumb', i);
+      t.innerHTML = '<img src="' + seg.nbPreviewDataUrl + '" style="width:100%;height:100%;object-fit:cover;opacity:' + (i===_rvIdx?'1':'.55') + ';">'
+        + '<span style="position:absolute;bottom:2px;left:4px;font-size:9px;font-weight:700;color:#fff;text-shadow:0 1px 3px #000;">' + (_rvGlobalIdx(i)+1) + '</span>'
+        + '<span style="position:absolute;top:3px;right:3px;width:15px;height:15px;border-radius:50%;background:#10B981;color:#04130d;display:' + (approved?'flex':'none') + ';align-items:center;justify-content:center;font-size:11px;"><i class="ti ti-check"></i></span>';
+      strip.appendChild(t);
+    });
+  }
+
+  function _rvUpdateApprovedCount(){
+    var approvedSegs = _rvList.filter(function(s){ return s.nbApproved !== false; });
+    var n = approvedSegs.length;
+    var el = document.getElementById('rvApproved');
+    if (el) el.textContent = n;
+    var costEl = document.getElementById('rvCost');
+    if (costEl) {
+      var c = 0;
+      try { if (typeof estimateCredits === 'function') c = estimateCredits(approvedSegs); } catch(e){ c = 0; }
+      costEl.textContent = c ? ('~' + c + ' cr') : '';
+      costEl.style.display = c ? 'inline-block' : 'none';
+    }
+  }
+
+  function _rvShow(i){
+    if (i < 0 || i >= _rvList.length) return;
+    _rvIdx = i;
+    var seg = _rvSegAt(i);
+    var gIdx = _rvGlobalIdx(i);
+    var img = document.getElementById('rvImg');
+    if (img) img.src = seg.nbPreviewDataUrl;
+    // beat badge
+    var bk = _rvBeatKey(seg);
+    var beatEl = document.getElementById('rvBeat');
+    var beatName = document.getElementById('rvBeatName');
+    if (bk && _RV_BEAT[bk]) {
+      if (beatEl) { beatEl.style.display='inline-block'; beatEl.textContent = bk; beatEl.style.color = _RV_BEAT[bk].c; }
+      if (beatName) beatName.textContent = _RV_BEAT[bk].label;
+    } else {
+      if (beatEl) beatEl.style.display='none';
+      if (beatName) beatName.textContent = (seg.beat || '—');
+    }
+    var shotEl = document.getElementById('rvShot');
+    var shot = String(seg._shot || '').trim();
+    if (shotEl) { if (shot) { shotEl.style.display='inline-block'; shotEl.textContent = shot.toUpperCase(); } else { shotEl.style.display='none'; } }
+    var numEl = document.getElementById('rvNum'); if (numEl) numEl.textContent = (gIdx+1);
+    var actEl = document.getElementById('rvAction'); if (actEl) actEl.textContent = (seg.action || '—');
+    var capEl = document.getElementById('rvCap'); if (capEl) capEl.textContent = (seg.onScreenText || seg.script || '—');
+    var ov = document.getElementById('rvOverride'); if (ov) ov.value = (seg.nbOverride || '');
+    // approve button state
+    var approved = seg.nbApproved !== false;
+    var ab = document.getElementById('rvApproveBtn');
+    if (ab) {
+      if (approved) { ab.style.background='rgba(16,185,129,.12)'; ab.style.borderColor='rgba(16,185,129,.32)'; ab.style.color='#34D399'; ab.innerHTML='<i class="ti ti-check"></i> Approved <span class="rv-kbd" style="font-family:\'Geist Mono\',monospace;font-size:10px;background:var(--surface-3,#1d1d22);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:4px;padding:0 5px;color:var(--text-3,rgba(255,255,255,.5));margin-left:6px;">A</span>'; }
+      else { ab.style.background='var(--surface-2,#16161a)'; ab.style.borderColor='var(--border-2,rgba(255,255,255,.14))'; ab.style.color='var(--text-1,#f5f5f6)'; ab.innerHTML='<i class="ti ti-check"></i> Approve <span class="rv-kbd" style="font-family:\'Geist Mono\',monospace;font-size:10px;background:var(--surface-3,#1d1d22);border:1px solid var(--border-2,rgba(255,255,255,.14));border-radius:4px;padding:0 5px;color:var(--text-3,rgba(255,255,255,.5));margin-left:6px;">A</span>'; }
+    }
+    // undo button visibility
+    var ub = document.getElementById('rvUndoBtn');
+    if (ub) ub.style.display = seg.nbEditOriginal ? 'inline-flex' : 'none';
+    // strip highlight
+    var strip = document.getElementById('rvStrip');
+    if (strip) Array.prototype.forEach.call(strip.children, function(c, ci){
+      var on = (ci===_rvIdx);
+      c.style.borderColor = on ? '#10B981' : 'transparent';
+      var im = c.querySelector('img'); if (im) im.style.opacity = on ? '1' : '.55';
+    });
+    _rvUpdateApprovedCount();
+  }
+
+  // ── Action handlers wired to existing pipeline functions ──
+  window.rvApprove = function(){
+    var seg = _rvSegAt(_rvIdx); if (!seg) return;
+    var gIdx = _rvGlobalIdx(_rvIdx);
+    // toggle: if not approved -> approve; if already approved -> keep approved (Approve is idempotent-forward)
+    seg.nbApproved = (seg.nbApproved === false) ? true : true;
+    if (typeof saveSegments === 'function') saveSegments();
+    // refresh strip check + count, then advance to next unapproved
+    var t = document.querySelector('[data-rvthumb="'+_rvIdx+'"] span:last-child');
+    if (t) t.style.display = 'flex';
+    _rvShow(_rvIdx);
+    // auto-advance
+    if (_rvIdx < _rvList.length-1) setTimeout(function(){ _rvShow(_rvIdx+1); }, 160);
+  };
+  window.rvSetOverride = function(v){
+    var gIdx = _rvGlobalIdx(_rvIdx);
+    if (typeof setNbOverride === 'function') setNbOverride(gIdx, v);
+    else { var seg=_rvSegAt(_rvIdx); if(seg) seg.nbOverride = v; }
+  };
+  window.rvRedo = function(){
+    var gIdx = _rvGlobalIdx(_rvIdx);
+    if (typeof regenNbFrame === 'function') regenNbFrame(gIdx);
+  };
+  window.rvSwapBg = function(){
+    var gIdx = _rvGlobalIdx(_rvIdx);
+    if (typeof swapBackgroundNbFrame === 'function') swapBackgroundNbFrame(gIdx);
+  };
+  window.rvUndo = function(){
+    var gIdx = _rvGlobalIdx(_rvIdx);
+    if (typeof revertBlend === 'function') revertBlend(gIdx);
+  };
+  window.rvGenerate = function(){
+    var m = document.getElementById('nbApprovalModal'); if (m) m.remove();
+    document.removeEventListener('keydown', _rvKeyHandler);
+    var _api = _rvForceApi ? true : ((typeof getGenerateMode === 'function' ? getGenerateMode() : 'api') === 'api');
+    if (_api) { if (typeof generateAllScenesViaAPI === 'function') generateAllScenesViaAPI(); }
+    else { if (typeof showPreflightModal === 'function') showPreflightModal(false); }
+  };
+  // Refresh the currently shown frame image after a redo / swap-bg mutates nbPreviewDataUrl
+  window.rvRefreshCurrent = function(){
+    if (!document.getElementById('nbApprovalModal')) return;
+    _rvShow(_rvIdx);
+    _rvRenderStrip();
+  };
+
   window.openNbApprovalModal = openNbApprovalModal;
 
   // ── "Swap BG" + Undo: post-passes on an approved start frame ────────────────
@@ -1015,6 +1158,7 @@
       saveSegments();
       var img = document.getElementById('nb-approval-img-' + segIdx);
       if (img) img.src = seg.nbPreviewDataUrl;
+      if (typeof rvRefreshCurrent === 'function') rvRefreshCurrent();
       showToast('Scene ' + (segIdx + 1) + ' background swapped ✓', 'success');
     } catch (e) {
       showToast('Background swap failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
@@ -1035,6 +1179,7 @@
     var img = document.getElementById('nb-approval-img-' + segIdx);
     if (img) img.src = seg.nbPreviewDataUrl;
     _showBlendRevert(segIdx, false);
+    if (typeof rvRefreshCurrent === 'function') rvRefreshCurrent();
     showToast('Reverted to the original frame.', 'info');
   }
   window.revertBlend = revertBlend;
@@ -1102,6 +1247,7 @@
     }
 
     if (btn) { btn.disabled = false; btn.textContent = '↺ Redo'; btn.style.opacity = '1'; }
+    if (typeof rvRefreshCurrent === 'function') rvRefreshCurrent();
   };
 
   // ═══════════════════════════════════════════════════════════════════════════

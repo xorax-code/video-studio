@@ -4870,6 +4870,7 @@ Stop fighting it the hard way. [CTA]` },
   }
 
   function _maybeFirstRunNudge() {
+    return; // disabled — first-run template nudge removed for clean mockup UI
     try {
       if (localStorage.getItem('aos_tmpl_nudge')) return;
       setTimeout(function () {

@@ -2342,6 +2342,14 @@
     const _psl = container.scrollLeft, _pst = container.scrollTop;
     renderSegmentTimeline();
     if (countEl) countEl.textContent = segments.length + ' segment' + (segments.length !== 1 ? 's' : '');
+    // Keep the top-bar "Review frames [N ready]" chip in sync — count generated start frames.
+    try {
+      const rc = document.getElementById('reviewFramesCount');
+      if (rc) {
+        const ready = segments.filter(s => s && s.nbPreviewDataUrl).length;
+        rc.textContent = ready + ' ready';
+      }
+    } catch (_) {}
     if (segments.length === 0) {
       // No segments — show toggle btn only if video is loaded, but keep expanded
       const hasVideo = !!document.getElementById('refVideoEl')?.src;

@@ -1332,6 +1332,18 @@
     if (!chip || !val) return;
     const n = typeof balance === 'number' ? balance : (window.userCredits || 0);
     val.textContent = n.toLocaleString();
+    // ── Sidebar plan card (mockup foot) — plan name + "X of Y credits left" + bar ──
+    try {
+      const _t = (window._stripeTier || 'free');
+      const _TIER = { free:{name:'Free plan',cap:50}, starter:{name:'Starter plan',cap:1000}, creator:{name:'Creator plan',cap:2500}, scale:{name:'Scale plan',cap:6500}, pro:{name:'Pro plan',cap:2500}, agency:{name:'Agency plan',cap:6500} };
+      const _info = _TIER[_t] || { name:'Pro plan', cap:2000 };
+      const _pn = document.getElementById('snavPlanName');
+      const _pc = document.getElementById('snavPlanCredits');
+      const _pb = document.getElementById('snavPlanBar');
+      if (_pn) _pn.textContent = _info.name;
+      if (_pc) _pc.textContent = n.toLocaleString() + ' of ' + _info.cap.toLocaleString() + ' credits left';
+      if (_pb) _pb.style.width = Math.max(4, Math.min(100, Math.round(n / _info.cap * 100))) + '%';
+    } catch(_) {}
     const LOW = 50; // ~ under one Fast video — nudge before they hit zero mid-render
     chip.style.borderColor = n <= LOW ? 'rgba(248,113,113,0.6)' : 'rgba(139,92,246,0.35)';
     chip.style.color       = n <= LOW ? '#f87171' : 'var(--accent-2)';
