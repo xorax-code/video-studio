@@ -94,6 +94,26 @@
     _fsRenderSlot(idx);
   };
 
+  // ── Drag & drop onto image slots (reuses the same read/render path) ──────────
+  window.fsSlotDragOver = function(idx, e) {
+    if (e) e.preventDefault();
+    var slot = document.getElementById('fsSlot-' + idx);
+    if (slot) slot.style.borderColor = 'rgba(52,211,153,0.6)';
+  };
+  window.fsSlotDragLeave = function(idx) {
+    var slot = document.getElementById('fsSlot-' + idx);
+    if (slot) slot.style.borderColor = _fsImgSlots[idx] ? 'rgba(52,211,153,0.6)' : 'rgba(255,255,255,0.1)';
+  };
+  window.onFsSlotDrop = function(idx, e) {
+    if (e) { e.preventDefault(); e.stopPropagation(); }
+    var file = e && e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!file || !/^image\//.test(file.type)) { _fsRenderSlot(idx); return; }
+    _fsReadImageFile(file, function(result) {
+      _fsImgSlots[idx] = result;
+      _fsRenderSlot(idx);
+    });
+  };
+
   window.fsSlotClearAll = function() {
     for (var i = 0; i < 6; i++) {
       _fsImgSlots[i] = null;
@@ -112,7 +132,8 @@
     var img = _fsImgSlots[idx];
     if (img) {
       slot.style.backgroundImage    = 'url(' + img.dataUrl + ')';
-      slot.style.backgroundSize     = 'cover';
+      slot.style.backgroundSize     = 'contain';
+      slot.style.backgroundRepeat   = 'no-repeat';
       slot.style.backgroundPosition = 'center';
       slot.style.borderColor = 'rgba(52,211,153,0.6)';
       if (clearX) clearX.style.display = 'flex';
@@ -155,7 +176,8 @@
     if (!slot) return;
     if (_fsVidFrame) {
       slot.style.backgroundImage    = 'url(' + _fsVidFrame.dataUrl + ')';
-      slot.style.backgroundSize     = 'cover';
+      slot.style.backgroundSize     = 'contain';
+      slot.style.backgroundRepeat   = 'no-repeat';
       slot.style.backgroundPosition = 'center';
       slot.style.borderColor = 'rgba(52,211,153,0.6)';
       if (clearX) clearX.style.display = 'flex';

@@ -778,7 +778,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     reader.onload = function(ev) {
       try {
         bgFromAvatar = false;
+        useAvatarBg = true;
         DB.remove('sm_bg_from_avatar').catch(e => console.warn('onBgImageChange remove error:', e));
+        DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('onBgImageChange mode error:', e));
         _applyBgToUI(ev.target.result);
         DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('onBgImageChange set error:', e));
         // Extract a plain-text description of this background for use in NB prompts.
@@ -799,8 +801,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
 
   function clearBgImage() {
     bgFromAvatar = false;
+    useAvatarBg = false;
     bgDescription = '';
     DB.remove('sm_bg_from_avatar').catch(e => console.warn('clearBgFromAvatar error:', e));
+    DB.remove('sm_use_avatar_bg').catch(e => console.warn('clearBgMode error:', e));
     DB.remove('sm_bg_description').catch(e => console.warn('clearBgDescription error:', e));
     _applyBgToUI(null);
     const _bgi = document.getElementById('bgImgInput');
@@ -808,9 +812,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     DB.remove('sm_bg_image').catch(e => console.warn('clearBgImage error:', e));
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'none';
-    // If background mode is on, re-patch all prompts so they drop the Photo 2
+    // Re-patch all prompts unconditionally so they drop the now-cleared Photo 2
     // reference and fall back to the avatar-Photo-1 instruction branch.
-    if (useAvatarBg && typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
+    if (typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
   }
 
   function useAvatarAsBg() {
@@ -819,9 +823,11 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       return;
     }
     bgFromAvatar = true;
+    useAvatarBg = true;
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('useAvatarAsBg bg error:', e));
     DB.set('sm_bg_from_avatar', '1').catch(e => console.warn('useAvatarAsBg flag error:', e));
+    DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('useAvatarAsBg mode error:', e));
     // Extract a plain-text description of the background in the avatar photo.
     // Also immediately patch prompts so photo_guide switches to bgFromAvatar mode
     // (description arrives async — extractBgDescription patches again when ready).
@@ -832,6 +838,25 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     const note = document.getElementById('bgSavedNote');
     if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
   }
+
+  // Programmatic background setter used by the "Generate from text" flow.
+  // Sets a generated/uploaded scene image as the background and activates
+  // background mode so it flows into NB Pro + Veo prompts (mockup has no
+  // separate Lock toggle — choosing a background is what activates it).
+  function setSceneBackground(dataUrl) {
+    if (!dataUrl) { clearBgImage(); return; }
+    bgFromAvatar = false;
+    useAvatarBg = true;
+    DB.remove('sm_bg_from_avatar').catch(() => {});
+    DB.set('sm_use_avatar_bg', '1').catch(() => {});
+    _applyBgToUI(dataUrl);
+    DB.set('sm_bg_image', bgImageDataUrl).catch(() => {});
+    extractBgDescription(dataUrl);
+    if (typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
+    const badge = document.getElementById('bgAvatarBadge');
+    if (badge) badge.style.display = 'none';
+  }
+  window.setSceneBackground = setSceneBackground;
 
   // --- Brand Kit ---
   let _bkSaveTimer = null;

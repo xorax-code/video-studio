@@ -127,7 +127,7 @@
   .phone .side .ic i{font-size:22px}
   /* fanned clips behind */
   .fan{position:absolute;width:190px;aspect-ratio:9/16;border-radius:20px;overflow:hidden;border:1px solid var(--line2);box-shadow:0 24px 60px rgba(0,0,0,.5);opacity:.9}
-  .fan img{width:100%;height:100%;object-fit:cover;filter:saturate(.95)}
+  .fan img,.fan video{width:100%;height:100%;object-fit:cover;filter:saturate(.95)}
   .fan.f1{transform:rotate(-11deg);left:16px;top:120px;z-index:1}
   .fan.f2{transform:rotate(10deg);right:10px;top:96px;z-index:1;opacity:.6}
   .fan.f1{opacity:.6}
@@ -325,10 +325,10 @@
   <div class="hero-right">
     <div class="stage">
       <!-- fanned outputs (one -> many) -->
-      <div class="fan f1"><img src="vid-thumb-2.jpg" alt=""></div>
-      <div class="fan f2"><img src="vid-thumb-4.jpg" alt=""></div>
+      <div class="fan f1"><video src="clip-4.mp4" autoplay muted loop playsinline poster="vid-frame-4.jpg"></video></div>
+      <div class="fan f2"><video src="clip-6.mp4" autoplay muted loop playsinline poster="vid-frame-6.jpg"></video></div>
       <!-- reference -> yours -->
-      <div class="refchip"><img src="vid-thumb-3.jpg" alt=""><div><div class="rt">Reference</div><div class="rn">viral TikTok</div></div><i class="ti ti-arrow-right arrow"></i></div>
+      <div class="refchip"><img src="vid-ref.jpg" alt=""><div><div class="rt">Reference</div><div class="rn">viral TikTok</div></div><i class="ti ti-arrow-right arrow"></i></div>
       <!-- floating proof -->
       <div class="fchip c2"><i class="ti ti-movie"></i> Veo 3.1 · 9:16 · 1080p</div>
       <!-- the phone playing a REAL generated clip -->
@@ -337,22 +337,20 @@
         <div class="ui">
           <div class="prog"><i></i></div>
           <div class="cap">they kept this quiet for years 👀 here's what actually cleared my skin…</div>
-          <div class="handle"><img class="pf" src="vid-thumb-1.jpg" alt="">@glowbykuiya</div>
+          <div class="handle"><img class="pf" src="vid-frame-1.jpg" alt="">@glowbykuiya</div>
           <div class="side">
             <div class="ic"><i class="ti ti-heart"></i></div>
             <div class="ic"><i class="ti ti-message-circle"></i></div>
             <div class="ic"><i class="ti ti-share-3"></i></div>
           </div>
         </div>
-        <!-- beat rail overlay -->
-        <div class="beat"><b class="bh">Hook</b><b class="bp">Problem</b><b class="bs">Solution</b><b class="bc">CTA</b></div>
       </div>
     </div>
   </div>
 </section>
 
 <div class="logos">
-  <span>Publishes to</span>
+  <span>Made for</span>
   <div class="plat"><i class="ti ti-brand-tiktok"></i> TikTok</div>
   <div class="plat"><i class="ti ti-brand-instagram"></i> Reels</div>
   <div class="plat"><i class="ti ti-brand-youtube"></i> Shorts</div>

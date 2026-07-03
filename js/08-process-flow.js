@@ -230,17 +230,8 @@
       var el = document.getElementById('apiKeyStatus');
       if (el) { el.textContent = 'Proxy ✓'; el.style.color = 'var(--success)'; }
     })();
-    // Show Quick Mode by default unless the user explicitly switched to advanced
-    const _qmPref = localStorage.getItem('vs_quick_mode');
-    if (_qmPref !== '0') {
-      // Delay so loadAvatarImage/loadSegments have time to populate state
-      // Quick Mode is replicator-only — never auto-trigger in producer mode
-      setTimeout(() => {
-        if (segments.length === 0 && studioMode !== 'producer') {
-          enterQuickMode();
-        }
-      }, 300);
-    }
+    // Quick Mode removed — the Replicator always opens in the full advanced workspace.
+    setTimeout(() => { try { if (typeof exitQuickMode === 'function') exitQuickMode(); } catch(_){} }, 300);
     // switchStudioMode handles library + projects loading
     if (forcedMode) {
       switchStudioMode(forcedMode).catch(e => console.warn('initVideoStudio: mode switch failed', e));

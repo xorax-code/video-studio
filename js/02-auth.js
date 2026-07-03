@@ -876,7 +876,6 @@
     { group: 'Studio',   label: 'Clear Segments',    icon: 'ti-trash',             action: () => clearSegments() },
     { group: 'Studio',   label: 'Open Video Library',icon: 'ti-books',             action: () => openVideoLibrary() },
     { group: 'Studio',   label: 'Save to Library',   icon: 'ti-device-floppy',     action: () => saveGeneratedToLibrary() },
-    { group: 'App',      label: 'Toggle Dark/Light', icon: 'ti-sun',               action: () => toggleAppTheme() },
     { group: 'App',      label: 'Sign Out',           icon: 'ti-logout',           action: () => doLogout() },
   ];
 
