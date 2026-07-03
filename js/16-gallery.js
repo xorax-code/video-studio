@@ -4,6 +4,19 @@
 
 (function() {
 
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  // Quote-safe escaping for values interpolated into HTML attribute strings.
+  // Prevents URLs/labels containing " ' < > & from breaking out of attributes.
+  function escAttr(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── State ──────────────────────────────────────────────────────────────────
   window._assemblerClips = window._assemblerClips || [];  // [{ segIdx, start, end, blobUrl, mime, label, dur }]
   var _galleryCollapsed  = false;
@@ -130,12 +143,12 @@
       card.dataset.segIdx = clip.segIdx;
       card.innerHTML =
         '<div class="gal-thumb">'
-          + '<video src="' + clip.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+          + '<video src="' + escAttr(clip.url) + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
           + '<div class="gal-dur">' + clip.dur + 's</div>'
           + (inAssembler ? '<div class="gal-badge-added">✓ Added</div>' : '')
         + '</div>'
         + '<div class="gal-meta">'
-          + '<span class="gal-label">' + clip.label + '</span>'
+          + '<span class="gal-label">' + escAttr(clip.label) + '</span>'
           + '<div class="gal-btns">'
             + '<button class="gal-btn gal-btn-add" onclick="galleryAddToAssembler(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Add to assembler">'
               + (inAssembler ? '✓ Added' : '+ Assemble')
@@ -144,7 +157,7 @@
               ? '<button class="gal-btn gal-btn-dl" onclick="galleryDownload(' + clip.segIdx + ')" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',-1)" title="Zoom / reframe, then download HD">🔍</button>'
                 + '<button id="gal-hd-btn-' + clip.segIdx + '" class="gal-btn gal-btn-hd" onclick="galleryUpscale(' + clip.segIdx + ')" title="Download 1080p upscaled">HD</button>'
-              : '<button class="gal-btn gal-btn-dl" onclick="(function(){var e=segments[' + clip.segIdx + '].veoExtras[' + clip.extraIdx + '];var a=document.createElement(\'a\');a.href=e.apiVideoRaw||e.apiVideoUrl;a.download=\'scene-' + (clip.segIdx+1) + '-clip-' + (clip.extraIdx+2) + '.mp4\';a.click();})()" title="Download clip">⬇</button>'
+              : '<button id="gal-extra-dl-' + clip.segIdx + '-' + clip.extraIdx + '" class="gal-btn gal-btn-dl" title="Download clip">⬇</button>'
                 + '<button class="gal-btn gal-btn-hd" onclick="openZoomEditor(' + clip.segIdx + ',' + clip.extraIdx + ')" title="Zoom / reframe, then download HD">🔍</button>'
             )
           + '</div>'
@@ -153,6 +166,24 @@
       var vid = card.querySelector('.gal-video');
       card.addEventListener('mouseenter', function() { if (vid) vid.play().catch(function(){}); });
       card.addEventListener('mouseleave', function() { if (vid) { vid.pause(); vid.currentTime = 0; } });
+
+      if (clip.extraIdx !== -1) {
+        var extraDlBtn = card.querySelector('#gal-extra-dl-' + clip.segIdx + '-' + clip.extraIdx);
+        if (extraDlBtn) {
+          (function(segIdx, extraIdx) {
+            extraDlBtn.addEventListener('click', function() {
+              var segs = window.segments || [];
+              var seg = segs[segIdx];
+              var e = seg && seg.veoExtras && seg.veoExtras[extraIdx];
+              if (!e) return;
+              var a = document.createElement('a');
+              a.href = e.apiVideoRaw || e.apiVideoUrl;
+              a.download = 'scene-' + (segIdx + 1) + '-clip-' + (extraIdx + 2) + '.mp4';
+              a.click();
+            });
+          })(clip.segIdx, clip.extraIdx);
+        }
+      }
 
       grid.appendChild(card);
     });
@@ -286,6 +317,27 @@
   // Expose the upscaler so other modules (Studio, etc.) can offer 1080p too.
   window._doUpscale = _doUpscale;
 
+  // ── Download a (possibly cross-origin) URL WITHOUT navigating the page ──────
+  // Setting a.href to a cross-origin signed URL makes the browser ignore the
+  // `download` attribute and NAVIGATE to it instead — which trips the
+  // "Leave site? Changes may not be saved" beforeunload prompt. Fetching the
+  // URL as a same-origin blob downloads it in place with no navigation.
+  async function _downloadNoNav(url, filename) {
+    try {
+      var resp = await fetch(url);
+      var blob = await resp.blob();
+      var obj  = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = obj; a.download = filename; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(obj); }, 60000);
+      return true;
+    } catch (e) {
+      // CORS-blocked fallback: open in a new tab (still doesn't navigate the app away).
+      window.open(url, '_blank');
+      return false;
+    }
+  }
+  window._downloadNoNav = _downloadNoNav;
+
   // ── 1080p for gallery clips (button, by segIdx) ───────────────────────────
   window.galleryUpscale = async function(segIdx) {
     var seg = (window.segments || [])[segIdx];
@@ -391,7 +443,7 @@
     var total = _asmTotalUsed();
     if (ph && wrap) {
       var pct = total > 0 ? (t / total) : 0;
-      ph.style.left = (pct * wrap.offsetWidth) + 'px';
+      ph.style.width = (pct * 100) + '%';
     }
     var lbl = document.getElementById('asmTimeLabel');
     if (lbl) lbl.textContent = _fmtTime(t) + ' / ' + _fmtTime(total);
@@ -475,7 +527,6 @@
     else                    clip.end   = Math.min(clip.dur, Math.max(clip.start + 0.2, local));
     var used = _asmUsed(clip);
     if (d.block) {
-      d.block.style.flexGrow = Math.max(0.2, used);
       var dl = d.block.querySelector('.asm-cliph-dur'); if (dl) dl.textContent = used.toFixed(1) + 's';
     }
     var totalEl = document.getElementById('assemblerTotal');
@@ -517,14 +568,13 @@
       var used  = _asmUsed(clip);
       var block = document.createElement('div');
       block.className = 'asm-cliph' + (i === window._asmSel ? ' on' : '');
-      block.style.flexGrow = Math.max(0.2, used);
       block.dataset.idx = i;
       block.draggable = true;
 
       block.innerHTML =
-        '<video class="asm-cliph-thumb" src="' + clip.blobUrl + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
+        '<video class="asm-cliph-thumb" src="' + escAttr(clip.blobUrl) + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
         + '<div class="asm-cliph-grad"></div>'
-        + '<div class="asm-cliph-label">' + clip.label + '</div>'
+        + '<div class="asm-cliph-label">' + escAttr(clip.label) + '</div>'
         + '<div class="asm-cliph-dur">' + used.toFixed(1) + 's</div>'
         + (i === window._asmSel
             ? '<div class="asm-cliph-hl" title="Trim start"></div><div class="asm-cliph-hr" title="Trim end"></div>'
@@ -571,6 +621,10 @@
         renderAssembler(); renderGallery(); _asmSave();
       });
     });
+
+    // Contextual edit tools (Split / Delete) — only when a clip is selected
+    var editTools = document.getElementById('asmEditTools');
+    if (editTools) editTools.classList.toggle('on', window._asmSel >= 0 && clips.length > 0);
 
     // Click the ruler to scrub the whole sequence
     var ruler = document.getElementById('asmRuler');
@@ -645,6 +699,16 @@
     renderGallery();
     renderAssembler();
     _asmSave();
+  };
+
+  // Progressive disclosure for the export "Options ▾" panel
+  window.asmToggleOptions = function() {
+    var panel = document.getElementById('asmOptionsPanel');
+    var toggle = document.getElementById('asmOptionsToggle');
+    if (!panel) return;
+    var open = panel.style.display === 'none' || !panel.style.display;
+    panel.style.display = open ? 'flex' : 'none';
+    if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
   };
 
   window.toggleAssembler = function() {
@@ -760,11 +824,11 @@
     var pBar  = document.getElementById('assemblerExportBar');
     var pLbl  = document.getElementById('assemblerExportLabel');
     function setProg(pct, label) { if (prog) prog.style.display = 'flex'; if (pBar) pBar.style.width = pct + '%'; if (pLbl) pLbl.textContent = label; }
-    function done(label) { if (btn) { btn.disabled = false; btn.innerHTML = label || '<i class="ti ti-sparkles" style="font-size:13px;margin-right:5px;vertical-align:-1px;"></i>1080p MP4'; } if (btn720) btn720.disabled = false; if (prog) prog.style.display = 'none'; }
+    function done(label) { if (btn) { btn.disabled = false; btn.innerHTML = label || '<i class="ti ti-download" style="font-size:13px;margin-right:6px;vertical-align:-1px;"></i>Export reel'; } if (btn720) btn720.disabled = false; if (prog) prog.style.display = 'none'; }
 
-    if (btn)   { btn.disabled = true; btn.textContent = 'Stitching…'; }
+    if (btn)   { btn.disabled = true; btn.innerHTML = 'Building your reel…'; }
     if (btn720) btn720.disabled = true;
-    setProg(4, 'Starting 1080p stitch (this can take a few minutes)…');
+    setProg(4, 'Building your reel… ~5s');
 
     try {
       // Free tier gets a "Made with AffiliateOS" watermark (server adds it only when
@@ -789,12 +853,12 @@
         var pollData = await pollRes.json();
         if (pollData.state === 'FAILED') throw new Error(pollData.error || 'Stitch job failed.');
         if (pollData.state === 'SUCCEEDED' && pollData.downloadUrl) {
-          var a = document.createElement('a'); a.href = pollData.downloadUrl; a.download = _exportFilename('1080p'); a.click();
+          await _downloadNoNav(pollData.downloadUrl, _exportFilename('1080p'));
           if (typeof showToast === 'function') showToast('1080p video ready — download started!', 'success', 5000);
           done();
           return;
         }
-        setProg(Math.min(95, 8 + Math.round((attempt / maxAttempts) * 90)), 'Rendering 1080p video… (' + (attempt * 5) + 's)');
+        setProg(Math.min(95, 8 + Math.round((attempt / maxAttempts) * 90)), 'Building your reel… (' + (attempt * 5) + 's)');
       }
       throw new Error('Stitch timed out. Try fewer clips or retry.');
     } catch(e) {
@@ -816,8 +880,8 @@
       if (progBar)   progBar.style.width    = pct + '%';
       if (progLabel) progLabel.textContent  = label;
     }
-    function resetBtn(label) {
-      if (btn) { btn.disabled = false; btn.textContent = label || '⬇ Download'; }
+    function resetBtn() {
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-bolt" style="font-size:12px;margin-right:5px;vertical-align:-1px;"></i>Quick preview (720p)'; }
       if (prog) prog.style.display = 'none';
     }
 
@@ -858,12 +922,12 @@
       setTimeout(function() { URL.revokeObjectURL(url); }, 10000);
 
       setProgress(100, 'Done!');
-      setTimeout(function() { resetBtn('⬇ Download'); }, 2000);
+      setTimeout(function() { resetBtn(); }, 2000);
       if (typeof showToast === 'function') showToast(clips.length + ' clips saved to ZIP!', 'success', 4000);
 
     } catch(e) {
       console.error('[ZIP export]', e);
-      resetBtn('⬇ Download');
+      resetBtn();
       if (typeof showToast === 'function') showToast('Download failed: ' + (e.message || e), 'error', 5000);
     }
   };
@@ -880,11 +944,11 @@
       if (progLabel) progLabel.textContent = label;
     }
     function resetBtn() {
-      if (btn) { btn.disabled = false; btn.textContent = '⬇ Export MP4'; }
+      if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-bolt" style="font-size:12px;margin-right:5px;vertical-align:-1px;"></i>Quick preview (720p)'; }
       if (prog) prog.style.display = 'none';
     }
 
-    if (btn) { btn.disabled = true; btn.textContent = 'Loading FFmpeg…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Building preview…'; }
     setProgress(5, 'Loading FFmpeg…');
 
     // Load FFmpeg.wasm from CDN.
@@ -1045,11 +1109,11 @@
         card.className = 'gal-card';
         card.innerHTML =
           '<div class="gal-thumb">'
-            + '<video src="' + v.url + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
+            + '<video src="' + escAttr(v.url) + '" muted playsinline loop preload="metadata" class="gal-video" tabindex="-1"></video>'
             + (v.duration ? '<div class="gal-dur">' + v.duration + 's</div>' : '')
           + '</div>'
           + '<div class="gal-meta">'
-            + '<span class="gal-label">' + (v.label ? String(v.label).replace(/[<>]/g, '') : _clFmtDate(v.created_at)) + '</span>'
+            + '<span class="gal-label">' + (v.label ? escAttr(v.label) : escAttr(_clFmtDate(v.created_at))) + '</span>'
             + '<div class="gal-btns">'
               + '<button class="gal-btn gal-btn-dl" title="Download this video">⬇ Download</button>'
             + '</div>'

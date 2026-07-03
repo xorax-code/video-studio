@@ -1,3 +1,136 @@
+  // ===== Speaking / non-speaking scene detection =====
+  // The avatar should only lip-sync dialogue on scenes where it's actually
+  // talking to camera. Product / hands / b-roll shots are NON-speaking — the
+  // line becomes voiceover instead, so Veo doesn't render a mouth moving over
+  // a product close-up. Detection is automatic:
+  //   1. explicit sceneType from the storyboard ('product'|'hands'|'broll')
+  //   2. otherwise inferred from the action / shot / frame text
+  // Default is SPEAKING — we only flip to non-speaking on a clear signal, so
+  // normal "talks to camera" scenes are never affected.
+  window.detectNonSpeakingScene = function (o) {
+    if (!o) return false;
+    var st = String(o.sceneType || '').toLowerCase();
+    if (st === 'product' || st === 'hands' || st === 'broll') return true;
+    if (st === 'character') return false;
+    var txt = [o.action, o._shot, o.shot, o.frameDesc]
+      .map(function (x) { return String(x || ''); }).join(' ').toLowerCase();
+    if (!txt.trim()) return false;
+    // Strong speaking cues override everything (keeps default behavior safe).
+    if (/\b(talk|talking|speak|speaking|says|saying|delivers?|deliver(?:ing)? (?:the )?line|to camera|piece to camera|monologue|voice[- ]?over the avatar|addresses the camera|lip[- ]?sync)\b/.test(txt)) return false;
+    // Clear non-speaking cues: product-only / hands-only / b-roll / no face.
+    return /\b(b-?roll|product (?:close-?up|shot|reveal|insert|demo)|insert shot|flat ?lay|pack ?shot|unboxing|hands? (?:only|close-?up|holding|applying|pouring|squeezing|spraying)|close-?up of (?:the )?product|no (?:one|person|people|face|avatar)|empty (?:room|scene|set)|on the table|texture shot|macro shot)\b/.test(txt);
+  };
+  window.sceneSpeaks = function (o) { return !window.detectNonSpeakingScene(o); };
+
+  // ===== Anti-tattoo negative terms =====
+  // Veo / the frame generator sometimes invent tattoos the uploaded avatar
+  // doesn't have. Returns a negative-prompt fragment to suppress them — UNLESS
+  // the avatar is actually described as tattooed, in which case it returns ''
+  // so we never strip tattoos that are supposed to be there.
+  window.antiTattooNeg = function () {
+    try {
+      var el = document.getElementById('avatarDesc');
+      var d  = String((el && el.value) || (window._avatarDesc) || '').toLowerCase();
+      if (/\b(tattoo|tattoos|tattooed|inked|body art)\b/.test(d)) return '';
+    } catch (e) {}
+    return 'tattoo, tattoos, body art, ink, inked skin, skin markings, arm tattoo, sleeve tattoo, neck tattoo, chest tattoo, hand tattoo, finger tattoo';
+  };
+
+  // ===== Clip fullscreen helper =====
+  // The native <video> fullscreen button can silently no-op for clips that sit
+  // inside a transformed/clipped container (e.g. continuation clips inside
+  // .seg-card-floating). fsClip tries the real Fullscreen API first, then falls
+  // back to a body-level overlay so the user ALWAYS gets a full-size view.
+  window.fsClip = function (idOrEl) {
+    var v = (typeof idOrEl === 'string') ? document.getElementById(idOrEl) : idOrEl;
+    if (!v || v.tagName !== 'VIDEO') return;
+    function lightbox() {
+      if (document.getElementById('fsClipOverlay')) return;
+      var o = document.createElement('div');
+      o.id = 'fsClipOverlay';
+      o.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.96);display:flex;align-items:center;justify-content:center;padding:24px;';
+      var nv = document.createElement('video');
+      nv.src = v.currentSrc || v.src;
+      nv.controls = true; nv.autoplay = true; nv.playsInline = true;
+      nv.style.cssText = 'max-width:100%;max-height:100%;border-radius:10px;background:#000;box-shadow:0 12px 60px rgba(0,0,0,0.7);';
+      try { nv.currentTime = v.currentTime || 0; } catch (e) {}
+      var x = document.createElement('button');
+      x.textContent = '✕';
+      x.style.cssText = 'position:absolute;top:18px;right:22px;width:40px;height:40px;border-radius:50%;background:rgba(255,255,255,0.14);border:1px solid rgba(255,255,255,0.3);color:#fff;font-size:18px;cursor:pointer;';
+      function close() { try { nv.pause(); } catch (e) {} o.remove(); document.removeEventListener('keydown', onKey); }
+      function onKey(e) { if (e.key === 'Escape') close(); }
+      x.onclick = close;
+      o.onclick = function (e) { if (e.target === o) close(); };
+      document.addEventListener('keydown', onKey);
+      o.appendChild(nv); o.appendChild(x);
+      document.body.appendChild(o);
+    }
+    function fsActive() {
+      return document.fullscreenElement || document.webkitFullscreenElement ||
+             document.msFullscreenElement || v.webkitDisplayingFullscreen;
+    }
+    // iOS shows its own native player and doesn't set document.fullscreenElement —
+    // trust it and don't second-guess with the lightbox.
+    if (!v.requestFullscreen && !v.webkitRequestFullscreen && !v.msRequestFullscreen && v.webkitEnterFullscreen) {
+      try { v.webkitEnterFullscreen(); } catch (e) { lightbox(); }
+      return;
+    }
+    var req = v.requestFullscreen || v.webkitRequestFullscreen || v.msRequestFullscreen;
+    if (req) {
+      var done = false;
+      try {
+        var p = req.call(v);
+        if (p && typeof p.catch === 'function') p.catch(function () { if (!done) { done = true; lightbox(); } });
+      } catch (e) { lightbox(); return; }
+      // Native fullscreen can RESOLVE yet silently no-op for a clip inside a
+      // transformed/fixed container (e.g. the segment modal) — the video just
+      // collapses. If we're not actually fullscreen a beat later, fall back to
+      // the guaranteed body-level lightbox.
+      setTimeout(function () { if (!done && !fsActive()) { done = true; lightbox(); } }, 300);
+    } else {
+      lightbox();
+    }
+  };
+
+  // Double-click ANY clip video to open it full-size. Capture phase + preventDefault
+  // so this beats the browser's native dbl-click-fullscreen (which is the control that
+  // fails on continuation clips); fsClip still tries true fullscreen first.
+  if (!window._fsClipBound) {
+    window._fsClipBound = true;
+    document.addEventListener('dblclick', function (e) {
+      var t = e.target;
+      if (t && t.tagName === 'VIDEO') { e.preventDefault(); window.fsClip(t); }
+    }, true);
+  }
+
+  // ===== Veo speech sync =====
+  // Sync a Veo 3 JSON prompt's spoken text to the live script. When the script is
+  // EMPTY, also strip any "speaks / talking" directives (including the two-person
+  // "the person on the left speaks" tag) and forbid lip movement — so an empty
+  // script never forces the avatar to mouth words. Only touches speech / action /
+  // negative_prompt; everything else (shot, camera, etc.) is preserved.
+  window.veoSyncSpeech = function (promptStr, liveText) {
+    if (!promptStr) return promptStr;
+    var txt = (liveText == null) ? '' : String(liveText);
+    var o;
+    try { o = JSON.parse(promptStr); } catch (e) { return promptStr; }
+    if (!o || typeof o !== 'object') return promptStr;
+    o.speech = txt.trim() ? txt : '';
+    if (!txt.trim()) {
+      var a = String(o.action || '');
+      a = a.replace(/\bspeaks\b/gi, 'stays silent, mouth closed')
+           .replace(/\bis the speaker\b/gi, 'stays silent')
+           .replace(/\bdelivers (?:the |every )?(?:line|lines|word|words|speech)\b/gi, 'stays silent')
+           .replace(/\b(?:mouth moves|moving mouth)\b/gi, 'mouth stays closed')
+           .replace(/\b(?:talking|speaking)\b/gi, 'silent');
+      o.action = 'No one speaks in this clip — every person keeps their mouth closed with no lip movement or talking. ' + a;
+      var neg = String(o.negative_prompt || '');
+      neg = neg.replace(/(^|,\s*)silent avatar/gi, '').replace(/(^|,\s*)listener speaking/gi, '').replace(/^[,\s]+/, '').trim();
+      o.negative_prompt = 'talking, speaking, lip sync, mouth moving, mouthing words' + (neg ? ', ' + neg : '');
+    }
+    try { return JSON.stringify(o, null, 2); } catch (e) { return promptStr; }
+  };
+
   // ===== DASHBOARD =====
   function renderDashboard() {
     const container = document.getElementById('dashboardContainer');
@@ -392,6 +525,7 @@
     const title  = document.getElementById('vsCalDayDetailTitle');
     const items  = document.getElementById('vsCalDayItems');
     if (!detail || !title || !items) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return;
 
     const [y, m, d] = dateKey.split('-').map(Number);
     const label = _vsCalMonthNames[m-1] + ' ' + d + ', ' + y;

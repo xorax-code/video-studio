@@ -160,7 +160,18 @@
     if (_qmGenerating) return;
     _qmGenerating = true;
     exitQuickMode();
-    setTimeout(() => { _qmGenerating = false; runAllScenes(true); }, 150);
+    // Keep the debounce guard held through the ENTIRE run (not just the 150ms
+    // delay) so a fast double-trigger can't launch two concurrent full
+    // generations. runAllScenes() may return undefined (it has bare-return
+    // gates) — wrap in Promise.resolve so .finally() is always safe, and clear
+    // the guard in .finally() so the button can never get stuck disabled, even
+    // if the run throws synchronously inside the timeout.
+    setTimeout(() => {
+      let p;
+      try { p = runAllScenes(true); }
+      catch (e) { _qmGenerating = false; throw e; }
+      Promise.resolve(p).finally(() => { _qmGenerating = false; });
+    }, 150);
   }
 
   async function switchStudioMode(mode) {
@@ -219,17 +230,8 @@
       var el = document.getElementById('apiKeyStatus');
       if (el) { el.textContent = 'Proxy ✓'; el.style.color = 'var(--success)'; }
     })();
-    // Show Quick Mode by default unless the user explicitly switched to advanced
-    const _qmPref = localStorage.getItem('vs_quick_mode');
-    if (_qmPref !== '0') {
-      // Delay so loadAvatarImage/loadSegments have time to populate state
-      // Quick Mode is replicator-only — never auto-trigger in producer mode
-      setTimeout(() => {
-        if (segments.length === 0 && studioMode !== 'producer') {
-          enterQuickMode();
-        }
-      }, 300);
-    }
+    // Quick Mode removed — the Replicator always opens in the full advanced workspace.
+    setTimeout(() => { try { if (typeof exitQuickMode === 'function') exitQuickMode(); } catch(_){} }, 300);
     // switchStudioMode handles library + projects loading
     if (forcedMode) {
       switchStudioMode(forcedMode).catch(e => console.warn('initVideoStudio: mode switch failed', e));

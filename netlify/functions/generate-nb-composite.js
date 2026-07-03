@@ -384,7 +384,8 @@ const runComposite = async (event) => {
 
   // Creative/Studio mode allows pure text-to-image (no avatar or reference needed).
   // Only the avatar/replicator composite paths require a subject image.
-  if (!avatarImg && !creative) {
+  // (creative text-to-image and background-replace do not.)
+  if (!avatarImg && !creative && body.bgReplace !== true) {
     return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Avatar image is required.' }) };
   }
 
@@ -395,6 +396,56 @@ const runComposite = async (event) => {
   const hasProductSwap = !!(frameImg && productImg);
   const hasProductGen  = !!(!frameImg && productImg);
   const hasProduct     = hasProductSwap; // back-compat alias for the swap path below
+
+  // ── Background-replace mode — swap the environment behind a finished composite ─
+  // Post-pass on an approved character-swap frame: keep the (already-grounded)
+  // person EXACTLY, replace only the background with the uploaded environment, and
+  // re-ground + relight so they are seated naturally in the new scene.
+  if (body.bgReplace === true) {
+    const srcB64  = body.harmonizeB64 || body.imageB64 || null;
+    const srcMime = body.harmonizeMime || 'image/png';
+    const nbgB64  = body.bgB64 || null;
+    const nbgMime = body.bgMime || 'image/jpeg';
+    if (!srcB64) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Background swap needs the composite image.' }) };
+    if (!nbgB64) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Background swap needs a background image.' }) };
+    const rSystem = 'You are a professional photo compositor. You receive an INPUT PHOTO of a person and a BACKGROUND photo of a new environment. Replace ONLY the background/setting behind the person with the BACKGROUND photo, and composite the person into it so it looks like one natural photograph. Keep the person EXACTLY as in the INPUT PHOTO — identical face, identity, body, pose, hands, clothing, and any held product/label. Do NOT move, resize, re-pose, or redraw the person or the product; do not change their framing or scale. Ground and relight the person to the new environment so they are seated in it and not floating.';
+    const rParts = [];
+    rParts.push({ text: 'INPUT PHOTO — the person to keep EXACTLY (do not alter the person or anything they hold):' });
+    rParts.push({ inlineData: { mimeType: srcMime, data: srcB64 } });
+    rParts.push({ text: 'BACKGROUND — the NEW environment to place them in. Use this as the entire background, setting, and light source:' });
+    rParts.push({ inlineData: { mimeType: nbgMime, data: nbgB64 } });
+    if (avatarB64) {
+      rParts.push({ text: 'IDENTITY REFERENCE — the person\'s face and identity must stay exactly like this:' });
+      rParts.push({ inlineData: { mimeType: avatarMime, data: avatarB64 } });
+    }
+    if (productB64) {
+      rParts.push({ text: 'PRODUCT REFERENCE — any product/label the person holds must stay pixel-identical to this:' });
+      rParts.push({ inlineData: { mimeType: productMime, data: productB64 } });
+    }
+    rParts.push({ text: 'Place this exact person into the new BACKGROUND environment and make it look naturally photographed there. Replace the ENTIRE background behind the person with the BACKGROUND photo. Relight the person to match the BACKGROUND photo\'s light direction, color temperature, exposure, and contrast; add realistic cast and contact shadows on the new surfaces beneath and behind them so they are GROUNDED and not floating; match depth of field and grain; blend the edges cleanly. KEEP THE PERSON IDENTICAL: same face and identity (see IDENTITY reference), same body, pose, hands, fingers, clothing, framing, scale, and any held product/label (see PRODUCT reference) — do NOT move, resize, re-pose, or redraw them or the product. Output a single natural photograph of this person in the new environment.' });
+
+    const rReq = {
+      systemInstruction: { parts: [{ text: rSystem }] },
+      contents: [{ role: 'user', parts: rParts }],
+      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.15 },
+    };
+    let rResult;
+    try { rResult = await callImageModel(rReq, apiKey, false, vtxToken); }
+    catch(e) { return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Could not reach image model: ' + e.message }) }; }
+    if (rResult.status === 429) return { statusCode: 429, headers: CORS, body: JSON.stringify({ error: 'Rate limit — please wait and retry.' }) };
+    if (!rResult.data || rResult.status !== 200 || rResult.data.error) {
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: (rResult.data && rResult.data.error && rResult.data.error.message) || ('Image model error ' + rResult.status) }) };
+    }
+    for (const candidate of rResult.data.candidates || []) {
+      for (const part of candidate?.content?.parts || []) {
+        if (part.inlineData?.data) {
+          await _chargeCompose(CREDIT_COST);
+          return { statusCode: 200, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ imageB64: part.inlineData.data, mime: part.inlineData.mimeType || 'image/png', creditsDeducted: CREDIT_COST, quality: 'flash' }) };
+        }
+      }
+    }
+    return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: 'Model returned no image.' }) };
+  }
 
   // ── Creative mode (Studio tab) — skip pose analysis, use open system prompt ─
   if (creative) {

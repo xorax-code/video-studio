@@ -3,6 +3,18 @@
   // Flow: extract NB instruction → call /.netlify/functions/generate-nb-composite
   //       → store result in seg.nbPreviewDataUrl → show approval modal
 
+  // Quote-safe escaping for values interpolated into HTML attribute strings.
+  // Prevents labels/descriptions containing " ' < > & from breaking out of attributes.
+  function escAttr(s) {
+    if (s == null) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
   // ── Compress image to max pixels before sending ───────────────────────────
   function _nbCompressImage(dataUrl, maxPx, quality) {
     maxPx = maxPx || 1280;
@@ -34,6 +46,13 @@
     var mime = meta.split(';')[0] || 'image/jpeg';
     var b64  = dataUrl.slice(comma + 1);
     return { b64, mime };
+  }
+
+  // Build an image data: URL from server-returned base64, validating the mime.
+  // Server-supplied mime is untrusted; only allow image/* and fall back to PNG.
+  function _nbImageDataUrl(mime, b64) {
+    var safeMime = (typeof mime === 'string' && /^image\//.test(mime)) ? mime : 'image/png';
+    return 'data:' + safeMime + ';base64,' + b64;
   }
 
   // ── Async composite: start a background job, then poll for the result ─────
@@ -257,7 +276,35 @@
     } catch(_) {}
     if (_lockedBg) { _nbBgRef = _lockedBg; _nbSetting = _lockedBg; }
 
-    if (hasFrame) {
+    // ── Green-screen overlay mode ──────────────────────────────────────────────
+    // For "composite scenes" (a talking person in FRONT of a screen-recording / app
+    // UI that we can't separate), we do NOT bake the avatar into the locked reference
+    // background. Instead we render the avatar ALONE on a flat chroma-green screen,
+    // matched to the reference person's position / scale / pose, so it can be keyed
+    // out and composited OVER the untouched original clip (real moving UI shows through
+    // around her). Gated on a global toggle or a per-segment flag.
+    var _greenOverlay = false;
+    try { _greenOverlay = !!(window._greenScreenOverlay || (seg && seg.overlayGreen)); } catch(_) {}
+
+    if (hasFrame && _greenOverlay) {
+      // Use Photo 2 (reference frame) ONLY as a pose/scale/framing reference — its
+      // background is discarded and replaced with solid chroma green for keying.
+      var _gsParts = [];
+      _gsParts.push('[FULL PERSON] REPLACE: the person from Photo 2 with the avatar from Photo 1. Match the avatar to the position, scale, body angle, arm height, and hand/finger pose of the person in Photo 2 EXACTLY, so the avatar occupies the same silhouette on screen.');
+      _gsParts.push('BACKGROUND REPLACE (critical): DISCARD the entire environment, app UI, charts, text, screen recording, props, and lighting from Photo 2. Output ONLY the avatar on a perfectly flat, solid chroma-green background (color #00b140 / RGB 0,177,64), edge to edge, evenly lit, no gradient, no shadows cast on the green, no logos, no text, nothing but the avatar and the green.');
+      if (_avatarDesc) _gsParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. Reproduce this person\'s face, skin tone, and hair exactly. Do NOT copy hair or features from the Photo 2 person.');
+      _gsParts.push('GENDER LOCK: Match Photo 1 person\'s gender, age, and ethnicity exactly. Do NOT change under any circumstances.');
+      if (_segAction) _gsParts.push('ARM/POSE: ' + _segAction + '. Keep the arm and hand at the same reach and height as Photo 2 so gestures line up with the underlying footage.');
+      if (hasProduct) _gsParts.push('The product from Photo 3 must be held in the hand at the same position as Photo 2.');
+      _gsParts.push('LIGHTING: light the avatar with soft, even, neutral studio key light (clean white balance) so she keys cleanly — do NOT relight her to any scene, and keep spill/reflected green off her skin, hair edges, and clothing.');
+      _gsParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot, subject chest-up with headroom, 50mm') + '. Keep the subject at the same on-screen position and size as Photo 2.');
+      _gsParts.push('RENDER STYLE: natural, real-looking photographic person (realistic skin texture, subtle pores, NOT plastic/waxy/over-smoothed; NOT a 3D render, illustration, or cartoon). ONE person only. No text, no watermark, no UI.');
+      _gsParts.push('IMPORTANT: the background must remain a single uniform chroma-green fill with hard, clean edges around the subject for reliable keying.');
+      instruction = _gsParts.join(' ');
+      // Green-screen output must not carry any transferred UI/text.
+      _nbNegativePrompt = (_nbNegativePrompt ? _nbNegativePrompt + ', ' : '') + 'text, logos, app UI, charts, numbers, screen recording, patterned background, green spill on subject, colored rim light';
+
+    } else if (hasFrame) {
       // ── Compositing mode ──────────────────────────────────────────────────────
       // The NB prompt JSON's `instruction` field (_nbCore) is a complete NB Pro
       // instruction in Flow format (REPLACE / LOCK / ARM / PROP STATE / HAIR LOCK /
@@ -286,7 +333,7 @@
         if (_avatarDesc) _hfParts.push('HAIR LOCK: Avatar — ' + _avatarDesc + '. Do NOT copy hair or features from Photo 2 person.');
         _hfParts.push('GENDER LOCK: Match Photo 1 person\'s gender, age, and ethnicity exactly. Do NOT change under any circumstances.');
         _hfParts.push('TRANSFER BLOCK: No text, logos, labels, or graphical overlays from Photo 2 in the output.');
-        _hfParts.push('LIGHTING MATCH: Match Photo 2 lighting color temperature, direction, and shadows exactly.');
+        _hfParts.push('RELIGHT (critical for realism): Fully RELIGHT the avatar to sit naturally inside Photo 2\'s environment — match the scene\'s light DIRECTION, COLOR TEMPERATURE / white balance (warm vs cool), overall BRIGHTNESS/exposure, contrast, and shadow softness exactly. DISCARD the original lighting and white balance baked into the avatar reference photo; the avatar must look genuinely photographed in THIS room under THIS light, not pasted on top. The avatar must NOT be brighter, warmer, more contrasty, or more saturated than the rest of the scene. Add soft contact shadows consistent with the scene\'s key light so the avatar is grounded in the space and shares the same color grade as the background.');
         if (_nbExpression) _hfParts.push('Expression: ' + _nbExpression + '.');
         _hfParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '. Single premium image — realistic natural skin texture (subtle pores, not plastic or over-smoothed), gentle soft natural lighting. ONE person only.');
         // RENDER-STYLE OVERRIDE — the decisive lever against Veo's person-likeness filter
@@ -294,7 +341,7 @@
         // stylized render reads as "digital character", not "real person to deepfake".
         // Aim for the sweet spot: premium + flattering, clearly NOT a literal photo, but
         // NOT a hard cartoon. (Applies even when a scene's saved style said "realistic".)
-        _hfParts.push('RENDER STYLE: render as a natural, REAL-LOOKING photograph — authentic and photographic, with realistic skin texture (keep subtle pores and fine detail; NOT plastic, waxy, glossy, or over-smoothed) and soft natural flattering light. Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — natural rather than airbrushed, with no glossy AI sheen.');
+        _hfParts.push('RENDER STYLE: render as a natural, REAL-LOOKING photograph — authentic and photographic, with realistic skin texture (keep subtle pores and fine detail; NOT plastic, waxy, glossy, or over-smoothed) and lighting that matches the scene per RELIGHT above (do NOT add separate bright/flattering light to the avatar). Keep it a genuine photo look (NOT a 3D render, illustration, anime, or cartoon) and the same clearly-recognizable person — natural rather than airbrushed, with no glossy AI sheen.');
         // ZOOM-OUT OVERRIDE — a face filling the frame also trips 15236754.
         _hfParts.push('IMPORTANT FRAMING OVERRIDE: ALWAYS render a MEDIUM SHOT, even if the source is a tight close-up or shows two people — pull the camera back so every person is chest-up with clear headroom and visible surroundings, and NO single face is larger than ~25% of the frame height. Err on the side of too wide. Do NOT crop in tight on the face — a large face trips the person filter.');
         instruction = _hfParts.join(' ');
@@ -334,6 +381,7 @@
       // Standard locks
       _gParts.push('GENDER LOCK: The avatar must match the exact gender, approximate age, and ethnicity of the person in the SUBJECT reference. Do NOT change the avatar\'s gender, age, or ethnicity.');
       _gParts.push('TRANSFER BLOCK: Do NOT add any text, logos, dates, or labels to the output.');
+      _gParts.push('RELIGHT: Light the avatar with the SAME light as the generated scene — one consistent color temperature, direction, exposure, and contrast across the person and the background. DISCARD the lighting/white-balance baked into the avatar reference; the avatar must not be brighter, warmer, or more saturated than the scene, and should share the same color grade so nothing looks pasted in.');
 
       // Technical
       _gParts.push('Framing: ' + (_nbFraming || 'vertical 9:16, medium shot (waist-up, face not filling the frame), subject centered with headroom, 50mm, gentle depth of field') + '.');
@@ -425,6 +473,13 @@
     // USER OVERRIDE — a per-scene manual correction typed into the Review modal's edit box.
     // Appended LAST + highest-priority so the user can fix leftovers (e.g. "her hands are
     // empty, no tool") without re-pinning or re-analyzing — it just applies on the next Redo.
+    // Skin fidelity — stop the editor inventing tattoos the avatar doesn't have.
+    // (window.antiTattooNeg returns '' when the avatar IS described as tattooed.)
+    var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
+    if (_tatNeg) {
+      instruction += '\n\nSKIN: Reproduce the avatar\'s skin exactly as in the reference photo. Do NOT add any tattoos, body ink, or skin markings that are not already present on the uploaded avatar.';
+    }
+
     var _nbOverride = (seg.nbOverride || '').trim();
     if (_nbOverride) {
       instruction += '\n\n🔒 USER OVERRIDE — HIGHEST PRIORITY, obey this exactly even if it contradicts anything above: ' + _nbOverride + (/[.!?]$/.test(_nbOverride) ? '' : '.');
@@ -436,7 +491,7 @@
     var _ar = await _nbGenerateAsync({
       instruction,
       avatarDesc:     _avatarDesc,
-      negativePrompt: _nbNegativePrompt,
+      negativePrompt: _nbNegativePrompt + (_tatNeg ? (_nbNegativePrompt ? ', ' : '') + _tatNeg : ''),
       // Pin coordinates (two-person target) passed as STRUCTURED data so the backend can
       // build a deterministic "replace ONLY the person here" directive — instead of relying
       // on the vision model to write the target into free text (which was unreliable/stale).
@@ -479,7 +534,7 @@
     }
 
     // Store composite in segment
-    segments[segIdx].nbPreviewDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+    segments[segIdx].nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
     segments[segIdx].nbApproved = null; // reset approval — needs re-review
     saveSegments();
     if (typeof renderSegments === 'function') renderSegments();
@@ -547,7 +602,7 @@
         setBtn(_origLabel || '🤚 Lock her hand', false);
         return;
       }
-      var dataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var dataUrl = _nbImageDataUrl(data.mime, data.imageB64);
       window._handRefDataUrl = dataUrl;
       try { if (typeof DB !== 'undefined' && DB && DB.set) DB.set('sm_hand_ref_img', dataUrl); } catch(_) {}
 
@@ -622,9 +677,9 @@
     // "recreate this real person") so the image model's own likeness guard
     // doesn't refuse, while still reducing the photoreal look Veo blocks on.
     var instruction =
-      'Re-render the person in this reference photo as a clean, natural, REAL-LOOKING photograph — authentic and photographic, NOT a 3D render, illustration, anime, smoothed cartoon, or airbrushed beauty-filter look. Keep natural human proportions. '
-      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, facial hair, outfit and jewelry so it is clearly the same person. '
-      + 'PRESERVE realistic, natural skin TEXTURE — keep subtle pores, fine lines and real detail so the skin looks like genuine human skin, NOT plastic, waxy, glossy, or over-smoothed. Use soft, natural, flattering light (like gentle window or outdoor light), clean but not flat studio lighting. '
+      'Re-render the person in this reference photo as a polished, premium DIGITAL-CHARACTER portrait — clearly a high-end stylized render, noticeably NOT a literal photograph of a real individual, so it reads as a digital character rather than a real person to deepfake. Use a smooth, simplified, soft painterly/editorial finish; keep it human, flattering and natural (not a hard cartoon, anime, or waxy 3D toy). Keep natural human proportions. '
+      + 'Keep the SAME hairstyle, hair color, face shape, skin tone, eye color, expression, facial hair, outfit and jewelry so it is clearly and recognizably the SAME person. '
+      + 'Simplify skin to a clean, even, gently stylized finish (not heavy pores or hyper-real texture), with soft, flattering light (like gentle window or outdoor light). '
       + (avDesc ? 'Notes: ' + avDesc + '. ' : '')
       + 'Vertical 9:16, head and shoulders, facing camera, plain soft neutral background.';
 
@@ -648,7 +703,7 @@
         if (typeof showToast === 'function') showToast('Kept your original photo — avatar optimize failed (' + why + '). Wait a minute and re-upload. Very photoreal faces may get blocked by Veo until it succeeds.', 'warning', 9000);
         return; // graceful — original avatar stays in place
       }
-      var styledUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var styledUrl = _nbImageDataUrl(data.mime, data.imageB64);
       console.log('[AvatarPrep] success — swapping in stylized avatar');
       if (typeof window.applyPreparedAvatar === 'function') {
         window.applyPreparedAvatar(styledUrl, originalDataUrl);
@@ -857,10 +912,12 @@
           + '<span style="font-size:11px;font-weight:600;color:var(--text-2);">Scene ' + (idx + 1) + '</span>'
           + '<div style="display:flex;align-items:center;gap:5px;">'
             + '<button id="nb-regen-btn-' + idx + '" onclick="event.stopPropagation();regenNbFrame(' + idx + ')" title="Regenerate this frame" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(56,189,248,0.15);border:1px solid rgba(56,189,248,0.4);border-radius:4px;color:#38bdf8;cursor:pointer;">↺ Redo</button>'
+            + '<button id="nb-swapbg-btn-' + idx + '" onclick="event.stopPropagation();swapBackgroundNbFrame(' + idx + ')" title="Swap the background to your uploaded custom background — grounded & relit, keeps the person and product" style="padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(167,139,250,0.15);border:1px solid rgba(167,139,250,0.45);border-radius:4px;color:#a78bfa;cursor:pointer;">🖼 Swap BG</button>'
+            + '<button id="nb-revert-btn-' + idx + '" onclick="event.stopPropagation();revertBlend(' + idx + ')" title="Undo — restore the original frame" style="display:' + (seg.nbEditOriginal ? 'inline-block' : 'none') + ';padding:2px 7px;font-size:11px;font-weight:700;font-family:inherit;background:rgba(148,163,184,0.15);border:1px solid rgba(148,163,184,0.4);border-radius:4px;color:#94a3b8;cursor:pointer;">↩ Undo</button>'
             + '<span id="nb-approval-badge-' + idx + '" style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:4px;background:' + (approved ? 'rgba(52,211,153,0.9)' : 'rgba(248,113,113,0.85)') + ';color:#fff;">' + (approved ? '✓' : '✕') + '</span>'
           + '</div>'
         + '</div>'
-        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + (seg.nbOverride || '').replace(/"/g, '&quot;') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
+        + '<div style="padding:0 8px 8px;"><input id="nb-override-' + idx + '" type="text" value="' + escAttr(seg.nbOverride || '') + '" placeholder="✎ Fix this scene (e.g. empty hands, no tool), then hit ↺ Redo" onclick="event.stopPropagation();" oninput="setNbOverride(' + idx + ', this.value)" title="Type a correction; it overrides the AI when you hit ↺ Redo" style="width:100%;box-sizing:border-box;background:var(--surface-3);border:1px solid var(--border-2);border-radius:5px;color:var(--text-1);font-size:10px;padding:5px 7px;font-family:inherit;"/></div>';
       card.onclick = function() { toggleNbApproval(idx); };
       grid.appendChild(card);
     });
@@ -885,6 +942,102 @@
     document.body.appendChild(modal);
   }
   window.openNbApprovalModal = openNbApprovalModal;
+
+  // ── "Swap BG" + Undo: post-passes on an approved start frame ────────────────
+  // Swap BG replaces the background behind the (already-grounded) character-swap
+  // subject with the uploaded custom background and re-grounds/relights him. Undo
+  // restores the saved original. Both operate on the current frame; nbEditOriginal
+  // holds the pre-edit frame for a one-click revert.
+
+  function _showBlendRevert(idx, show) {
+    var b = document.getElementById('nb-revert-btn-' + idx);
+    if (b) b.style.display = show ? 'inline-block' : 'none';
+  }
+
+  async function swapBackgroundNbFrame(segIdx) {
+    var seg = segments[segIdx];
+    if (!seg || !seg.nbPreviewDataUrl) { showToast('Generate this frame first.', 'warning'); return; }
+    var _bgUrl    = (typeof bgImageDataUrl !== 'undefined' && bgImageDataUrl) ? bgImageDataUrl : null;
+    var _bgFromAv = (typeof bgFromAvatar !== 'undefined') ? bgFromAvatar : false;
+    if (!_bgUrl || _bgFromAv) { showToast('Upload a custom background first (Background panel), then Swap BG.', 'warning', 6000); return; }
+    var btn = document.getElementById('nb-swapbg-btn-' + segIdx);
+    var _orig = btn ? btn.innerHTML : '';
+    if (btn) { btn.innerHTML = '🖼 Swapping…'; btn.disabled = true; btn.style.opacity = '0.7'; }
+    try {
+      var jwt = null;
+      try {
+        var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
+        if (_sbRef) { var s = await _sbRef.auth.getSession(); jwt = (s && s.data && s.data.session && s.data.session.access_token) || null; }
+      } catch(_) {}
+      if (!jwt) { showToast('Please log in to swap the background.', 'warning'); if (btn) { btn.innerHTML = _orig; btn.disabled = false; btn.style.opacity = '1'; } return; }
+
+      var _nbPx = window._nbMaxQuality ? 1280 : 768;
+      var _nbJq = window._nbMaxQuality ? 0.9  : 0.8;
+
+      // Keep the very first frame so Undo can always restore it, even after
+      // chaining passes. Operate on the CURRENT frame.
+      if (!seg.nbEditOriginal) seg.nbEditOriginal = seg.nbPreviewDataUrl;
+      var inputUrl = seg.nbPreviewDataUrl;
+
+      var _srcComp  = await _nbCompressImage(inputUrl, _nbPx, _nbJq);
+      var _srcParts = _nbSplitDataUrl(_srcComp);
+      var _bgComp   = await _nbCompressImage(_bgUrl, _nbPx, _nbJq);
+      var _bgParts  = _nbSplitDataUrl(_bgComp);
+      var body = { bgReplace: true, harmonizeB64: _srcParts.b64, harmonizeMime: _srcParts.mime, bgB64: _bgParts.b64, bgMime: _bgParts.mime };
+
+      // Identity lock — keep his face exact.
+      try {
+        if (typeof avatarImageDataUrl !== 'undefined' && avatarImageDataUrl) {
+          var _aC = await _nbCompressImage(avatarImageDataUrl, _nbPx, _nbJq);
+          var _aP = _nbSplitDataUrl(_aC);
+          body.avatarB64 = _aP.b64; body.avatarMime = _aP.mime;
+        }
+      } catch(_) {}
+
+      // Product lock — keep the label pixel-identical.
+      try {
+        var _pUrl = (typeof productImageDataUrl !== 'undefined' && productImageDataUrl) || window._producerProductImageUrl || null;
+        if (_pUrl && seg.showProduct) {
+          var _pC = await _nbCompressImage(_pUrl, _nbPx, _nbJq);
+          var _pP = _nbSplitDataUrl(_pC);
+          body.productB64 = _pP.b64; body.productMime = _pP.mime;
+        }
+      } catch(_) {}
+
+      var _ar = await _nbGenerateAsync(body, jwt, 'Swap BG scene ' + (segIdx + 1));
+      var res = _ar.res, data = _ar.data;
+      if (!res || !res.ok || !data || data.error || !data.imageB64) {
+        throw new Error((data && data.error) || 'no image returned');
+      }
+      seg.nbPreviewDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
+      seg.nbApproved = null;
+      _showBlendRevert(segIdx, true);
+      saveSegments();
+      var img = document.getElementById('nb-approval-img-' + segIdx);
+      if (img) img.src = seg.nbPreviewDataUrl;
+      showToast('Scene ' + (segIdx + 1) + ' background swapped ✓', 'success');
+    } catch (e) {
+      showToast('Background swap failed for Scene ' + (segIdx + 1) + ': ' + (e.message || e), 'error', 8000);
+    } finally {
+      if (btn) { btn.innerHTML = _orig || '🖼 Swap BG'; btn.disabled = false; btn.style.opacity = '1'; }
+    }
+  }
+  window.swapBackgroundNbFrame = swapBackgroundNbFrame;
+
+  // Undo — restore the saved original frame (works after a background swap).
+  function revertBlend(segIdx) {
+    var seg = segments[segIdx];
+    if (!seg || !seg.nbEditOriginal) { showToast('Nothing to undo.', 'info'); return; }
+    seg.nbPreviewDataUrl = seg.nbEditOriginal;
+    seg.nbEditOriginal = null;
+    seg.nbApproved = null;
+    saveSegments();
+    var img = document.getElementById('nb-approval-img-' + segIdx);
+    if (img) img.src = seg.nbPreviewDataUrl;
+    _showBlendRevert(segIdx, false);
+    showToast('Reverted to the original frame.', 'info');
+  }
+  window.revertBlend = revertBlend;
 
   function toggleNbApproval(segIdx) {
     var seg = segments[segIdx];
@@ -1047,7 +1200,7 @@
 
         + '<div style="margin-bottom:18px;">'
           + '<label style="font-size:10px;font-weight:700;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase;display:block;margin-bottom:6px;">Your Avatar Description <span style="color:var(--text-4);font-weight:400;text-transform:none;">(optional)</span></label>'
-          + '<input id="nbMasterAvatarInput" type="text" placeholder="e.g. young woman with long dark hair wearing a white t-shirt..." value="' + avatarDesc.replace(/"/g, '&quot;') + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:9px 10px;font-family:inherit;">'
+          + '<input id="nbMasterAvatarInput" type="text" placeholder="e.g. young woman with long dark hair wearing a white t-shirt..." value="' + escAttr(avatarDesc) + '" style="width:100%;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;color:var(--text-1);font-size:12px;padding:9px 10px;font-family:inherit;">'
         + '</div>'
 
         + '<button id="nbMasterGenBtn" onclick="_nbRunMasterGeneration()" style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#fb923c,#f97316);border:none;color:#fff;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;letter-spacing:0.02em;transition:filter 0.15s;" onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x26A1; Generate Master Reference</button>'
@@ -1108,7 +1261,7 @@
         return;
       }
 
-      var masterDataUrl = 'data:' + (data.mime || 'image/png') + ';base64,' + data.imageB64;
+      var masterDataUrl = _nbImageDataUrl(data.mime, data.imageB64);
 
       // Close setup modal and show approval modal
       var setupModal = document.getElementById('nbMasterSetupModal');
@@ -1158,8 +1311,9 @@
         // Action buttons
         + '<div style="display:flex;flex-direction:column;gap:8px;">'
 
-          // Approve
-          + '<button onclick="_nbApproveMaster(\'' + masterDataUrl.replace(/'/g, "\\'") + '\', \'' + setting.replace(/'/g, "\\'") + '\', \'' + avatarDesc.replace(/'/g, "\\'") + '\')" '
+          // Approve — handler attached via addEventListener below (no inline
+          // string-injection of the multi-KB masterDataUrl into the DOM)
+          + '<button id="nbMasterApproveBtn" '
             + 'style="width:100%;padding:12px;border-radius:10px;background:linear-gradient(135deg,#00e5bc,#00c4a3);border:none;color:#001a14;font-size:13px;font-weight:800;cursor:pointer;font-family:inherit;transition:filter 0.15s;" '
             + 'onmouseenter="this.style.filter=\'brightness(1.1)\'" onmouseleave="this.style.filter=\'\'">&#x2705; Approve &amp; Lock Scene for All Clips</button>'
 
@@ -1172,6 +1326,15 @@
       + '</div>';
 
     document.body.appendChild(overlay);
+
+    // Attach approve handler via closure — passes masterDataUrl/setting/avatarDesc
+    // by reference instead of string-injecting them into an inline onclick.
+    var approveBtn = overlay.querySelector('#nbMasterApproveBtn');
+    if (approveBtn) {
+      approveBtn.addEventListener('click', function() {
+        _nbApproveMaster(masterDataUrl, setting, avatarDesc);
+      });
+    }
   }
   window._nbShowMasterApproval = _nbShowMasterApproval;
 

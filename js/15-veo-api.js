@@ -234,7 +234,14 @@
   }
 
   // ── Refresh credit balance after a generation ─────────────────────────────
-  async function refreshCreditBalance() {
+  // Debounced: a completion wave can fire up to ~10 of these (one per clip) in a tight
+  // burst, each doing a Supabase token refresh → a refresh storm. We collapse calls within
+  // a short window to a single token refresh, while guaranteeing a TRAILING refresh so the
+  // balance still settles to the correct value after the last clip finishes.
+  var _REFRESH_DEBOUNCE_MS = 1500;
+  var _lastCreditRefresh = 0;
+  var _trailingRefreshTimer = null;
+  async function _doRefreshCreditBalance() {
     try {
       if (typeof _sb !== 'undefined' && _sb) {
         var res = await _sb.auth.refreshSession();
@@ -245,6 +252,23 @@
         }
       }
     } catch(e) { console.warn('[VeoAPI] refreshCreditBalance failed:', e.message); }
+  }
+  async function refreshCreditBalance() {
+    var now = Date.now();
+    if (now - _lastCreditRefresh < _REFRESH_DEBOUNCE_MS) {
+      // Too soon after the last refresh — suppress this call, but schedule a single
+      // trailing refresh so the final balance is still fetched once the burst settles.
+      if (!_trailingRefreshTimer) {
+        _trailingRefreshTimer = setTimeout(function () {
+          _trailingRefreshTimer = null;
+          _lastCreditRefresh = Date.now();
+          _doRefreshCreditBalance();
+        }, _REFRESH_DEBOUNCE_MS);
+      }
+      return;
+    }
+    _lastCreditRefresh = now;
+    return _doRefreshCreditBalance();
   }
   window.refreshCreditBalance = refreshCreditBalance;
 
@@ -281,15 +305,35 @@
     try { obj = typeof veoJsonStr === 'string' ? JSON.parse(veoJsonStr) : veoJsonStr; }
     catch(e) { return String(veoJsonStr || ''); }
     var parts = [];
+
+    // ── Green-screen overlay mode ──────────────────────────────────────────────
+    // The start frame is the avatar on flat chroma green (see 17-nb-api.js). Force
+    // the background to stay green + static so it keys cleanly, and push the subject
+    // to gesture energetically so the composited character isn't stagnant. When on,
+    // this overrides the obj.background field (which would otherwise re-describe a
+    // scene) and we skip the wardrobe/scene fields further down where noted.
+    var _gsVeo = false;
+    try { _gsVeo = !!(window._greenScreenOverlay || obj.overlayGreen); } catch(_) {}
+    if (_gsVeo) {
+      parts.push('Background: a single perfectly flat, solid chroma-green screen (#00b140), edge to edge, evenly lit and completely STATIC — the background never changes, moves, brightens, or gains any text, UI, charts, or objects at any point');
+      parts.push('Keep the green background clean with no shadows cast onto it and no green spill onto the subject\'s skin, hair, or clothing');
+    }
+
     // Scene context first — sets the visual environment before action/speech
     // These fields exist when the prompt was built from an NB composite start frame.
     // In API mode they were previously dropped; Flow agents read the full JSON so they
     // always had them. Adding them here makes API output match Flow quality.
     if (obj.starting_frame)   parts.push('Starting frame: ' + obj.starting_frame);
-    if (obj.background)       parts.push('Background: ' + obj.background);
+    if (obj.background && !_gsVeo) parts.push('Background: ' + obj.background);
     if (obj.foreground_props) parts.push('Foreground and props: ' + obj.foreground_props);
     // Anchor left/right in action before adding to prompt
     if (obj.action) parts.push(_anchorLeftRight(obj.action));
+    if (_gsVeo) {
+      // Composited character must be lively, not stiff — match the energy of the
+      // reference talker (pointing at on-screen numbers, leaning in, hand emphasis).
+      parts.push('The subject is animated and expressive throughout: active hand gestures and pointing, leaning slightly toward the camera on emphasis, natural head movement, shifting weight, engaged eyebrows and mouth — never a stiff, frozen, or static pose');
+      parts.push('Camera: handheld with subtle natural micro-movement');
+    }
     if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech.toLowerCase() + '"');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
@@ -304,7 +348,10 @@
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '');
+    // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
+    var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
+    var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
@@ -361,9 +408,26 @@
     return /15236754|usage guidelines|violat|responsible ai|safety (?:filter|guidelines)|input image/i.test(String(msg));
   }
 
-  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel) {
-    softenLevel  = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
-    framingLevel = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
+  // Transient backend hiccups from Vertex/Veo (NOT content blocks) — e.g. "Internal
+  // error. Please try again later", "service unavailable", "deadline exceeded". These
+  // clear on a retry. Kept separate from _isLikenessBlock so we retry the SAME frame
+  // (the frame is fine; Google's backend just stumbled), not regenerate a wider one.
+  function _isTransientError(msg) {
+    if (!msg) return false;
+    return /internal error|try again later|please try again|temporarily|unavailable|deadline exceeded|backend error|service error|\b50[023]\b/i.test(String(msg));
+  }
+
+  async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry, outerDeadline) {
+    softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
+    framingLevel   = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
+    transientRetry = transientRetry | 0; // 0 = first attempt; bumped once on a transient backend error
+    // Single OUTER wall-clock budget shared across all recovery/retry recursions. Set once
+    // on the first (top-level) call and threaded down so a blocked-then-recovered clip can't
+    // silently run for ~30-45 min by resetting the poll deadline on every recursion — the
+    // whole attempt (incl. recoveries) stays bounded to the ~15 min the UI promises.
+    if (typeof outerDeadline !== 'number' || !isFinite(outerDeadline)) {
+      outerDeadline = Date.now() + _GEMINI_TIMEOUT;
+    }
     var jwt = await _getSupabaseJwt();
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
@@ -449,8 +513,12 @@
     }
 
     // ── Step 2: Poll for completion ───────────────────────────────────────
-    var deadline = Date.now() + _GEMINI_TIMEOUT;
-    while (Date.now() < deadline) {
+    // Poll against the shared OUTER budget (not a freshly-reset per-call deadline) so the
+    // total time across the initial attempt + any auto-recoveries/retries stays bounded.
+    // Track CONSECUTIVE poll failures so a poll endpoint that always returns malformed JSON
+    // or persistently non-OK fails fast (~36s) instead of spinning the whole 15-min window.
+    var _consecPollFails = 0;
+    while (Date.now() < outerDeadline) {
       await new Promise(function(r) { setTimeout(r, _GEMINI_POLL_MS); });
 
       var pollRes = await fetch('/.netlify/functions/poll-veo-clip', {
@@ -460,39 +528,85 @@
       });
 
       var pollData;
-      try { pollData = await pollRes.json(); } catch(e) { continue; }
+      try {
+        pollData = await pollRes.json();
+      } catch(e) {
+        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        continue;
+      }
 
       if (!pollRes.ok) {
         // Transient server error on the poll endpoint — log and retry rather than aborting
         // (the generation operation is still running server-side)
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
+        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
+      // A 200 with parseable JSON — the poll service is healthy. Reset the consecutive
+      // failure counter so only *back-to-back* failures count toward the fast-fail threshold.
+      _consecPollFails = 0;
       // Terminal: done + error (content filter, 404, auth failure, etc.)
       if (pollData.done && pollData.error) {
-        // Auto-soften retry: the safety filter blocked this clip (server already
-        // refunded it), so re-render the start frame softer and try again — up to 3
-        // total attempts. Fires on the structured `filtered` flag OR when the error
-        // text is a likeness/usage-guidelines block (code 15236754), which Vertex
-        // returns through the generic error path without setting `filtered`.
         // A block = likeness filter (15236754), the structured `filtered` flag, OR a
-        // recitation/copyright block. All three are fixed the same way: a wider, cleaner
-        // start frame. Server already refunded the blocked clip, so each retry is safe.
+        // recitation/copyright block. All three are fixed the same way: a MORE STYLIZED,
+        // WIDER, cleaner start frame. The server already refunded the blocked clip, so a
+        // retry is safe to re-charge.
         var _blocked = pollData.filtered || pollData.recitation || _isLikenessBlock(pollData.error);
-
-        // No auto-retry. The widen + soften fallbacks were removed by request: a blocked
-        // clip now fails fast (the server already refunded it) instead of churning through
-        // wider/softer re-renders. If a scene keeps getting blocked, regenerate it manually
-        // with a wider / less close-up frame or switch to a less model-like avatar.
         // Surface the raw Vertex response shape (when the server attaches it) so an
         // opaque "no video" failure is diagnosable straight from the console.
         if (pollData.debug) console.warn('[VeoAPI] Vertex done-but-empty response shape:', pollData.debug);
+        if (_blocked) console.warn('[VeoAPI] clip blocked — raw model error:', pollData.error);
+
+        // AUTO-RECOVER: a blocked PRIMARY clip (has a real segIdx) regenerates its start
+        // frame more de-photorealized AND wider, then retries — this is what actually
+        // clears Veo's person-likeness / recitation filter (a plain downscale does not).
+        // Escalate up to framingLevel 2 (level 2 drops the source frame → a fresh wide
+        // generate-mode composite). Extras (segIdx undefined) and exhausted escalations
+        // fall through to a clean, refunded failure.
+        if (_blocked && typeof segIdx === 'number' && framingLevel < 2
+            && typeof window.generateNbComposite === 'function') {
+          var _next = framingLevel + 1;
+          console.warn('[VeoAPI] auto-recovering blocked clip — regenerating Scene ' + (segIdx + 1) +
+                       ' start frame (stylize+wider, level ' + _next + ')');
+          if (typeof showToast === 'function') {
+            showToast('Scene ' + (segIdx + 1) + ' was blocked — rebuilding a softer, wider frame and retrying…', 'info', 5000);
+          }
+          var _regenOk = false;
+          try { _regenOk = await window.generateNbComposite(segIdx, _next, _next); } catch (_e) { _regenOk = false; }
+          if (_regenOk) {
+            var _seg2 = (window.segments || [])[segIdx];
+            var _newStart = (_seg2 && (_seg2.nbPreviewDataUrl || _seg2.frameDataUrl)) || imageDataUrl;
+            // A recovery starts a genuinely NEW paid generation, so give it its OWN fresh
+            // polling window — otherwise a late-window block would start (and re-charge) a
+            // clip the poll loop immediately abandons (charged-but-lost). Total time stays
+            // bounded because recovery recursion is capped (framingLevel < 2).
+            return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, _newStart, refFrameDataUrl, softenLevel + 1, segIdx, _next, 0, (Date.now() + _GEMINI_TIMEOUT));
+          }
+          console.warn('[VeoAPI] auto-recover frame regen failed — surfacing clean failure');
+        }
+
+        // AUTO-RETRY (transient): a NON-block backend hiccup from Vertex/Veo ("Internal
+        // error. Please try again later", "unavailable", "deadline exceeded", etc.). The
+        // start frame is fine, so retry the SAME generation once (the server already
+        // refunded the failed op) before surfacing anything — most self-heal on attempt 2.
+        var _transient = !_blocked && _isTransientError(pollData.error);
+        if (_transient && transientRetry < 1) {
+          console.warn('[VeoAPI] transient backend error — auto-retrying once:', pollData.error);
+          if (typeof showToast === 'function') showToast('Video service hiccup — retrying this clip…', 'info', 4000);
+          await new Promise(function (r) { setTimeout(r, 2500); });
+          // Fresh polling window for the retried clip (bounded by transientRetry < 1) so an
+          // end-of-window transient retry isn't started-then-abandoned.
+          return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1, (Date.now() + _GEMINI_TIMEOUT));
+        }
+
         // Keep the raw model error in the console for debugging, but show the user a
         // clean, human, actionable message instead of Vertex's technical text.
-        if (_blocked) console.warn('[VeoAPI] clip blocked — raw model error:', pollData.error);
+        if (!_blocked) console.warn('[VeoAPI] clip failed — raw model error:', pollData.error);
         var _errMsg = _blocked
-          ? "🚫 The video model's people filter blocked this clip — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
-          : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.');
+          ? "🚫 The video model's people filter blocked this clip even after rebuilding softer, wider frames — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
+          : (_transient
+              ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
+              : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.'));
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
@@ -679,14 +793,21 @@
   // slots free up — no manual batching needed regardless of segment count.
   async function generateAllScenesViaAPI() {
     // Build flat work list — primary clips first, then continuation extras (veoExtras)
+    // Safety net: force the Veo JSON's speech to match the LIVE script before generating,
+    // so a script that was edited/deleted after the prompt was built never replays the
+    // old line. (The edit handler also syncs this, but this catches prompts that went
+    // stale before that fix or via other paths.)
+    function _syncSpeech(promptStr, liveText) {
+      return (typeof window.veoSyncSpeech === 'function') ? window.veoSyncSpeech(promptStr, liveText) : promptStr;
+    }
     var workList = [];
     segments.forEach(function(seg) {
       if (!seg.veoPrompt || !seg.veoPrompt.trim() || seg.nbApproved === false) return;
       var segIdx = segments.indexOf(seg);
-      workList.push({ seg: seg, segIdx: segIdx, veoPrompt: seg.veoPrompt, isExtra: false, extraIdx: -1, extra: null });
+      workList.push({ seg: seg, segIdx: segIdx, veoPrompt: _syncSpeech(seg.veoPrompt, seg.script), isExtra: false, extraIdx: -1, extra: null });
       (seg.veoExtras || []).forEach(function(extra, j) {
         if (!(extra.veoPrompt || '').trim()) return;
-        workList.push({ seg: seg, segIdx: segIdx, veoPrompt: extra.veoPrompt, isExtra: true, extraIdx: j, extra: extra });
+        workList.push({ seg: seg, segIdx: segIdx, veoPrompt: _syncSpeech(extra.veoPrompt, extra.speech), isExtra: true, extraIdx: j, extra: extra });
       });
     });
 
@@ -884,6 +1005,10 @@
   async function regenSingleScene(segIdx) {
     var seg = (window.segments || [])[segIdx];
     if (!seg) { showToast('Segment not found.', 'error'); return; }
+    // Re-entrancy guard — kept OFF the seg object so it is never persisted by
+    // saveSegments (a persisted busy flag would lock the scene after reload).
+    window.__regenBusy = window.__regenBusy || {};
+    if (window.__regenBusy['s' + segIdx]) { showToast('Scene ' + (segIdx + 1) + ' is already regenerating…', 'info', 3000); return; }
     if (!seg.veoPrompt || !seg.veoPrompt.trim()) {
       showToast('Generate the Veo 3 prompt for this scene first.', 'warning'); return;
     }
@@ -898,6 +1023,8 @@
     // Show loading state on the regen button
     var btn = document.getElementById('regenSceneBtn-' + segIdx);
     if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+    window.__regenBusy['s' + segIdx] = true;
+    showToast('Regenerating Scene ' + (segIdx + 1) + '… (~30–90s)', 'info', 4000);
 
     try {
       var startImg = seg.nbPreviewDataUrl || seg.frameDataUrl || null;
@@ -913,10 +1040,17 @@
       if (typeof renderGallery   === 'function') renderGallery();
       if (typeof renderAssembler === 'function') renderAssembler();
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      // The scene modal (segFloatModal) is built once when opened and is NOT
+      // refreshed by renderSegments — that only redraws the cards behind it. If
+      // it's open, rebuild it so the freshly generated clip actually shows;
+      // otherwise the user sees the old video and thinks regen did nothing.
+      if (document.getElementById('segFloatModal') && typeof window.openSegModal === 'function') window.openSegModal(segIdx);
       showToast('Scene ' + (segIdx + 1) + ' regenerated!', 'success', 4000);
     } catch(e) {
       showToast('Regen failed (Scene ' + (segIdx + 1) + '): ' + e.message, 'error', 8000);
       if (btn) { btn.disabled = false; btn.textContent = '↺ Regen'; }
+    } finally {
+      window.__regenBusy['s' + segIdx] = false;
     }
   }
   window.regenSingleScene = regenSingleScene;
@@ -979,6 +1113,9 @@
       if (typeof saveSegments   === 'function') saveSegments();
       if (typeof renderSegments === 'function') renderSegments();
       if (typeof refreshCreditBalance === 'function') refreshCreditBalance();
+      // Rebuild the scene modal if open so the new continuation clip shows
+      // (renderSegments only redraws the cards behind it, not the modal).
+      if (document.getElementById('segFloatModal') && typeof window.openSegModal === 'function') window.openSegModal(segIdx);
       showToast('Clip ' + (extraIdx + 2) + ' generated!', 'success', 4000);
     } catch(e) {
       showToast('Regen failed (Clip ' + (extraIdx + 2) + '): ' + e.message, 'error', 8000);

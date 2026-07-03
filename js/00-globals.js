@@ -67,7 +67,16 @@
         if (val !== null) {
           try {
             await set(key, val);
-            localStorage.removeItem(key);
+            // Verify the migrated value was actually written AND can be read
+            // back through the same scoped get() path before destroying the
+            // legacy copy. If scopes mismatch (read-back empty/unequal), keep
+            // the legacy key so the data is never lost permanently.
+            const readBack = await get(key);
+            if (readBack != null && String(readBack) === String(val)) {
+              localStorage.removeItem(key);
+            } else {
+              console.warn('migrateLocalStorage: read-back mismatch, keeping legacy key', key);
+            }
           } catch(e) { console.warn('migrateLocalStorage: failed to migrate key', key, e); }
         }
       }
@@ -75,6 +84,115 @@
 
     return { get, set, remove, migrateLocalStorage, setUser };
   })();
+
+  // ===== AT-REST FIELD ENCRYPTION (WebCrypto AES-GCM) =====
+  // Encrypts sensitive single fields (e.g. social-account passwords) before
+  // they are persisted to IndexedDB. The key is derived (PBKDF2) from a
+  // per-install random secret kept in localStorage. This is hardening short of
+  // a user passphrase — it stops casual at-rest plaintext exposure of stored
+  // credentials. Encrypted values are marked with the `enc:v1:` prefix so old
+  // plaintext values remain transparently readable (and get re-encrypted on
+  // next save). Helpers are async (WebCrypto requirement); fail-soft so a
+  // crypto error never blocks save/login.
+  const _ENC_MARKER = 'enc:v1:';
+  const _ENC = (() => {
+    let _keyPromise = null;
+
+    function _hasCrypto() {
+      return typeof crypto !== 'undefined' && crypto.subtle &&
+             typeof TextEncoder !== 'undefined';
+    }
+
+    // Per-install random secret (32 random bytes, base64) stored once.
+    function _getInstallSecret() {
+      let s = null;
+      try { s = localStorage.getItem('sm_enc_secret'); } catch(e) {}
+      if (!s) {
+        const buf = new Uint8Array(32);
+        crypto.getRandomValues(buf);
+        s = btoa(String.fromCharCode.apply(null, buf));
+        try { localStorage.setItem('sm_enc_secret', s); } catch(e) {}
+      }
+      return s;
+    }
+
+    async function _getKey() {
+      if (_keyPromise) return _keyPromise;
+      _keyPromise = (async () => {
+        const enc = new TextEncoder();
+        const secret = _getInstallSecret();
+        const baseKey = await crypto.subtle.importKey(
+          'raw', enc.encode(secret), { name: 'PBKDF2' }, false, ['deriveKey']
+        );
+        // Fixed deterministic salt (the install secret is the entropy source).
+        const salt = enc.encode('socialos_field_v1');
+        return crypto.subtle.deriveKey(
+          { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+          baseKey,
+          { name: 'AES-GCM', length: 256 },
+          false,
+          ['encrypt', 'decrypt']
+        );
+      })();
+      return _keyPromise;
+    }
+
+    function _b64(bytes) { return btoa(String.fromCharCode.apply(null, bytes)); }
+    function _unb64(str) {
+      const bin = atob(str);
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+
+    // Returns `enc:v1:<b64(iv)>:<b64(ct)>`. On any failure returns the original
+    // plaintext unchanged so saving never breaks.
+    async function encField(str) {
+      if (str == null || str === '') return str;
+      if (typeof str === 'string' && str.indexOf(_ENC_MARKER) === 0) return str; // already encrypted
+      if (!_hasCrypto()) return str;
+      try {
+        const key = await _getKey();
+        const iv = new Uint8Array(12);
+        crypto.getRandomValues(iv);
+        const enc = new TextEncoder();
+        const ct = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv }, key, enc.encode(String(str))
+        );
+        return _ENC_MARKER + _b64(iv) + ':' + _b64(new Uint8Array(ct));
+      } catch(e) {
+        console.warn('encField failed — storing plaintext fallback:', e);
+        return str;
+      }
+    }
+
+    // If value carries the marker, decrypt; otherwise return as-is (legacy
+    // plaintext). On decrypt failure returns the raw value so reads never throw.
+    async function decField(str) {
+      if (typeof str !== 'string' || str.indexOf(_ENC_MARKER) !== 0) return str;
+      if (!_hasCrypto()) return str;
+      try {
+        const body = str.slice(_ENC_MARKER.length);
+        const sep = body.indexOf(':');
+        if (sep === -1) return str;
+        const iv = _unb64(body.slice(0, sep));
+        const ct = _unb64(body.slice(sep + 1));
+        const key = await _getKey();
+        const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ct);
+        return new TextDecoder().decode(pt);
+      } catch(e) {
+        console.warn('decField failed — returning raw value:', e);
+        return str;
+      }
+    }
+
+    return { encField, decField, MARKER: _ENC_MARKER };
+  })();
+  // Expose async field-crypto helpers to other modules (shared scope + window).
+  const _encField = _ENC.encField;
+  const _decField = _ENC.decField;
+  window._encField = _encField;
+  window._decField = _decField;
 
   // ── Confirm toast (replaces native confirm() dialogs) ──
   window.showConfirm = function(message, onYes, onNo) {

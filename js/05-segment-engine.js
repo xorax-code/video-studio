@@ -363,11 +363,12 @@
     try {
 
     const dur = videoEl.duration;
-    const sampleInterval = 0.1;     // sample every 0.1s — catches sub-second scene changes
-    const hardCutThreshold = 25;    // absolute diff for obvious scene cuts
-    const spikeMultiplier = 2.8;    // sudden change = diff > rolling_avg × this
-    const minSpikeAbs = 10;         // ignore spikes below this (noise floor)
-    const minSegmentLen = 0.4;      // allow segments as short as 0.4s
+    const sampleInterval = 0.1;     // sample every 0.1s
+    const hardCutThreshold = 32;    // absolute diff for an obvious hard scene cut (was 25)
+    const spikeMultiplier = 3.8;    // sudden change = diff > rolling_avg × this (was 2.8 — too twitchy for selfie UGC)
+    const minSpikeAbs = 22;         // noise floor: ignore spikes below this (was 10 — ordinary hand/face motion cleared it)
+    const minSegmentLen = 1.5;      // minimum seconds between cuts (was 0.4 — produced sub-second micro-cuts)
+    const minSamplesForSpike = 12;  // require ~1.2s of baseline history before trusting a spike (kills the post-cut cascade)
     const thumbW = 80, thumbH = 45;
 
     const canvas = document.getElementById('frameCanvas');
@@ -384,7 +385,7 @@
     const cutTimes = [0];
     let prevData = null;
     const recentDiffs = []; // rolling window of composite diff scores
-    const rollingWindow = 15; // ~1.5s of history at 0.1s sample rate
+    const rollingWindow = 20; // ~2.0s of history at 0.1s sample rate
     const totalFrames = Math.ceil(dur / sampleInterval);
 
     for (let k = 0; k <= totalFrames; k++) {
@@ -419,15 +420,22 @@
         if (recentDiffs.length > rollingWindow) recentDiffs.shift();
         const rollingAvg = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
 
-        // 5. Cut if hard cut OR sudden spike above the rolling baseline
-        const isHardCut = score > hardCutThreshold;
-        const isSuddenChange = score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
+        // 5. Cut if hard cut OR sudden spike above the rolling baseline.
+        //    Spike detection only trusts the rolling average once it holds enough
+        //    samples — otherwise the post-cut reset leaves a tiny, unrepresentative
+        //    baseline that ordinary motion blows past, cascading into a cut every
+        //    ~1s. Hard cuts are absolute so they don't need the baseline.
+        const haveBaseline   = recentDiffs.length >= minSamplesForSpike;
+        const isHardCut      = score > hardCutThreshold;
+        const isSuddenChange = haveBaseline && score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
 
         if (isHardCut || isSuddenChange) {
           const lastCut = cutTimes[cutTimes.length - 1];
           if (t - lastCut >= minSegmentLen) {
             cutTimes.push(t);
-            // Reset rolling avg after a cut so next segment starts fresh
+            // Clear history after a cut so the next segment builds its own baseline.
+            // Combined with the minSamplesForSpike gate above, this gives a natural
+            // ~1.2s refractory period before another spike-based cut can fire.
             recentDiffs.length = 0;
           }
         }
@@ -1237,6 +1245,11 @@
       audio:           parentVeo.audio           || 'clear natural voice, slight ambient room tone, no background music',
       negative_prompt: parentVeo.negative_prompt || 'multiple people, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts',
     };
+    // Two-person scenes: carry the parent's "speaker" through so Veo lip-syncs the
+    // SAME person in the continuation clip (without it Veo may sync the wrong person).
+    // Only add when the parent actually declared a speaker — never invent one for
+    // single-person scenes.
+    if (parentVeo.speaker) obj.speaker = parentVeo.speaker;
     extra.veoPrompt = JSON.stringify(obj, null, 2);
     debounceSave();
 
@@ -1244,6 +1257,23 @@
     var promptEl = document.getElementById('veo-extra-prompt-' + segIdx + '-' + extraIdx);
     if (promptEl) promptEl.value = extra.veoPrompt;
   }
+
+  // Keep the cached Veo 3 JSON's speech in sync with the live script. Without this,
+  // editing or DELETING a segment's script left the OLD speech baked into seg.veoPrompt,
+  // so generation still spoke the deleted line. Patches only the speech field so the
+  // rest of the prompt (action/shot/camera/etc.) is preserved.
+  function updateSegScript(i, val) {
+    var seg = segments[i];
+    if (!seg) return;
+    seg.script = val;
+    if (seg.veoPrompt && typeof window.veoSyncSpeech === 'function') {
+      seg.veoPrompt = window.veoSyncSpeech(seg.veoPrompt, val);
+      var pe = document.getElementById('veo-prompt-' + i);
+      if (pe) pe.value = seg.veoPrompt;
+    }
+    if (typeof debounceSave === 'function') debounceSave();
+  }
+  window.updateSegScript = updateSegScript;
 
 
   // Pull the NEXT segment's script into the current segment as a continuation clip
@@ -2425,7 +2455,7 @@
             <button id="rewrite-seg-btn-${i}" onclick="rewriteSegmentScript(${i})" title="AI rewrite this scene to fit within 8s" style="background:none;border:1px solid rgba(96,165,250,0.3);border-radius:3px;color:#60a5fa;font-size:9px;padding:1px 6px;cursor:pointer;white-space:nowrap;">↺ Rewrite</button>
           </div>
           <textarea id="script-seg-${i}"
-            oninput="segments[${i}].script=this.value;autoGrow(this);debounceSave()"
+            oninput="updateSegScript(${i},this.value);autoGrow(this)"
             class="seg-ta-base seg-ta-script"
             placeholder="Script for this scene…"
           >${escHtml(seg.script || '')}</textarea>
@@ -2681,9 +2711,9 @@
         ${seg.done?'<span style="font-size:9px;font-weight:700;color:#4ade80;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:4px;padding:2px 7px;">✅ Done</span>':''}
         ${hasVideo?'<span style="font-size:9px;font-weight:700;color:#34d399;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.25);border-radius:4px;padding:2px 7px;">⚡ Clip Ready</span>':''}
         <span style="flex:1;"></span>
-        <button onclick="window.openSegModal(${prev})" title="Previous (←)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">◀</button>
+        ${total > 1 ? `<button onclick="window.openSegModal(${prev})" title="Previous (←)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">◀</button>` : ''}
         <span style="font-size:10px;color:var(--text-3);min-width:40px;text-align:center;">${idx+1} / ${total}</span>
-        <button onclick="window.openSegModal(${next})" title="Next (→)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">▶</button>
+        ${total > 1 ? `<button onclick="window.openSegModal(${next})" title="Next (→)" style="padding:3px 11px;font-size:11px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:var(--text-2);cursor:pointer;font-family:inherit;">▶</button>` : ''}
         <button onclick="window.closeSegModal()" style="padding:3px 11px;font-size:12px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.25);border-radius:6px;color:var(--danger);cursor:pointer;font-family:inherit;">✕</button>
       </div>
 
@@ -2732,12 +2762,13 @@
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;">
               <div style="font-size:8px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:#34d399;">⚡ Clip 1 · Primary</div>
               <div style="display:flex;gap:5px;">
+                <button onclick="fsClip('clipv-primary-${idx}')" title="Fullscreen" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⛶</button>
                 <button onclick="typeof regenSingleScene==='function'&&regenSingleScene(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(56,189,248,0.1);border:1px solid rgba(56,189,248,0.35);border-radius:5px;color:#38bdf8;cursor:pointer;font-family:inherit;">↺ Regen</button>
                 <button onclick="typeof downloadSegmentVideo==='function'&&downloadSegmentVideo(${idx})" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);border-radius:5px;color:#34d399;cursor:pointer;font-family:inherit;">⬇ DL</button>
                 <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},-1)" style="padding:2px 9px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕ Assemble</button>
               </div>
             </div>
-            <video controls playsinline style="width:100%;border-radius:10px;background:#000;display:block;max-height:300px;object-fit:contain;" src="${seg.apiVideoRaw||seg.apiVideoUrl}"></video>
+            <video id="clipv-primary-${idx}" controls controlsList="nofullscreen" playsinline ondblclick="fsClip('clipv-primary-${idx}')" style="width:100%;border-radius:10px;background:#000;display:block;max-height:300px;object-fit:contain;" src="${seg.apiVideoRaw||seg.apiVideoUrl}"></video>
           </div>`:`
           <div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:10px;padding:18px;text-align:center;">
             <div style="font-size:9px;color:var(--text-3);margin-bottom:10px;">No clip generated yet</div>
@@ -2754,11 +2785,12 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
                   <span style="font-size:9px;font-weight:700;color:#c4b5fd;">Clip ${j+2}</span>
                   ${ex.apiVideoUrl?`<div style="display:flex;gap:4px;">
+                    <button onclick="fsClip('clipvx-${idx}-${j}')" title="Fullscreen" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">⛶</button>
                     <button onclick="typeof galleryAddToAssembler==='function'&&galleryAddToAssembler(${idx},${j})" style="padding:2px 8px;font-size:9px;font-weight:700;background:rgba(99,102,241,0.1);border:1px solid rgba(99,102,241,0.3);border-radius:5px;color:var(--accent-2);cursor:pointer;font-family:inherit;">➕</button>
                   </div>`:''}
                 </div>
                 ${ex.speech?`<div style="font-size:10px;color:var(--text-2);line-height:1.55;margin-bottom:7px;background:rgba(255,255,255,0.03);border-radius:6px;padding:6px 8px;">${esc(ex.speech)}</div>`:''}
-                ${ex.apiVideoUrl?`<video controls playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
+                ${ex.apiVideoUrl?`<video id="clipvx-${idx}-${j}" controls controlsList="nofullscreen" playsinline style="width:100%;border-radius:8px;background:#000;display:block;max-height:260px;object-fit:contain;" src="${ex.apiVideoRaw||ex.apiVideoUrl}" ondblclick="fsClip('clipvx-${idx}-${j}')"></video>`:`<div style="background:rgba(255,255,255,0.02);border:1px dashed rgba(255,255,255,0.1);border-radius:7px;padding:10px;text-align:center;font-size:9px;color:var(--text-3);">Not yet generated</div>`}
               </div>`).join('')}
             </div>
           </div>`:''}
@@ -2783,6 +2815,7 @@
     // Keyboard nav
     const onKey = e => {
       if (e.key === 'Escape') { window.closeSegModal(); }
+      else if (total <= 1) { /* single scene — nothing to navigate to */ }
       else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { window.openSegModal(next); }
       else if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { window.openSegModal(prev); }
     };
@@ -3642,10 +3675,21 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
       : ((setting || 'clean neutral background or lifestyle environment')
         + (_sceneLayout ? ' Object positions: ' + _sceneLayout : ''));
     const actionWithSpeech = analyzedAction;
+    // Auto-detect whether the avatar actually speaks in this scene. Product /
+    // hands / b-roll shots are non-speaking — the script becomes voiceover so
+    // Veo doesn't lip-sync a line over a shot with no talking head. Inferred
+    // from sceneType (if set) or the analyzed action text; defaults to speaking.
+    const _speaks = (typeof window.sceneSpeaks === 'function')
+      ? window.sceneSpeaks({ sceneType: seg && seg.sceneType, action: analyzedAction, _shot: seg && seg._shot, frameDesc: seg && seg.frameDesc })
+      : true;
     const voiceStyle = getVoiceStyle();
-    const audioDesc = voiceStyle
-      ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
-      : 'natural ambient sound, clear voice, no background music';
+    const audioDesc = _speaks
+      ? (voiceStyle
+          ? `natural ambient sound, ${voiceStyle} voice tone, no background music`
+          : 'natural ambient sound, clear voice, no background music')
+      : (voiceStyle
+          ? `natural ambient sound, ${voiceStyle} voiceover continuing over the shot, no background music`
+          : 'natural ambient sound, voiceover continuing over the shot, no background music');
     // If the script or action describes a two-person scene, remove "multiple people"
     // from the negative_prompt — it will cause Veo 3 to flip or drop one person
     const twoPersonScene = detectsTwoPeople(scriptSlice) || detectsTwoPeople(analyzedAction);
@@ -3665,13 +3709,16 @@ No markdown, no explanation, no extra fields. Be specific and concrete — name 
     const _duration     = _maxSec > 6 ? 8 : 6;
     const obj = {
       action: actionWithSpeech,
-      speech: scriptSlice || '',
+      speech: _speaks ? (scriptSlice || '') : '',
       audio: audioDesc,
       duration: _duration + ' seconds',
-      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words',
+      negative_prompt: negativePrompt + ', rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words'
+        + (_speaks ? '' : ', talking, speaking, mouth moving, lip movement, lip sync'),
       camera: 'static handheld, slight natural movement, close-up to medium shot, vertical 9:16',
       background: bgNote,
     };
+    // Non-speaking scene: keep the words as voiceover so narration isn't lost.
+    if (!_speaks && scriptSlice && scriptSlice.trim()) obj.voiceover = scriptSlice;
     return JSON.stringify(obj, null, 2);
   }
 
@@ -3888,11 +3935,12 @@ If 0 or 3+ people visible: {"person_count":0}`
                   if (notesEl) { notesEl.value = seg.sceneNotes; autoGrow(notesEl); notesEl.style.borderColor = 'rgba(96,165,250,0.7)'; setTimeout(() => { if (notesEl) notesEl.style.borderColor = ''; }, 1500); }
                 }
 
-                // Refresh the target dot on the frame thumbnail
-                const currentIdx3 = segments.indexOf(seg);
-                if (typeof renderSegmentCard === 'function' && currentIdx3 >= 0) {
-                  try { renderSegmentCard(currentIdx3); } catch(_) {}
-                }
+                // Refresh the target dot on the frame thumbnail.
+                // (Removed a dead call to renderSegmentCard() — that function does not
+                // exist, so the per-card refresh never ran. The full renderSegments()
+                // that runs once after this concurrent loop completes (below) already
+                // repaints every card's target dot, so no per-iteration render is needed
+                // here — doing one would trigger N redundant full re-renders mid-loop.)
               }
             }
           } catch(_) { /* person detection is best-effort — never block the main flow */ }

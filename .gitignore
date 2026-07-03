@@ -1,6 +1,27 @@
-# Supabase credentials — generated at Netlify build time from env vars
+# ── Secrets — NEVER commit ──────────────────────────────────────────
+# Generated at Netlify build time from env vars; may contain keys.
 supabase-config.js
 
-# Local build artifacts
+# ── Dependencies & build artifacts ──────────────────────────────────
 node_modules/
 app.obfuscated.html
+_build.txt
+
+# ── Editor / OS junk ────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+
+# ── Backups & scratch copies ────────────────────────────────────────
+*.bak
+*.bak_*
+*.tail.html
+
+# ── Large test / reference media (keep only the 4 landing clips) ─────
+*.mp4
+!clip-1.mp4
+!clip-2.mp4
+!clip-3.mp4
+!clip-4.mp4
+cmp/
+f0*.jpg

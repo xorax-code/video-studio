@@ -82,6 +82,7 @@
 
   // ===== THEME TOGGLE =====
   function applyTheme(theme) {
+    theme = 'dark'; // light mode removed — always dark
     document.documentElement.setAttribute('data-theme', theme);
     const isLight = theme === 'light';
     const label = document.getElementById('themeLabel');
@@ -94,7 +95,7 @@
 
   function toggleAppTheme() {
     const current = document.documentElement.getAttribute('data-theme') || 'dark';
-    const next = current === 'dark' ? 'light' : 'dark';
+    const next = 'dark'; // light mode removed
     applyTheme(next);
     // Keep Settings panel in sync so dropdown matches the active theme
     const s = getUserSettings();

@@ -340,8 +340,7 @@ Score each hook 1-10 on: pattern-interrupt strength, emotional pull, curiosity g
     }
 
     // ── Step 1: tokenise into individual sentences ─────────────────────────
-    // Handle  .  !  ?  …  and common abbreviations (Mr. Dr. vs sentence ends)
-    const sentenceRe = /(?<=[^A-Z][.!?…]{1,3})\s+(?=[A-Z"'])|(?<=[.!?…]{1,3})\s*$/gm;
+    // Split after sentence-ending punctuation ( .  !  ?  … ) followed by whitespace.
     const rawSentences = raw
       .replace(/\r\n|\r/g, '\n')             // normalise line endings
       .replace(/\n+/g, ' ')                  // flatten all newlines to spaces
@@ -986,7 +985,7 @@ Script the person says (word for word): "${script}"
 ${action ? 'Presenter action: ' + action : ''}
 
 Return ONLY a valid JSON object with these fields:
-- action: STEP 1 — Before writing anything, mentally list every physical object visible in the attached starting frame (products, containers, tools, bottles, pads, cloths — anything on the surface or in the person's hands). STEP 2 — If reference motion was provided above, check each prop interaction in it against your list. If the reference describes using an object that is NOT visible in this frame (e.g. pouring water when no glass/pitcher is visible, using a bowl when no bowl is present), EXCLUDE that interaction entirely and replace it with a natural gesture the person can perform without touching any new object (nod, look at camera, expressive hand gesture near face, etc.). STEP 3 — Write the final action field using ONLY movements and prop interactions involving objects confirmed visible in the starting frame. Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms.
+- action: STEP 1 — Before writing anything, mentally list every physical object visible in the attached starting frame (products, containers, tools, bottles, pads, cloths — anything on the surface or in the person's hands). STEP 2 — If reference motion was provided above, check each prop interaction in it against your list. If the reference describes using an object that is NOT visible in this frame (e.g. pouring water when no glass/pitcher is visible, using a bowl when no bowl is present), EXCLUDE that interaction entirely and replace it with a natural gesture the person can perform without touching any new object (nod, look at camera, expressive hand gesture near face, etc.). STEP 3 — Write the final action field using ONLY movements and prop interactions involving objects confirmed visible in the starting frame. STEP 4 — There is exactly ONE of every item shown: the person handles only those single existing objects and must NEVER pour, add, sprinkle, reveal, drop in, or introduce any new, extra, second, or duplicate food, powder, liquid, scoop, container, bowl, cup, or utensil — describing an ingredient being "added" or "poured in" is what makes Veo spawn duplicate food. For any recipe or ingredient beat, write the motion as interacting with the SINGLE item already in the frame: "picks up / holds / tilts / lifts / gestures toward the [item already on the surface]", never "adds more" or "pours in". Do NOT use "left" or "right" — use "one hand", "the other hand", "both hands", or camera-relative terms.
 - speech: the exact script text, verbatim
 - starting_frame: describe the person's position, clothing, and pose only — do NOT describe props or background here
 - background: describe the exact background setting visible in the image (wall color, any art/decor, distance). End with: "Background is locked — do not alter, move, or add any elements."
@@ -994,7 +993,7 @@ Return ONLY a valid JSON object with these fields:
 - camera: "static handheld, slight natural movement, medium shot — keep the subject waist-up with headroom, face not filling the frame, vertical 9:16"
 - audio: "${getVoiceStyle() ? getVoiceStyle() + ' voice tone, ' : ''}clear natural voice, slight ambient room tone, no music"
 - duration: MUST be exactly "6 seconds" or "8 seconds" — no other values are valid. Choose 8 if the speech takes longer than 7 seconds to say at a natural pace, otherwise choose 6.
-- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
+- negative_prompt: if the frame shows TWO people, do NOT include "multiple people" — instead use "flipped composition, mirrored subjects, solo person, disappeared person, rearranged props, moved objects, changed table contents, new objects added, duplicate or cloned objects, multiplying or doubled food, extra bowls, extra cups, a second copy of any item, duplicated utensils, extra hands, missing objects, changed background, different lighting, inconsistent set, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". If single person, use "multiple people, rearranged props, moved objects, changed table contents, new objects added, duplicate or cloned objects, multiplying or doubled food, extra bowls, extra cups, a second copy of any item, duplicated utensils, extra hands, missing objects, changed background, inconsistent set, different lighting, cuts, transitions, text overlays, subtitles, watermarks, AI artifacts, morphing text, blurry label, illegible text, distorted letters, warped label, changing text, shifting words". ALWAYS include the label-preservation terms — they prevent product text from morphing.
 ${isTwoPerson ? `
 TWO-PERSON COMPOSITION — CRITICAL SPEAKER RULES:
 • The ${speakerGender} on the ${speakerSide} is the SPEAKER (the avatar). Their mouth moves, they deliver every word of the speech field, and they are the focal subject throughout.
@@ -1059,8 +1058,25 @@ No markdown. Return only the JSON object.`
           _parsed.action = sanitizeDirections(_parsed.action);
         }
       }
-      if (!_parsed.speech || _parsed.speech === 'null' || !String(_parsed.speech).trim()) {
-        _parsed.speech = seg.script || '';
+      // Only force the script back into speech when the avatar actually speaks
+      // in this scene. If it's a product / hands / b-roll shot (or the vision
+      // model deliberately left speech empty), keep the words as voiceover so
+      // Veo doesn't lip-sync a line over a non-talking shot.
+      {
+        var _spk = (typeof window.sceneSpeaks === 'function')
+          ? window.sceneSpeaks({ sceneType: _parsed.sceneType || seg.sceneType, action: _parsed.action || seg.action, _shot: seg._shot, frameDesc: seg.frameDesc })
+          : true;
+        var _speechEmpty = (!_parsed.speech || _parsed.speech === 'null' || !String(_parsed.speech).trim());
+        if (_speechEmpty) {
+          if (_spk) {
+            _parsed.speech = seg.script || '';
+          } else {
+            _parsed.speech = '';
+            if (seg.script && String(seg.script).trim()) _parsed.voiceover = seg.script;
+            _parsed.negative_prompt = (_parsed.negative_prompt ? _parsed.negative_prompt + ', ' : '')
+              + 'talking, speaking, mouth moving, lip movement, lip sync';
+          }
+        }
       }
       // Always enforce duration — must be exactly 6s or 8s (Veo 3 only supports these two)
       {
@@ -1087,10 +1103,13 @@ No markdown. Return only the JSON object.`
   function onNbPreviewChange(i, input) {
     const file = input.files[0];
     if (!file) return;
+    // Reset so re-selecting the same file later still fires the change event
+    input.value = '';
+    const segRef = segments[i]; // capture before any await so we can detect if segments changed
     const reader = new FileReader();
     reader.onload = async ev => {
       try {
-        if (i >= segments.length) return;
+        if (i >= segments.length || segments[i] !== segRef) return;
         segments[i].nbPreviewDataUrl = ev.target.result;
         debounceSave();
         const zone = document.getElementById('nbpreview-zone-' + i);
@@ -1100,6 +1119,7 @@ No markdown. Return only the JSON object.`
         if (veoTa) { veoTa.value = '⏳ Building Veo 3 prompt from image…'; }
         let ok = false;
         try { ok = await buildVeo3FromNBImage(i); } catch (_) {}
+        if (segments[i] !== segRef) return; // segments swapped during the vision call — abandon writes
         if (!ok && veoTa) {
           // Fall back to text-based prompt if vision call fails
           const setting = document.getElementById('studioSetting')?.value.trim() || '';
@@ -1112,7 +1132,7 @@ No markdown. Return only the JSON object.`
       } catch (err) {
         console.error('onNbPreviewChange error:', err);
         const veoTa = document.getElementById('veo-seg-' + i);
-        if (veoTa && veoTa.value.startsWith('⏳')) {
+        if (veoTa && veoTa.value.startsWith('⏳') && segments[i] === segRef) {
           // Fall back to text-based prompt so the textarea is never left blank
           const setting = document.getElementById('studioSetting')?.value.trim() || '';
           const productSel = document.getElementById('studioProduct');
@@ -1159,11 +1179,12 @@ No markdown. Return only the JSON object.`
     for (let j = 0; j < assignCount; j++) {
       const { i } = frameSegs[j];
       const file = sorted[j];
+      const segRef = segments[i]; // capture before any await so we can detect if segments changed
       await new Promise(resolve => {
         const reader = new FileReader();
         reader.onload = async ev => {
           try {
-            if (i >= segments.length) { resolve(); return; }
+            if (i >= segments.length || segments[i] !== segRef) { resolve(); return; }
             segments[i].nbPreviewDataUrl = ev.target.result;
             debounceSave();
             const zone = document.getElementById('nbpreview-zone-' + i);
@@ -1173,6 +1194,7 @@ No markdown. Return only the JSON object.`
             if (veoTa) veoTa.value = '⏳ Building Veo 3 prompt…';
             let ok = false;
             try { ok = await buildVeo3FromNBImage(i); } catch(_) {}
+            if (segments[i] !== segRef) { resolve(); return; } // segments swapped during the vision call — abandon writes
             if (!ok && veoTa) {
               const setting = document.getElementById('studioSetting')?.value.trim() || '';
               const productSel = document.getElementById('studioProduct');
@@ -3661,6 +3683,7 @@ TECHNICAL SPECS:
 
   function loadAvatarFromAccount() {
     const sel = document.getElementById('avatarAccountPicker');
+    if (!sel) return;
     const id = sel.value;
     if (!id) return;
     const acct = accounts.find(a => a.id === id);
@@ -4889,7 +4912,8 @@ Stop fighting it the hard way. [CTA]` },
       if (clr) clr.style.display = 'block';
       try { if (typeof DB !== 'undefined' && DB.set) DB.set('sm_avatar_img', dataUrl); } catch (_) {}
       try { if (typeof extractAvatarInventory === 'function') extractAvatarInventory(dataUrl); } catch (_) {}
-      try { if (typeof window.prepareAvatarReference === 'function') window._avatarPrepPromise = window.prepareAvatarReference(dataUrl); } catch (_) {}
+      // Avatar prep disabled (by request) — use the avatar as-is. See js/03-avatar.js.
+      window._avatarPrepPromise = null;
       return true;
     } catch (_) { return false; }
   }

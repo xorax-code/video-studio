@@ -139,13 +139,6 @@
       if (!h) return;
       const p = document.getElementById(id);
       if (!p) return;
-      // Don't restore vsPanelDownloader if its body is currently hidden (collapsed state)
-      if (id === 'vsPanelDownloader') {
-        const body = p.querySelector('[id^="vsPanelDownloader"] > div:not(.vs-panel-header):not(.vs-panel-resize-handle)');
-        const allDivs = p.querySelectorAll(':scope > div');
-        const bodyDiv = Array.from(allDivs).find(d => !d.classList.contains('vs-panel-header') && !d.classList.contains('vs-panel-resize-handle'));
-        if (bodyDiv && bodyDiv.style.display === 'none') return; // skip — panel is collapsed
-      }
       // Validate: only apply sane pixel values
       const parsed = parseFloat(h);
       if (!isFinite(parsed) || parsed < 80) return;
@@ -181,16 +174,12 @@
         extractAvatarInventory(avatarImageDataUrl);
         // Update quick mode state now that avatarImageDataUrl is set (was a racy setTimeout)
         _qmUpdateUploadState?.();
-        // Auto-prep: re-render the upload as a stylized digital avatar so Veo's
-        // realistic-person-likeness filter accepts the start frames. Async; the
-        // original preview shows immediately, then swaps to the prepared version.
-        // Falls back to the original on any failure (see applyPreparedAvatar).
-        if (typeof window.prepareAvatarReference === 'function') {
-          // Keep the promise so composite generation can await prep — guarantees the
-          // de-photorealized avatar (not the raw photo) is what reaches the frames.
-          try { window._avatarPrepPromise = window.prepareAvatarReference(avatarImageDataUrl); }
-          catch(_) { window._avatarPrepPromise = null; }
-        }
+        // Avatar prep DISABLED (by request): we keep the avatar exactly as uploaded —
+        // no de-photorealization pass, no ~2-credit charge. The raw photo is the
+        // identity base for every composite; Flash-rendered composites + the Veo-block
+        // auto-recovery (js/15-veo-api.js) handle the person-likeness filter instead.
+        // To re-enable, restore the prepareAvatarReference call here.
+        window._avatarPrepPromise = null;
       } catch (err) {
         showToast('Failed to load avatar image — please try again.', 'error');
       }
@@ -301,12 +290,8 @@
         const el = document.getElementById('avatarInventory');
         if (el) {
           el.value = saved;
-          // Auto-expand the section so the user can see the saved inventory
-          if (el.style.display === 'none') {
-            el.style.display = '';
-            const arr = document.querySelector('.inv-arrow');
-            if (arr) arr.style.transform = 'rotate(0deg)';
-          }
+          // Keep the section COLLAPSED by default (the value is loaded behind it).
+          // The user can expand Appearance Inventory manually if they want to review it.
         }
       }
     }).catch(e => console.warn('loadAvatarInventory error:', e));
@@ -352,8 +337,14 @@
     const objUrl = URL.createObjectURL(file);
     videoEl.src = objUrl;
     videoEl.addEventListener('loadedmetadata', () => {
-      // Seek to 20% of the duration (tends to show the product clearly, past any intro motion)
-      videoEl.currentTime = Math.min(videoEl.duration * 0.2, videoEl.duration - 0.1, 3);
+      // Seek to 20% of the duration (tends to show the product clearly, past any intro motion).
+      // Guard against zero/invalid duration (NaN/Infinity) which would yield a NaN/negative
+      // seek target and silently skip capture — fall back to the current (first) frame.
+      if (!isFinite(videoEl.duration) || videoEl.duration <= 0) {
+        videoEl.currentTime = 0;
+      } else {
+        videoEl.currentTime = Math.min(videoEl.duration * 0.2, videoEl.duration - 0.1, 3);
+      }
     });
     videoEl.addEventListener('seeked', () => {
       try {
@@ -538,7 +529,9 @@
           }
           const c = document.createElement('canvas');
           c.width = w; c.height = h;
-          c.getContext('2d').drawImage(img, 0, 0, w, h);
+          const _ctx = c.getContext('2d');
+          if (!_ctx) { reject(new Error('canvas context unavailable')); return; }
+          _ctx.drawImage(img, 0, 0, w, h);
           const compressed = c.toDataURL('image/jpeg', 0.78);
           console.log('[AvatarInventory] compressed to', Math.round(compressed.length / 1024), 'KB');
           resolve(compressed);
@@ -785,7 +778,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     reader.onload = function(ev) {
       try {
         bgFromAvatar = false;
+        useAvatarBg = true;
         DB.remove('sm_bg_from_avatar').catch(e => console.warn('onBgImageChange remove error:', e));
+        DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('onBgImageChange mode error:', e));
         _applyBgToUI(ev.target.result);
         DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('onBgImageChange set error:', e));
         // Extract a plain-text description of this background for use in NB prompts.
@@ -806,8 +801,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
 
   function clearBgImage() {
     bgFromAvatar = false;
+    useAvatarBg = false;
     bgDescription = '';
     DB.remove('sm_bg_from_avatar').catch(e => console.warn('clearBgFromAvatar error:', e));
+    DB.remove('sm_use_avatar_bg').catch(e => console.warn('clearBgMode error:', e));
     DB.remove('sm_bg_description').catch(e => console.warn('clearBgDescription error:', e));
     _applyBgToUI(null);
     const _bgi = document.getElementById('bgImgInput');
@@ -815,9 +812,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     DB.remove('sm_bg_image').catch(e => console.warn('clearBgImage error:', e));
     const badge = document.getElementById('bgAvatarBadge');
     if (badge) badge.style.display = 'none';
-    // If background mode is on, re-patch all prompts so they drop the Photo 2
+    // Re-patch all prompts unconditionally so they drop the now-cleared Photo 2
     // reference and fall back to the avatar-Photo-1 instruction branch.
-    if (useAvatarBg && typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
+    if (typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
   }
 
   function useAvatarAsBg() {
@@ -826,9 +823,11 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       return;
     }
     bgFromAvatar = true;
+    useAvatarBg = true;
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('useAvatarAsBg bg error:', e));
     DB.set('sm_bg_from_avatar', '1').catch(e => console.warn('useAvatarAsBg flag error:', e));
+    DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('useAvatarAsBg mode error:', e));
     // Extract a plain-text description of the background in the avatar photo.
     // Also immediately patch prompts so photo_guide switches to bgFromAvatar mode
     // (description arrives async — extractBgDescription patches again when ready).
@@ -839,6 +838,25 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     const note = document.getElementById('bgSavedNote');
     if (note) { note.style.display = 'inline'; setTimeout(() => note.style.display = 'none', 2500); }
   }
+
+  // Programmatic background setter used by the "Generate from text" flow.
+  // Sets a generated/uploaded scene image as the background and activates
+  // background mode so it flows into NB Pro + Veo prompts (mockup has no
+  // separate Lock toggle — choosing a background is what activates it).
+  function setSceneBackground(dataUrl) {
+    if (!dataUrl) { clearBgImage(); return; }
+    bgFromAvatar = false;
+    useAvatarBg = true;
+    DB.remove('sm_bg_from_avatar').catch(() => {});
+    DB.set('sm_use_avatar_bg', '1').catch(() => {});
+    _applyBgToUI(dataUrl);
+    DB.set('sm_bg_image', bgImageDataUrl).catch(() => {});
+    extractBgDescription(dataUrl);
+    if (typeof patchNbPromptBackground === 'function') patchNbPromptBackground();
+    const badge = document.getElementById('bgAvatarBadge');
+    if (badge) badge.style.display = 'none';
+  }
+  window.setSceneBackground = setSceneBackground;
 
   // --- Brand Kit ---
   let _bkSaveTimer = null;

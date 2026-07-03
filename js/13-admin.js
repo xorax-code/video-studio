@@ -262,11 +262,9 @@
             if (data.performance)  await DB.set('sm_performance',   JSON.stringify(data.performance));
             if (data.recycle)      await DB.set('sm_recycle',       JSON.stringify(data.recycle));
             if (data.ideas)        await DB.set('sm_ideas',         JSON.stringify(data.ideas));
-            const postPlans = Array.isArray(data.postPlans) ? data.postPlans : [];
-            const dailyItems = Array.isArray(data.dailyItems) ? data.dailyItems : [];
-            await DB.set('sm_post_plans',  JSON.stringify(postPlans));
-            await DB.set('sm_daily_items', JSON.stringify(dailyItems));
-            await DB.set('sm_video_log',   JSON.stringify(data.videoLog   || []));
+            if (data.postPlans !== undefined)  await DB.set('sm_post_plans',  JSON.stringify(Array.isArray(data.postPlans) ? data.postPlans : []));
+            if (data.dailyItems !== undefined) await DB.set('sm_daily_items', JSON.stringify(Array.isArray(data.dailyItems) ? data.dailyItems : []));
+            if (data.videoLog !== undefined)   await DB.set('sm_video_log',   JSON.stringify(Array.isArray(data.videoLog) ? data.videoLog : []));
             if (data.replicatorProjects)      await DB.set('sm_projects_r',       JSON.stringify(data.replicatorProjects));
             if (data.producerProjects)        await DB.set('sm_projects_p',       JSON.stringify(data.producerProjects));
             if (data.replicatorActiveProject) await DB.set('sm_active_project_r', data.replicatorActiveProject);
@@ -292,7 +290,8 @@
           'sm_active_project_r','sm_active_project_p',
           'sm_studio_library','sm_studio_library_r','sm_studio_library_p',
           'sm_video_log','sm_post_plans','sm_daily_items',
-          'sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments'
+          'sm_hooks','sm_ctas','sm_ideas','sm_products','sm_performance','sm_recycle','sm_segments',
+          'sm_user_settings'
         ].map(k => DB.remove(k)));
         try { if (_sb) await _sb.auth.signOut(); } catch(_) {}
         localStorage.clear(); // clear after signOut so auth tokens are available during session termination
@@ -321,6 +320,11 @@
             DB.remove('sm_segments'),
           ]);
           localStorage.removeItem('sm_admin_settings');
+          // User settings (display name, avatar, accent, dlPath) live in localStorage, NOT
+          // IndexedDB, so the DB.remove above is a no-op for them — clear them here so a full
+          // reset actually wipes them. Also drop the per-install encryption secret.
+          localStorage.removeItem('sm_user_settings');
+          localStorage.removeItem('sm_enc_secret');
           showToast('Data cleared. The page will now reload.', 'success');
           setTimeout(() => location.reload(), 1200);
         } catch (err) {

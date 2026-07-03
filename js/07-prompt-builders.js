@@ -524,15 +524,24 @@
       'wide':       'wide shot',
       'pov':        'POV shot',
     };
+    // Speaking only on 'character' scenes. On product/hands/b-roll the line
+    // becomes voiceover so the avatar doesn't lip-sync over a product shot.
+    var _speaks = (typeof window.sceneSpeaks === 'function') ? window.sceneSpeaks(beat) : true;
     var obj = {
-      speech:          beat.script,
-      action:          beat.action || 'person delivers line naturally to camera with confident eye contact',
+      speech:          _speaks ? beat.script : '',
+      action:          beat.action || (_speaks
+                          ? 'person delivers line naturally to camera with confident eye contact'
+                          : 'no one speaks on camera — product/insert shot, no mouth movement, no talking'),
       shot:            (shotMap[beat.shot] || beat.shot) + ', vertical 9:16',
       camera:          cameraMap[beat.camera] || beat.camera,
       duration:        beat.duration + ' seconds',
-      audio:           'clear natural voice, slight ambient room tone, no background music',
-      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, text overlays, subtitles, watermarks, AI artifacts, distorted hands',
+      audio:           _speaks
+                          ? 'clear natural voice, slight ambient room tone, no background music'
+                          : 'voiceover continues over the shot, slight ambient room tone, no background music',
+      negative_prompt: 'multiple people, rearranged props, changed background, cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, scene change, text overlays, subtitles, watermarks, AI artifacts, distorted hands'
+                          + (_speaks ? '' : ', talking, speaking, mouth moving, lip movement, lip sync'),
     };
+    if (!_speaks && beat.script && String(beat.script).trim()) obj.voiceover = beat.script;
     if (productName && beat.type !== 'HOOK' && beat.type !== 'PROBLEM') {
       obj.product = productName;
     }
@@ -1020,10 +1029,16 @@
       lines.push('--- Scene ' + (idx + 1) + ' of ' + n + ' ---');
       lines.push('Model: ' + _curModel);
       lines.push(seg.veoPrompt.trim());
-      var speechText = '';
-      try { speechText = JSON.parse(seg.veoPrompt).speech || seg.script || ''; }
-      catch(e) { speechText = seg.script || ''; }
-      if (typeof buildSpeechTimingGuide === 'function') {
+      // Parse the veoPrompt once. sbBuildVeoJson encodes the speaking/non-speaking
+      // decision directly: on-camera dialogue lives in `speech`; non-speaking
+      // (product/hands/broll) clips emit speech:'' and put the line in `voiceover`.
+      var pj; try { pj = JSON.parse(seg.veoPrompt); } catch(e) { pj = null; }
+      // ONLY treat as on-camera speech when `speech` is non-empty — never fall
+      // back to seg.script, which would force a lip-sync timing guide onto a
+      // voiceover clip and defeat the voiceover design.
+      var speechText = (pj && pj.speech) ? pj.speech : '';
+      // Build the on-camera lip-sync timing guide for genuinely speaking clips only.
+      if (speechText && typeof buildSpeechTimingGuide === 'function') {
         var timing = buildSpeechTimingGuide(speechText, duration);
         if (timing) { lines.push(''); lines.push('Speech timing:'); lines.push(timing); }
       }
