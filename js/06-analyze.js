@@ -3761,6 +3761,10 @@ TECHNICAL SPECS:
   function loadProjectData() {
     const p = getActiveProject();
     if (!p) return;
+    // Per-project reset of the reference-video collapse latches so a manual "pin open"
+    // in one project doesn't leak and suppress the one-time auto-collapse in another.
+    window._videoUserPinnedOpen = false;
+    window._videoAutoCollapsedOnce = false;
     segments        = (p.segments || []).map(s => ({ ...s }));
     // Restore background state per project
     if (typeof p.bgImageDataUrl !== 'undefined') {
@@ -3918,6 +3922,8 @@ TECHNICAL SPECS:
   function deleteProject(id) {
     if (projects.length <= 1) { showToast('Can\'t delete the only project.', 'warning'); return; }
     showConfirm('Delete this project and all its segments?', () => {
+      // Drop this project's persisted reference video so blobs don't leak in IndexedDB
+      try { if (typeof DB !== 'undefined') DB.remove('sm_projvid_' + id).catch(function(){}); } catch (_) {}
       projects = projects.filter(p => p.id !== id);
       if (activeProjectId === id) activeProjectId = projects[0].id;
       DB.set(modeKey('sm_projects'), JSON.stringify(projects)).catch(e => console.warn('deleteProject save error:', e));
@@ -4065,6 +4071,7 @@ TECHNICAL SPECS:
     if (!file) return;
 
     refVideoFile = file;
+    if (typeof _persistProjectVideo === 'function') _persistProjectVideo(file); // survive page refresh
 
     // Reset previous scene-count estimate
     _refVideoDuration   = 0;
