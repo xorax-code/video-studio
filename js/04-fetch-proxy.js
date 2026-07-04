@@ -81,6 +81,7 @@
     const meta = lib.find(v => v.id === id) || {};
     const file = new File([blob], meta.fileName || (meta.name || 'library-video') + '.mp4', { type: blob.type || meta.type || 'video/mp4' });
     refVideoFile = file;
+    if (typeof _persistProjectVideo === 'function') _persistProjectVideo(file); // survive page refresh
     if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
     refVideoObjectUrl = URL.createObjectURL(file);
     const videoEl = document.getElementById('refVideoEl');

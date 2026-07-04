@@ -1519,7 +1519,10 @@ Production rules:
   function toggleVideoMini() {
     const panel = document.getElementById('vsPanelRefVideo');
     if (!panel) return;
-    setVideoMini(!panel.classList.contains('video-collapsed'));
+    const willCollapse = !panel.classList.contains('video-collapsed');
+    // Remember the user's manual choice so re-renders don't re-collapse an intentionally-open player.
+    window._videoUserPinnedOpen = !willCollapse;
+    setVideoMini(willCollapse);
   }
   // Alias used by the header button
   function toggleVideoCollapsed() { toggleVideoMini(); }
@@ -3870,6 +3873,8 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId).catch(e => console.warn('loadProjects active save error:', e));
     loadProjectData();
     renderProjectBar();
+    // Rehydrate this project's saved reference video (survives page refresh)
+    if (typeof _restoreProjectVideo === 'function') _restoreProjectVideo();
   }
 
   function newProject() {
@@ -3896,7 +3901,8 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId).catch(e => console.warn('switchProject save error:', e));
     loadProjectData(); // loads new project's segments before we touch the UI
     renderProjectBar();
-    _resetVideoUI(); // silently clear video UI — don't wipe newly-loaded project segments
+    // Rehydrate this project's saved reference video (falls back to a clean player if none)
+    if (typeof _restoreProjectVideo === 'function') _restoreProjectVideo(); else _resetVideoUI();
   }
 
   function renameProject() {

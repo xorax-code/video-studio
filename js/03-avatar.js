@@ -985,6 +985,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     const file = e.target.files[0];
     if (!file) return;
     refVideoFile = file; // Store for Whisper transcription
+    _persistProjectVideo(file); // stash raw file in IndexedDB so it survives a page refresh
     if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
     refVideoObjectUrl = URL.createObjectURL(file);
     const videoEl = document.getElementById('refVideoEl');
@@ -1008,6 +1009,8 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
       refVideoFile = null;
       _activeLibraryVideoId = null;
+      // Drop the refresh-persistence copy for this project too
+      try { const _cp = (typeof getActiveProject === 'function') ? getActiveProject() : null; if (_cp && _cp.id && typeof DB !== 'undefined') DB.remove('sm_projvid_' + _cp.id).catch(function(){}); } catch (_) {}
       // Clear timestamps and segments — they belong to the old video
       whisperSegments = []; whisperWords = [];
       segments = [];
@@ -1049,4 +1052,54 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     if (fn) fn.textContent = '';
     const inp = document.getElementById('refVideoInput');
     if (inp) inp.value = '';
+  }
+
+  // ── Reference-video persistence across page refreshes ─────────────────────
+  // The player uses an in-memory blob URL (URL.createObjectURL) that dies on
+  // reload, so the video vanished on refresh. We stash the raw file in
+  // IndexedDB keyed by project id and rehydrate it whenever the project loads.
+  function _projVidKey(id) { return 'sm_projvid_' + id; }
+
+  function _persistProjectVideo(file) {
+    try {
+      const p = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      const id = p && p.id;
+      if (!id || !file || typeof DB === 'undefined') return;
+      DB.set(_projVidKey(id), { blob: file, name: file.name || 'reference.mp4', type: file.type || 'video/mp4' })
+        .catch(function (e) { console.warn('persistProjectVideo error:', e); });
+    } catch (e) { console.warn('persistProjectVideo error:', e); }
+  }
+
+  async function _restoreProjectVideo() {
+    // Preserve any library link loadProjectData() just set — _resetVideoUI clears it.
+    const _keepLib = (typeof _activeLibraryVideoId !== 'undefined') ? _activeLibraryVideoId : null;
+    _resetVideoUI(); // start from a clean player
+    if (typeof _activeLibraryVideoId !== 'undefined') _activeLibraryVideoId = _keepLib;
+    try {
+      const p = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      const id = p && p.id;
+      if (!id || typeof DB === 'undefined') return;
+      const rec = await DB.get(_projVidKey(id));
+      if (!rec) return;
+      const blob = rec.blob || rec;
+      if (!blob) return;
+      // Guard against a project switch that happened while we awaited.
+      const now = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      if (!now || now.id !== id) return;
+      if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
+      refVideoObjectUrl = URL.createObjectURL(blob);
+      refVideoFile = (blob instanceof File)
+        ? blob
+        : new File([blob], rec.name || 'reference.mp4', { type: rec.type || blob.type || 'video/mp4' });
+      const videoEl = document.getElementById('refVideoEl');
+      if (videoEl) { videoEl.src = refVideoObjectUrl; videoEl.load(); videoEl.style.display = 'block'; }
+      const placeholder = document.getElementById('videoUploadPlaceholder');
+      if (placeholder) placeholder.style.display = 'none';
+      const cvb = document.getElementById('clearVideoBtn'); if (cvb) cvb.style.display = 'inline-block';
+      const slb = document.getElementById('saveVideoLibBtn'); if (slb) slb.style.display = 'inline-block';
+      const fn = document.getElementById('videoFileName'); if (fn) fn.textContent = rec.name || refVideoFile.name || '';
+      const vuz = document.getElementById('videoUploadZone'); if (vuz) vuz.onclick = null;
+      if (typeof showVideoMiniBtn === 'function') showVideoMiniBtn(true);
+      setTimeout(function () { if (typeof updateStepProgress === 'function') updateStepProgress(); }, 80);
+    } catch (e) { console.warn('restoreProjectVideo error:', e); }
   }
