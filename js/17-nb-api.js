@@ -497,6 +497,9 @@
       // on the vision model to write the target into free text (which was unreliable/stale).
       targetX:        (seg && typeof seg.targetX === 'number') ? seg.targetX : null,
       targetY:        (seg && typeof seg.targetY === 'number') ? seg.targetY : null,
+      // Stable per-scene seed → re-renders reproduce the SAME background instead of rerolling
+      // props each time; an intentional Redo bumps seg.nbSeed (see regenNbFrame) for a new take.
+      seed:           (seg ? (seg.nbSeed || (seg.nbSeed = ((Math.random() * 2147483647) | 0) || 1)) : null),
       avatarB64:      avatarParts.b64,
       avatarMime:     avatarParts.mime,
       frameB64,
@@ -1257,6 +1260,8 @@
     if (btn) { btn.disabled = true; btn.textContent = '…'; btn.style.opacity = '0.5'; }
     if (img) { img.style.opacity = '0.4'; }
 
+    // Fresh seed on an intentional Redo → a genuinely new take, not the same reroll.
+    try { var _rs = segments[segIdx]; if (_rs) _rs.nbSeed = ((Math.random() * 2147483647) | 0) || 1; } catch (_) {}
     var ok = await generateNbComposite(segIdx);
 
     if (ok) {
