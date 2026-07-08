@@ -238,6 +238,10 @@ exports.handler = async (event) => {
     const inKey = 'in' + i;
     inputs.push({ key: inKey, uri });
     const atom = { key: 'atom' + i, inputs: [inKey] };
+    // Reject an inverted / zero-length trim (end <= start) instead of submitting a broken atom.
+    if (c.start != null && c.end != null && Number(c.end) > 0 && Number(c.end) <= Number(c.start)) {
+      return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Clip ' + (i + 1) + ' has an invalid trim (its end is not after its start).' }) };
+    }
     if (c.start != null && Number(c.start) > 0.05)  atom.startTimeOffset = offsetStr(c.start);
     if (c.end   != null && Number(c.end)   > 0)     atom.endTimeOffset   = offsetStr(c.end);
     editList.push(atom);

@@ -287,6 +287,28 @@ exports.handler = async (event) => {
     console.warn('poll-veo-clip: user ' + authUser.id + ' attempted op owned by ' + _op.user_id);
     return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden.' }) };
   }
+
+  // kie.ai poll branch - task ids are prefixed "kie:" by generate-veo-clip.
+  if (operationName.indexOf('kie:') === 0) {
+    const _kie = require('./_kie-veo');
+    let kr;
+    try { kr = await _kie.poll(operationName.slice(4)); }
+    catch (e) {
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }), body: JSON.stringify({ done: false }) };
+    }
+    if (!kr.done) {
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }), body: JSON.stringify({ done: false }) };
+    }
+    if (kr.error) {
+      const _rk = await refundVeoOp(operationName, _op);
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ done: true, error: kr.error, filtered: !!kr.filtered, refunded: _rk > 0, refundedCredits: _rk }) };
+    }
+    await markVeoOpDone(operationName);
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ done: true, videoUrl: kr.videoUrl, mimeType: kr.mimeType || 'video/mp4' }) };
+  }
+
   let accessToken;
   try {
     accessToken = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);

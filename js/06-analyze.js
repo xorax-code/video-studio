@@ -3550,6 +3550,7 @@ TECHNICAL SPECS:
         nbEndPrompt: s.nbEndPrompt || '',
         nbPreviewDataUrl: s.nbPreviewDataUrl || null,
         veoPrompt: s.veoPrompt || '',
+        veoExtras: (s.veoExtras || []).map(e => ({ speech: e.speech || '', action: e.action || '', veoPrompt: e.veoPrompt || '' })),
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
         done: s.done || false,
@@ -3777,7 +3778,7 @@ TECHNICAL SPECS:
     _activeLibraryVideoId = p.libraryVideoId || null;
     // Clear undo stack and rewrite cache so they don't bleed across projects
     if (typeof _undoStack !== 'undefined') _undoStack = [];
-    if (typeof rewrittenSegScripts !== 'undefined') rewrittenSegScripts = {};
+    if (typeof rewrittenSegScripts !== 'undefined') rewrittenSegScripts = null;
     const _osel = document.getElementById('originalScript');
     if (_osel) _osel.value = p.originalScript || '';
     renderSegments();
@@ -4044,8 +4045,11 @@ TECHNICAL SPECS:
         for (var ti = 0; ti < times.length; ti++) {
           var t = times[ti];
           await new Promise(function(r) {
-            video.addEventListener('seeked', r, { once: true });
-            video.currentTime = t;
+            var _done = false;
+            var _fin = function(){ if (_done) return; _done = true; video.removeEventListener('seeked', _fin); r(); };
+            video.addEventListener('seeked', _fin, { once: true });
+            setTimeout(_fin, 3000); // never hang if 'seeked' doesn't fire (corrupt/unseekable region)
+            try { video.currentTime = t; } catch(_) { _fin(); }
           });
           var c  = document.createElement('canvas');
           var vw = video.videoWidth  || 480;
@@ -4111,6 +4115,8 @@ TECHNICAL SPECS:
       if (statusEl) { statusEl.textContent = ''; statusEl.style.display = 'none'; }
       if (zone)     zone.style.borderColor = 'rgba(124,106,247,0.45)';
       refVideoFile = null;
+      // Drop the pre-transcription IndexedDB copy so a "failed" video doesn't rehydrate on refresh.
+      try { var _fp = (typeof getActiveProject === 'function') ? getActiveProject() : null; if (_fp && _fp.id && typeof DB !== 'undefined') DB.remove('sm_projvid_' + _fp.id).catch(function(){}); } catch (_) {}
     }
   }
 

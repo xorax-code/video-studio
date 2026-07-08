@@ -1005,7 +1005,7 @@
       document.head.appendChild(_st);
     }
     var _img = document.getElementById('rvImg');
-    var _frame = _img ? _img.parentElement : document.querySelector('#nbApprovalModal .mp-frame');
+    var _frame = _img ? _img.parentElement : document.getElementById('rvFrame');
     if (!_frame) return;
     var _ex = _frame.querySelector('.rv-busy');
     if (on) {
@@ -1252,7 +1252,10 @@
   window.approveAllNbComposites = approveAllNbComposites;
 
   // ── Regenerate a single NB frame in-place inside the approval modal ────────
+  window.__regenBusy = window.__regenBusy || {};
   window.regenNbFrame = async function(segIdx) {
+    if (window.__regenBusy['s' + segIdx]) return; // already regenerating this scene — ignore re-fires
+    window.__regenBusy['s' + segIdx] = true;
     var btn  = document.getElementById('nb-regen-btn-' + segIdx);
     var img  = document.getElementById('nb-approval-img-' + segIdx);
     var card = document.getElementById('nb-approval-card-' + segIdx);
@@ -1271,8 +1274,9 @@
         img.src = seg.nbPreviewDataUrl;
         img.style.opacity = '1';
       }
-      // Auto-approve the fresh frame
+      // Auto-approve the fresh frame (persist it so a reload keeps the approval)
       seg.nbApproved = true;
+      if (typeof saveSegments === 'function') saveSegments();
       var badge = document.getElementById('nb-approval-badge-' + segIdx);
       if (card)  card.style.borderColor = 'rgba(52,211,153,0.7)';
       if (badge) { badge.textContent = '✓'; badge.style.background = 'rgba(52,211,153,0.9)'; }
@@ -1281,6 +1285,7 @@
     }
 
     if (btn) { btn.disabled = false; btn.textContent = '↺ Redo'; btn.style.opacity = '1'; }
+    window.__regenBusy['s' + segIdx] = false;
     if (typeof rvRefreshCurrent === 'function') rvRefreshCurrent();
   };
 

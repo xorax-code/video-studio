@@ -412,6 +412,36 @@ exports.handler = async (event) => {
     return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
   }
 
+  // kie.ai provider (flagged) - primary, Vertex fallback on submit failure.
+  // Credits are already reserved above. If kie accepts the job we return its taskId
+  // (prefixed "kie:") so poll-veo-clip routes to kie. If kie submit fails, we fall
+  // through to the Vertex path below WITHOUT re-charging (same reserved credits).
+  const _kie = require('./_kie-veo');
+  if (_kie.enabled()) {
+    let kr;
+    try {
+      kr = await _kie.submit({ prompt: prompt.trim(), modelKey, aspect, startImageB64, startImageMime, userId });
+    } catch (e) {
+      kr = { ok: false, error: e && e.message };
+    }
+    if (kr && kr.ok) {
+      const opName = 'kie:' + kr.taskId;
+      const _regK = await registerVeoOp(opName, userId, cost, 'clip');
+      if (!_regK) {
+        const _rfK = await addCredits(userId, cost);
+        if (!_rfK) console.error('generate-veo-clip: CRITICAL - refund failed after kie op-registration failure for ' + userId);
+        return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'Could not start tracking this clip. Credits refunded - please try again.' }) };
+      }
+      console.log('generate-veo-clip: user ' + userId + ' started KIE op ' + opName + ', ' + cost + ' credits (balance ' + newBalance + ')');
+      return {
+        statusCode: 200,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationName: opName, creditsDeducted: cost, newBalance, model: modelKey, durationSecs: dur }),
+      };
+    }
+    console.warn('generate-veo-clip: kie submit failed - falling back to Vertex:', kr && kr.error);
+  }
+
   // ── Get Vertex AI access token ────────────────────────────────────────────
   let accessToken;
   try {
