@@ -85,15 +85,32 @@ async function resolveDirectUrl(platform, url) {
   });
   if (!r.ok) throw new Error('Importer returned ' + r.status);
   const d = await r.json();
-  // Providers vary; look for the most common shapes for a direct MP4 URL.
-  const _mv = (d && Array.isArray(d.medias)) ? d.medias.find(m => (m.type||'').includes('video')) : null;
-  const vid =
-    (d && d.url) ||
-    (d && d.data && (d.data.url || d.data.play)) ||
-    (_mv && _mv.url) ||
-    (d && Array.isArray(d.links) && d.links[0] && d.links[0].link);
-  if (!vid) throw new Error('Could not resolve a video from this link.');
-  return { videoUrl: vid, watermarkFree: true };
+  // The download links live in `medias` (array of variants). The top-level `url`
+  // is just the source page echoed back, and one media item is audio — so pick the
+  // best VIDEO variant, preferring no-watermark / HD. Falls back to other shapes.
+  let vid = null, wmFree = true;
+  if (d && Array.isArray(d.medias) && d.medias.length) {
+    const lbl = m => ((m.quality||'') + ' ' + (m.label||'') + ' ' + (m.type||'') + ' ' + (m.extension||'')).toLowerCase();
+    const vids = d.medias.filter(m => {
+      if (!m || !m.url) return false;
+      const l = lbl(m), u = ('' + m.url).toLowerCase();
+      const isAudio = /audio|mp3|\.mp3|m4a/.test(l) || (m.audioAvailable === true && m.videoAvailable === false);
+      const isVideo = /video|mp4|mov|webm/.test(l) || /\.mp4|\.mov|\.webm/.test(u) || m.videoAvailable === true;
+      return !isAudio && (isVideo || /^https?:/.test(u));
+    });
+    const isWm = m => /water\s*mark|wmplay|\bwm\b/.test(lbl(m));
+    const noWm = vids.filter(m => !isWm(m));
+    const pool = noWm.length ? noWm : vids;
+    const pick = pool.find(m => /hd|1080|no.?water|nowm/.test(lbl(m))) || pool[0] || null;
+    if (pick) { vid = pick.url; wmFree = noWm.length ? noWm.includes(pick) : false; }
+  }
+  if (!vid) {
+    vid = (d && d.data && (d.data.url || d.data.play)) ||
+          (d && Array.isArray(d.links) && d.links[0] && d.links[0].link) ||
+          null;
+  }
+  if (!vid) throw new Error('Could not resolve a downloadable video from this link.');
+  return { videoUrl: vid, watermarkFree: wmFree };
 }
 
 exports.handler = async (event) => {
