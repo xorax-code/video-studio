@@ -39,7 +39,7 @@ async function getAuthUser(jwt) {
   if (!process.env.SUPABASE_URL) return null;
   try {
     const r = await fetch(process.env.SUPABASE_URL + '/auth/v1/user', {
-      headers: { 'Authorization': 'Bearer ' + jwt, 'apikey': process.env.SUPABASE_ANON_KEY || '' },
+      headers: { 'Authorization': 'Bearer ' + jwt, 'apikey': process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_ANON || '' },
     });
     if (!r.ok) return null;
     const d = await r.json();
