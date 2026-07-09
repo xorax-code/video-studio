@@ -389,10 +389,14 @@ exports.handler = async (event) => {
   const aspect   = (aspectRatio === '16:9') ? '16:9' : '9:16';
   const dur      = (durationSecs === 8) ? 8 : 6;
   const modelKey = (model === 'fast') ? 'fast' : (model === 'standard') ? 'standard' : 'lite';
-  const cost     = CREDIT_COSTS[modelKey];
+  // "Faster" = the user explicitly asked to skip kie and run direct on Vertex (pricier for us),
+  // so it costs 2× credits. NOTE: this only triggers on an explicit provider==='vertex' request,
+  // NOT on the automatic kie→Vertex fallback below (kie outage), so users aren't penalized then.
+  const _fastMult = (provider === 'vertex') ? 2 : 1;
+  const cost      = CREDIT_COSTS[modelKey] * _fastMult;
   const modelId  = MODEL_IDS[modelKey];
 
-  console.log(`generate-veo-clip: model=${modelKey} (${modelId}), dur=${dur}s, cost=${cost} credits`);
+  console.log(`generate-veo-clip: model=${modelKey} (${modelId}), dur=${dur}s, provider=${provider || 'default'}, cost=${cost} credits (x${_fastMult})`);
 
   // ── Credit check ──────────────────────────────────────────────────────────
   const adminUser = await getAdminUser(userId);

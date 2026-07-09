@@ -9,16 +9,29 @@
   // ── Generation speed preference ('' = Cheaper via kie [default] · 'vertex' = Faster, direct) ──
   // Applies to BOTH the Replicator and the Studio (read when building the generate request).
   try { window._veoProviderPref = localStorage.getItem('veoProvider') || ''; } catch(e) { window._veoProviderPref = ''; }
+  // Relabel the Studio video quality dropdown with doubled credits when Faster is on.
+  window.updateVeoCostLabels = function () {
+    var mult = (window._veoProviderPref === 'vertex') ? 2 : 1;
+    var base = { lite: 15, fast: 30, standard: 80 };
+    var lbl  = { lite: '◈ Lite', fast: '⚡ Fast', standard: '✦ Quality' };
+    try {
+      document.querySelectorAll('#fsVidModel option').forEach(function (o) {
+        if (base[o.value] != null) o.textContent = lbl[o.value] + ' · ~' + (base[o.value] * mult) + ' cr';
+      });
+    } catch (_) {}
+  };
   window.setVeoProvider = function (p) {
     window._veoProviderPref = (p === 'vertex') ? 'vertex' : '';
     try { localStorage.setItem('veoProvider', window._veoProviderPref); } catch(_) {}
     try { document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref; }); } catch(_) {}
+    window.updateVeoCostLabels();
     if (typeof showToast === 'function') showToast(window._veoProviderPref === 'vertex'
-      ? '⚡ Faster mode — clips generate direct (quicker, a bit pricier)'
+      ? '⚡ Faster mode — clips generate direct (quicker, 2× credits)'
       : '💸 Cheaper mode — clips route through kie (best price)', 'info', 3200);
   };
   try { document.addEventListener('DOMContentLoaded', function () {
     document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref || ''; });
+    window.updateVeoCostLabels();
   }); } catch(_) {}
 
   // ── Generate mode: 'api' (server-side, credits) | 'flow' (manual Google Flow) ──
@@ -349,7 +362,10 @@
       parts.push('The subject is animated and expressive throughout: active hand gestures and pointing, leaning slightly toward the camera on emphasis, natural head movement, shifting weight, engaged eyebrows and mouth — never a stiff, frozen, or static pose');
       parts.push('Camera: handheld with subtle natural micro-movement');
     }
-    if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech.toLowerCase() + '"');
+    // Speaker lock — keep the INTENDED speaker (whoever the action names, which may be a
+    // background or specific person) as the only one who talks, and freeze everyone else's
+    // mouth. We deliberately do NOT assume the "main" person, so you can direct any person.
+    if (obj.speech) parts.push('Exactly ONE person speaks this line and says exactly: "' + obj.speech.toLowerCase() + '". The speaker is the specific person named in the action above — keep the line with that exact person and never switch it to anyone else. Every OTHER person in the shot stays completely silent the entire time with their mouth closed and still, and never lip-syncs, mouths, or mimes any words');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');
@@ -372,13 +388,15 @@
     }
     var _handNeg = _oneHand ? ', two hands, both hands, second hand entering frame, extra hand, third hand, extra arm' : '';
     var _prodNeg = (_oneHand || _holdsProduct) ? ', duplicate product, two products, cloned product, split product, product splitting in half, product breaking apart, extra fingers, sixth finger, deformed hands, merged hands, morphing hands' : '';
+    // Speaker negatives — only when there IS a spoken line, to stop the wrong person lip-syncing.
+    var _speechNeg = obj.speech ? ', wrong person speaking, wrong person talking, background person talking, second person talking, another person mouthing words, the person lying down talking, the person being treated talking, both people talking at once, lip sync on the wrong person, mouth moving on a silent person' : '';
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
     // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
     var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
     var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + _speechNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
@@ -861,7 +879,8 @@
 
     // Pre-spend cost gate — show the estimated total and confirm BEFORE committing, so a
     // user can't accidentally burn a big batch or hit a surprise out-of-credits mid-batch.
-    var _clipCost = modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15;
+    var _clipCost = (modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15)
+                    * ((typeof window !== 'undefined' && window._veoProviderPref === 'vertex') ? 2 : 1); // ⚡ Faster (Vertex) = 2× credits
     var _estCost  = total * _clipCost;
     var _bal      = (typeof window.userCredits === 'number') ? window.userCredits : null;
     if (_bal != null && _estCost > _bal) {
