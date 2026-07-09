@@ -1519,7 +1519,10 @@ Production rules:
   function toggleVideoMini() {
     const panel = document.getElementById('vsPanelRefVideo');
     if (!panel) return;
-    setVideoMini(!panel.classList.contains('video-collapsed'));
+    const willCollapse = !panel.classList.contains('video-collapsed');
+    // Remember the user's manual choice so re-renders don't re-collapse an intentionally-open player.
+    window._videoUserPinnedOpen = !willCollapse;
+    setVideoMini(willCollapse);
   }
   // Alias used by the header button
   function toggleVideoCollapsed() { toggleVideoMini(); }
@@ -3547,6 +3550,7 @@ TECHNICAL SPECS:
         nbEndPrompt: s.nbEndPrompt || '',
         nbPreviewDataUrl: s.nbPreviewDataUrl || null,
         veoPrompt: s.veoPrompt || '',
+        veoExtras: (s.veoExtras || []).map(e => ({ speech: e.speech || '', action: e.action || '', veoPrompt: e.veoPrompt || '' })),
         frameDesc: s.frameDesc || '',
         _scriptOnly: s._scriptOnly || false,
         done: s.done || false,
@@ -3758,6 +3762,10 @@ TECHNICAL SPECS:
   function loadProjectData() {
     const p = getActiveProject();
     if (!p) return;
+    // Per-project reset of the reference-video collapse latches so a manual "pin open"
+    // in one project doesn't leak and suppress the one-time auto-collapse in another.
+    window._videoUserPinnedOpen = false;
+    window._videoAutoCollapsedOnce = false;
     segments        = (p.segments || []).map(s => ({ ...s }));
     // Restore background state per project
     if (typeof p.bgImageDataUrl !== 'undefined') {
@@ -3770,7 +3778,7 @@ TECHNICAL SPECS:
     _activeLibraryVideoId = p.libraryVideoId || null;
     // Clear undo stack and rewrite cache so they don't bleed across projects
     if (typeof _undoStack !== 'undefined') _undoStack = [];
-    if (typeof rewrittenSegScripts !== 'undefined') rewrittenSegScripts = {};
+    if (typeof rewrittenSegScripts !== 'undefined') rewrittenSegScripts = null;
     const _osel = document.getElementById('originalScript');
     if (_osel) _osel.value = p.originalScript || '';
     renderSegments();
@@ -3870,6 +3878,8 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId).catch(e => console.warn('loadProjects active save error:', e));
     loadProjectData();
     renderProjectBar();
+    // Rehydrate this project's saved reference video (survives page refresh)
+    if (typeof _restoreProjectVideo === 'function') _restoreProjectVideo();
   }
 
   function newProject() {
@@ -3896,7 +3906,8 @@ TECHNICAL SPECS:
     DB.set(modeKey('sm_active_project'), activeProjectId).catch(e => console.warn('switchProject save error:', e));
     loadProjectData(); // loads new project's segments before we touch the UI
     renderProjectBar();
-    _resetVideoUI(); // silently clear video UI — don't wipe newly-loaded project segments
+    // Rehydrate this project's saved reference video (falls back to a clean player if none)
+    if (typeof _restoreProjectVideo === 'function') _restoreProjectVideo(); else _resetVideoUI();
   }
 
   function renameProject() {
@@ -3912,6 +3923,8 @@ TECHNICAL SPECS:
   function deleteProject(id) {
     if (projects.length <= 1) { showToast('Can\'t delete the only project.', 'warning'); return; }
     showConfirm('Delete this project and all its segments?', () => {
+      // Drop this project's persisted reference video so blobs don't leak in IndexedDB
+      try { if (typeof DB !== 'undefined') DB.remove('sm_projvid_' + id).catch(function(){}); } catch (_) {}
       projects = projects.filter(p => p.id !== id);
       if (activeProjectId === id) activeProjectId = projects[0].id;
       DB.set(modeKey('sm_projects'), JSON.stringify(projects)).catch(e => console.warn('deleteProject save error:', e));
@@ -4032,8 +4045,11 @@ TECHNICAL SPECS:
         for (var ti = 0; ti < times.length; ti++) {
           var t = times[ti];
           await new Promise(function(r) {
-            video.addEventListener('seeked', r, { once: true });
-            video.currentTime = t;
+            var _done = false;
+            var _fin = function(){ if (_done) return; _done = true; video.removeEventListener('seeked', _fin); r(); };
+            video.addEventListener('seeked', _fin, { once: true });
+            setTimeout(_fin, 3000); // never hang if 'seeked' doesn't fire (corrupt/unseekable region)
+            try { video.currentTime = t; } catch(_) { _fin(); }
           });
           var c  = document.createElement('canvas');
           var vw = video.videoWidth  || 480;
@@ -4059,6 +4075,7 @@ TECHNICAL SPECS:
     if (!file) return;
 
     refVideoFile = file;
+    if (typeof _persistProjectVideo === 'function') _persistProjectVideo(file); // survive page refresh
 
     // Reset previous scene-count estimate
     _refVideoDuration   = 0;
@@ -4098,6 +4115,8 @@ TECHNICAL SPECS:
       if (statusEl) { statusEl.textContent = ''; statusEl.style.display = 'none'; }
       if (zone)     zone.style.borderColor = 'rgba(124,106,247,0.45)';
       refVideoFile = null;
+      // Drop the pre-transcription IndexedDB copy so a "failed" video doesn't rehydrate on refresh.
+      try { var _fp = (typeof getActiveProject === 'function') ? getActiveProject() : null; if (_fp && _fp.id && typeof DB !== 'undefined') DB.remove('sm_projvid_' + _fp.id).catch(function(){}); } catch (_) {}
     }
   }
 

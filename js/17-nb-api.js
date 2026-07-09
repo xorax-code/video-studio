@@ -497,6 +497,9 @@
       // on the vision model to write the target into free text (which was unreliable/stale).
       targetX:        (seg && typeof seg.targetX === 'number') ? seg.targetX : null,
       targetY:        (seg && typeof seg.targetY === 'number') ? seg.targetY : null,
+      // Stable per-scene seed → re-renders reproduce the SAME background instead of rerolling
+      // props each time; an intentional Redo bumps seg.nbSeed (see regenNbFrame) for a new take.
+      seed:           (seg ? (seg.nbSeed || (seg.nbSeed = ((Math.random() * 2147483647) | 0) || 1)) : null),
       avatarB64:      avatarParts.b64,
       avatarMime:     avatarParts.mime,
       frameB64,
@@ -921,7 +924,6 @@
         + '<div class="rv-info" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:13px;">'
           + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">Scene <span id="rvNum">1</span> · beat</div><div id="rvBeatName" style="font-size:13.5px;color:var(--text-1,#f5f5f6);line-height:1.5;">—</div></div>'
           + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">Action</div><div id="rvAction" style="font-size:13.5px;color:var(--text-1,#f5f5f6);line-height:1.5;">—</div></div>'
-          + '<div><div style="font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-4,rgba(255,255,255,.34));margin-bottom:4px;">On-screen caption</div><div id="rvCap" style="font-family:\'Geist Mono\',monospace;font-size:12.5px;color:var(--text-2,rgba(255,255,255,.68));background:var(--bg,#08080a);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:8px;padding:9px 11px;line-height:1.4;">—</div></div>'
           + '<div style="margin-top:auto;display:flex;flex-direction:column;gap:8px;">'
             + '<input id="rvOverride" type="text" placeholder="✎ Fix this scene (e.g. empty hands), then Redo" oninput="rvSetOverride(this.value)" style="width:100%;box-sizing:border-box;background:var(--bg,#08080a);border:1px solid var(--border,rgba(255,255,255,.08));border-radius:8px;color:var(--text-1,#f5f5f6);font-size:11px;padding:8px 10px;font-family:inherit;outline:none;"/>'
             + '<div style="display:flex;gap:8px;">'
@@ -994,8 +996,32 @@
     }
   }
 
+  // Busy overlay on the modal frame — gives feedback while a redo / swap-bg runs
+  // (the underlying pipeline fns update old card-grid button ids that this modal no longer has).
+  function _rvSetBusy(on, label){
+    if (!document.getElementById('rv-busy-style')) {
+      var _st = document.createElement('style'); _st.id = 'rv-busy-style';
+      _st.textContent = '@keyframes rvspin{to{transform:rotate(360deg)}}';
+      document.head.appendChild(_st);
+    }
+    var _img = document.getElementById('rvImg');
+    var _frame = _img ? _img.parentElement : document.getElementById('rvFrame');
+    if (!_frame) return;
+    var _ex = _frame.querySelector('.rv-busy');
+    if (on) {
+      if (getComputedStyle(_frame).position === 'static') _frame.style.position = 'relative';
+      if (!_ex) {
+        _ex = document.createElement('div'); _ex.className = 'rv-busy';
+        _ex.setAttribute('style','position:absolute;inset:0;z-index:6;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;background:rgba(4,4,6,.62);');
+        _ex.innerHTML = '<i class="ti ti-loader-2" style="font-size:28px;color:#34D399;animation:rvspin .9s linear infinite;"></i><span style="font-size:12px;color:#fff;font-weight:600;">'+(label||'Working…')+'</span>';
+        _frame.appendChild(_ex);
+      } else { var _sp = _ex.querySelector('span'); if (_sp) _sp.textContent = label||'Working…'; }
+    } else if (_ex) { _ex.remove(); }
+  }
+
   function _rvShow(i){
     if (i < 0 || i >= _rvList.length) return;
+    _rvSetBusy(false);
     _rvIdx = i;
     var seg = _rvSegAt(i);
     var gIdx = _rvGlobalIdx(i);
@@ -1042,16 +1068,14 @@
   // ── Action handlers wired to existing pipeline functions ──
   window.rvApprove = function(){
     var seg = _rvSegAt(_rvIdx); if (!seg) return;
-    var gIdx = _rvGlobalIdx(_rvIdx);
-    // toggle: if not approved -> approve; if already approved -> keep approved (Approve is idempotent-forward)
-    seg.nbApproved = (seg.nbApproved === false) ? true : true;
+    // Real toggle: approve; click again on an approved frame to UN-approve.
+    var nowApproving = (seg.nbApproved === false);   // currently un-approved -> approving
+    seg.nbApproved = nowApproving ? true : false;
     if (typeof saveSegments === 'function') saveSegments();
-    // refresh strip check + count, then advance to next unapproved
-    var t = document.querySelector('[data-rvthumb="'+_rvIdx+'"] span:last-child');
-    if (t) t.style.display = 'flex';
-    _rvShow(_rvIdx);
-    // auto-advance
-    if (_rvIdx < _rvList.length-1) setTimeout(function(){ _rvShow(_rvIdx+1); }, 160);
+    _rvShow(_rvIdx);        // refresh Approve button label + count + highlight
+    _rvRenderStrip();       // refresh filmstrip check badges
+    // Only advance when approving — never after un-approving.
+    if (nowApproving && _rvIdx < _rvList.length-1) setTimeout(function(){ _rvShow(_rvIdx+1); }, 160);
   };
   window.rvSetOverride = function(v){
     var gIdx = _rvGlobalIdx(_rvIdx);
@@ -1059,12 +1083,20 @@
     else { var seg=_rvSegAt(_rvIdx); if(seg) seg.nbOverride = v; }
   };
   window.rvRedo = function(){
+    if (typeof regenNbFrame !== 'function') return;
     var gIdx = _rvGlobalIdx(_rvIdx);
-    if (typeof regenNbFrame === 'function') regenNbFrame(gIdx);
+    _rvSetBusy(true, 'Redoing frame…');
+    if (typeof showToast === 'function') showToast('Regenerating this frame…', 'info', 2500);
+    try { Promise.resolve(regenNbFrame(gIdx)).catch(function(){}).finally(function(){ _rvSetBusy(false); }); }
+    catch(_){ _rvSetBusy(false); }
   };
   window.rvSwapBg = function(){
+    if (typeof swapBackgroundNbFrame !== 'function') return;
     var gIdx = _rvGlobalIdx(_rvIdx);
-    if (typeof swapBackgroundNbFrame === 'function') swapBackgroundNbFrame(gIdx);
+    _rvSetBusy(true, 'Swapping background…');
+    if (typeof showToast === 'function') showToast('Swapping the background…', 'info', 2500);
+    try { Promise.resolve(swapBackgroundNbFrame(gIdx)).catch(function(){}).finally(function(){ _rvSetBusy(false); }); }
+    catch(_){ _rvSetBusy(false); }
   };
   window.rvUndo = function(){
     var gIdx = _rvGlobalIdx(_rvIdx);
@@ -1220,7 +1252,10 @@
   window.approveAllNbComposites = approveAllNbComposites;
 
   // ── Regenerate a single NB frame in-place inside the approval modal ────────
+  window.__regenBusy = window.__regenBusy || {};
   window.regenNbFrame = async function(segIdx) {
+    if (window.__regenBusy['s' + segIdx]) return; // already regenerating this scene — ignore re-fires
+    window.__regenBusy['s' + segIdx] = true;
     var btn  = document.getElementById('nb-regen-btn-' + segIdx);
     var img  = document.getElementById('nb-approval-img-' + segIdx);
     var card = document.getElementById('nb-approval-card-' + segIdx);
@@ -1228,6 +1263,8 @@
     if (btn) { btn.disabled = true; btn.textContent = '…'; btn.style.opacity = '0.5'; }
     if (img) { img.style.opacity = '0.4'; }
 
+    // Fresh seed on an intentional Redo → a genuinely new take, not the same reroll.
+    try { var _rs = segments[segIdx]; if (_rs) _rs.nbSeed = ((Math.random() * 2147483647) | 0) || 1; } catch (_) {}
     var ok = await generateNbComposite(segIdx);
 
     if (ok) {
@@ -1237,8 +1274,9 @@
         img.src = seg.nbPreviewDataUrl;
         img.style.opacity = '1';
       }
-      // Auto-approve the fresh frame
+      // Auto-approve the fresh frame (persist it so a reload keeps the approval)
       seg.nbApproved = true;
+      if (typeof saveSegments === 'function') saveSegments();
       var badge = document.getElementById('nb-approval-badge-' + segIdx);
       if (card)  card.style.borderColor = 'rgba(52,211,153,0.7)';
       if (badge) { badge.textContent = '✓'; badge.style.background = 'rgba(52,211,153,0.9)'; }
@@ -1247,6 +1285,7 @@
     }
 
     if (btn) { btn.disabled = false; btn.textContent = '↺ Redo'; btn.style.opacity = '1'; }
+    window.__regenBusy['s' + segIdx] = false;
     if (typeof rvRefreshCurrent === 'function') rvRefreshCurrent();
   };
 

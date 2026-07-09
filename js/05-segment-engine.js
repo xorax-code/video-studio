@@ -10,6 +10,42 @@
     if (svc) window.open(svc.home, '_blank');
   }
 
+  // --- Import a video straight from a pasted link (TikTok / IG / FB / YT) ---
+  // Calls the fetch-remote-video Netlify function, which resolves + downloads the
+  // clip server-side, stores it, and hands back a signed URL we pull into a File
+  // and feed through the normal onVideoFileChange path.
+  async function fetchRemoteVideo() {
+    const input  = document.getElementById('dlLinkInput');
+    const btn    = document.getElementById('dlFetchBtn');
+    const status = document.getElementById('dlFetchStatus');
+    const url = ((input && input.value) || '').trim();
+    const setStatus = (msg, color) => { if (status) { status.style.display='block'; status.textContent=msg; status.style.color=color||'var(--text-3)'; } };
+    if (!url) { setStatus('Paste a link first.', 'var(--danger)'); return; }
+    if (window.location.protocol === 'file:') { setStatus('Link import only works on the live site.', 'var(--danger)'); return; }
+    if (btn) btn.disabled = true;
+    setStatus('Fetching video…');
+    try {
+      let headers = { 'Content-Type': 'application/json' };
+      try { if (typeof _sb !== 'undefined' && _sb) { const s = await _sb.auth.getSession(); const tok = s && s.data && s.data.session && s.data.session.access_token; if (tok) headers['Authorization'] = 'Bearer ' + tok; } } catch(_) {}
+      const resp = await fetch('/.netlify/functions/fetch-remote-video', { method:'POST', headers, body: JSON.stringify({ url }) });
+      const info = await resp.json().catch(() => ({}));
+      if (!resp.ok) { setStatus((info && info.error && info.error.message) || 'Import failed.', 'var(--danger)'); return; }
+      setStatus('Downloading…');
+      const vr = await fetch(info.url);
+      if (!vr.ok) { setStatus('Could not download the imported video.', 'var(--danger)'); return; }
+      const blob = await vr.blob();
+      const file = new File([blob], info.filename || 'reference.mp4', { type: 'video/mp4' });
+      onVideoFileChange({ target: { files: [file] } });
+      setStatus('Imported \u2713' + (info.watermarkFree === false ? ' (has watermark)' : ''), 'var(--accent-2)');
+      if (input) input.value = '';
+    } catch (err) {
+      setStatus('Import error: ' + ((err && err.message) || err), 'var(--danger)');
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+  window.fetchRemoteVideo = fetchRemoteVideo;
+
   // --- Clear transcript ---
   function clearTranscript() {
     const ta = document.getElementById('originalScript');
@@ -2354,6 +2390,8 @@
       // No segments — show toggle btn only if video is loaded, but keep expanded
       const hasVideo = !!document.getElementById('refVideoEl')?.src;
       showVideoMiniBtn(hasVideo);
+      // Reset the one-time auto-collapse latch so the next batch of segments can collapse once.
+      window._videoAutoCollapsedOnce = false;
       const emptyMsg = studioMode === 'producer'
         ? 'Paste your script and click <strong style="color:var(--text-2);">✂ Split into Scenes</strong> to create segments.'
         : 'Upload a video and detect cuts to get started.';
@@ -2362,11 +2400,15 @@
       if (saveAllBtn) saveAllBtn.style.display = 'none';
       return;
     }
-    // Segments exist — show toggle button and auto-collapse player if not already mini
+    // Segments exist — show toggle button and auto-collapse the player ONCE.
+    // (Previously this ran on every re-render, so any click that re-rendered the
+    //  timeline would slam the reference video closed again — impossible to keep open.)
     showVideoMiniBtn(true);
     const panel = document.getElementById('vsPanelRefVideo');
-    if (panel && !panel.classList.contains('video-collapsed')) {
+    if (panel && !panel.classList.contains('video-collapsed')
+        && !window._videoAutoCollapsedOnce && !window._videoUserPinnedOpen) {
       setVideoMini(true);
+      window._videoAutoCollapsedOnce = true;
     }
     const fmt = t => { const m = Math.floor(t/60); const s = Math.floor(t%60); return m+':'+(s<10?'0':'')+s; };
     if (typeof window._segZoom !== 'number') window._segZoom = 1;

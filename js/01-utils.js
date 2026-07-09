@@ -83,10 +83,26 @@
         if (p && typeof p.catch === 'function') p.catch(function () { if (!done) { done = true; lightbox(); } });
       } catch (e) { lightbox(); return; }
       // Native fullscreen can RESOLVE yet silently no-op for a clip inside a
-      // transformed/fixed container (e.g. the segment modal) — the video just
-      // collapses. If we're not actually fullscreen a beat later, fall back to
-      // the guaranteed body-level lightbox.
-      setTimeout(function () { if (!done && !fsActive()) { done = true; lightbox(); } }, 300);
+      // transformed/fixed container (e.g. continuation clips in the segment card):
+      // the TAB enters fullscreen but the video collapses to nothing ("F11 the whole
+      // tab"). So a beat later, verify the video is actually the fullscreen element
+      // AND is filling the screen; if not, exit that broken fullscreen and use the
+      // guaranteed body-level lightbox instead.
+      setTimeout(function () {
+        if (done) return;
+        var fsEl = document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement;
+        var r = v.getBoundingClientRect();
+        // A properly fullscreened video fills at least ONE axis (portrait 9:16 clips
+        // letterbox on wide screens — their width is small, so don't require width).
+        // A truly collapsed/broken fullscreen has BOTH dims tiny → falls back to lightbox.
+        var showingVideo = v.webkitDisplayingFullscreen ||
+          (fsEl === v && (r.height > window.innerHeight * 0.85 || r.width > window.innerWidth * 0.85));
+        if (!showingVideo) {
+          done = true;
+          if (fsEl) { try { (document.exitFullscreen || document.webkitExitFullscreen || document.msExitFullscreen).call(document); } catch (e) {} }
+          lightbox();
+        }
+      }, 300);
     } else {
       lightbox();
     }

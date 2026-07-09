@@ -833,7 +833,7 @@
   };
 
   const PLAN_INFO = {
-    free:    { label: 'Free Trial', price: '$0',     desc: '3-day full access · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
+    free:    { label: 'Free', price: '$0',     desc: 'Free starter credits · Video Replicator · Veo 3 prompts · NB Pro workflow · Viral Scripts' },
     starter: { label: 'Starter',   price: '$19/mo', priceAnnual: '$16/mo', annualTotal: '$190/yr', desc: '1,000 credits/mo · Full Video Replicator · Veo 3 + NB Pro · Up to 5 tracked accounts · Viral Scripts' },
     creator: { label: 'Creator',   price: '$39/mo', priceAnnual: '$33/mo', annualTotal: '$390/yr', desc: '2,500 credits/mo · Everything in Starter · Unlimited accounts · Multiple script variations · Priority AI' },
     scale:   { label: 'Scale',     price: '$99/mo', priceAnnual: '$83/mo', annualTotal: '$990/yr', desc: '6,500 credits/mo · Lowest cost per credit · Priority AI processing · Early access to new features' },
@@ -933,8 +933,8 @@
           <div style="display:flex;align-items:center;gap:10px;">
             <span style="font-size:20px;">🎁</span>
             <div>
-              <div style="font-size:13px;font-weight:700;color:var(--warning);margin-bottom:2px;">${urgency}Free Trial — ${trial.daysLeft} day${trial.daysLeft !== 1 ? 's' : ''} remaining</div>
-              <div style="font-size:11px;color:var(--text-3);">You have full access during your trial. Upgrade before it ends to keep everything.</div>
+              <div style="font-size:13px;font-weight:700;color:var(--accent-2);margin-bottom:2px;">You're on the Free plan</div>
+              <div style="font-size:11px;color:var(--text-3);">Full access with your free credits. Upgrade any time for more credits and higher Veo quality.</div>
             </div>
           </div>
           <button onclick="openUpgradeModal('starter')" style="padding:8px 16px;border-radius:8px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-2);font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0;">View Plans</button>

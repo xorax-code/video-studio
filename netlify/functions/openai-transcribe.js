@@ -23,7 +23,8 @@ const CORS = {
 
 const CREDIT_COST = 2; // credits per transcription (tune as needed)
 
-// Read/deduct credits via Supabase admin API (fail-open if unavailable → never blocks legit use)
+// Read balance via Supabase admin API; spend atomically via spend_credits RPC.
+// The credit gate in the handler now fails CLOSED if the balance can't be verified.
 async function _readBalance(userId) {
   const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!svc || !process.env.SUPABASE_URL) return null;
@@ -34,12 +35,22 @@ async function _readBalance(userId) {
     return d?.app_metadata?.credits_balance ?? 0;
   } catch(_) { return null; }
 }
-async function _deduct(userId, balance, cost) {
+// Atomic credit spend via the spend_credits RPC — no read-modify-write race, and it
+// can't clobber a concurrent charge. Returns new balance, -1 if insufficient, null on error.
+async function _spend(userId, amount) {
   const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!svc || balance == null) return;
+  if (!svc || !process.env.SUPABASE_URL) return null;
   try {
-    await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: balance - cost } }) });
-  } catch(_) {}
+    const r = await fetch(process.env.SUPABASE_URL + '/rest/v1/rpc/spend_credits', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_user: userId, p_amount: amount }),
+    });
+    if (!r.ok) return null;
+    const n = await r.json();
+    const v = (typeof n === 'number') ? n : parseInt(n, 10);
+    return Number.isFinite(v) ? v : null;
+  } catch(_) { return null; }
 }
 
 // FIX: Added JWT auth -- previously this was an open proxy; any caller could
@@ -118,9 +129,13 @@ exports.handler = async (event) => {
     };
   }
 
-  // Credit gate — block users with no credits (fail-open if balance can't be read)
+  // Credit gate — fail CLOSED: if the balance can't be verified, refuse rather than
+  // hand out un-metered transcription calls.
   const _bal = await _readBalance(authUser.id);
-  if (_bal != null && _bal < CREDIT_COST) {
+  if (_bal == null) {
+    return { statusCode: 503, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: { message: 'Could not verify credit balance. Please retry.' } }) };
+  }
+  if (_bal < CREDIT_COST) {
     return { statusCode: 402, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: { message: 'Out of credits.' }, balance: _bal, cost: CREDIT_COST }) };
   }
 
@@ -261,7 +276,7 @@ exports.handler = async (event) => {
       };
     }
 
-    if (result.status >= 200 && result.status < 300) await _deduct(authUser.id, _bal, CREDIT_COST);
+    if (result.status >= 200 && result.status < 300) await _spend(authUser.id, CREDIT_COST);
 
     return {
       statusCode: result.status,

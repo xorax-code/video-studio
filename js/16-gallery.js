@@ -419,9 +419,21 @@
   var _asmCurIdx  = 0;     // clip currently loaded in the preview
   var _asmRAF     = null;
 
+  var _ASM_PPS = 44; // timeline pixels-per-second: clip block width = duration * this
+  function _asmBlockW(c)     { return Math.max(44, _asmUsed(c) * _ASM_PPS); }
   function _asmUsed(c)       { return Math.max(0, (c.end - c.start)); }
   function _asmTotalUsed()   { return window._assemblerClips.reduce(function(s, c) { return s + _asmUsed(c); }, 0); }
   function _asmSeqStart(i)   { var t = 0; for (var k = 0; k < i; k++) t += _asmUsed(window._assemblerClips[k]); return t; }
+  // Map a sequence time to a pixel offset along the clip track (accounts for the 2px gaps).
+  function _asmSeqToPx(t) {
+    var clips = window._assemblerClips, x = 0, rem = t;
+    for (var k = 0; k < clips.length; k++) {
+      var used = _asmUsed(clips[k]), w = _asmBlockW(clips[k]);
+      if (rem <= used || k === clips.length - 1) return x + (used > 0 ? Math.min(1, rem / used) * w : 0);
+      rem -= used; x += w + 2;
+    }
+    return x;
+  }
   function _asmPreviewEl()   { return document.getElementById('asmPreviewVid'); }
 
   // Sequence time → { idx, local } (local = time inside the clip's source video)
@@ -447,6 +459,9 @@
     }
     var lbl = document.getElementById('asmTimeLabel');
     if (lbl) lbl.textContent = _fmtTime(t) + ' / ' + _fmtTime(total);
+    // Move the cut-line playhead over the clips so you can see exactly where Split will cut.
+    var cut = document.getElementById('asmCutLine');
+    if (cut) { cut.style.left = _asmSeqToPx(t) + 'px'; cut.style.display = window._assemblerClips.length ? 'block' : 'none'; }
   }
 
   function _asmLoadClip(idx, local, play) {
@@ -490,7 +505,7 @@
     if (_asmPlaying) { _asmPause(); return; }
     _asmPlaying = true;
     var btn = document.getElementById('asmPlayBtn'); if (btn) btn.textContent = '⏸';
-    var v = _asmPreviewEl();
+    var v = _asmPreviewEl(); if (!v) return;
     if (!v.getAttribute('data-src')) _asmLoadClip(_asmCurIdx, clips[_asmCurIdx].start, true);
     else v.play().catch(function(){});
     if (_asmRAF) cancelAnimationFrame(_asmRAF);
@@ -526,6 +541,7 @@
     if (d.side === 'start') clip.start = Math.max(0, Math.min(clip.end - 0.2, local));
     else                    clip.end   = Math.min(clip.dur, Math.max(clip.start + 0.2, local));
     var used = _asmUsed(clip);
+    if (d.block && d.side === 'end') d.block.style.width = _asmBlockW(clip) + 'px'; // live-shrink on end trim
     if (d.block) {
       var dl = d.block.querySelector('.asm-cliph-dur'); if (dl) dl.textContent = used.toFixed(1) + 's';
     }
@@ -537,7 +553,7 @@
   });
 
   document.addEventListener('mouseup', function() {
-    if (_tlDrag) { document.body.style.cursor = ''; var i = _tlDrag.idx; _tlDrag = null; _asmSeekSeq(_asmSeqStart(i)); _asmSave(); }
+    if (_tlDrag) { document.body.style.cursor = ''; var i = _tlDrag.idx; _tlDrag = null; renderAssembler(); _asmSeekSeq(_asmSeqStart(i)); _asmSave(); }
   });
 
   // ── Render Assembler ───────────────────────────────────────────────────────
@@ -570,6 +586,7 @@
       block.className = 'asm-cliph' + (i === window._asmSel ? ' on' : '');
       block.dataset.idx = i;
       block.draggable = true;
+      block.style.width = _asmBlockW(clip) + 'px'; // width scales with clip length (CapCut-style)
 
       block.innerHTML =
         '<video class="asm-cliph-thumb" src="' + escAttr(clip.blobUrl) + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
@@ -588,7 +605,13 @@
       block.addEventListener('click', function(e) {
         if (e.target.classList.contains('asm-cliph-hl') || e.target.classList.contains('asm-cliph-hr')) return;
         if (_tlDrag) return;
-        window.asmSelect(i);
+        // Drop the playhead exactly where you clicked inside the clip, so Split cuts right there.
+        var r = block.getBoundingClientRect();
+        var frac = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+        var localT = clip.start + frac * _asmUsed(clip);
+        window._asmSel = i; _asmPause(); renderAssembler();
+        _asmLoadClip(i, localT, false);
+        _asmSetPlayhead(_asmSeqStart(i) + frac * _asmUsed(clip));
       });
 
       // Hover-scrub the thumbnail
@@ -621,6 +644,11 @@
         renderAssembler(); renderGallery(); _asmSave();
       });
     });
+
+    // Playhead line that runs over the clips — shows exactly where Split will cut.
+    var _cutLine = document.createElement('div');
+    _cutLine.id = 'asmCutLine'; _cutLine.className = 'asm-cut-line';
+    track.appendChild(_cutLine);
 
     // Contextual edit tools (Split / Delete) — only when a clip is selected
     var editTools = document.getElementById('asmEditTools');
@@ -677,7 +705,10 @@
     if (i < 0 || i >= clips.length) { if (typeof showToast === 'function') showToast('Click a clip to select it, then Split.', 'warning'); return; }
     var clip = clips[i], used = _asmUsed(clip), local;
     var v = _asmPreviewEl();
-    if (_asmCurIdx === i && v && v.getAttribute('data-src') === clip.blobUrl) local = v.currentTime;
+    // Only trust the preview time if it's actually inside THIS clip's trimmed range —
+    // a split-created clip shares its parent's blobUrl, so data-src alone isn't enough.
+    if (_asmCurIdx === i && v && v.getAttribute('data-src') === clip.blobUrl
+        && v.currentTime >= clip.start - 0.05 && v.currentTime <= clip.end + 0.05) local = v.currentTime;
     else local = clip.start + used / 2;
     local = Math.max(clip.start + 0.2, Math.min(clip.end - 0.2, local));
     if (clip.end - clip.start < 0.5) { if (typeof showToast === 'function') showToast('Clip is too short to split.', 'warning'); return; }
@@ -834,9 +865,12 @@
       // Free tier gets a "Made with AffiliateOS" watermark (server adds it only when
       // a watermark image is configured via WATERMARK_GCS_URI). Paid tiers: no mark.
       var _isFree = (typeof window !== 'undefined' && (window._stripeTier || 'free') === 'free');
+      // Burn-in captions + on-screen text: render client PNGs → timed Transcoder overlays.
+      var _overlays = [];
+      try { if (typeof window.asmHasOverlays === 'function' && window.asmHasOverlays() && typeof window.asmBuildOverlayPayload === 'function') _overlays = window.asmBuildOverlayPayload(); } catch (_e) { console.warn('overlay build failed', _e); }
       var createRes = await fetch('/.netlify/functions/assemble-1080p', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ clips: payload, watermark: _isFree }),
+        body: JSON.stringify({ clips: payload, watermark: _isFree, overlays: _overlays }),
       });
       var createData = await createRes.json();
       if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start the stitch job.');

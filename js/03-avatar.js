@@ -778,9 +778,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     reader.onload = function(ev) {
       try {
         bgFromAvatar = false;
-        useAvatarBg = true;
         DB.remove('sm_bg_from_avatar').catch(e => console.warn('onBgImageChange remove error:', e));
-        DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('onBgImageChange mode error:', e));
         _applyBgToUI(ev.target.result);
         DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('onBgImageChange set error:', e));
         // Extract a plain-text description of this background for use in NB prompts.
@@ -823,11 +821,9 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       return;
     }
     bgFromAvatar = true;
-    useAvatarBg = true;
     _applyBgToUI(avatarImageDataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(e => console.warn('useAvatarAsBg bg error:', e));
     DB.set('sm_bg_from_avatar', '1').catch(e => console.warn('useAvatarAsBg flag error:', e));
-    DB.set('sm_use_avatar_bg', '1').catch(e => console.warn('useAvatarAsBg mode error:', e));
     // Extract a plain-text description of the background in the avatar photo.
     // Also immediately patch prompts so photo_guide switches to bgFromAvatar mode
     // (description arrives async — extractBgDescription patches again when ready).
@@ -846,9 +842,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function setSceneBackground(dataUrl) {
     if (!dataUrl) { clearBgImage(); return; }
     bgFromAvatar = false;
-    useAvatarBg = true;
     DB.remove('sm_bg_from_avatar').catch(() => {});
-    DB.set('sm_use_avatar_bg', '1').catch(() => {});
     _applyBgToUI(dataUrl);
     DB.set('sm_bg_image', bgImageDataUrl).catch(() => {});
     extractBgDescription(dataUrl);
@@ -951,7 +945,10 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
   function loadBgImage() {
     Promise.all([DB.get('sm_bg_image'), DB.get('sm_bg_from_avatar'), DB.get('sm_use_avatar_bg'), DB.get('sm_bg_description')]).then(([saved, fromAvatar, avatarBg, savedDesc]) => {
       bgFromAvatar  = fromAvatar === '1';
-      useAvatarBg   = avatarBg === '1';
+      // Background-replace mode is retired: composites keep the ORIGINAL scene frame (aligned).
+      // A stale saved "on" flag must not force the misaligned "imagine a new background" mode.
+      useAvatarBg   = false;
+      if (avatarBg === '1') DB.remove('sm_use_avatar_bg').catch(() => {});
       if (savedDesc) bgDescription = savedDesc;
       if (saved) _applyBgToUI(saved);
       const badge = document.getElementById('bgAvatarBadge');
@@ -988,6 +985,7 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     const file = e.target.files[0];
     if (!file) return;
     refVideoFile = file; // Store for Whisper transcription
+    _persistProjectVideo(file); // stash raw file in IndexedDB so it survives a page refresh
     if (refVideoObjectUrl) URL.revokeObjectURL(refVideoObjectUrl);
     refVideoObjectUrl = URL.createObjectURL(file);
     const videoEl = document.getElementById('refVideoEl');
@@ -1011,6 +1009,8 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
       if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
       refVideoFile = null;
       _activeLibraryVideoId = null;
+      // Drop the refresh-persistence copy for this project too
+      try { const _cp = (typeof getActiveProject === 'function') ? getActiveProject() : null; if (_cp && _cp.id && typeof DB !== 'undefined') DB.remove('sm_projvid_' + _cp.id).catch(function(){}); } catch (_) {}
       // Clear timestamps and segments — they belong to the old video
       whisperSegments = []; whisperWords = [];
       segments = [];
@@ -1052,4 +1052,54 @@ Keep it under 140 words total. No intro, no commentary — just the five labelle
     if (fn) fn.textContent = '';
     const inp = document.getElementById('refVideoInput');
     if (inp) inp.value = '';
+  }
+
+  // ── Reference-video persistence across page refreshes ─────────────────────
+  // The player uses an in-memory blob URL (URL.createObjectURL) that dies on
+  // reload, so the video vanished on refresh. We stash the raw file in
+  // IndexedDB keyed by project id and rehydrate it whenever the project loads.
+  function _projVidKey(id) { return 'sm_projvid_' + id; }
+
+  function _persistProjectVideo(file) {
+    try {
+      const p = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      const id = p && p.id;
+      if (!id || !file || typeof DB === 'undefined') return;
+      DB.set(_projVidKey(id), { blob: file, name: file.name || 'reference.mp4', type: file.type || 'video/mp4' })
+        .catch(function (e) { console.warn('persistProjectVideo error:', e); });
+    } catch (e) { console.warn('persistProjectVideo error:', e); }
+  }
+
+  async function _restoreProjectVideo() {
+    // Preserve any library link loadProjectData() just set — _resetVideoUI clears it.
+    const _keepLib = (typeof _activeLibraryVideoId !== 'undefined') ? _activeLibraryVideoId : null;
+    _resetVideoUI(); // start from a clean player
+    if (typeof _activeLibraryVideoId !== 'undefined') _activeLibraryVideoId = _keepLib;
+    try {
+      const p = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      const id = p && p.id;
+      if (!id || typeof DB === 'undefined') return;
+      const rec = await DB.get(_projVidKey(id));
+      if (!rec) return;
+      const blob = rec.blob || rec;
+      if (!blob) return;
+      // Guard against a project switch that happened while we awaited.
+      const now = (typeof getActiveProject === 'function') ? getActiveProject() : null;
+      if (!now || now.id !== id) return;
+      if (refVideoObjectUrl) { URL.revokeObjectURL(refVideoObjectUrl); refVideoObjectUrl = null; }
+      refVideoObjectUrl = URL.createObjectURL(blob);
+      refVideoFile = (blob instanceof File)
+        ? blob
+        : new File([blob], rec.name || 'reference.mp4', { type: rec.type || blob.type || 'video/mp4' });
+      const videoEl = document.getElementById('refVideoEl');
+      if (videoEl) { videoEl.src = refVideoObjectUrl; videoEl.load(); videoEl.style.display = 'block'; }
+      const placeholder = document.getElementById('videoUploadPlaceholder');
+      if (placeholder) placeholder.style.display = 'none';
+      const cvb = document.getElementById('clearVideoBtn'); if (cvb) cvb.style.display = 'inline-block';
+      const slb = document.getElementById('saveVideoLibBtn'); if (slb) slb.style.display = 'inline-block';
+      const fn = document.getElementById('videoFileName'); if (fn) fn.textContent = rec.name || refVideoFile.name || '';
+      const vuz = document.getElementById('videoUploadZone'); if (vuz) vuz.onclick = null;
+      if (typeof showVideoMiniBtn === 'function') showVideoMiniBtn(true);
+      setTimeout(function () { if (typeof updateStepProgress === 'function') updateStepProgress(); }, 80);
+    } catch (e) { console.warn('restoreProjectVideo error:', e); }
   }

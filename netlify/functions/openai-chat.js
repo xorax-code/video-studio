@@ -31,12 +31,23 @@ async function _readBalance(userId) {
     return d?.app_metadata?.credits_balance ?? 0;
   } catch(_) { return null; }
 }
-async function _deduct(userId, balance, cost) {
+// Atomic credit spend via the spend_credits RPC — no read-modify-write race, and it
+// can't clobber a concurrent charge from another function. Returns the new balance,
+// -1 if insufficient/missing, or null on error.
+async function _spend(userId, amount) {
   const svc = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!svc || balance == null) return;
+  if (!svc || !process.env.SUPABASE_URL) return null;
   try {
-    await fetch(process.env.SUPABASE_URL + '/auth/v1/admin/users/' + userId, { method: 'PUT', headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' }, body: JSON.stringify({ app_metadata: { credits_balance: balance - cost } }) });
-  } catch(_) {}
+    const r = await fetch(process.env.SUPABASE_URL + '/rest/v1/rpc/spend_credits', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + svc, 'apikey': svc, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_user: userId, p_amount: amount }),
+    });
+    if (!r.ok) return null;
+    const n = await r.json();
+    const v = (typeof n === 'number') ? n : parseInt(n, 10);
+    return Number.isFinite(v) ? v : null;
+  } catch(_) { return null; }
 }
 
 // FIX: Added JWT auth -- previously this was an open proxy; any caller could
@@ -95,9 +106,13 @@ exports.handler = async (event) => {
     return { statusCode: 401, headers: CORS, body: JSON.stringify({ error: { message: 'Invalid or expired session.' } }) };
   }
 
-  // Credit gate — block users with no credits (fail-open if balance can't be read)
+  // Credit gate — fail CLOSED: if the balance can't be verified, refuse rather than
+  // hand out un-metered OpenAI calls.
   const _bal = await _readBalance(authUser.id);
-  if (_bal != null && _bal < CREDIT_COST) {
+  if (_bal == null) {
+    return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: { message: 'Could not verify credit balance. Please retry.' } }) };
+  }
+  if (_bal < CREDIT_COST) {
     return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: { message: 'Out of credits.' }, balance: _bal, cost: CREDIT_COST }) };
   }
 
@@ -120,7 +135,7 @@ exports.handler = async (event) => {
 
     const data = await response.json();
 
-    if (response.status >= 200 && response.status < 300) await _deduct(authUser.id, _bal, CREDIT_COST);
+    if (response.status >= 200 && response.status < 300) await _spend(authUser.id, CREDIT_COST);
 
     return {
       statusCode: response.status,
