@@ -6,6 +6,21 @@
   var _GEMINI_POLL_MS  = 6000;   // poll every 6s
   var _GEMINI_TIMEOUT  = 900000; // 15 min max — wider window so genuine completions under load aren't cut off (a false timeout → user regenerates → a second paid clip)
 
+  // ── Generation speed preference ('' = Cheaper via kie [default] · 'vertex' = Faster, direct) ──
+  // Applies to BOTH the Replicator and the Studio (read when building the generate request).
+  try { window._veoProviderPref = localStorage.getItem('veoProvider') || ''; } catch(e) { window._veoProviderPref = ''; }
+  window.setVeoProvider = function (p) {
+    window._veoProviderPref = (p === 'vertex') ? 'vertex' : '';
+    try { localStorage.setItem('veoProvider', window._veoProviderPref); } catch(_) {}
+    try { document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref; }); } catch(_) {}
+    if (typeof showToast === 'function') showToast(window._veoProviderPref === 'vertex'
+      ? '⚡ Faster mode — clips generate direct (quicker, a bit pricier)'
+      : '💸 Cheaper mode — clips route through kie (best price)', 'info', 3200);
+  };
+  try { document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref || ''; });
+  }); } catch(_) {}
+
   // ── Generate mode: 'api' (server-side, credits) | 'flow' (manual Google Flow) ──
   function getGenerateMode() {
     try { return localStorage.getItem('affiliateos_generate_mode') || 'api'; } catch(e) { return 'api'; }
@@ -345,13 +360,25 @@
     parts.push('The person wears the exact same outfit for the entire clip — their clothing stays identical and stays on; they do NOT put on, take off, change, or adjust any clothing, robe, or kimono at any point');
     // If any left/right positioning is mentioned, add composition lock
     var _hasPosition = /\b(left|right)\b/i.test(obj.action || '');
+    // Hand / product integrity — Veo loves to sprout a SECOND hand or split the held product
+    // into two. When the action asks for one hand and/or holds a product, force a single hand
+    // and one intact object, as a POSITIVE instruction AND negatives (kie has no separate
+    // negative-prompt field, so both must live inside the prompt text).
+    var _actTxt = (obj.action || '');
+    var _oneHand = /\b(one|single|1)[\s-]*hand(ed)?\b/i.test(_actTxt) || /\bwith one hand\b/i.test(_actTxt);
+    var _holdsProduct = /\b(hold|holds|holding|apply|applies|applying|swipe|swipes|dab|dabs|press|presses|rub|rubs|wipe|wipes|use[sd]? (?:the|a|it)|with (?:her|his|the) hand)\b/i.test(_actTxt);
+    if (_oneHand) {
+      parts.push('She uses ONLY ONE hand for the entire clip — the other hand stays relaxed at her side or fully out of frame and never enters the shot; she holds exactly ONE single product that stays whole and intact the entire time (it is never duplicated, cloned, or split)');
+    }
+    var _handNeg = _oneHand ? ', two hands, both hands, second hand entering frame, extra hand, third hand, extra arm' : '';
+    var _prodNeg = (_oneHand || _holdsProduct) ? ', duplicate product, two products, cloned product, split product, product splitting in half, product breaking apart, extra fingers, sixth finger, deformed hands, merged hands, morphing hands' : '';
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
     // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
     var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
     var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
@@ -495,6 +522,7 @@
         frameB64:        frameB64,    // reference frame for Gemini scene analysis
         frameMime:       frameMime,
         aspectRatio:     aspect,
+        provider:        (typeof window !== 'undefined' && window._veoProviderPref) || undefined,
       }),
     });
 

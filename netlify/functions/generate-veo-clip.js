@@ -381,6 +381,7 @@ exports.handler = async (event) => {
     frameB64      = null,   // optional reference frame for scene analysis
     frameMime     = 'image/jpeg',
     aspectRatio   = '9:16', // Veo supports '9:16' (vertical) or '16:9' (landscape)
+    provider      = null,   // per-generation speed pref: 'vertex' = skip kie (faster, pricier)
   } = body;
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
@@ -417,7 +418,7 @@ exports.handler = async (event) => {
   // (prefixed "kie:") so poll-veo-clip routes to kie. If kie submit fails, we fall
   // through to the Vertex path below WITHOUT re-charging (same reserved credits).
   const _kie = require('./_kie-veo');
-  if (_kie.enabled()) {
+  if (_kie.enabled() && provider !== 'vertex') {
     let kr;
     try {
       kr = await _kie.submit({ prompt: prompt.trim(), modelKey, aspect, startImageB64, startImageMime, userId });
