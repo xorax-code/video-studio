@@ -922,11 +922,16 @@
     var toSave = _fsVidHistory.slice(0, _FS_VID_PERSIST_MAX);
     Promise.all(toSave.map(function(item) {
       if (item.pending || !item.src) return Promise.resolve(null); // skip in-flight placeholders
-      if (item.arrayBuffer) return Promise.resolve(item); // already converted
+      if (item.arrayBuffer) return Promise.resolve({ id: item.id, arrayBuffer: item.arrayBuffer, mime: item.mime || 'video/mp4', gcsUrl: item.gcsUrl || null });
       return fetch(item.src)
         .then(function(r) { return r.arrayBuffer(); })
-        .then(function(ab) { return { id: item.id, arrayBuffer: ab, mime: item.mime || 'video/mp4' }; })
-        .catch(function() { return null; }); // skip if fetch fails
+        .then(function(ab) { return { id: item.id, arrayBuffer: ab, mime: item.mime || 'video/mp4', gcsUrl: item.gcsUrl || null }; })
+        .catch(function() {
+          // Couldn't grab the bytes (kie/cross-origin URL, or a revoked blob). Still persist a
+          // durable pointer so the clip survives a reload while its cloud URL is valid, instead
+          // of vanishing entirely.
+          return item.gcsUrl ? { id: item.id, gcsUrl: item.gcsUrl, mime: item.mime || 'video/mp4' } : null;
+        });
     })).then(function(items) {
       var valid = items.filter(Boolean);
       _fsPutAll('vidHistory', valid).catch(function(e) {
@@ -953,10 +958,14 @@
       // The leading Date.now() timestamp is fixed-width, so string order matches time order.
       items.sort(function(a, b) { return String(b.id).localeCompare(String(a.id)); });
       var restored = items.map(function(item) {
-        var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
-        var blobUrl = URL.createObjectURL(blob);
-        return { src: blobUrl, id: item.id, mime: item.mime, arrayBuffer: item.arrayBuffer };
-      });
+        if (item.arrayBuffer) {
+          var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
+          var blobUrl = URL.createObjectURL(blob);
+          return { src: blobUrl, id: item.id, mime: item.mime, arrayBuffer: item.arrayBuffer, gcsUrl: item.gcsUrl || null };
+        }
+        // No stored bytes — restore straight from the durable cloud URL (kept as a fallback).
+        return { src: item.gcsUrl, id: item.id, mime: item.mime, gcsUrl: item.gcsUrl };
+      }).filter(function(it) { return it.src; });
       _fsVidHistory = restored;
       _renderVidStrip();
     }).catch(function(e) { console.warn('fsStudio: could not restore video history:', e); });

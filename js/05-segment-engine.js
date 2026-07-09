@@ -421,7 +421,15 @@
     const cutTimes = [0];
     let prevData = null;
     const recentDiffs = []; // rolling window of composite diff scores
+    const recentCenter = []; // rolling window of center/object-region diffs (own baseline)
     const rollingWindow = 20; // ~2.0s of history at 0.1s sample rate
+    // Object-entrance detector: a new item appearing in-hand/center is a LOCALIZED
+    // change — centerDiff spikes but the composite score averages it back down
+    // against a calm globalDiff, so it slips under the whole-frame spike bars. We
+    // watch centerDiff against its OWN rolling baseline with a more sensitive
+    // threshold so those entrances still cut, without loosening the frame thresholds.
+    const objMultiplier = 2.6;  // centerDiff > center_avg × this = object entered/left
+    const objMinAbs = 15;       // noise floor for the region (localized, so lower than frame)
     const totalFrames = Math.ceil(dur / sampleInterval);
 
     for (let k = 0; k <= totalFrames; k++) {
@@ -456,6 +464,13 @@
         if (recentDiffs.length > rollingWindow) recentDiffs.shift();
         const rollingAvg = recentDiffs.reduce((a, b) => a + b, 0) / recentDiffs.length;
 
+        // 4b. Separate rolling average of the object-region diff, so a localized
+        //     item entering the frame can be detected against the region's own
+        //     calm baseline (before it gets diluted into the composite score).
+        recentCenter.push(centerDiff);
+        if (recentCenter.length > rollingWindow) recentCenter.shift();
+        const centerAvg = recentCenter.reduce((a, b) => a + b, 0) / recentCenter.length;
+
         // 5. Cut if hard cut OR sudden spike above the rolling baseline.
         //    Spike detection only trusts the rolling average once it holds enough
         //    samples — otherwise the post-cut reset leaves a tiny, unrepresentative
@@ -464,8 +479,10 @@
         const haveBaseline   = recentDiffs.length >= minSamplesForSpike;
         const isHardCut      = score > hardCutThreshold;
         const isSuddenChange = haveBaseline && score > rollingAvg * spikeMultiplier && score > minSpikeAbs;
+        // Object entered/left the hand/center region — localized spike vs its own baseline.
+        const isObjectChange = haveBaseline && centerDiff > centerAvg * objMultiplier && centerDiff > objMinAbs;
 
-        if (isHardCut || isSuddenChange) {
+        if (isHardCut || isSuddenChange || isObjectChange) {
           const lastCut = cutTimes[cutTimes.length - 1];
           if (t - lastCut >= minSegmentLen) {
             cutTimes.push(t);
@@ -473,6 +490,7 @@
             // Combined with the minSamplesForSpike gate above, this gives a natural
             // ~1.2s refractory period before another spike-based cut can fire.
             recentDiffs.length = 0;
+            recentCenter.length = 0;
           }
         }
       }
