@@ -416,6 +416,13 @@
     if (!msg) return false;
     return /internal error|try again later|please try again|temporarily|unavailable|deadline exceeded|backend error|service error|\b50[023]\b/i.test(String(msg));
   }
+  // Veo intermittently fails to generate AUDIO for a request ("...was unable to generate
+  // audio for this request. Please try a different prompt."). It usually clears on a plain
+  // retry of the same clip, so treat it as retryable rather than a hard failure.
+  function _isAudioError(msg) {
+    if (!msg) return false;
+    return /unable to generate audio|generate audio for this request|could ?n'?t generate audio|failed to generate audio|no audio (?:was )?generated/i.test(String(msg));
+  }
 
   async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry, outerDeadline) {
     softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
@@ -589,10 +596,11 @@
         // error. Please try again later", "unavailable", "deadline exceeded", etc.). The
         // start frame is fine, so retry the SAME generation once (the server already
         // refunded the failed op) before surfacing anything — most self-heal on attempt 2.
-        var _transient = !_blocked && _isTransientError(pollData.error);
+        var _audio     = !_blocked && _isAudioError(pollData.error);
+        var _transient = !_blocked && (_isTransientError(pollData.error) || _audio);
         if (_transient && transientRetry < 1) {
-          console.warn('[VeoAPI] transient backend error — auto-retrying once:', pollData.error);
-          if (typeof showToast === 'function') showToast('Video service hiccup — retrying this clip…', 'info', 4000);
+          console.warn('[VeoAPI] ' + (_audio ? 'audio-generation error' : 'transient backend error') + ' — auto-retrying once:', pollData.error);
+          if (typeof showToast === 'function') showToast(_audio ? 'The model missed the audio on this clip — retrying…' : 'Video service hiccup — retrying this clip…', 'info', 4000);
           await new Promise(function (r) { setTimeout(r, 2500); });
           // Fresh polling window for the retried clip (bounded by transientRetry < 1) so an
           // end-of-window transient retry isn't started-then-abandoned.
@@ -604,9 +612,11 @@
         if (!_blocked) console.warn('[VeoAPI] clip failed — raw model error:', pollData.error);
         var _errMsg = _blocked
           ? "🚫 The video model's people filter blocked this clip even after rebuilding softer, wider frames — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
-          : (_transient
-              ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
-              : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.'));
+          : (_audio
+              ? "🔇 The video model couldn't generate audio for this scene, even after a retry — your credits were refunded. Fix: shorten or reword the spoken line (very long or unusual lines trip this up), then regenerate just this scene."
+              : (_transient
+                  ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
+                  : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.')));
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {

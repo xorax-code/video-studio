@@ -256,17 +256,7 @@
   // _FS_VID_SYS removed — video prompt enhancement handled by enhance-veo-prompt Netlify function (Gemini 2.5 Flash multimodal)
 
   // ── Prompt history ─────────────────────────────────────────────────────────
-  function _fsSavePrompt(mode, text) {
-    if (!text || !text.trim()) return;
-    var key = mode === 'image' ? 'fsImgPrompts' : 'fsVidPrompts';
-    var arr = mode === 'image' ? _fsImgPromptHistory : _fsVidPromptHistory;
-    var ex  = arr.indexOf(text);
-    if (ex !== -1) arr.splice(ex, 1);
-    arr.unshift(text);
-    if (arr.length > 10) arr.length = 10;
-    try { localStorage.setItem(key, JSON.stringify(arr)); } catch(_) {}
-    _fsRenderPromptHistory(mode);
-  }
+  function _fsSavePrompt(mode, text) { /* prompt-history removed per request */ }
 
   function _fsRenderPromptHistory(mode) {
     var cId  = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
@@ -290,17 +280,13 @@
   }
 
   function _fsInitPromptHistory() {
-    ['image', 'video'].forEach(function(mode) {
-      var pId = mode === 'image' ? 'fsImgPrompt' : 'fsVidPrompt';
-      var cId = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
-      var el  = document.getElementById(pId);
-      if (!el || document.getElementById(cId)) return;
-      var div = document.createElement('div');
-      div.id = cId;
-      div.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;margin-top:5px;';
-      el.parentNode.insertBefore(div, el.nextSibling);
-      _fsRenderPromptHistory(mode);
+    // Prompt-history chips removed per request. Never create the containers,
+    // and remove any that already exist (plus clear the saved history).
+    ['fsImgPromptHistory', 'fsVidPromptHistory'].forEach(function(cId) {
+      var c = document.getElementById(cId); if (c) c.remove();
     });
+    try { localStorage.removeItem('fsImgPrompts'); localStorage.removeItem('fsVidPrompts'); } catch(_) {}
+    _fsImgPromptHistory = []; _fsVidPromptHistory = [];
   }
 
   // ── Delete individual results ──────────────────────────────────────────────
