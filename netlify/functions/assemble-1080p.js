@@ -169,6 +169,21 @@ function toGcsUri(input) {
   } catch(_) { return null; }
 }
 
+// Upload a base64 PNG to GCS via the JSON media-upload API → returns gs:// URI.
+function uploadPng(accessToken, bucketName, objectName, base64) {
+  const buf  = Buffer.from(base64, 'base64');
+  const path = `/upload/storage/v1/b/${encodeURIComponent(bucketName)}/o?uploadType=media&name=${encodeURIComponent(objectName)}`;
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname: 'storage.googleapis.com', path, method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'image/png', 'Content-Length': buf.length } },
+      (res) => { const ch = []; res.on('data', c => ch.push(c)); res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve(`gs://${bucketName}/${objectName}`);
+        else reject(new Error('GCS upload HTTP ' + res.statusCode + ' ' + Buffer.concat(ch).toString().slice(0, 200)));
+      }); });
+    req.on('error', reject); req.write(buf); req.end();
+  });
+}
+
 function offsetStr(sec) {
   return (Math.max(0, Number(sec)).toFixed(3)) + 's';
 }
@@ -297,6 +312,23 @@ exports.handler = async (event) => {
       image: { uri: process.env.WATERMARK_GCS_URI, resolution: { x: 0, y: 0 }, alpha: 0.85 },
       animations: [{ animationStatic: { xy: { x: 0.62, y: 0.93 }, startTimeOffset: '0s' } }],
     }];
+  }
+
+  // Caption + on-screen text burn-in: client sends transparent full-frame PNGs
+  // (base64) with reel timing; upload each to GCS and add as a timed image overlay.
+  const _userOverlays = Array.isArray(body.overlays) ? body.overlays.slice(0, 40) : [];
+  if (_userOverlays.length) {
+    _tcConfig.overlays = _tcConfig.overlays || [];
+    for (let oi = 0; oi < _userOverlays.length; oi++) {
+      const ov = _userOverlays[oi];
+      if (!ov || typeof ov.png !== 'string' || !ov.png || ov.png.length > 3000000) continue;
+      let ovUri;
+      try { ovUri = await uploadPng(accessToken, allowedBucket, `assembled/${jobSlug}/ovl_${oi}.png`, ov.png); }
+      catch (e) { console.error('assemble-1080p: overlay upload failed', oi, e.message); continue; }
+      const anims = [{ animationStatic: { xy: { x: 0, y: 0 }, startTimeOffset: offsetStr(ov.start || 0) } }];
+      if (ov.end != null && Number(ov.end) > 0) anims.push({ animationEnd: { startTimeOffset: offsetStr(ov.end) } });
+      _tcConfig.overlays.push({ image: { uri: ovUri, resolution: { x: 1, y: 1 }, alpha: 1 }, animations: anims });
+    }
   }
 
   const jobBody = JSON.stringify({ outputUri: outputUri, config: _tcConfig });

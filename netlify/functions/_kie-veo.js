@@ -74,7 +74,6 @@ async function submit(opts) {
     prompt: opts.prompt,
     model,
     aspect_ratio: (opts.aspect === '16:9') ? '16:9' : '9:16',
-    enableFallback: true,
     enableTranslation: true,
   };
   if (opts.startImageB64 && opts.startImageMime) {

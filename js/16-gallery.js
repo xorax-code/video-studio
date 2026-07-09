@@ -865,9 +865,12 @@
       // Free tier gets a "Made with AffiliateOS" watermark (server adds it only when
       // a watermark image is configured via WATERMARK_GCS_URI). Paid tiers: no mark.
       var _isFree = (typeof window !== 'undefined' && (window._stripeTier || 'free') === 'free');
+      // Burn-in captions + on-screen text: render client PNGs → timed Transcoder overlays.
+      var _overlays = [];
+      try { if (typeof window.asmHasOverlays === 'function' && window.asmHasOverlays() && typeof window.asmBuildOverlayPayload === 'function') _overlays = window.asmBuildOverlayPayload(); } catch (_e) { console.warn('overlay build failed', _e); }
       var createRes = await fetch('/.netlify/functions/assemble-1080p', {
         method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + jwt },
-        body: JSON.stringify({ clips: payload, watermark: _isFree }),
+        body: JSON.stringify({ clips: payload, watermark: _isFree, overlays: _overlays }),
       });
       var createData = await createRes.json();
       if (!createRes.ok || !createData.jobName) throw new Error(createData.error || 'Failed to start the stitch job.');
