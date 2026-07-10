@@ -16,9 +16,12 @@
     { t: 'Your avatar',        ids: ['vsPanelAvatar'] },
     { t: 'Reference & script', ids: ['vsPanelRefVideo', 'vsPanelScript'] },
     { t: 'Scene setup',        ids: ['avatarBgPanel', 'productRefPanel', 'handRefPanel'] },
-    { t: 'Generate',           ids: ['vsSettingsToggleRow', 'processEverythingBtn', 'vsPanelProducer', 'vsSegmentsPanel'] }
+    { t: 'Generate',           ids: ['vsSpeedRow', 'processEverythingBtn', 'vsSegmentsPanel'] }
   ];
-  var ALL = STEPS.reduce(function (a, s) { return a.concat(s.ids); }, []);
+  // Right-column controls not part of any step — hidden for the whole wizard so
+  // they don't float into steps 1–3 (they belong to the normal stacked view).
+  var EXTRA_HIDE = ['leftColToggleBtn'];
+  var ALL = STEPS.reduce(function (a, s) { return a.concat(s.ids); }, []).concat(EXTRA_HIDE);
   var cur = 0;
   var _on = false;
 
@@ -38,10 +41,14 @@
       '#wizDots i{height:5px;border-radius:3px;flex:1;max-width:64px;background:rgba(255,255,255,.15);transition:background .2s}' +
       '#wizDots i.on{background:#34d399}' +
       '#wizTitle{text-align:center;font-weight:800;font-size:15px;color:var(--text-1)}' +
-      '#wizBar{position:fixed;left:0;right:0;bottom:58px;z-index:1150;display:flex;gap:10px;align-items:center;padding:9px 12px;background:rgba(12,12,15,.98);border-top:1px solid var(--border);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}' +
+      // Sits directly above the mobile bottom nav (#mnav, ~58px + safe-area, z1200).
+      // Match the nav's safe-area math and stack above it so its buttons stay tappable
+      // on notched phones.
+      '#wizBar{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:1250;display:flex;gap:10px;align-items:center;padding:9px 12px;background:rgba(12,12,15,.98);border-top:1px solid var(--border);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}' +
       '#wizBar button{height:44px;border-radius:12px;font-family:inherit;font-weight:800;font-size:13px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);cursor:pointer;padding:0 18px}' +
+      '#wizBar .wizBack.wizHiddenBack{display:none}' +
       '#wizBar .wizNext{flex:1;background:#34d399;color:#04130d;border:none}' +
-      'body.wizmode-on #tab-video-studio{padding-bottom:124px !important}' +
+      'body.wizmode-on #tab-video-studio{padding-bottom:calc(128px + env(safe-area-inset-bottom,0px)) !important}' +
       '}';
     document.head.appendChild(s);
   }
@@ -76,7 +83,7 @@
     var bar = $('wizBar');
     if (bar) {
       var bk = bar.querySelector('.wizBack'), nx = bar.querySelector('.wizNext');
-      if (bk) bk.style.visibility = (cur === 0) ? 'hidden' : 'visible';
+      if (bk) bk.classList.toggle('wizHiddenBack', cur === 0); // collapse (not just hide) so Next fills the bar on step 1
       if (nx) nx.textContent = (cur === STEPS.length - 1) ? '✨ Make my video' : 'Next ›';
     }
     try { var t = tabEl(); if (t) t.scrollTop = 0; } catch (e) {}
@@ -84,8 +91,11 @@
   }
 
   // Only activate if we can actually find the step panels — otherwise fail safe (stay off).
+  // Also require Replicator mode (studio-replicator): in Producer mode the step-3
+  // panels are producer-hidden and the last step's button runs the wrong pipeline.
   function panelsPresent() {
     var t = tabEl(); if (!t) return false;
+    if (!t.classList.contains('studio-replicator')) return false;
     // Require at least the first two anchor panels to exist.
     return !!($('vsPanelAvatar') && $('vsLayout'));
   }
@@ -120,7 +130,9 @@
     var _o = window.switchTab;
     window.switchTab = function () {
       var r = _o.apply(this, arguments);
-      try { cur = 0; setTimeout(evaluate, 60); } catch (e) {}
+      // Only reset wizard progress when we're NOT staying on the Replicator — a
+      // re-tap of "Create" while already here shouldn't kick the user back to step 1.
+      try { if (!(isMobile() && tabVisible() && panelsPresent())) cur = 0; setTimeout(evaluate, 60); } catch (e) {}
       return r;
     };
     window.switchTab._wizHooked = true;

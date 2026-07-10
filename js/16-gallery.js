@@ -598,6 +598,7 @@
       block.innerHTML =
         '<video class="asm-cliph-thumb" src="' + escAttr(clip.blobUrl) + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
         + '<div class="asm-cliph-grad"></div>'
+        + '<canvas class="asm-cliph-wave" title="Audio — tall = speech, flat = silence/dead space"></canvas>'
         + '<div class="asm-cliph-label">' + escAttr(clip.label) + '</div>'
         + '<div class="asm-cliph-dur">' + used.toFixed(1) + 's</div>'
         + (i === window._asmSel
@@ -605,6 +606,14 @@
             : '');
 
       track.appendChild(block);
+
+      // Audio waveform strip — lets you see speech vs dead space at a glance (CapCut-style).
+      try {
+        var wv = block.querySelector('.asm-cliph-wave');
+        if (wv && window.AsmAudio && window.AsmAudio.drawWave) {
+          window.AsmAudio.drawWave(wv, clip.blobUrl, clip.start, clip.end, _asmBlockW(clip));
+        }
+      } catch (_wvErr) {}
 
       var tv = block.querySelector('.asm-cliph-thumb');
 
