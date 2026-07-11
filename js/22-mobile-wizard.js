@@ -36,16 +36,19 @@
     s.textContent =
       '@media (max-width:800px){' +
       'body.wizmode-on #vsLayout .wiz-hide{display:none !important}' +
-      '#wizHdr{padding:6px 12px 4px}' +
-      '#wizDots{display:flex;gap:6px;justify-content:center;margin-bottom:8px}' +
-      '#wizDots i{height:5px;border-radius:3px;flex:1;max-width:64px;background:rgba(255,255,255,.15);transition:background .2s}' +
+      '#wizHdr{padding:12px 16px 8px}' +
+      '#wizDots{display:flex;gap:5px;margin-bottom:10px}' +
+      '#wizDots i{height:4px;border-radius:3px;flex:1;background:rgba(255,255,255,.12);transition:background .2s}' +
       '#wizDots i.on{background:#34d399}' +
-      '#wizTitle{text-align:center;font-weight:800;font-size:15px;color:var(--text-1)}' +
+      '#wizHd2{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px}' +
+      '#wizStepNo{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#34d399}' +
+      '#wizStepTot{font-size:10.5px;font-weight:700;color:rgba(255,255,255,.3)}' +
+      '#wizTitle{text-align:left;font-weight:800;font-size:20px;letter-spacing:-.4px;color:var(--text-1)}' +
       // Sits directly above the mobile bottom nav (#mnav, ~58px + safe-area, z1200).
       // Match the nav's safe-area math and stack above it so its buttons stay tappable
       // on notched phones.
       '#wizBar{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom,0px));z-index:1250;display:flex;gap:10px;align-items:center;padding:9px 12px;background:rgba(12,12,15,.98);border-top:1px solid var(--border);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px)}' +
-      '#wizBar button{height:44px;border-radius:12px;font-family:inherit;font-weight:800;font-size:13px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);cursor:pointer;padding:0 18px}' +
+      '#wizBar button{height:46px;border-radius:13px;font-family:inherit;font-weight:800;font-size:13.5px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text-2);cursor:pointer;padding:0 18px}' +
       '#wizBar .wizBack.wizHiddenBack{display:none}' +
       '#wizBar .wizNext{flex:1;background:#34d399;color:#04130d;border:none}' +
       'body.wizmode-on #tab-video-studio{padding-bottom:calc(128px + env(safe-area-inset-bottom,0px)) !important}' +
@@ -57,7 +60,7 @@
     var layout = $('vsLayout'); if (!layout) return false;
     if (!$('wizHdr')) {
       var h = document.createElement('div'); h.id = 'wizHdr';
-      h.innerHTML = '<div id="wizDots">' + STEPS.map(function () { return '<i></i>'; }).join('') + '</div><div id="wizTitle"></div>';
+      h.innerHTML = '<div id="wizDots">' + STEPS.map(function () { return '<i></i>'; }).join('') + '</div><div id="wizHd2"><span id="wizStepNo"></span><span id="wizStepTot"></span></div><div id="wizTitle"></div>';
       layout.parentNode.insertBefore(h, layout);
     }
     if (!$('wizBar')) {
@@ -79,7 +82,9 @@
     STEPS[cur].ids.forEach(function (id) { var e = $(id); if (e) e.classList.remove('wiz-hide'); });
     var dots = document.querySelectorAll('#wizDots i');
     for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('on', d <= cur);
-    var title = $('wizTitle'); if (title) title.textContent = 'Step ' + (cur + 1) + ' of ' + STEPS.length + ' · ' + STEPS[cur].t;
+    var title = $('wizTitle'); if (title) title.textContent = STEPS[cur].t;
+    var sNo = $('wizStepNo'); if (sNo) sNo.textContent = 'Step ' + (cur + 1);
+    var sTot = $('wizStepTot'); if (sTot) sTot.textContent = 'of ' + STEPS.length;
     var bar = $('wizBar');
     if (bar) {
       var bk = bar.querySelector('.wizBack'), nx = bar.querySelector('.wizNext');
