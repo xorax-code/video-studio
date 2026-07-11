@@ -132,7 +132,10 @@
       var r = _o.apply(this, arguments);
       // Only reset wizard progress when we're NOT staying on the Replicator — a
       // re-tap of "Create" while already here shouldn't kick the user back to step 1.
-      try { if (!(isMobile() && tabVisible() && panelsPresent())) cur = 0; setTimeout(evaluate, 60); } catch (e) {}
+      // Fire several delayed re-evaluations: js/08 applies the studio-replicator
+      // mode class asynchronously AFTER switchTab returns, so a single 60ms check
+      // often misses it and the wizard would never turn on.
+      try { if (!(isMobile() && tabVisible() && panelsPresent())) cur = 0; [60, 220, 500, 900].forEach(function (ms) { setTimeout(evaluate, ms); }); } catch (e) {}
       return r;
     };
     window.switchTab._wizHooked = true;
@@ -140,6 +143,22 @@
   }
   var _tries = 0;
   (function waitHook() { if (hookSwitchTab() || _tries++ > 40) return; setTimeout(waitHook, 250); })();
+
+  // The studio-replicator mode class is applied asynchronously (js/08
+  // _applyModeVisuals) AFTER switchTab returns, so a single timed check can miss
+  // it and the wizard would never activate. Watch the studio tab for class/style
+  // (mode + visibility) changes and re-evaluate. Fail-safe: evaluate() only turns
+  // the wizard on when every condition is actually met, and disable() is clean.
+  var _tries2 = 0, _obsDeb = null;
+  (function observeStudio () {
+    var t = tabEl();
+    if (!t) { if (_tries2++ < 40) setTimeout(observeStudio, 250); return; }
+    try {
+      new MutationObserver(function () {
+        clearTimeout(_obsDeb); _obsDeb = setTimeout(evaluate, 90);
+      }).observe(t, { attributes: true, attributeFilter: ['class', 'style'] });
+    } catch (e) {}
+  })();
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { setTimeout(evaluate, 400); });
   else setTimeout(evaluate, 400);
