@@ -2,9 +2,13 @@
  * 22-mobile-wizard.js — Mobile-only step wizard for the Video Replicator.
  *
  * On phones (≤800px) while the Replicator tab (#tab-video-studio) is showing, this
- * groups the existing panels into 4 guided steps (Avatar → Reference & script →
- * Scene setup → Generate) and reveals one step at a time, with a progress bar and
- * a fixed Back / Next bar. On desktop it does nothing, and it is fully reversible —
+ * groups the existing panels into 6 guided steps (Avatar → Source → Transcribe →
+ * Detect cuts → Scene setup → Generate) and reveals one step at a time, with a
+ * progress bar and a fixed Back / Next bar. The Transcribe and Detect-cuts steps
+ * are their own screens: each shows the relevant panel plus a big action button
+ * that clicks the real underlying control (#transcribeBtn / #detectCutsBtn), so
+ * the wizard drives the existing pipeline — it never reimplements it.
+ * On desktop it does nothing, and it is fully reversible —
  * it only toggles a `wiz-hide` class + a `body.wizmode-on` flag, never editing panel
  * data or the generation logic. If any step's panels are missing it stays off, so it
  * can never break the normal stacked view.
@@ -12,11 +16,19 @@
 (function () {
   'use strict';
 
+  // Each step reveals a set of existing panels. `hint` is a one-line helper shown
+  // under the title. `action` (optional) renders a prominent button that clicks a
+  // real underlying control by id — used for the Transcribe / Detect-cuts steps so
+  // the wizard runs the actual pipeline rather than reimplementing it.
   var STEPS = [
-    { t: 'Your avatar',        ids: ['vsPanelAvatar'] },
-    { t: 'Reference & script', ids: ['vsPanelRefVideo', 'vsPanelScript'] },
-    { t: 'Scene setup',        ids: ['avatarBgPanel', 'productRefPanel', 'handRefPanel'] },
-    { t: 'Generate',           ids: ['vsSpeedRow', 'processEverythingBtn', 'vsSegmentsPanel'] }
+    { t: 'Your avatar',   hint: 'Upload the AI avatar that appears in every scene.',                 ids: ['vsPanelAvatar'] },
+    { t: 'Source',        hint: 'Paste a link or upload the reference video to recreate.',           ids: ['vsPanelRefVideo'] },
+    { t: 'Transcribe',    hint: 'Pull the spoken words from the video. Edit the transcript if needed.', ids: ['vsPanelScript'],
+      action: { label: '🎤 Transcribe audio', btn: 'transcribeBtn' } },
+    { t: 'Detect cuts',   hint: 'Split the video into scenes at each cut.',                           ids: ['vsSegmentsPanel'],
+      action: { label: '✂ Detect cuts', btn: 'detectCutsBtn' } },
+    { t: 'Scene setup',   hint: 'Optional — background, product and hand references for the scenes.', ids: ['avatarBgPanel', 'productRefPanel', 'handRefPanel'] },
+    { t: 'Generate',      hint: 'Make the clips. This runs in the background — you can leave.',        ids: ['vsSpeedRow', 'processEverythingBtn', 'vsSegmentsPanel'] }
   ];
   // Right-column controls not part of any step — hidden for the whole wizard so
   // they don't float into steps 1–3 (they belong to the normal stacked view).
@@ -44,6 +56,10 @@
       '#wizStepNo{font-size:10.5px;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:#34d399}' +
       '#wizStepTot{font-size:10.5px;font-weight:700;color:rgba(255,255,255,.3)}' +
       '#wizTitle{text-align:left;font-weight:800;font-size:20px;letter-spacing:-.4px;color:var(--text-1)}' +
+      '#wizHint{font-size:12.5px;color:var(--text-3);line-height:1.5;margin:4px 0 0}' +
+      '#wizAction{margin:12px 0 2px}' +
+      '#wizAction button{width:100%;height:46px;border-radius:13px;border:1px solid var(--accent-line,rgba(52,211,153,.4));background:var(--accent-tint,rgba(52,211,153,.12));color:var(--accent-2,#34d399);font-family:inherit;font-weight:800;font-size:14px;cursor:pointer}' +
+      '#wizAction button:active{background:rgba(52,211,153,.2)}' +
       // Sits directly above the mobile bottom nav (#mnav, ~58px + safe-area, z1200).
       // Match the nav's safe-area math and stack above it so its buttons stay tappable
       // on notched phones.
@@ -60,7 +76,7 @@
     var layout = $('vsLayout'); if (!layout) return false;
     if (!$('wizHdr')) {
       var h = document.createElement('div'); h.id = 'wizHdr';
-      h.innerHTML = '<div id="wizDots">' + STEPS.map(function () { return '<i></i>'; }).join('') + '</div><div id="wizHd2"><span id="wizStepNo"></span><span id="wizStepTot"></span></div><div id="wizTitle"></div>';
+      h.innerHTML = '<div id="wizDots">' + STEPS.map(function () { return '<i></i>'; }).join('') + '</div><div id="wizHd2"><span id="wizStepNo"></span><span id="wizStepTot"></span></div><div id="wizTitle"></div><div id="wizHint"></div><div id="wizAction"></div>';
       layout.parentNode.insertBefore(h, layout);
     }
     if (!$('wizBar')) {
@@ -83,6 +99,20 @@
     var dots = document.querySelectorAll('#wizDots i');
     for (var d = 0; d < dots.length; d++) dots[d].classList.toggle('on', d <= cur);
     var title = $('wizTitle'); if (title) title.textContent = STEPS[cur].t;
+    var hint = $('wizHint'); if (hint) hint.textContent = STEPS[cur].hint || '';
+    var act = $('wizAction');
+    if (act) {
+      var a = STEPS[cur].action;
+      if (a) {
+        act.innerHTML = '<button type="button">' + a.label + '</button>';
+        act.style.display = '';
+        act.firstChild.onclick = function () {
+          var b = $(a.btn); if (!b) return;
+          var real = (b.tagName === 'BUTTON') ? b : (b.querySelector && b.querySelector('button')) || b;
+          try { real.click(); } catch (e) {}
+        };
+      } else { act.innerHTML = ''; act.style.display = 'none'; }
+    }
     var sNo = $('wizStepNo'); if (sNo) sNo.textContent = 'Step ' + (cur + 1);
     var sTot = $('wizStepTot'); if (sTot) sTot.textContent = 'of ' + STEPS.length;
     var bar = $('wizBar');
