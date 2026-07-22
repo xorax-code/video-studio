@@ -3,7 +3,7 @@
   // (credits deducted server-side) and polls via /.netlify/functions/poll-veo-clip.
   // No Gemini API key needed in the browser.
 
-  var _GEMINI_POLL_MS  = 6000;   // poll every 6s
+  var _GEMINI_POLL_MS  = 9000;   // poll every 9s (was 6s — eases load on kie's rate limit + the status-poll endpoint)
   var _GEMINI_TIMEOUT  = 900000; // 15 min max — wider window so genuine completions under load aren't cut off (a false timeout → user regenerates → a second paid clip)
 
   // ── Generation speed preference ('' = Cheaper via kie [default] · 'vertex' = Faster, direct) ──
@@ -472,7 +472,7 @@
   async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry, outerDeadline) {
     softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
     framingLevel   = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
-    transientRetry = transientRetry | 0; // 0 = first attempt; bumped once on a transient backend error
+    transientRetry = transientRetry | 0; // 0 = first attempt; bumped on each transient retry (up to 3)
     // Single OUTER wall-clock budget shared across all recovery/retry recursions. Set once
     // on the first (top-level) call and threaded down so a blocked-then-recovered clip can't
     // silently run for ~30-45 min by resetting the poll deadline on every recursion — the
@@ -584,7 +584,7 @@
       try {
         pollData = await pollRes.json();
       } catch(e) {
-        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        if (++_consecPollFails >= 10) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
 
@@ -592,7 +592,7 @@
         // Transient server error on the poll endpoint — log and retry rather than aborting
         // (the generation operation is still running server-side)
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
-        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        if (++_consecPollFails >= 10) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
       // A 200 with parseable JSON — the poll service is healthy. Reset the consecutive
@@ -640,15 +640,20 @@
 
         // AUTO-RETRY (transient): a NON-block backend hiccup from Vertex/Veo ("Internal
         // error. Please try again later", "unavailable", "deadline exceeded", etc.). The
-        // start frame is fine, so retry the SAME generation once (the server already
-        // refunded the failed op) before surfacing anything — most self-heal on attempt 2.
+        // start frame is fine, so retry the SAME generation — up to 3× with exponential
+        // backoff (2.5s → 5s → 10s) — before surfacing anything. The server already
+        // refunded each failed op, so extra attempts never double-charge; most clips
+        // self-heal within a retry or two, and the backoff rides out longer Veo blips.
         var _audio     = !_blocked && _isAudioError(pollData.error);
         var _transient = !_blocked && (_isTransientError(pollData.error) || _audio);
-        if (_transient && transientRetry < 1) {
-          console.warn('[VeoAPI] ' + (_audio ? 'audio-generation error' : 'transient backend error') + ' — auto-retrying once:', pollData.error);
+        if (_transient && transientRetry < 3) {
+          var _tAttempt = transientRetry + 1;                    // 1..3
+          var _tBackoff = 2500 * Math.pow(2, transientRetry);    // 2.5s → 5s → 10s
+          console.warn('[VeoAPI] ' + (_audio ? 'audio-generation error' : 'transient backend error') +
+                       ' — auto-retrying (' + _tAttempt + ' of 3, in ' + Math.round(_tBackoff / 1000) + 's):', pollData.error);
           if (typeof showToast === 'function') showToast(_audio ? 'The model missed the audio on this clip — retrying…' : 'Video service hiccup — retrying this clip…', 'info', 4000);
-          await new Promise(function (r) { setTimeout(r, 2500); });
-          // Fresh polling window for the retried clip (bounded by transientRetry < 1) so an
+          await new Promise(function (r) { setTimeout(r, _tBackoff); });
+          // Fresh polling window for the retried clip (bounded by transientRetry < 3) so an
           // end-of-window transient retry isn't started-then-abandoned.
           return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1, (Date.now() + _GEMINI_TIMEOUT));
         }
@@ -893,8 +898,13 @@
       if (!_okToSpend) return;
     }
 
-    // Concurrency limit — Vertex AI allows 10 concurrent video gen operations
-    var MAX_CONCURRENT = 10;
+    // Concurrency limit. Vertex AI comfortably allows 10 concurrent video gen ops,
+    // but kie.ai rate-limits (~20 requests / 10s across submit + status polls), so when
+    // we're NOT explicitly on Vertex ("⚡ Faster") we run a smaller pool to stay under
+    // kie's limit and to ease load on the poll-veo-clip status endpoint (fewer
+    // "status service isn't responding" fast-fails during big batches).
+    var _onVertexPref  = (typeof window !== 'undefined' && window._veoProviderPref === 'vertex');
+    var MAX_CONCURRENT = _onVertexPref ? 10 : 4;
     var concurrency    = Math.min(MAX_CONCURRENT, total);
 
     _openVeoAPIModal(total);

@@ -639,7 +639,9 @@
 
       var _imgModelEl = document.getElementById('fsImgModel');
       var _imgQuality = (_imgModelEl && _imgModelEl.value === 'pro') ? 'pro' : 'flash';
-      var payloadObj = { instruction: instruction, images: images, creative: true, quality: _imgQuality };
+      var _aspEl      = document.getElementById('fsImgAspect');
+      var _aspect     = (_aspEl && _aspEl.value) ? _aspEl.value : '9:16';
+      var payloadObj = { instruction: instruction, images: images, creative: true, quality: _imgQuality, aspect: _aspect };
 
       function _doFetch() {
         // Use the shared retry helper (auto-retries on a Vertex DSQ 429) when available
