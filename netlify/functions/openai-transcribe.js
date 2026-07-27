@@ -150,7 +150,7 @@ exports.handler = async (event) => {
     };
   }
 
-  const { audioBase64, fileName, model, response_format, timestamp_granularities } = parsed;
+  const { audioBase64, fileName, model, response_format, timestamp_granularities, language } = parsed;
 
   if (!audioBase64) {
     return {
@@ -214,6 +214,17 @@ exports.handler = async (event) => {
         '--' + boundary + CRLF +
         'Content-Disposition: form-data; name="response_format"' + CRLF + CRLF +
         response_format + CRLF,
+        'utf8'
+      ));
+    }
+
+    // language field — force the transcription language (e.g. 'en') when provided so
+    // Whisper doesn't auto-detect and mis-guess (e.g. Malay) on accented/noisy audio.
+    if (language && /^[a-z]{2}$/i.test(String(language))) {
+      parts.push(Buffer.from(
+        '--' + boundary + CRLF +
+        'Content-Disposition: form-data; name="language"' + CRLF + CRLF +
+        String(language).toLowerCase() + CRLF,
         'utf8'
       ));
     }
