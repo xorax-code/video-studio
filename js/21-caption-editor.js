@@ -58,13 +58,17 @@
       if (seg) txt = seg.captionText || seg.speech || seg.voiceover || seg.scriptChunk || seg.text || '';
       txt = (txt || '').toString().trim();
       if (txt.length > 90) txt = txt.slice(0, 88).replace(/\s+\S*$/, '') + '…';
-      lines.push({ text: txt || ('Scene ' + (lines.length + 1)) });
+      // No script text for this clip (e.g. an uploaded video) → leave it blank and
+      // flag it so "Transcribe from audio" can caption it from the real spoken words.
+      var line = { text: txt, _needsAudio: !txt, _blobUrl: c.blobUrl, _start: c.start, _end: c.end };
+      lines.push(line);
     });
-    if (!lines.length) lines.push({ text: 'Your caption here' });
+    if (!lines.length) lines.push({ text: '', _needsAudio: false });
     if (S.tr.length === lines.length) { for (var i = 0; i < lines.length; i++) if (S.tr[i]._edited) lines[i] = S.tr[i]; }
     S.tr = lines;
     S.selLine = clamp(S.selLine, 0, S.tr.length - 1);
   }
+  function anyNeedsAudio() { return S.tr.some(function (l) { return l._needsAudio && !l._edited && !l.text; }); }
 
   function lineTimes() {
     var clips = window._assemblerClips || [];
@@ -138,8 +142,10 @@
       + '<div class="edctl"><span>Size</span><input type="range" class="edrange" min="12" max="60" value="' + S.cap.size + '" oninput="asmCapSize(this.value)"></div>'
       + '<div class="edctl"><span>Color</span>' + swRow(S.cap.color, 'asmCapColor') + '</div>'
       + '<div class="edlbl">Transcript</div>'
-      + '<div class="edhint" style="margin-bottom:8px">Auto-transcribed from your script - tap a line to preview it, edit inline. <button class="trbtn" onclick="asmReTranscribe()">Re-transcribe</button></div>'
-      + '<div class="trlist">' + S.tr.map(function (l, i) { return '<div class="trline' + (i === S.selLine ? ' on' : '') + '"><span class="tc">' + (i + 1) + '</span><input class="tri" value="' + escA(l.text) + '" onfocus="asmTrPick(' + i + ')" oninput="asmTrEdit(' + i + ',this.value)"></div>'; }).join('') + '</div>';
+      + '<div class="edhint" style="margin-bottom:8px">' + (anyNeedsAudio()
+            ? 'Some clips have no script. <button class="trbtn" onclick="asmReTranscribe()">🎙 Transcribe from audio</button> <span style="opacity:.7">(2 credits per clip)</span>'
+            : 'Auto-filled from your script — tap a line to preview it, edit inline. <button class="trbtn" onclick="asmReTranscribe()">Re-transcribe from audio</button>') + '</div>'
+      + '<div class="trlist">' + S.tr.map(function (l, i) { return '<div class="trline' + (i === S.selLine ? ' on' : '') + '"><span class="tc">' + (i + 1) + '</span><input class="tri" value="' + escA(l.text) + '"' + (l._needsAudio && !l.text ? ' placeholder="No script — transcribe from audio"' : '') + ' onfocus="asmTrPick(' + i + ')" oninput="asmTrEdit(' + i + ',this.value)"></div>'; }).join('') + '</div>';
   }
   window.asmRenderPanel = renderPanel;
 
@@ -159,7 +165,46 @@
   window.asmCapColor = function (c) { S.cap.color = c; renderOverlay(); renderPanel(); };
   window.asmTrPick   = function (i) { S.selLine = i; renderOverlay(); renderPanel(); };
   window.asmTrEdit   = function (i, v) { if (S.tr[i]) { S.tr[i].text = v; S.tr[i]._edited = true; if (i === S.selLine && S.cap.anim !== 'karaoke') { var c = $('asmCap'); if (c) { var sp = c.querySelector('span'); if (sp) sp.textContent = v; } } else if (i === S.selLine) { renderOverlay(); } } };
-  window.asmReTranscribe = function () { var b = (typeof event !== 'undefined') && event.target; if (b) b.textContent = 'Transcribing…'; S.tr.forEach(function (l) { l._edited = false; }); refreshTranscript(); setTimeout(function () { renderPanel(); }, 700); };
+  // Transcribe from the clip's real audio (Whisper) for any line without script text.
+  // Lines the user has edited are left untouched. Runs clips sequentially so the
+  // credit spend + progress is predictable.
+  window.asmReTranscribe = function () {
+    var btn = (typeof event !== 'undefined') && event.target && event.target.closest ? event.target.closest('.trbtn') : null;
+    if (!(window.AsmAudio && window.AsmAudio.transcribeClip)) {
+      if (typeof showToast === 'function') showToast('Audio transcription unavailable here.', 'warning');
+      return;
+    }
+    // Default: only fill clips that have NO script text (avoid surprise credit spend on
+    // already-captioned clips). If every line already has text, this button is an explicit
+    // "redo all from audio" override, so transcribe them all (minus lines the user edited).
+    var forceAll = !anyNeedsAudio();
+    var targets = [];
+    for (var i = 0; i < S.tr.length; i++) { var l = S.tr[i]; if (!l._blobUrl || l._edited) continue; if (forceAll || !l.text) targets.push(i); }
+    if (!targets.length) { if (typeof showToast === 'function') showToast('Nothing to transcribe — every line already has text.', 'info'); return; }
+    // The all-scripted "redo all from audio" path overwrites good script captions and
+    // spends 2 credits per clip — confirm before charging.
+    if (forceAll && typeof window.confirm === 'function' && !window.confirm('Re-transcribe all ' + targets.length + ' clips from their audio? This replaces the current captions and costs ~2 credits per clip.')) return;
+    if (btn) { btn.disabled = true; btn.textContent = 'Transcribing… 0/' + targets.length; }
+    if (typeof showToast === 'function') showToast('Transcribing ' + targets.length + ' clip' + (targets.length > 1 ? 's' : '') + ' from audio…', 'info');
+    var done = 0, gotAny = false;
+    (function next(k) {
+      if (k >= targets.length) {
+        if (btn) { btn.disabled = false; btn.textContent = anyNeedsAudio() ? '🎙 Transcribe from audio' : 'Re-transcribe from audio'; }
+        if (typeof showToast === 'function') showToast(gotAny ? 'Transcription done.' : 'No speech found in those clips.', gotAny ? 'success' : 'warning');
+        renderOverlay(); renderPanel();
+        return;
+      }
+      var idx = targets[k], line = S.tr[idx];
+      window.AsmAudio.transcribeClip(line._blobUrl, line._start, line._end).then(function (text) {
+        text = (text || '').toString().trim();
+        if (text.length > 120) text = text.slice(0, 118).replace(/\s+\S*$/, '') + '…';
+        if (text) { line.text = text; line._needsAudio = false; gotAny = true; }
+        done++; if (btn) btn.textContent = 'Transcribing… ' + done + '/' + targets.length;
+        if (idx === S.selLine) renderOverlay();
+        next(k + 1);
+      });
+    })(0);
+  };
 
   function gestureDown(e) {
     e.preventDefault(); e.stopPropagation();

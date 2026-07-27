@@ -233,6 +233,26 @@ function markVeoOpDone(opName) {
 
 // Persist a finished clip to the user's cloud library (best-effort, non-fatal).
 // We store the gs:// path, never a signed URL — list-user-videos re-signs on read.
+// Download a finished kie clip (an expiring https URL) and re-upload it to our GCS bucket, so the
+// 1080p upscale + 1080p reel (which require a gs:// source) work for kie clips too. Returns gs:// URI.
+async function uploadRemoteVideoToGcs(accessToken, bucketName, objectName, remoteUrl) {
+  const resp = await fetch(remoteUrl);
+  if (!resp.ok) throw new Error('kie video download HTTP ' + resp.status);
+  const buf = Buffer.from(await resp.arrayBuffer());
+  if (!buf.length) throw new Error('kie video download was empty');
+  if (buf.length > 80 * 1024 * 1024) throw new Error('kie video too large to persist (' + buf.length + ' bytes)');
+  const path = '/upload/storage/v1/b/' + encodeURIComponent(bucketName) + '/o?uploadType=media&name=' + encodeURIComponent(objectName);
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname: 'storage.googleapis.com', path, method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + accessToken, 'Content-Type': 'video/mp4', 'Content-Length': buf.length } },
+      (res) => { const ch = []; res.on('data', c => ch.push(c)); res.on('end', () => {
+        if (res.statusCode >= 200 && res.statusCode < 300) resolve('gs://' + bucketName + '/' + objectName);
+        else reject(new Error('GCS video upload HTTP ' + res.statusCode + ' ' + Buffer.concat(ch).toString().slice(0, 200)));
+      }); });
+    req.on('error', reject); req.write(buf); req.end();
+  });
+}
+
 async function saveUserVideo(userId, gcsUri, mime, label, duration) {
   if (!userId || !gcsUri) return;
   try {
@@ -305,6 +325,25 @@ exports.handler = async (event) => {
         body: JSON.stringify({ done: true, error: kr.error, filtered: !!kr.filtered, refunded: _rk > 0, refundedCredits: _rk }) };
     }
     await markVeoOpDone(operationName);
+    // Persist the finished kie clip to GCS so 1080p upscale + the 1080p reel work (kie URLs expire
+    // and aren't GCS). Best-effort: on ANY failure, fall back to returning the raw kie URL, so the
+    // clip still plays and exports at 720p exactly as before.
+    try {
+      const _at  = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const _bkt = (process.env.GOOGLE_CLOUD_STORAGE_BUCKET || '').replace(/^gs:\/\//, '').replace(/\/.*$/, '');
+      if (_at && _bkt) {
+        const _obj    = 'assembled/kie-clips/' + operationName.slice(4).replace(/[^a-zA-Z0-9_-]/g, '') + '.mp4';
+        const _gcsUri = await uploadRemoteVideoToGcs(_at, _bkt, _obj, kr.videoUrl);
+        const _sa     = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        const _signed = createSignedUrl(_gcsUri, _sa, 172800);
+        try { await saveUserVideo(authUser.id, _gcsUri, kr.mimeType || 'video/mp4', (typeof label === 'string' ? label.slice(0, 120) : null), parseInt(durationSecs, 10) || null); } catch (_) {}
+        console.log('poll-veo-clip: kie clip persisted to GCS →', _gcsUri.slice(0, 80));
+        return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ done: true, videoUrl: _signed, mimeType: kr.mimeType || 'video/mp4', gcsBacked: true }) };
+      }
+    } catch (e) {
+      console.warn('poll-veo-clip: kie→GCS persist failed, returning kie URL:', e && e.message);
+    }
     return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
       body: JSON.stringify({ done: true, videoUrl: kr.videoUrl, mimeType: kr.mimeType || 'video/mp4' }) };
   }

@@ -584,6 +584,7 @@ RULES:
       const form = new FormData();
       form.append('file', file, file.name || 'audio.mp4');
       form.append('model', 'whisper-1');
+      form.append('language', 'en'); // force English — Whisper auto-detect mis-guesses (e.g. Malay) on accented/noisy audio
       form.append('response_format', 'verbose_json');
       form.append('timestamp_granularities[]', 'word');
       form.append('timestamp_granularities[]', 'segment');
@@ -611,6 +612,7 @@ RULES:
       audioBase64,
       fileName: file.name || 'audio.mp4',
       model: 'whisper-1',
+      language: 'en', // force English — Whisper auto-detect mis-guesses (e.g. Malay) on accented/noisy audio
       response_format: 'verbose_json',
       timestamp_granularities: ['word', 'segment'],
     });

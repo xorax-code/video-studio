@@ -102,6 +102,8 @@ STRICT RULES:
 3. The action field: one unbroken sentence of movement and camera description, under 60 words. No transition language.
 4. The speech field: exact words the person says out loud, written in all lowercase — NEVER use capital letters in speech (capitals cause the API to spell out letters instead of speaking words), or empty string if none.
 5. Use Veo 3's vocabulary: cinematic terms, specific camera movements (slow push-in, rack focus, dolly, handheld), lighting descriptors.
+6. PRESERVE the user's explicit physical constraints exactly. If they specify one hand (a single hand, or a specific hand) or one/a single product, keep that wording in the action — e.g. "using only one hand", "the other hand stays out of frame", "holding a single product". Never increase the number of hands or products the user asked for.
+7. SPEAKER: if the user designates who talks (e.g. "make the woman in the red dress say ...", "have the person in the background say ..."), put ONLY their exact spoken words in the speech field (lowercase), and in the action clearly identify THAT exact person as the one speaking to camera — keep their identifying details (clothing, position, which person). Never reassign the line to a different person, and never leave the speaker ambiguous when the user named one.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {"action":"<single continuous movement and camera, under 60 words>","speech":"<exact spoken words or empty string>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, multiple scenes, blurry"}`;
@@ -115,6 +117,8 @@ STRICT RULES:
 4. The speech field: exact words the person says out loud, written in all lowercase — NEVER use capital letters in speech (capitals cause the API to spell out letters instead of speaking words), or empty string if none.
 5. Use Veo 3's vocabulary: cinematic camera terms, specific movements, lighting descriptors.
 6. Do NOT describe the frame itself as the action — describe what HAPPENS next from this starting point.
+7. PRESERVE the user's explicit physical constraints exactly. If they specify one hand (a single hand, or a specific hand) or one/a single product, keep that wording in the action — e.g. "using only one hand", "the other hand stays out of frame", "holding a single product". Never increase the number of hands or products the user asked for.
+8. SPEAKER: if the user designates who talks (e.g. "make the woman in the red dress say ...", "have the person in the background say ..."), put ONLY their exact spoken words in the speech field (lowercase), and in the action clearly identify THAT exact person as the one speaking to camera — keep their identifying details (clothing, position, which person). Match them to the right person in the reference frame. Never reassign the line to a different person, and never leave the speaker ambiguous when the user named one.
 
 Return ONLY valid JSON — no markdown, no explanation:
 {"action":"<single continuous shot grounded in the frame, under 60 words>","speech":"<exact spoken words or empty string>","negative_prompt":"text overlays, captions, watermarks, subtitles, jump cuts, scene changes, transitions, multiple scenes, blurry"}`;

@@ -256,17 +256,7 @@
   // _FS_VID_SYS removed — video prompt enhancement handled by enhance-veo-prompt Netlify function (Gemini 2.5 Flash multimodal)
 
   // ── Prompt history ─────────────────────────────────────────────────────────
-  function _fsSavePrompt(mode, text) {
-    if (!text || !text.trim()) return;
-    var key = mode === 'image' ? 'fsImgPrompts' : 'fsVidPrompts';
-    var arr = mode === 'image' ? _fsImgPromptHistory : _fsVidPromptHistory;
-    var ex  = arr.indexOf(text);
-    if (ex !== -1) arr.splice(ex, 1);
-    arr.unshift(text);
-    if (arr.length > 10) arr.length = 10;
-    try { localStorage.setItem(key, JSON.stringify(arr)); } catch(_) {}
-    _fsRenderPromptHistory(mode);
-  }
+  function _fsSavePrompt(mode, text) { /* prompt-history removed per request */ }
 
   function _fsRenderPromptHistory(mode) {
     var cId  = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
@@ -290,17 +280,13 @@
   }
 
   function _fsInitPromptHistory() {
-    ['image', 'video'].forEach(function(mode) {
-      var pId = mode === 'image' ? 'fsImgPrompt' : 'fsVidPrompt';
-      var cId = mode === 'image' ? 'fsImgPromptHistory' : 'fsVidPromptHistory';
-      var el  = document.getElementById(pId);
-      if (!el || document.getElementById(cId)) return;
-      var div = document.createElement('div');
-      div.id = cId;
-      div.style.cssText = 'display:none;flex-wrap:wrap;gap:4px;margin-top:5px;';
-      el.parentNode.insertBefore(div, el.nextSibling);
-      _fsRenderPromptHistory(mode);
+    // Prompt-history chips removed per request. Never create the containers,
+    // and remove any that already exist (plus clear the saved history).
+    ['fsImgPromptHistory', 'fsVidPromptHistory'].forEach(function(cId) {
+      var c = document.getElementById(cId); if (c) c.remove();
     });
+    try { localStorage.removeItem('fsImgPrompts'); localStorage.removeItem('fsVidPrompts'); } catch(_) {}
+    _fsImgPromptHistory = []; _fsVidPromptHistory = [];
   }
 
   // ── Delete individual results ──────────────────────────────────────────────
@@ -653,7 +639,9 @@
 
       var _imgModelEl = document.getElementById('fsImgModel');
       var _imgQuality = (_imgModelEl && _imgModelEl.value === 'pro') ? 'pro' : 'flash';
-      var payloadObj = { instruction: instruction, images: images, creative: true, quality: _imgQuality };
+      var _aspEl      = document.getElementById('fsImgAspect');
+      var _aspect     = (_aspEl && _aspEl.value) ? _aspEl.value : '9:16';
+      var payloadObj = { instruction: instruction, images: images, creative: true, quality: _imgQuality, aspect: _aspect };
 
       function _doFetch() {
         // Use the shared retry helper (auto-retries on a Vertex DSQ 429) when available
@@ -936,11 +924,16 @@
     var toSave = _fsVidHistory.slice(0, _FS_VID_PERSIST_MAX);
     Promise.all(toSave.map(function(item) {
       if (item.pending || !item.src) return Promise.resolve(null); // skip in-flight placeholders
-      if (item.arrayBuffer) return Promise.resolve(item); // already converted
+      if (item.arrayBuffer) return Promise.resolve({ id: item.id, arrayBuffer: item.arrayBuffer, mime: item.mime || 'video/mp4', gcsUrl: item.gcsUrl || null });
       return fetch(item.src)
         .then(function(r) { return r.arrayBuffer(); })
-        .then(function(ab) { return { id: item.id, arrayBuffer: ab, mime: item.mime || 'video/mp4' }; })
-        .catch(function() { return null; }); // skip if fetch fails
+        .then(function(ab) { return { id: item.id, arrayBuffer: ab, mime: item.mime || 'video/mp4', gcsUrl: item.gcsUrl || null }; })
+        .catch(function() {
+          // Couldn't grab the bytes (kie/cross-origin URL, or a revoked blob). Still persist a
+          // durable pointer so the clip survives a reload while its cloud URL is valid, instead
+          // of vanishing entirely.
+          return item.gcsUrl ? { id: item.id, gcsUrl: item.gcsUrl, mime: item.mime || 'video/mp4' } : null;
+        });
     })).then(function(items) {
       var valid = items.filter(Boolean);
       _fsPutAll('vidHistory', valid).catch(function(e) {
@@ -967,10 +960,14 @@
       // The leading Date.now() timestamp is fixed-width, so string order matches time order.
       items.sort(function(a, b) { return String(b.id).localeCompare(String(a.id)); });
       var restored = items.map(function(item) {
-        var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
-        var blobUrl = URL.createObjectURL(blob);
-        return { src: blobUrl, id: item.id, mime: item.mime, arrayBuffer: item.arrayBuffer };
-      });
+        if (item.arrayBuffer) {
+          var blob    = new Blob([item.arrayBuffer], { type: item.mime || 'video/mp4' });
+          var blobUrl = URL.createObjectURL(blob);
+          return { src: blobUrl, id: item.id, mime: item.mime, arrayBuffer: item.arrayBuffer, gcsUrl: item.gcsUrl || null };
+        }
+        // No stored bytes — restore straight from the durable cloud URL (kept as a fallback).
+        return { src: item.gcsUrl, id: item.id, mime: item.mime, gcsUrl: item.gcsUrl };
+      }).filter(function(it) { return it.src; });
       _fsVidHistory = restored;
       _renderVidStrip();
     }).catch(function(e) { console.warn('fsStudio: could not restore video history:', e); });

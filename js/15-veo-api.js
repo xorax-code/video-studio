@@ -3,8 +3,36 @@
   // (credits deducted server-side) and polls via /.netlify/functions/poll-veo-clip.
   // No Gemini API key needed in the browser.
 
-  var _GEMINI_POLL_MS  = 6000;   // poll every 6s
+  var _GEMINI_POLL_MS  = 9000;   // poll every 9s (was 6s — eases load on kie's rate limit + the status-poll endpoint)
   var _GEMINI_TIMEOUT  = 900000; // 15 min max — wider window so genuine completions under load aren't cut off (a false timeout → user regenerates → a second paid clip)
+
+  // ── Generation speed preference ('' = Cheaper via kie [default] · 'vertex' = Faster, direct) ──
+  // Applies to BOTH the Replicator and the Studio (read when building the generate request).
+  try { window._veoProviderPref = localStorage.getItem('veoProvider') || ''; } catch(e) { window._veoProviderPref = ''; }
+  // Relabel the Studio video quality dropdown with doubled credits when Faster is on.
+  window.updateVeoCostLabels = function () {
+    var mult = (window._veoProviderPref === 'vertex') ? 2 : 1;
+    var base = { lite: 15, fast: 30, standard: 80 };
+    var lbl  = { lite: '◈ Lite', fast: '⚡ Fast', standard: '✦ Quality' };
+    try {
+      document.querySelectorAll('#fsVidModel option').forEach(function (o) {
+        if (base[o.value] != null) o.textContent = lbl[o.value] + ' · ~' + (base[o.value] * mult) + ' cr';
+      });
+    } catch (_) {}
+  };
+  window.setVeoProvider = function (p) {
+    window._veoProviderPref = (p === 'vertex') ? 'vertex' : '';
+    try { localStorage.setItem('veoProvider', window._veoProviderPref); } catch(_) {}
+    try { document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref; }); } catch(_) {}
+    window.updateVeoCostLabels();
+    if (typeof showToast === 'function') showToast(window._veoProviderPref === 'vertex'
+      ? '⚡ Faster mode — clips generate direct (quicker, 2× credits)'
+      : '💸 Cheaper mode — clips route through kie (best price)', 'info', 3200);
+  };
+  try { document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.veo-speed-sel').forEach(function (s) { s.value = window._veoProviderPref || ''; });
+    window.updateVeoCostLabels();
+  }); } catch(_) {}
 
   // ── Generate mode: 'api' (server-side, credits) | 'flow' (manual Google Flow) ──
   function getGenerateMode() {
@@ -334,7 +362,10 @@
       parts.push('The subject is animated and expressive throughout: active hand gestures and pointing, leaning slightly toward the camera on emphasis, natural head movement, shifting weight, engaged eyebrows and mouth — never a stiff, frozen, or static pose');
       parts.push('Camera: handheld with subtle natural micro-movement');
     }
-    if (obj.speech) parts.push('Person speaks directly to camera and says exactly: "' + obj.speech.toLowerCase() + '"');
+    // Speaker lock — keep the INTENDED speaker (whoever the action names, which may be a
+    // background or specific person) as the only one who talks, and freeze everyone else's
+    // mouth. We deliberately do NOT assume the "main" person, so you can direct any person.
+    if (obj.speech) parts.push('Exactly ONE person speaks this line and says exactly: "' + obj.speech.toLowerCase() + '". The speaker is the specific person named in the action above — keep the line with that exact person and never switch it to anyone else. Every OTHER person in the shot stays completely silent the entire time with their mouth closed and still, and never lip-syncs, mouths, or mimes any words');
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');
@@ -345,13 +376,27 @@
     parts.push('The person wears the exact same outfit for the entire clip — their clothing stays identical and stays on; they do NOT put on, take off, change, or adjust any clothing, robe, or kimono at any point');
     // If any left/right positioning is mentioned, add composition lock
     var _hasPosition = /\b(left|right)\b/i.test(obj.action || '');
+    // Hand / product integrity — Veo loves to sprout a SECOND hand or split the held product
+    // into two. When the action asks for one hand and/or holds a product, force a single hand
+    // and one intact object, as a POSITIVE instruction AND negatives (kie has no separate
+    // negative-prompt field, so both must live inside the prompt text).
+    var _actTxt = (obj.action || '');
+    var _oneHand = /\b(one|single|1)[\s-]*hand(ed)?\b/i.test(_actTxt) || /\bwith one hand\b/i.test(_actTxt);
+    var _holdsProduct = /\b(hold|holds|holding|apply|applies|applying|swipe|swipes|dab|dabs|press|presses|rub|rubs|wipe|wipes|use[sd]? (?:the|a|it)|with (?:her|his|the) hand)\b/i.test(_actTxt);
+    if (_oneHand) {
+      parts.push('She uses ONLY ONE hand for the entire clip — the other hand stays relaxed at her side or fully out of frame and never enters the shot; she holds exactly ONE single product that stays whole and intact the entire time (it is never duplicated, cloned, or split)');
+    }
+    var _handNeg = _oneHand ? ', two hands, both hands, second hand entering frame, extra hand, third hand, extra arm' : '';
+    var _prodNeg = (_oneHand || _holdsProduct) ? ', duplicate product, two products, cloned product, split product, product splitting in half, product breaking apart, extra fingers, sixth finger, deformed hands, merged hands, morphing hands' : '';
+    // Speaker negatives — only when there IS a spoken line, to stop the wrong person lip-syncing.
+    var _speechNeg = obj.speech ? ', wrong person speaking, wrong person talking, background person talking, second person talking, another person mouthing words, the person lying down talking, the person being treated talking, both people talking at once, lip sync on the wrong person, mouth moving on a silent person' : '';
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
     // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
     var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
     var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + _speechNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
@@ -416,11 +461,18 @@
     if (!msg) return false;
     return /internal error|try again later|please try again|temporarily|unavailable|deadline exceeded|backend error|service error|\b50[023]\b/i.test(String(msg));
   }
+  // Veo intermittently fails to generate AUDIO for a request ("...was unable to generate
+  // audio for this request. Please try a different prompt."). It usually clears on a plain
+  // retry of the same clip, so treat it as retryable rather than a hard failure.
+  function _isAudioError(msg) {
+    if (!msg) return false;
+    return /unable to generate audio|generate audio for this request|could ?n'?t generate audio|failed to generate audio|no audio (?:was )?generated/i.test(String(msg));
+  }
 
   async function generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry, outerDeadline) {
     softenLevel    = softenLevel | 0;  // 0 = default; higher = softer start frame (fallback retries when no segIdx)
     framingLevel   = framingLevel | 0; // 0 = normal; higher = wider/cleaner regenerated composite (auto-escalate)
-    transientRetry = transientRetry | 0; // 0 = first attempt; bumped once on a transient backend error
+    transientRetry = transientRetry | 0; // 0 = first attempt; bumped on each transient retry (up to 3)
     // Single OUTER wall-clock budget shared across all recovery/retry recursions. Set once
     // on the first (top-level) call and threaded down so a blocked-then-recovered clip can't
     // silently run for ~30-45 min by resetting the poll deadline on every recursion — the
@@ -488,6 +540,7 @@
         frameB64:        frameB64,    // reference frame for Gemini scene analysis
         frameMime:       frameMime,
         aspectRatio:     aspect,
+        provider:        (typeof window !== 'undefined' && window._veoProviderPref) || undefined,
       }),
     });
 
@@ -531,7 +584,7 @@
       try {
         pollData = await pollRes.json();
       } catch(e) {
-        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        if (++_consecPollFails >= 10) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
 
@@ -539,7 +592,7 @@
         // Transient server error on the poll endpoint — log and retry rather than aborting
         // (the generation operation is still running server-side)
         console.warn('[VeoAPI] poll HTTP ' + pollRes.status + ' — retrying:', pollData && pollData.error);
-        if (++_consecPollFails >= 6) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
+        if (++_consecPollFails >= 10) throw new Error("The video status service isn't responding — your credits were refunded if the clip didn't start. Please try regenerating this clip.");
         continue;
       }
       // A 200 with parseable JSON — the poll service is healthy. Reset the consecutive
@@ -587,14 +640,20 @@
 
         // AUTO-RETRY (transient): a NON-block backend hiccup from Vertex/Veo ("Internal
         // error. Please try again later", "unavailable", "deadline exceeded", etc.). The
-        // start frame is fine, so retry the SAME generation once (the server already
-        // refunded the failed op) before surfacing anything — most self-heal on attempt 2.
-        var _transient = !_blocked && _isTransientError(pollData.error);
-        if (_transient && transientRetry < 1) {
-          console.warn('[VeoAPI] transient backend error — auto-retrying once:', pollData.error);
-          if (typeof showToast === 'function') showToast('Video service hiccup — retrying this clip…', 'info', 4000);
-          await new Promise(function (r) { setTimeout(r, 2500); });
-          // Fresh polling window for the retried clip (bounded by transientRetry < 1) so an
+        // start frame is fine, so retry the SAME generation — up to 3× with exponential
+        // backoff (2.5s → 5s → 10s) — before surfacing anything. The server already
+        // refunded each failed op, so extra attempts never double-charge; most clips
+        // self-heal within a retry or two, and the backoff rides out longer Veo blips.
+        var _audio     = !_blocked && _isAudioError(pollData.error);
+        var _transient = !_blocked && (_isTransientError(pollData.error) || _audio);
+        if (_transient && transientRetry < 3) {
+          var _tAttempt = transientRetry + 1;                    // 1..3
+          var _tBackoff = 2500 * Math.pow(2, transientRetry);    // 2.5s → 5s → 10s
+          console.warn('[VeoAPI] ' + (_audio ? 'audio-generation error' : 'transient backend error') +
+                       ' — auto-retrying (' + _tAttempt + ' of 3, in ' + Math.round(_tBackoff / 1000) + 's):', pollData.error);
+          if (typeof showToast === 'function') showToast(_audio ? 'The model missed the audio on this clip — retrying…' : 'Video service hiccup — retrying this clip…', 'info', 4000);
+          await new Promise(function (r) { setTimeout(r, _tBackoff); });
+          // Fresh polling window for the retried clip (bounded by transientRetry < 3) so an
           // end-of-window transient retry isn't started-then-abandoned.
           return await generateVeoClipViaAPI(veoJsonStr, durationSecs, modelKey, imageDataUrl, refFrameDataUrl, softenLevel, segIdx, framingLevel, transientRetry + 1, (Date.now() + _GEMINI_TIMEOUT));
         }
@@ -604,9 +663,11 @@
         if (!_blocked) console.warn('[VeoAPI] clip failed — raw model error:', pollData.error);
         var _errMsg = _blocked
           ? "🚫 The video model's people filter blocked this clip even after rebuilding softer, wider frames — your credits were refunded. Fix: use a wider / less close-up start frame, or a more everyday-looking (less model-like) avatar, then regenerate just this scene."
-          : (_transient
-              ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
-              : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.'));
+          : (_audio
+              ? "🔇 The video model couldn't generate audio for this scene, even after a retry — your credits were refunded. Fix: shorten or reword the spoken line (very long or unusual lines trip this up), then regenerate just this scene."
+              : (_transient
+                  ? "⚠️ The video service had a brief hiccup and couldn't finish this clip — your credits were refunded. Please hit Regen to try again."
+                  : (pollData.error || 'This clip didn’t render — your credits were refunded. Try regenerating it.')));
         throw new Error(_errMsg);
       }
       if (pollData.error && !pollData.done) {
@@ -823,7 +884,8 @@
 
     // Pre-spend cost gate — show the estimated total and confirm BEFORE committing, so a
     // user can't accidentally burn a big batch or hit a surprise out-of-credits mid-batch.
-    var _clipCost = modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15;
+    var _clipCost = (modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15)
+                    * ((typeof window !== 'undefined' && window._veoProviderPref === 'vertex') ? 2 : 1); // ⚡ Faster (Vertex) = 2× credits
     var _estCost  = total * _clipCost;
     var _bal      = (typeof window.userCredits === 'number') ? window.userCredits : null;
     if (_bal != null && _estCost > _bal) {
@@ -836,8 +898,13 @@
       if (!_okToSpend) return;
     }
 
-    // Concurrency limit — Vertex AI allows 10 concurrent video gen operations
-    var MAX_CONCURRENT = 10;
+    // Concurrency limit. Vertex AI comfortably allows 10 concurrent video gen ops,
+    // but kie.ai rate-limits (~20 requests / 10s across submit + status polls), so when
+    // we're NOT explicitly on Vertex ("⚡ Faster") we run a smaller pool to stay under
+    // kie's limit and to ease load on the poll-veo-clip status endpoint (fewer
+    // "status service isn't responding" fast-fails during big batches).
+    var _onVertexPref  = (typeof window !== 'undefined' && window._veoProviderPref === 'vertex');
+    var MAX_CONCURRENT = _onVertexPref ? 10 : 4;
     var concurrency    = Math.min(MAX_CONCURRENT, total);
 
     _openVeoAPIModal(total);

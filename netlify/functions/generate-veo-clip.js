@@ -381,6 +381,7 @@ exports.handler = async (event) => {
     frameB64      = null,   // optional reference frame for scene analysis
     frameMime     = 'image/jpeg',
     aspectRatio   = '9:16', // Veo supports '9:16' (vertical) or '16:9' (landscape)
+    provider      = null,   // per-generation speed pref: 'vertex' = skip kie (faster, pricier)
   } = body;
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
 
@@ -388,10 +389,14 @@ exports.handler = async (event) => {
   const aspect   = (aspectRatio === '16:9') ? '16:9' : '9:16';
   const dur      = (durationSecs === 8) ? 8 : 6;
   const modelKey = (model === 'fast') ? 'fast' : (model === 'standard') ? 'standard' : 'lite';
-  const cost     = CREDIT_COSTS[modelKey];
+  // "Faster" = the user explicitly asked to skip kie and run direct on Vertex (pricier for us),
+  // so it costs 2× credits. NOTE: this only triggers on an explicit provider==='vertex' request,
+  // NOT on the automatic kie→Vertex fallback below (kie outage), so users aren't penalized then.
+  const _fastMult = (provider === 'vertex') ? 2 : 1;
+  const cost      = CREDIT_COSTS[modelKey] * _fastMult;
   const modelId  = MODEL_IDS[modelKey];
 
-  console.log(`generate-veo-clip: model=${modelKey} (${modelId}), dur=${dur}s, cost=${cost} credits`);
+  console.log(`generate-veo-clip: model=${modelKey} (${modelId}), dur=${dur}s, provider=${provider || 'default'}, cost=${cost} credits (x${_fastMult})`);
 
   // ── Credit check ──────────────────────────────────────────────────────────
   const adminUser = await getAdminUser(userId);
@@ -417,7 +422,7 @@ exports.handler = async (event) => {
   // (prefixed "kie:") so poll-veo-clip routes to kie. If kie submit fails, we fall
   // through to the Vertex path below WITHOUT re-charging (same reserved credits).
   const _kie = require('./_kie-veo');
-  if (_kie.enabled()) {
+  if (_kie.enabled() && provider !== 'vertex') {
     let kr;
     try {
       kr = await _kie.submit({ prompt: prompt.trim(), modelKey, aspect, startImageB64, startImageMime, userId });

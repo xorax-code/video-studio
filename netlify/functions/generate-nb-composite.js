@@ -455,10 +455,18 @@ const runComposite = async (event) => {
     }
     creativeParts.push({ text: instruction || 'Generate a high-quality image based on the reference photos.' });
 
+    // Aspect ratio (Studio selector). Gemini 3 image models honor
+    // generationConfig.imageConfig.aspectRatio; validate against the supported set
+    // and fall back to the model default if absent/invalid.
+    const _ASPECTS = ['1:1', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:16', '16:9', '21:9'];
+    const _aspect  = _ASPECTS.includes(body.aspect) ? body.aspect : null;
+    const _creativeGenCfg = { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.7 };
+    if (_aspect) _creativeGenCfg.imageConfig = { aspectRatio: _aspect };
+
     const creativeReq = {
       systemInstruction: { parts: [{ text: 'You are a professional photo editor and image generator. Follow the user\'s instruction exactly and creatively. Use any provided reference photos as visual guides.' }] },
       contents: [{ role: 'user', parts: creativeParts }],
-      generationConfig: { responseModalities: ['IMAGE', 'TEXT'], temperature: 0.7 },
+      generationConfig: _creativeGenCfg,
     };
 
     // Routes Vertex-first (Flash, or Pro when Max Quality), Gemini Dev API fallback.

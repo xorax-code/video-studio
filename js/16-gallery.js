@@ -246,6 +246,13 @@
       if (typeof showToast === 'function') showToast('No video URL for this clip.', 'error');
       return;
     }
+    // 1080p upscale + the Transcoder path require a Google Cloud Storage source. Clips made on
+    // the Cheaper (kie) path come back as an expiring kie URL, not GCS, so they can't be upscaled.
+    // Fail clean with a helpful message instead of surfacing the raw 400 from upscale-video.
+    if (videoUrl.indexOf('storage.googleapis.com') === -1 && videoUrl.indexOf('gs://') !== 0) {
+      if (typeof showToast === 'function') showToast("1080p isn't available for this clip — it was generated on the Cheaper (kie) path, which doesn't store clips in Google Cloud. Regenerate it with the ⚡ Faster toggle on to unlock 1080p, or use the 720p download.", 'warning', 9000);
+      return;
+    }
     var jwt = null;
     try {
       var _sbRef = (typeof _sb !== 'undefined' && _sb) ? _sb : window._sb;
@@ -591,6 +598,7 @@
       block.innerHTML =
         '<video class="asm-cliph-thumb" src="' + escAttr(clip.blobUrl) + '#t=' + clip.start + '" muted playsinline preload="metadata"></video>'
         + '<div class="asm-cliph-grad"></div>'
+        + '<canvas class="asm-cliph-wave" title="Audio — tall = speech, flat = silence/dead space"></canvas>'
         + '<div class="asm-cliph-label">' + escAttr(clip.label) + '</div>'
         + '<div class="asm-cliph-dur">' + used.toFixed(1) + 's</div>'
         + (i === window._asmSel
@@ -598,6 +606,14 @@
             : '');
 
       track.appendChild(block);
+
+      // Audio waveform strip — lets you see speech vs dead space at a glance (CapCut-style).
+      try {
+        var wv = block.querySelector('.asm-cliph-wave');
+        if (wv && window.AsmAudio && window.AsmAudio.drawWave) {
+          window.AsmAudio.drawWave(wv, clip.blobUrl, clip.start, clip.end, _asmBlockW(clip));
+        }
+      } catch (_wvErr) {}
 
       var tv = block.querySelector('.asm-cliph-thumb');
 

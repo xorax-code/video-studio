@@ -30,7 +30,11 @@ const MODELS = {
   fast:     process.env.KIE_MODEL_FAST     || 'veo3_fast',
   standard: process.env.KIE_MODEL_STANDARD || 'veo3',
 };
-const GENTYPE_IMAGE = process.env.KIE_GEN_TYPE_IMAGE  || 'REFERENCE_2_VIDEO';
+// Use the provided image as the actual FIRST FRAME (video starts from it), not a loose
+// style/subject "reference" that lets the model redraw a new scene. kie's
+// FIRST_AND_LAST_FRAMES_2_VIDEO with a single image = "start from this exact frame".
+// Override with KIE_GEN_TYPE_IMAGE=REFERENCE_2_VIDEO to go back to inspiration mode.
+const GENTYPE_IMAGE = process.env.KIE_GEN_TYPE_IMAGE  || 'FIRST_AND_LAST_FRAMES_2_VIDEO';
 const DETAIL_PATH   = process.env.KIE_VEO_DETAIL_PATH || '/api/v1/veo/record-info';
 const FRAME_BUCKET  = process.env.KIE_FRAME_BUCKET    || 'ref-videos';
 

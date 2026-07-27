@@ -251,6 +251,7 @@
     'video-replicator': 'Video Replicator',
     'video-producer': 'Video Producer',
     'video-editor': 'Video Editor',
+    'flow-studio': 'Studio',
   };
 
   function switchTab(tab) {
