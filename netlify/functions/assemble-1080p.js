@@ -241,6 +241,7 @@ exports.handler = async (event) => {
   // Build Transcoder inputs + editList (concatenation with per-clip trims)
   const inputs   = [];
   const editList = [];
+  const uriToKey = new Map(); // dedupe inputs by URI — Transcoder rejects duplicate input URIs
   for (let i = 0; i < clipsIn.length; i++) {
     const c   = clipsIn[i];
     const uri = toGcsUri(c.gcsUri || c.videoUrl);
@@ -250,8 +251,13 @@ exports.handler = async (event) => {
     if (uri.indexOf('gs://' + allowedBucket + '/') !== 0) {
       return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'Clip ' + (i + 1) + ' is not from this app\'s storage and was rejected.' }) };
     }
-    const inKey = 'in' + i;
-    inputs.push({ key: inKey, uri });
+    // Transcoder requires each input URI to be unique. If this clip's file is already
+    // an input (same clip reused elsewhere in the reel), reuse that input's key rather
+    // than pushing the same URI again — otherwise Transcoder fails the whole job with
+    // "config.inputs[N].uri is not unique, duplication detected". The editList can point
+    // multiple atoms at one input, so a repeated clip still plays in each position.
+    let inKey = uriToKey.get(uri);
+    if (!inKey) { inKey = 'in' + i; uriToKey.set(uri, inKey); inputs.push({ key: inKey, uri }); }
     const atom = { key: 'atom' + i, inputs: [inKey] };
     // Reject an inverted / zero-length trim (end <= start) instead of submitting a broken atom.
     if (c.start != null && c.end != null && Number(c.end) > 0 && Number(c.end) <= Number(c.start)) {
