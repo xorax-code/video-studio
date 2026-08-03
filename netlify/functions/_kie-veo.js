@@ -178,7 +178,8 @@ function omniEnabled() { return !!process.env.KIE_API_KEY; }
 async function submitOmni(opts) {
   const key = process.env.KIE_API_KEY;
   const secs = OMNI_DURATIONS.includes(Number(opts.durationSecs)) ? Number(opts.durationSecs) : 8;
-  const input = { prompt: opts.prompt, duration: String(secs) }; // kie wants duration as a STRING
+  // kie's Gemini Omni requires aspect_ratio and only accepts 16:9 or 9:16 (default vertical).
+  const input = { prompt: opts.prompt, duration: String(secs), aspect_ratio: (opts.aspect === '16:9') ? '16:9' : '9:16' }; // duration as a STRING
   if (opts.startImageB64 && opts.startImageMime) {
     const url = await hostFrame(opts.startImageB64, opts.startImageMime, opts.userId);
     input.image_urls = [url]; // image-to-video from the composite start frame

@@ -429,7 +429,7 @@ exports.handler = async (event) => {
 
     let ko;
     try {
-      ko = await _kie.submitOmni({ prompt: prompt.trim(), startImageB64, startImageMime, durationSecs: omniSecs, userId });
+      ko = await _kie.submitOmni({ prompt: prompt.trim(), startImageB64, startImageMime, durationSecs: omniSecs, userId, aspect: aspectRatio });
     } catch (e) {
       ko = { ok: false, error: e && e.message };
     }
