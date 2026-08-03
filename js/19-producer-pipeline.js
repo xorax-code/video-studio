@@ -208,7 +208,9 @@
       // Model key from admin settings
       var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
       var dm       = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-      var modelKey = dm.includes('fast') ? 'fast' : dm.includes('standard') ? 'standard' : 'lite';
+      var modelKey = dm.includes('omni') ? 'omni' : dm.includes('fast') ? 'fast' : dm.includes('standard') ? 'standard' : 'lite';
+      // Omni Flash uses the user-chosen clip length (4/6/8/10s), not the scene's Veo length.
+      var _ppOmniDur = ([4, 6, 8, 10].indexOf(parseInt(window._omniDurationSecs, 10)) !== -1) ? parseInt(window._omniDurationSecs, 10) : 8;
 
       // Open UI
       _ppOpenStatusPanel(total);
@@ -260,6 +262,7 @@
 
         var durSecs = 6;
         try { durSecs = (JSON.parse(seg.veoPrompt || '{}').duration) || 6; } catch (_) {}
+        if (modelKey === 'omni') durSecs = _ppOmniDur;
 
         // IIFE captures loop vars — durSecs MUST be a param to avoid var-closure bug
         (function (theSeg, theSegIdx, theDur) {
@@ -313,6 +316,7 @@
           if (!(extra.veoPrompt || '').trim()) return;
           var extraDur = 6;
           try { extraDur = (JSON.parse(extra.veoPrompt || '{}').duration) || 6; } catch (_) {}
+          if (modelKey === 'omni') extraDur = _ppOmniDur;
           (function(theSeg, theSegIdx, theExtra, theDur, clipNum) {
             var p = (async function() {
               try {

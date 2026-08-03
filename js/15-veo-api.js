@@ -6,6 +6,23 @@
   var _GEMINI_POLL_MS  = 9000;   // poll every 9s (was 6s — eases load on kie's rate limit + the status-poll endpoint)
   var _GEMINI_TIMEOUT  = 900000; // 15 min max — wider window so genuine completions under load aren't cut off (a false timeout → user regenerates → a second paid clip)
 
+  // ── Omni Flash (Gemini Omni via kie) helpers ──────────────────────────────
+  // Per-duration credit cost (must mirror OMNI_COSTS in generate-veo-clip.js).
+  var _OMNI_COST = { 4: 50, 6: 65, 8: 85, 10: 100 };
+  // The user-chosen Omni duration (persisted globally on window._omniDurationSecs by 06-analyze.js).
+  function _omniDurNow() {
+    var d = (typeof window !== 'undefined') ? parseInt(window._omniDurationSecs, 10) : NaN;
+    return ([4, 6, 8, 10].indexOf(d) !== -1) ? d : 8;
+  }
+  // Map the stored defaultModel label → generation modelKey ('omni'|'fast'|'standard'|'lite').
+  function _modelKeyFromDm(dm) {
+    dm = (dm || '').toLowerCase();
+    return dm.indexOf('omni')     !== -1 ? 'omni'
+         : dm.indexOf('fast')     !== -1 ? 'fast'
+         : dm.indexOf('standard') !== -1 ? 'standard'
+         : 'lite';
+  }
+
   // ── Generation speed preference ('' = Cheaper via kie [default] · 'vertex' = Faster, direct) ──
   // Applies to BOTH the Replicator and the Studio (read when building the generate request).
   try { window._veoProviderPref = localStorage.getItem('veoProvider') || ''; } catch(e) { window._veoProviderPref = ''; }
@@ -484,9 +501,12 @@
     if (!jwt) throw new Error('Not logged in. Please refresh and try again.');
 
     var prompt = _veoJsonToPrompt(veoJsonStr);
-    var dur    = parseInt(durationSecs, 10) || 6;
-    if (dur !== 6 && dur !== 8) dur = 6;
-    var model  = (modelKey === 'fast') ? 'fast' : (modelKey === 'standard') ? 'standard' : 'lite';
+    // Omni Flash (Gemini Omni via kie) supports 4/6/8/10s; Veo tiers stay 6/8s.
+    var isOmni = (modelKey === 'omni');
+    var dur    = parseInt(durationSecs, 10) || (isOmni ? 8 : 6);
+    if (isOmni) { if ([4, 6, 8, 10].indexOf(dur) === -1) dur = 8; }
+    else        { if (dur !== 6 && dur !== 8) dur = 6; }
+    var model  = isOmni ? 'omni' : (modelKey === 'fast') ? 'fast' : (modelKey === 'standard') ? 'standard' : 'lite';
     // Aspect ratio is a session-level choice the UI stores globally; Veo only
     // accepts '9:16' (vertical) or '16:9' (landscape). Default vertical.
     var aspect = (window._veoAspectRatio === '16:9') ? '16:9' : '9:16';
@@ -513,11 +533,14 @@
     // Last level (380px) is a deliberately soft "get it through at any cost" fallback
     // for extreme face close-ups Veo blocks even when moderately softened. Quality
     // suffers at that level, but a soft clip beats a hard failure.
-    var _softenSteps = [ [960, 0.85], [700, 0.66], [520, 0.56], [380, 0.5] ];
-    var _ss = _softenSteps[Math.max(0, Math.min(_softenSteps.length - 1, softenLevel))];
-    var _veoStartUrl = imageDataUrl
-      ? await _veoSoftenStartFrame(imageDataUrl, _ss[0], _ss[1])
-      : imageDataUrl;
+    // Likeness-softening REMOVED (per request): Veo now receives the FULL-RESOLUTION
+    // start frame, so the generated video comes out sharper (no more down-res/mushy
+    // input). The person-likeness filter is still handled — on a block, recovery
+    // regenerates a WIDER / cleaner composite frame (framingLevel escalation below),
+    // which is the lever that actually clears it; the old soften pass did not.
+    // `softenLevel` stays in the signature (only bounds the recovery recursion) but no
+    // longer alters the image. `_veoSoftenStartFrame` is now unused — kept for easy re-enable.
+    var _veoStartUrl = imageDataUrl;
 
     var _start = _splitDataUrl(_veoStartUrl);
     var startImageB64  = _start.b64;
@@ -535,6 +558,7 @@
         prompt:          prompt,
         durationSecs:    dur,
         model:           model,
+        videoModel:      isOmni ? 'omni' : undefined,  // routes server to the Omni Flash branch
         startImageB64:   startImageB64,
         startImageMime:  startImageMime,
         frameB64:        frameB64,    // reference frame for Gemini scene analysis
@@ -878,13 +902,18 @@
     }
 
     var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite');
+    var modelKey = _modelKeyFromDm(_dm);
+    var _isOmni  = (modelKey === 'omni');
+    var _omniDur = _omniDurNow();
     var total    = workList.length;
 
     // Pre-spend cost gate — show the estimated total and confirm BEFORE committing, so a
     // user can't accidentally burn a big batch or hit a surprise out-of-credits mid-batch.
-    var _clipCost = (modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15)
+    // Omni Flash uses its per-duration price (50/65/85/100); Veo tiers keep their tier price.
+    var _clipCost = _isOmni
+      ? (_OMNI_COST[_omniDur] || 85)
+      : (modelKey === 'standard' ? 80 : modelKey === 'fast' ? 30 : 15)
                     * ((typeof window !== 'undefined' && window._veoProviderPref === 'vertex') ? 2 : 1); // ⚡ Faster (Vertex) = 2× credits
     var _estCost  = total * _clipCost;
     var _bal      = (typeof window.userCredits === 'number') ? window.userCredits : null;
@@ -939,6 +968,7 @@
 
         var durSecs = 6;
         try { var _po = JSON.parse(item.veoPrompt || '{}'); durSecs = parseInt(_po.duration, 10) || 6; } catch(_) {}
+        if (_isOmni) durSecs = _omniDur; // Omni uses the user-chosen 4/6/8/10s, not the scene's Veo length
 
         try {
           // All clips (primary + continuations) use the same NB composite start frame
@@ -1081,11 +1111,11 @@
     }
 
     var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+    var modelKey = _modelKeyFromDm(adm.defaultModel || 'Veo 3.1 Lite');
 
     var durSecs = 6;
     try { var _po = JSON.parse(seg.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+    if (modelKey === 'omni') durSecs = _omniDurNow(); // Omni uses the chosen 4/6/8/10s
 
     // Show loading state on the regen button
     var btn = document.getElementById('regenSceneBtn-' + segIdx);
@@ -1157,11 +1187,11 @@
     }
 
     var adm      = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
-    var _dm      = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-    var modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+    var modelKey = _modelKeyFromDm(adm.defaultModel || 'Veo 3.1 Lite');
 
     var durSecs = 6;
     try { var _po = JSON.parse(extra.veoPrompt || '{}'); durSecs = _po.duration || 6; } catch(_) {}
+    if (modelKey === 'omni') durSecs = _omniDurNow(); // Omni uses the chosen 4/6/8/10s
 
     var btnId = 'regenExtraBtn-' + segIdx + '-' + extraIdx;
     var btn = document.getElementById(btnId);

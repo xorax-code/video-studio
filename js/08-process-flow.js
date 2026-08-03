@@ -224,6 +224,7 @@
     // Sync the Lite/Fast/Standard toggle to whatever model is saved
     _syncVeoModelToggle(getAdminSettings().defaultModel || 'Veo 3.1 Lite');
     if (typeof window._initVeoAspect === 'function') window._initVeoAspect();
+    if (typeof window._initOmniDuration === 'function') window._initOmniDuration();
     loadAvatarProfile();
     loadAvatarImage();
     loadAvatarInventory();

@@ -308,6 +308,47 @@ exports.handler = async (event) => {
     return { statusCode: 403, headers: CORS, body: JSON.stringify({ error: 'Forbidden.' }) };
   }
 
+  // Omni Flash (Gemini Omni) poll branch — task ids prefixed "kieomni:" by generate-veo-clip.
+  // Mirrors the kie: branch exactly (refund on error, persist finished clip to GCS so 1080p
+  // export works), but routes through _kie.pollOmni and slices the 8-char "kieomni:" prefix.
+  if (operationName.indexOf('kieomni:') === 0) {
+    const _kie = require('./_kie-veo');
+    let kr;
+    try { kr = await _kie.pollOmni(operationName.slice(8)); }
+    catch (e) {
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }), body: JSON.stringify({ done: false }) };
+    }
+    if (!kr.done) {
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }), body: JSON.stringify({ done: false }) };
+    }
+    if (kr.error) {
+      const _rk = await refundVeoOp(operationName, _op);
+      return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ done: true, error: kr.error, filtered: !!kr.filtered, refunded: _rk > 0, refundedCredits: _rk }) };
+    }
+    await markVeoOpDone(operationName);
+    // Persist the finished Omni clip to GCS (kie URLs expire + aren't GCS) so 1080p upscale
+    // + the 1080p reel work. Best-effort: on ANY failure fall back to the raw kie URL.
+    try {
+      const _at  = await getAccessToken(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+      const _bkt = (process.env.GOOGLE_CLOUD_STORAGE_BUCKET || '').replace(/^gs:\/\//, '').replace(/\/.*$/, '');
+      if (_at && _bkt) {
+        const _obj    = 'assembled/kie-clips/' + operationName.slice(8).replace(/[^a-zA-Z0-9_-]/g, '') + '.mp4';
+        const _gcsUri = await uploadRemoteVideoToGcs(_at, _bkt, _obj, kr.videoUrl);
+        const _sa     = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
+        const _signed = createSignedUrl(_gcsUri, _sa, 172800);
+        try { await saveUserVideo(authUser.id, _gcsUri, kr.mimeType || 'video/mp4', (typeof label === 'string' ? label.slice(0, 120) : null), parseInt(durationSecs, 10) || null); } catch (_) {}
+        console.log('poll-veo-clip: Omni clip persisted to GCS →', _gcsUri.slice(0, 80));
+        return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ done: true, videoUrl: _signed, mimeType: kr.mimeType || 'video/mp4', gcsBacked: true }) };
+      }
+    } catch (e) {
+      console.warn('poll-veo-clip: Omni→GCS persist failed, returning kie URL:', e && e.message);
+    }
+    return { statusCode: 200, headers: Object.assign({}, CORS, { 'Content-Type': 'application/json' }),
+      body: JSON.stringify({ done: true, videoUrl: kr.videoUrl, mimeType: kr.mimeType || 'video/mp4' }) };
+  }
+
   // kie.ai poll branch - task ids are prefixed "kie:" by generate-veo-clip.
   if (operationName.indexOf('kie:') === 0) {
     const _kie = require('./_kie-veo');

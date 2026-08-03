@@ -164,4 +164,82 @@ async function poll(taskId) {
   return { done: false };
 }
 
-module.exports = { enabled, submit, poll, MODELS };
+// ── Gemini Omni ("Omni Flash") via kie's UNIFIED JOBS API ───────────────────
+// Different endpoint than Veo: POST /api/v1/jobs/createTask (model + input) and a
+// unified job-status query. Supports image-to-video (image_urls) + a user-chosen
+// `duration` (string seconds: "4" | "6" | "8" | "10"). Rides the same KIE_API_KEY.
+const OMNI_MODEL      = process.env.KIE_MODEL_OMNI      || 'gemini-omni-video';
+const OMNI_QUERY_PATH = process.env.KIE_JOBS_QUERY_PATH || '/api/v1/jobs/recordInfo';
+const OMNI_DURATIONS  = [4, 6, 8, 10];
+
+function omniEnabled() { return !!process.env.KIE_API_KEY; }
+
+// Submit an Omni Flash generation. Returns { ok, taskId } or { ok:false, error }.
+async function submitOmni(opts) {
+  const key = process.env.KIE_API_KEY;
+  const secs = OMNI_DURATIONS.includes(Number(opts.durationSecs)) ? Number(opts.durationSecs) : 8;
+  const input = { prompt: opts.prompt, duration: String(secs) }; // kie wants duration as a STRING
+  if (opts.startImageB64 && opts.startImageMime) {
+    const url = await hostFrame(opts.startImageB64, opts.startImageMime, opts.userId);
+    input.image_urls = [url]; // image-to-video from the composite start frame
+  }
+  const body = { model: OMNI_MODEL, input };
+  if (opts.callBackUrl) body.callBackUrl = opts.callBackUrl;
+  const r = await fetch(KIE_BASE + '/api/v1/jobs/createTask', {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  let d = null;
+  try { d = await r.json(); } catch (_) {}
+  const taskId = d && d.data && (d.data.taskId || d.data.task_id);
+  if (!r.ok || !d || d.code !== 200 || !taskId) {
+    return { ok: false, error: (d && (d.msg || d.message)) || ('kie omni generate HTTP ' + r.status) };
+  }
+  return { ok: true, taskId };
+}
+
+// Poll an Omni task via kie's unified Jobs query endpoint. Same return shape as poll().
+async function pollOmni(taskId) {
+  const key = process.env.KIE_API_KEY;
+  let r;
+  try {
+    r = await fetch(KIE_BASE + OMNI_QUERY_PATH + '?taskId=' + encodeURIComponent(taskId), {
+      headers: { 'Authorization': 'Bearer ' + key },
+    });
+  } catch (e) { return { done: false }; }
+  let d = null;
+  try { d = await r.json(); } catch (_) {}
+  if (!r.ok || !d) return { done: false };
+  const data = d.data || d;
+  // Job state can arrive as state/status/successFlag depending on kie's schema.
+  let flag = (data.successFlag !== undefined) ? data.successFlag
+           : (data.state       !== undefined) ? data.state
+           : data.status;
+  flag = (typeof flag === 'string') ? flag.toLowerCase() : flag;
+  const isDone = (flag === 1 || flag === '1' || flag === 'success' || flag === 'succeed' || flag === 'completed');
+  const isFail = (flag === 2 || flag === 3 || flag === '2' || flag === '3' || flag === 'fail' || flag === 'failed' || flag === 'error');
+  if (isDone) {
+    // kie's unified Jobs query returns the result URL inside data.resultJson — a JSON
+    // STRING, e.g. {"resultUrls":["https://.../clip.mp4"]}. Parse it first; fall back
+    // to a recursive search for other shapes.
+    let url = null;
+    if (data.resultJson) {
+      try {
+        const rj = JSON.parse(data.resultJson);
+        url = (rj.resultUrls && rj.resultUrls[0]) || rj.resultUrl || findVideoUrl(rj, 0);
+      } catch (_) {}
+    }
+    if (!url) url = findVideoUrl(data, 0);
+    if (!url) return { done: false }; // success flag set but URL not populated yet — keep polling
+    return { done: true, videoUrl: url, mimeType: 'video/mp4' };
+  }
+  if (isFail) {
+    const emsg = data.failMsg || data.failCode || data.errorMessage || data.error || d.msg || 'kie omni generation failed.';
+    const filtered = /filter|responsible|safety|policy|violat|blocked|sensitive|guideline/i.test(String(emsg));
+    return { done: true, error: String(emsg), filtered };
+  }
+  return { done: false };
+}
+
+module.exports = { enabled, submit, poll, MODELS, omniEnabled, submitOmni, pollOmni, OMNI_DURATIONS };

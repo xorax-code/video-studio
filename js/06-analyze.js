@@ -1381,14 +1381,39 @@ Production rules:
   window.setVeoAspect = setVeoAspect;
   window._initVeoAspect = _initVeoAspect;
 
+  // ── Omni Flash clip length (4/6/8/10s) ────────────────────────────────────
+  // Stored globally on window._omniDurationSecs (read by 15-veo-api.js) and
+  // persisted in admin settings so the choice survives reloads. Only used when
+  // the selected model is "Omni Flash"; the Veo tiers derive length from the scene.
+  function setOmniDuration(val) {
+    const secs = ([4, 6, 8, 10].indexOf(parseInt(val, 10)) !== -1) ? parseInt(val, 10) : 8;
+    window._omniDurationSecs = secs;
+    const s = getAdminSettings();
+    s.omniDuration = secs;
+    saveAdminSettings(s);
+    const el = document.getElementById('repOmniDur');
+    if (el && parseInt(el.value, 10) !== secs) el.value = String(secs);
+  }
+  function _initOmniDuration() {
+    const raw = (getAdminSettings() || {}).omniDuration;
+    const secs = ([4, 6, 8, 10].indexOf(parseInt(raw, 10)) !== -1) ? parseInt(raw, 10) : 8;
+    window._omniDurationSecs = secs;
+    const el = document.getElementById('repOmniDur');
+    if (el) el.value = String(secs);
+  }
+  window.setOmniDuration = setOmniDuration;
+  window._initOmniDuration = _initOmniDuration;
+
   function _syncVeoModelToggle(model) {
     const fastBtn = document.getElementById('veoModelFastBtn');
     const liteBtn = document.getElementById('veoModelLiteBtn');
     const qualBtn = document.getElementById('veoModelQualBtn');
+    const omniBtn = document.getElementById('veoModelOmniBtn');
     if (!fastBtn || !qualBtn) return;
     const isFast  = model === 'Veo 3.1 Fast';
     const isLite  = model === 'Veo 3.1 Lite';
     const isQual  = model === 'Veo 3.1 Standard';
+    const isOmni  = model === 'Omni Flash';
     fastBtn.style.background = isFast ? 'rgba(34,197,94,0.18)'  : 'var(--surface)';
     fastBtn.style.color      = isFast ? '#4ade80'               : 'var(--text-3)';
     if (liteBtn) {
@@ -1397,6 +1422,13 @@ Production rules:
     }
     qualBtn.style.background = isQual ? 'rgba(251,191,36,0.15)' : 'var(--surface)';
     qualBtn.style.color      = isQual ? '#fbbf24'               : 'var(--text-3)';
+    if (omniBtn) {
+      omniBtn.style.background = isOmni ? 'rgba(167,139,250,0.20)' : 'var(--surface)';
+      omniBtn.style.color      = isOmni ? '#a78bfa'               : 'var(--text-3)';
+    }
+    // Omni Flash exposes a clip-length picker; the Veo tiers don't (length comes from the scene).
+    const omniDurWrap = document.getElementById('repOmniDurWrap');
+    if (omniDurWrap) omniDurWrap.style.display = isOmni ? 'flex' : 'none';
   }
 
   function toggleAllPrompts() {

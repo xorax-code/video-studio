@@ -27,6 +27,10 @@ const CREDIT_COSTS = {
   standard: 80,
 };
 
+// Omni Flash (Gemini Omni via kie.ai) — credit cost by chosen duration (seconds).
+// Priced independently of the Veo tiers; the duration picker in both UIs sends one of these.
+const OMNI_COSTS = { 4: 50, 6: 65, 8: 85, 10: 100 };
+
 // Vertex AI model IDs — fast is GA (-001), lite and standard are preview
 const MODEL_IDS = {
   lite:     'veo-3.1-lite-generate-001',
@@ -382,8 +386,75 @@ exports.handler = async (event) => {
     frameMime     = 'image/jpeg',
     aspectRatio   = '9:16', // Veo supports '9:16' (vertical) or '16:9' (landscape)
     provider      = null,   // per-generation speed pref: 'vertex' = skip kie (faster, pricier)
+    videoModel    = null,   // 'omni' = route to Gemini Omni ("Omni Flash") via kie's Jobs API
   } = body;
   if (!prompt?.trim()) return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: 'prompt is required.' }) };
+
+  // ── Omni Flash branch (Gemini Omni via kie.ai) ───────────────────────────
+  // Completely separate flow from Veo: its own per-duration credit cost, its own kie
+  // Jobs-API submit, and NO Vertex fallback (unlike kie-Veo). Op ids are prefixed
+  // "kieomni:" so poll-veo-clip routes them to _kie.pollOmni. We reserve credits with
+  // the SAME spendCredits/addCredits mechanism the Veo path uses, and refund on any failure.
+  if (videoModel === 'omni') {
+    const _kie = require('./_kie-veo');
+    if (!_kie.omniEnabled()) {
+      return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'Omni Flash is not available right now. Please pick another model.' }) };
+    }
+    const _reqSecs = parseInt(durationSecs, 10);
+    const omniSecs = OMNI_COSTS[_reqSecs] ? _reqSecs : 8;   // 4/6/8/10 only; default 8
+    const omniCost = OMNI_COSTS[omniSecs];
+
+    const adminUserO = await getAdminUser(userId);
+    if (!adminUserO) return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not read account data.' }) };
+    const currentBalanceO = adminUserO.app_metadata?.credits_balance ?? 0;
+
+    // PAID-ONLY GATE: Omni is the most expensive model (~$0.30–0.63/clip on kie), so
+    // don't let free-tier users burn their trial credits on it. Owner bypasses via
+    // OWNER_EMAIL. (Server-side is the real gate; the UI can also hide it for free users.)
+    const _omniTier  = adminUserO.app_metadata?.stripe_tier || 'free';
+    const _omniOwner = (process.env.OWNER_EMAIL || '').toLowerCase();
+    const _omniEmail = (adminUserO.email || '').toLowerCase();
+    if (_omniTier === 'free' && !(_omniOwner && _omniEmail === _omniOwner)) {
+      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'upgrade_required', message: 'Omni Flash is a premium model — upgrade to a paid plan to use it.' }) };
+    }
+
+    // Reserve credits atomically (same insufficient-funds + decrement as Veo).
+    const newBalanceO = await spendCredits(userId, omniCost);
+    if (newBalanceO === -1) {
+      return { statusCode: 402, headers: CORS, body: JSON.stringify({ error: 'insufficient_credits', message: `This ${omniSecs}s Omni clip costs ${omniCost} credits. You have ${currentBalanceO}.`, balance: currentBalanceO, cost: omniCost }) };
+    }
+    if (newBalanceO === null) {
+      return { statusCode: 500, headers: CORS, body: JSON.stringify({ error: 'Could not reserve credits. Try again.' }) };
+    }
+
+    let ko;
+    try {
+      ko = await _kie.submitOmni({ prompt: prompt.trim(), startImageB64, startImageMime, durationSecs: omniSecs, userId });
+    } catch (e) {
+      ko = { ok: false, error: e && e.message };
+    }
+    if (!ko || !ko.ok) {
+      // Omni does NOT fall back to Vertex — refund the reserve and return a clean error.
+      const _rfO = await addCredits(userId, omniCost);
+      if (!_rfO) console.error('generate-veo-clip: CRITICAL — Omni refund failed after submit failure for ' + userId);
+      console.warn('generate-veo-clip: Omni submit failed:', ko && ko.error);
+      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: (ko && ko.error ? ('Omni Flash could not start this clip: ' + ko.error) : 'Omni Flash could not start this clip.') + ' Credits refunded.' }) };
+    }
+
+    const opNameO = 'kieomni:' + ko.taskId;
+    const _regO = await registerVeoOp(opNameO, userId, omniCost, 'clip');
+    if (!_regO) {
+      const _rfO2 = await addCredits(userId, omniCost);
+      if (!_rfO2) console.error('generate-veo-clip: CRITICAL — Omni refund failed after op-registration failure for ' + userId);
+      return { statusCode: 503, headers: CORS, body: JSON.stringify({ error: 'Could not start tracking this clip. Credits refunded — please try again.' }) };
+    }
+    console.log('generate-veo-clip: user ' + userId + ' started OMNI op ' + opNameO + ' (' + omniSecs + 's), ' + omniCost + ' credits (balance ' + newBalanceO + ')');
+    return {
+      statusCode: 200,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ operationName: opNameO, creditsDeducted: omniCost, newBalance: newBalanceO, model: 'omni', durationSecs: omniSecs }),
+    };
+  }
 
   // Veo 3 only accepts these two ratios; anything else falls back to vertical.
   const aspect   = (aspectRatio === '16:9') ? '16:9' : '9:16';

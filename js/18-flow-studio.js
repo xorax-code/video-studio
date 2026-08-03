@@ -749,12 +749,12 @@
       var _selModelEl = document.getElementById('fsVidModel');
       var _selModel   = _selModelEl && _selModelEl.value;
       var modelKey;
-      if (_selModel === 'lite' || _selModel === 'fast' || _selModel === 'standard') {
+      if (_selModel === 'lite' || _selModel === 'fast' || _selModel === 'standard' || _selModel === 'omni') {
         modelKey = _selModel;
       } else {
         var adm = (typeof getAdminSettings === 'function') ? getAdminSettings() : {};
         var _dm = (adm.defaultModel || 'Veo 3.1 Lite').toLowerCase();
-        modelKey = _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
+        modelKey = _dm.includes('omni') ? 'omni' : _dm.includes('fast') ? 'fast' : _dm.includes('standard') ? 'standard' : 'lite';
       }
 
       var result = await generateVeoClipViaAPI(veoJson, dur, modelKey, startImg, refFrameUrl);
@@ -844,6 +844,24 @@
     pendingIds.forEach(function(pid) {
       _runOneVidGeneration(pid, casual, dur, jwt, startImg, refFrameUrl, enhFrameB64, enhFrameMime);
     });
+  };
+
+  // ── Studio video-model change: show/hide Omni-only durations (4s/10s) ───────
+  // Veo tiers only allow 6s/8s; Omni Flash allows 4/6/8/10s. When the user switches
+  // OFF Omni while a 4s or 10s pill was active, snap the active duration back to 6s.
+  window.onFsVidModelChange = function() {
+    var sel    = document.getElementById('fsVidModel');
+    var isOmni = sel && sel.value === 'omni';
+    document.querySelectorAll('#fsVidDuration .fs-dur-omni').forEach(function(b) {
+      b.style.display = isOmni ? '' : 'none';
+    });
+    if (!isOmni) {
+      var active = document.querySelector('#fsVidDuration .fs-dur-btn.active');
+      if (active && (active.dataset.dur === '4' || active.dataset.dur === '10')) {
+        var six = document.querySelector('#fsVidDuration .fs-dur-btn[data-dur="6"]');
+        if (six && typeof window.setFsDur === 'function') window.setFsDur(six);
+      }
+    }
   };
 
   // ── Duration toggle ────────────────────────────────────────────────────────
