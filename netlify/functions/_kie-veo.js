@@ -30,16 +30,31 @@ const MODELS = {
   fast:     process.env.KIE_MODEL_FAST     || 'veo3_fast',
   standard: process.env.KIE_MODEL_STANDARD || 'veo3',
 };
-// Use the provided image as the actual FIRST FRAME (video starts from it), not a loose
-// style/subject "reference" that lets the model redraw a new scene. kie's
-// FIRST_AND_LAST_FRAMES_2_VIDEO with a single image = "start from this exact frame".
-// Override with KIE_GEN_TYPE_IMAGE=REFERENCE_2_VIDEO to go back to inspiration mode.
-const GENTYPE_IMAGE = process.env.KIE_GEN_TYPE_IMAGE  || 'FIRST_AND_LAST_FRAMES_2_VIDEO';
+// Single-image image-to-video. We send ONE start frame (the avatar composite), so the
+// mode MUST be the single-reference-frame path: REFERENCE_2_VIDEO. The old default,
+// FIRST_AND_LAST_FRAMES_2_VIDEO, expects TWO frames (first AND last) — handing it one
+// image made kie accept the task then fail generation with a generic "Internal Error,
+// Please try again later", i.e. every image-to-video clip failed 100% of the time.
+// Override with KIE_GEN_TYPE_IMAGE if kie documents a dedicated start-frame mode.
+const GENTYPE_IMAGE = process.env.KIE_GEN_TYPE_IMAGE  || 'REFERENCE_2_VIDEO';
 const DETAIL_PATH   = process.env.KIE_VEO_DETAIL_PATH || '/api/v1/veo/record-info';
 const FRAME_BUCKET  = process.env.KIE_FRAME_BUCKET    || 'ref-videos';
 
 function enabled() {
   return process.env.VEO_PROVIDER === 'kie' && !!process.env.KIE_API_KEY;
+}
+
+// kie surfaces an empty/low ACCOUNT wallet as a vague error. Detect it so callers can
+// show a clear "top up your kie.ai account" message instead of the app masking it as a
+// generic "video service hiccup" and wasting 3 pointless retries on something a retry
+// can't fix. NOTE: this is the kie.ai wallet (real money), separate from the app's own
+// per-user credit_balance which is always refunded on failure.
+function isBalanceError(msg) {
+  return /insufficient|top ?-? ?up|balance (?:is )?(?:too )?low|not enough|run this request/i.test(String(msg || ''));
+}
+function clarifyError(msg) {
+  const s = String(msg || 'kie generation failed.');
+  return isBalanceError(s) ? ('kie.ai account balance too low — top up at kie.ai. (' + s + ')') : s;
 }
 
 // Upload the base64 start frame to Supabase Storage and return a short-lived signed URL
@@ -79,6 +94,7 @@ async function submit(opts) {
     model,
     aspect_ratio: (opts.aspect === '16:9') ? '16:9' : '9:16',
     enableTranslation: true,
+    enableFallback: true, // let kie auto-retry its own upstream on a transient blip
   };
   if (opts.startImageB64 && opts.startImageMime) {
     const url = await hostFrame(opts.startImageB64, opts.startImageMime, opts.userId);
@@ -98,7 +114,7 @@ async function submit(opts) {
   try { d = await r.json(); } catch (_) {}
   const taskId = d && d.data && (d.data.taskId || d.data.task_id);
   if (!r.ok || !d || d.code !== 200 || !taskId) {
-    return { ok: false, error: (d && (d.msg || d.message)) || ('kie generate HTTP ' + r.status) };
+    return { ok: false, error: clarifyError((d && (d.msg || d.message)) || ('kie generate HTTP ' + r.status)), insufficient: isBalanceError(d && (d.msg || d.message)) };
   }
   return { ok: true, taskId };
 }
@@ -159,7 +175,7 @@ async function poll(taskId) {
   if (isFail) {
     const emsg = data.errorMessage || data.error || data.msg || d.msg || 'kie generation failed.';
     const filtered = /filter|responsible|safety|policy|violat|blocked|sensitive|guideline/i.test(String(emsg));
-    return { done: true, error: String(emsg), filtered };
+    return { done: true, error: clarifyError(emsg), filtered, insufficient: isBalanceError(emsg) };
   }
   return { done: false };
 }
@@ -195,7 +211,7 @@ async function submitOmni(opts) {
   try { d = await r.json(); } catch (_) {}
   const taskId = d && d.data && (d.data.taskId || d.data.task_id);
   if (!r.ok || !d || d.code !== 200 || !taskId) {
-    return { ok: false, error: (d && (d.msg || d.message)) || ('kie omni generate HTTP ' + r.status) };
+    return { ok: false, error: clarifyError((d && (d.msg || d.message)) || ('kie omni generate HTTP ' + r.status)), insufficient: isBalanceError(d && (d.msg || d.message)) };
   }
   return { ok: true, taskId };
 }
@@ -238,7 +254,7 @@ async function pollOmni(taskId) {
   if (isFail) {
     const emsg = data.failMsg || data.failCode || data.errorMessage || data.error || d.msg || 'kie omni generation failed.';
     const filtered = /filter|responsible|safety|policy|violat|blocked|sensitive|guideline/i.test(String(emsg));
-    return { done: true, error: String(emsg), filtered };
+    return { done: true, error: clarifyError(emsg), filtered, insufficient: isBalanceError(emsg) };
   }
   return { done: false };
 }
