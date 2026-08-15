@@ -12,30 +12,41 @@
  *   VEO_PROVIDER=kie           (flag)
  *   KIE_BASE_URL               (default https://api.kie.ai)
  *   KIE_MODEL_LITE/FAST/STANDARD  — kie model ids per tier (see note below)
- *   KIE_GEN_TYPE_IMAGE         (default REFERENCE_2_VIDEO) — mode when a start frame is sent
+ *   KIE_GEN_TYPE_IMAGE         (default REFERENCE_2_VIDEO) — mode when a start frame is sent (see note below)
  *   KIE_VEO_DETAIL_PATH        (default /api/v1/veo/record-info) — poll endpoint
  *   KIE_FRAME_BUCKET           (default ref-videos) — Supabase Storage bucket for start frames
  *   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY  — used to host the start frame as a URL
  *
- * NOTE on model ids: kie's confirmed strings are `veo3` (Quality) and `veo3_fast` (Fast).
- * The exact Veo-3.1 **Lite** id isn't documented publicly, so KIE_MODEL_LITE defaults to
- * `veo3_fast` and SHOULD be overridden with kie's real Lite id (check the kie playground)
- * to get the $0.15/clip Lite price. Until then, Lite requests run as Fast on kie.
+ * NOTE on model ids: kie's documented Veo 3.1 ids are `veo3_quality` (Quality),
+ * `veo3_fast` (Fast), and `veo3_lite` (Lite). Defaults now map each tier to its real id
+ * (verified against docs.kie.ai/veo3-api, 2026-08). Previously Lite defaulted to
+ * `veo3_fast` (Lite id was undocumented at the time), so every "Lite" job silently ran —
+ * and was billed at 15 credits — as Fast. If your kie account exposes different ids,
+ * override per tier with KIE_MODEL_LITE / KIE_MODEL_FAST / KIE_MODEL_STANDARD.
  */
 
 const KIE_BASE = process.env.KIE_BASE_URL || 'https://api.kie.ai';
 
 const MODELS = {
-  lite:     process.env.KIE_MODEL_LITE     || 'veo3_fast',
+  lite:     process.env.KIE_MODEL_LITE     || 'veo3_lite',
   fast:     process.env.KIE_MODEL_FAST     || 'veo3_fast',
-  standard: process.env.KIE_MODEL_STANDARD || 'veo3',
+  standard: process.env.KIE_MODEL_STANDARD || 'veo3_quality',
 };
-// Single-image image-to-video. We send ONE start frame (the avatar composite), so the
-// mode MUST be the single-reference-frame path: REFERENCE_2_VIDEO. The old default,
-// FIRST_AND_LAST_FRAMES_2_VIDEO, expects TWO frames (first AND last) — handing it one
-// image made kie accept the task then fail generation with a generic "Internal Error,
-// Please try again later", i.e. every image-to-video clip failed 100% of the time.
-// Override with KIE_GEN_TYPE_IMAGE if kie documents a dedicated start-frame mode.
+// generationType when a start frame is sent. IMPORTANT — the two kie modes differ:
+//   REFERENCE_2_VIDEO            → the image is a STYLE/SUBJECT reference (1-3 imgs). kie
+//                                  does NOT pin it as frame 1, so the clip won't actually
+//                                  open on the approved composite. This is the historical
+//                                  default and the reason start frames looked "ignored".
+//   FIRST_AND_LAST_FRAMES_2_VIDEO → with a SINGLE image, that image is the literal OPENING
+//                                  frame (per docs.kie.ai/veo3-api) — this is what we want
+//                                  for the avatar composite. (An earlier attempt at this
+//                                  mode failed 100% with a generic "Internal Error", but
+//                                  that predates fixing the model-id map above, which may
+//                                  have been the real cause — retest before trusting it.)
+// We already send exactly one image (payload.imageUrls = [url]), so flipping the env var to
+// KIE_GEN_TYPE_IMAGE=FIRST_AND_LAST_FRAMES_2_VIDEO enables true start-frame grounding with
+// no code change. Default is left at REFERENCE_2_VIDEO so this can be A/B'd on a test clip
+// before becoming the global default.
 const GENTYPE_IMAGE = process.env.KIE_GEN_TYPE_IMAGE  || 'REFERENCE_2_VIDEO';
 const DETAIL_PATH   = process.env.KIE_VEO_DETAIL_PATH || '/api/v1/veo/record-info';
 const FRAME_BUCKET  = process.env.KIE_FRAME_BUCKET    || 'ref-videos';
