@@ -319,7 +319,9 @@
 
   // ── Convert Veo JSON object → flat text prompt ────────────────────────────
   // Anti-transition terms injected on every single prompt regardless of source.
-  var _ANTI_TRANSITION_NEG = 'cuts, transitions, fade in, fade out, crossfade, dissolve, wipe, flash cut, jump cut, transition effect, scene change, hard cut, smash cut';
+  // Kept short on purpose — the positive "single continuous smooth shot… no cuts, no
+  // fades, no scene changes" line does the heavy lifting; a dozen synonyms only diluted it.
+  var _ANTI_TRANSITION_NEG = 'cuts, transitions, fades, hard cut, jump cut, scene change';
 
   // ── Left/right screen-space anchor ───────────────────────────────────────
   // Veo interprets "left/right" from the subject's POV (mirror perspective),
@@ -383,6 +385,20 @@
     // background or specific person) as the only one who talks, and freeze everyone else's
     // mouth. We deliberately do NOT assume the "main" person, so you can direct any person.
     if (obj.speech) parts.push('Exactly ONE person speaks this line and says exactly: "' + obj.speech.toLowerCase() + '". The speaker is the specific person named in the action above — keep the line with that exact person and never switch it to anyone else. Every OTHER person in the shot stays completely silent the entire time with their mouth closed and still, and never lip-syncs, mouths, or mimes any words');
+    // ── Accent lock ────────────────────────────────────────────────────────────
+    // Veo anchors the SPOKEN accent to the on-screen face and treats the accent cue
+    // buried inside obj.audio as a weak hint — so an avatar whose face reads as a given
+    // region can steamroll a "neutral American accent" note and every clip comes back in
+    // the avatar's apparent accent (commonly Indian/South Asian). Pull the chosen accent
+    // back out and restate it as a strong, standalone directive right next to the spoken
+    // line, and (below) push every OTHER accent into the negatives. This is the strongest
+    // lever available in the prompt; a start frame whose face clearly reads as another
+    // region can still fight it, but this makes the requested accent win far more often.
+    var _accentM = (obj.audio || '').match(/((?:neutral |soft )?(?:Latin American|South Asian|American|Korean|Filipino|British|Australian|Indian|Chinese|Nigerian|French|Jamaican))\s+accent/i);
+    var _accent  = _accentM ? _accentM[1].trim() : '';
+    if (obj.speech && _accent) {
+      parts.push('The speaking voice is unmistakably a ' + _accent + ' English accent — pronunciation, rhythm, and intonation are clearly ' + _accent + ', regardless of how the person looks on screen; do not use any other regional accent unless it is ' + _accent);
+    }
     if (obj.camera) parts.push('Camera: ' + obj.camera);
     if (obj.shot)   parts.push('Framing: ' + obj.shot);
     parts.push(obj.audio || 'Natural clear voice audio, slight ambient room tone, no background music');
@@ -407,13 +423,42 @@
     var _prodNeg = (_oneHand || _holdsProduct) ? ', duplicate product, two products, cloned product, split product, product splitting in half, product breaking apart, extra fingers, sixth finger, deformed hands, merged hands, morphing hands' : '';
     // Speaker negatives — only when there IS a spoken line, to stop the wrong person lip-syncing.
     var _speechNeg = obj.speech ? ', wrong person speaking, wrong person talking, background person talking, second person talking, another person mouthing words, the person lying down talking, the person being treated talking, both people talking at once, lip sync on the wrong person, mouth moving on a silent person' : '';
+    // Accent negatives — negate every accent EXCEPT the chosen one, so the avatar's
+    // apparent ethnicity can't drag the voice back to (most often) an Indian/South Asian accent.
+    var _accentNeg = '';
+    if (_accent) {
+      var _lcAcc = _accent.toLowerCase();
+      _accentNeg = ['American','Korean','Filipino','British','Australian','Latin American','Indian','South Asian','Chinese','Nigerian','French','Jamaican']
+        .filter(function(a){ return _lcAcc.indexOf(a.toLowerCase()) === -1; })
+        .map(function(a){ return a + ' accent'; }).join(', ');
+      if (_accentNeg) _accentNeg = ', ' + _accentNeg;
+    }
     // Negative prompt: strip duplicate transition terms, append full list + optional position lock
     var _negBase = (obj.negative_prompt || '').replace(/\b(cuts|transitions|fade\s*in|fade\s*out)[,]?\s*/gi, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
+    // Scene-aware negatives — the upstream builders hardcode a food/dishware/table dedup
+    // list ("doubled food, extra bowls, extra cups, duplicated utensils, changed table
+    // contents") into EVERY scene, even ones with none of that (e.g. a skincare clip).
+    // Naming absent objects is noise and video models handle negation weakly, so drop those
+    // terms unless the scene actually involves food/dishware/a table. Generic object locks
+    // (props, duplicate/cloned objects) and ALL left/right + two-person locks are untouched.
+    var _sceneText = [obj.action, obj.starting_frame, obj.foreground_props, obj.background, obj.speech, obj.shot]
+      .filter(Boolean).join(' ').toLowerCase();
+    var _hasFoodCtx = /\b(food|meal|eat|eating|snack|drink|drinking|beverage|bowl|cup|mug|glass|plate|dish|utensil|fork|spoon|knife|chopstick|kitchen|dining|table|counter|coffee|tea|soup|salad|smoothie|breakfast|lunch|dinner|recipe|cook|cooking|fridge)\b/.test(_sceneText);
+    if (!_hasFoodCtx) {
+      _negBase = _negBase
+        .replace(/,?\s*multiplying or doubled food/gi, '')
+        .replace(/,?\s*doubled food/gi, '')
+        .replace(/,?\s*extra bowls/gi, '')
+        .replace(/,?\s*extra cups/gi, '')
+        .replace(/,?\s*duplicated utensils/gi, '')
+        .replace(/,?\s*changed table contents/gi, '')
+        .replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '');
+    }
     var _wardrobeNeg = ', changing clothes, putting on clothing, taking off clothing, dressing, undressing, adjusting clothing, wardrobe change, outfit change, clothes morphing, new garment appearing, robe appearing, kimono, putting on a robe';
     // Suppress invented tattoos (skipped automatically if the avatar is tattooed).
     var _tatNeg = (typeof window.antiTattooNeg === 'function') ? window.antiTattooNeg() : '';
     var _gsNeg = _gsVeo ? ', background changing, patterned or textured background, app UI appearing, charts, text or numbers appearing, environment appearing behind subject, green spill on skin or hair, static frozen stiff pose' : '';
-    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + _speechNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
+    var _negExtra = _ANTI_TRANSITION_NEG + _wardrobeNeg + _gsNeg + _handNeg + _prodNeg + _speechNeg + _accentNeg + (_hasPosition ? ', horizontally flipped, mirrored composition, swapped sides, reversed left and right, wrong side' : '') + (_tatNeg ? ', ' + _tatNeg : '');
     parts.push('Do not include: ' + (_negBase ? _negBase + ', ' : '') + _negExtra);
     return parts.join('. ');
   }
