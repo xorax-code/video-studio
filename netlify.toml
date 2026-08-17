@@ -2,6 +2,17 @@
   publish = "."
   command = "echo \"const SUPABASE_URL='$SUPABASE_URL'; const SUPABASE_ANON='$SUPABASE_ANON';\" > supabase-config.js"
 
+# ── Secrets scanning ──────────────────────────────────────────────────────────
+# These keys are NOT secrets — they are public kie.ai model/route identifiers
+# (e.g. veo3_lite, veo3_fast, veo3_quality, REFERENCE_2_VIDEO) whose values also
+# live as default fallback strings in netlify/functions/_kie-veo.js. Because
+# publish = ".", Netlify scans that source file and flags the value, failing the
+# build. Omitting these keys stops the false positive. Real secrets — KIE_API_KEY,
+# SUPABASE_SERVICE_ROLE_KEY, STRIPE_* — are deliberately NOT listed, so they stay
+# scanned.
+[build.environment]
+  SECRETS_SCAN_OMIT_KEYS = "VEO_PROVIDER,KIE_BASE_URL,KIE_MODEL_LITE,KIE_MODEL_FAST,KIE_MODEL_STANDARD,KIE_MODEL_OMNI,KIE_GEN_TYPE_IMAGE,KIE_VEO_DETAIL_PATH,KIE_FRAME_BUCKET,KIE_JOBS_QUERY_PATH"
+
 [[redirects]]
   from = "/"
   to = "/landing.html"
