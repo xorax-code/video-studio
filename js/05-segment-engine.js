@@ -2105,10 +2105,39 @@
     const buckets = segments.map(() => []);
     let cursor = 0;
 
-    for (let si = 0; si < segments.length; si++) {
-      const isLast = si === segments.length - 1;
+    // ── Leading / trailing silence (b-roll) detection ────────────────────────
+    // A reference clip often opens or closes with a few seconds of b-roll before
+    // anyone speaks (a hook shot, a product beauty pass, an outro). Whisper puts
+    // no words there, so the first spoken word starts LATER than the video does.
+    // If the proportional floor below runs on those silent scenes it steals the
+    // first real words into the intro and shifts the ENTIRE script one scene
+    // early — the "Detect Cuts drops the script in random places" bug that shows
+    // up on videos with no audio at the start. Instead, mark the contiguous
+    // silent scenes at each end and leave them with an empty script (a genuine
+    // non-speaking / b-roll scene, which the prompt builder treats as voiceover).
+    const firstWordTime = wordTimeline[0].time;
+    const lastWordTime  = wordTimeline[wordTimeline.length - 1].time;
+    const SIL_TOL = 0.15; // a word within 0.15s of a boundary belongs to the spoken side
+    const silent = segments.map(() => false);
+
+    let firstSpeaking = 0;
+    while (firstSpeaking < segments.length - 1 &&
+           firstWordTime >= r1(segments[firstSpeaking].endTime) - SIL_TOL) {
+      silent[firstSpeaking] = true;   // no speech begins before this scene ends
+      firstSpeaking++;
+    }
+    let lastSpeaking = segments.length - 1;
+    while (lastSpeaking > firstSpeaking &&
+           lastWordTime < r1(segments[lastSpeaking].startTime) + SIL_TOL) {
+      silent[lastSpeaking] = true;    // last spoken word ends before this scene starts
+      lastSpeaking--;
+    }
+
+    // Distribute words across the SPEAKING span only; silent scenes stay empty.
+    for (let si = firstSpeaking; si <= lastSpeaking; si++) {
+      const isLast = si === lastSpeaking;
       if (isLast) {
-        // Last segment gets everything remaining
+        // Last speaking segment gets everything remaining
         while (cursor < wordTimeline.length) buckets[si].push(wordTimeline[cursor++].word);
         break;
       }
@@ -2126,10 +2155,12 @@
       // bucket never starts empty.  This is the root cause of "watermelon" landing
       // in Seg 3: its chunk starts at 8.0 s = Seg 3 boundary, so naturalEnd never
       // advances and splitAfter becomes cursor-1, leaving Seg 2 with nothing.
+      // (Genuinely silent intro/outro scenes were already excluded from this loop
+      // above, so this floor now only fires on boundary alignment inside speech.)
       let splitAfter;
       if (naturalEnd === cursor) {
         const totalWords   = wordTimeline.length;
-        const totalDur     = r1(segments[segments.length - 1].endTime) - r1(segments[0].startTime);
+        const totalDur     = r1(segments[lastSpeaking].endTime) - r1(segments[firstSpeaking].startTime);
         const segDur       = segEnd - r1(segments[si].startTime);
         const targetWords  = Math.max(1, Math.round(totalWords * segDur / totalDur));
         splitAfter = Math.min(cursor + targetWords - 1, wordTimeline.length - 2);
@@ -2164,21 +2195,24 @@
       }
     }
 
-    // If any bucket is still empty, bridge from nearest non-empty neighbour
+    // If a SPEAKING bucket is still empty, bridge from nearest non-empty neighbour.
+    // Silent (b-roll) scenes are intentionally empty and are skipped as both the
+    // target to fill and the source to steal from.
     buckets.forEach((bucket, i) => {
-      if (bucket.length > 0) return;
+      if (bucket.length > 0 || silent[i]) return;
       for (let d = 1; d < buckets.length; d++) {
-        if (i - d >= 0 && buckets[i - d].length > 1) {
+        if (i - d >= 0 && !silent[i - d] && buckets[i - d].length > 1) {
           bucket.push(buckets[i - d].pop()); break;
         }
-        if (i + d < buckets.length && buckets[i + d].length > 1) {
+        if (i + d < buckets.length && !silent[i + d] && buckets[i + d].length > 1) {
           bucket.push(buckets[i + d].shift()); break;
         }
       }
     });
 
-    // Still empty after bridging? Fall back to proportional
-    if (buckets.some(b => b.length === 0)) return false;
+    // A non-silent bucket still empty means the timing genuinely didn't line up —
+    // fall back to proportional. Intentionally-silent scenes don't count.
+    if (buckets.some((b, i) => b.length === 0 && !silent[i])) return false;
 
     buckets.forEach((words, i) => {
       segments[i].script = words.join(' ').trim();
